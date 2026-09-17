@@ -141,10 +141,48 @@ interface RouteResult {
   primary_skill: string | null;
   secondary_skills: string[];
   ranking: RankedSkill[];
+  warnings: string[];
+  penguin: string;
   clarify_question?: string;
-  source: 's2f-agent registry port';
+  source: 's2f-penguin guards + s2f-agent registry';
 }
 declare function routeQuery(query: string, taskHint?: string): RouteResult;
+//#endregion
+//#region src/s2f/penguin.d.ts
+declare const AXES: readonly ["constraint", "molecular", "cellular", "evidence"];
+type Axis = (typeof AXES)[number];
+interface S2fEntity {
+  gene?: string;
+  rsid?: string;
+  hgvs_c?: string;
+  hgvs_p?: string;
+  transcript?: string | null;
+  source_refs: string[];
+  provenance_layer: 'demo_panel' | 'vcf' | 'user';
+  verification_status: 'unverified' | 'panel' | 'translated';
+}
+/** De-identified profile-agent contract from s2f-penguin `s2f batch` (2026-09-14). */
+interface S2fBatchRequest {
+  request_id: string;
+  assembly: 'hg38' | 'unknown';
+  entities: S2fEntity[];
+  allowed_axes: Axis[];
+  claim_ceiling: 'constraint' | 'molecular' | 'cellular';
+  return_to: string;
+  notes_zh: string[];
+}
+declare function buildBatchRequest(input: {
+  gene?: string;
+  rsid?: string;
+  hgvs_c?: string;
+  hgvs_p?: string;
+  assembly?: string;
+  axes?: string[];
+}): S2fBatchRequest | {
+  error: true;
+  code: string;
+  message_zh: string;
+};
 //#endregion
 //#region src/s2f/genome.d.ts
 type OmicsLayer = 'genome' | 'epigenome' | 'transcriptome' | 'proteome' | 'metabolome';
@@ -201,7 +239,7 @@ declare function parseVcf(text: string, options?: {
 }): VcfIngestResult | VcfIngestError;
 //#endregion
 //#region src/s2f/report.d.ts
-declare const PRODUCT_VERSION = "1.0.0";
+declare const PRODUCT_VERSION = "1.0.1";
 declare function buildOmicsReport(): {
   product: string;
   version: string;
@@ -260,4 +298,4 @@ declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): void;
 //#endregion
-export { CUSTOMER, Config, METRICS, PRODUCT_VERSION, annotateVariant, apply, buildOmicsReport, findMetric, inject, lookupEvidence, name, parseVcf, preGuard, retrieve, routeQuery };
+export { CUSTOMER, Config, METRICS, PRODUCT_VERSION, annotateVariant, apply, buildBatchRequest, buildOmicsReport, findMetric, inject, lookupEvidence, name, parseVcf, preGuard, retrieve, routeQuery };

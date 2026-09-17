@@ -64,7 +64,7 @@ Restart the GUI (or hard-refresh). Open a session → tab **LongPi**. Uninstall:
 | Composer dock | Four suggested questions (copy → paste into Chat) |
 | Sidebar mark | LongPi dot |
 | Persona | Health assistant, not a coding agent |
-| Tools (18) | 8 concierge + 10 genome/omics/report — matches source |
+| Tools (19) | 8 concierge + 11 genome/omics/s2f — matches source |
 | Skills (6) | Phenotype, panel, itinerary, genome, multi-omics, s2f routing |
 
 ### Tools (18)
@@ -81,7 +81,8 @@ Restart the GUI (or hard-refresh). Open a session → tab **LongPi**. Uninstall:
 | `handoff_concierge` | Human handoff (max 1 / process) | yes |
 | `s2f_route` | Rank s2f-agent skills | no |
 | `s2f_plan` | Dry-run plan + missing canonical inputs | no |
-| `s2f_execute` | Optional local `route_query.sh` (off by default) | no |
+| `s2f_execute` | Optional penguin `s2f route` (off by default) | no |
+| `s2f_batch_request` | De-identified JSON for `s2f batch` (gpn_msa / translate) | no |
 | `read_personal_genome` | 12-locus longevity panel | no |
 | `ingest_vcf` | Local VCF SNP ingest (hg38, capped) | in-process |
 | `annotate_variant` | Consequence, ClinVar note, literature, s2f skills | no |

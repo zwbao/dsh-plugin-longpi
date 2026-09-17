@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.1 — 2026-09-17
+
+Integrate scientific guards and the profile contract from [zwbao/s2f-penguin](https://github.com/zwbao/s2f-penguin) without embedding PenguinHarness.
+
+- Human variant routing no longer defaults to live GPN (P0: alignment channels would be zero). Human constraint path is `gpn_msa` published table; scoring path is AlphaGenome / Evo 2.
+- Refuse hg19/GRCh37 (no liftover).
+- `s2f_execute` prefers penguin `s2f route` binary; legacy `route_query.sh` is fallback only.
+- New `s2f_batch_request` emits the de-identified `s2f batch` JSON for LongPi as the profile agent.
+- Plans point at `s2f doctor` / `s2f translate` / `s2f batch`, not GPU from DSH.
+
 ## 1.0.0 — 2026-09-17
 
 First production release of **dsh-plugin-longpi**.

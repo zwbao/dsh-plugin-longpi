@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-longpi",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "LongPi 1.0.0 for DeepSeek Harness: longevity concierge, personal-genome panel, VCF ingest, multi-omics report, s2f-agent routing.",
   "type": "module",
   "main": "lib/index.js",

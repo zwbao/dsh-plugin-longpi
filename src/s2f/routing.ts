@@ -1,4 +1,6 @@
 import {
+  HUMAN_UNSAFE_SKILLS,
+  S2F_PENGUIN_REPO,
   S2F_SKILLS,
   S2F_WEIGHTS,
   TASK_ALIASES,
@@ -20,8 +22,10 @@ export interface RouteResult {
   primary_skill: string | null
   secondary_skills: string[]
   ranking: RankedSkill[]
+  warnings: string[]
+  penguin: string
   clarify_question?: string
-  source: 's2f-agent registry port'
+  source: 's2f-penguin guards + s2f-agent registry'
 }
 
 function classifyTask(query: string, hint?: string): string | null {
@@ -47,9 +51,35 @@ function scoreSkill(query: string, skill: S2fSkill, task: string | null): number
   return score
 }
 
+export function looksHuman(query: string): boolean {
+  if (/\b(arabidopsis|plant|zea mays|oryza)\b/i.test(query)) return false
+  return /\b(hg38|grch38|human|homo sapiens|chr[0-9xy]+\b|rs[0-9]+)\b/i.test(query)
+}
+
+export function isHg19(query: string): boolean {
+  return /\b(hg19|grch37)\b/i.test(query)
+}
+
 export function routeQuery(query: string, taskHint?: string): RouteResult {
+  const warnings: string[] = []
+  if (isHg19(query)) {
+    return {
+      decision: 'clarify',
+      confidence: 'low',
+      task: classifyTask(query, taskHint),
+      primary_skill: null,
+      secondary_skills: [],
+      ranking: [],
+      warnings: ['hg19/GRCh37 is refused. s2f-penguin does not liftover; reissue on hg38/GRCh38.'],
+      penguin: S2F_PENGUIN_REPO,
+      clarify_question: 'Please re-state the variant on hg38 / GRCh38. This plugin does not lift over hg19.',
+      source: 's2f-penguin guards + s2f-agent registry',
+    }
+  }
+
   const task = classifyTask(query, taskHint)
-  const ranking = S2F_SKILLS
+  const human = looksHuman(query)
+  let ranking = S2F_SKILLS
     .map((s) => ({
       id: s.id,
       score: scoreSkill(query, s, task),
@@ -57,6 +87,14 @@ export function routeQuery(query: string, taskHint?: string): RouteResult {
       best_for: s.best_for,
     }))
     .sort((a, b) => b.score - a.score)
+
+  if (human) {
+    const dropped = ranking.filter((r) => HUMAN_UNSAFE_SKILLS.has(r.id) && r.score > 0)
+    if (dropped.length) {
+      warnings.push('GPN live forward pass cannot score human variants (alignment channels would be zero; s2f-penguin P0). Use gpn_msa published table, alphagenome, or evo2.')
+    }
+    ranking = ranking.filter((r) => !HUMAN_UNSAFE_SKILLS.has(r.id))
+  }
 
   const top = ranking[0]
   const second = ranking[1]
@@ -68,17 +106,20 @@ export function routeQuery(query: string, taskHint?: string): RouteResult {
   else if (primary && primary.score >= S2F_WEIGHTS.medMin && margin >= S2F_WEIGHTS.medMargin) confidence = 'medium'
 
   const decision: RouteResult['decision'] = confidence === 'low' && !taskHint ? 'clarify' : 'route'
+  const defaultSkill = task ? (TASK_DEFAULTS[task]?.[0] ?? null) : null
 
   return {
     decision,
     confidence,
     task,
-    primary_skill: primary && primary.score > 0 ? primary.id : (task ? (TASK_DEFAULTS[task]?.[0] ?? null) : null),
+    primary_skill: primary && primary.score > 0 ? primary.id : defaultSkill,
     secondary_skills: ranking.slice(1, 4).filter((r) => r.score > 0).map((r) => r.id),
     ranking: ranking.filter((r) => r.score > 0).slice(0, 8),
+    warnings,
     clarify_question: decision === 'clarify'
       ? 'I can route this better with one detail: which task do you want (environment-setup, embedding, variant-effect, fine-tuning, track-prediction, troubleshooting)?'
       : undefined,
-    source: 's2f-agent registry port',
+    source: 's2f-penguin guards + s2f-agent registry',
+    penguin: S2F_PENGUIN_REPO,
   }
 }

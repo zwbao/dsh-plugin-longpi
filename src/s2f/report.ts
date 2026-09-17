@@ -5,7 +5,7 @@ import { DEMO_VARIANTS, type OmicsLayer } from './genome.ts'
 import { getGenomeStore } from './store.ts'
 import { normalizeChrom, type ParsedVariant } from './vcf.ts'
 
-export const PRODUCT_VERSION = '1.0.0'
+export const PRODUCT_VERSION = '1.0.1'
 
 function matchPanel(v: ParsedVariant) {
   return DEMO_VARIANTS.find((p) => {

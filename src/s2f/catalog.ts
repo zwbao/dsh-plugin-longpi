@@ -18,7 +18,8 @@ export const S2F_SKILLS: S2fSkill[] = [
   { id: 'chrombpnet-skill', family: 'bias-factorized-accessibility-modeling', tasks: ['environment-setup', 'preprocessing', 'bias-model-training', 'training', 'prediction', 'attribution', 'motif-analysis', 'footprinting', 'troubleshooting'], triggers: ['chrombpnet', 'bias factorized', 'pred_bw'], best_for: 'ChromBPNet ATAC/DNase' },
   { id: 'dnabert2', family: 'transformer-embedding-and-finetuning', tasks: ['embedding', 'gue-evaluation', 'fine-tuning', 'csv-validation'], triggers: ['dnabert2', 'zhihan1996/DNABERT-2-117M', 'gue'], best_for: 'DNABERT-2 embeddings and CSV fine-tune' },
   { id: 'evo2-inference', family: 'genome-language-model-inference', tasks: ['environment-setup', 'forward', 'embedding', 'generation', 'hosted-api'], triggers: ['evo2', 'nvcf', 'flash-attn'], best_for: 'Evo 2 inference (GPU or hosted API)' },
-  { id: 'gpn-models', family: 'phylogenetic-language-models', tasks: ['framework-selection', 'loading', 'training', 'variant-scoring'], triggers: ['gpn', 'phylogpn', 'gpn-star'], best_for: 'GPN / PhyloGPN variant scoring' },
+  { id: 'gpn-models', family: 'phylogenetic-language-models', tasks: ['framework-selection', 'loading', 'training', 'variant-scoring'], triggers: ['gpn', 'phylogpn', 'gpn-star'], best_for: 'GPN / PhyloGPN — plants only; refuses human scoring (s2f-penguin P0)' },
+  { id: 'gpn_msa', family: 'published-constraint-table', tasks: ['variant-effect', 'variant-scoring'], triggers: ['gpn_msa', 'gpn-msa', 'multiz100way', 'constraint table'], best_for: 'Human constraint via authors’ published hg38 GPN-MSA table (no live GPN forward)' },
   { id: 'hyenadna-inference', family: 'long-context-dna-language-models', tasks: ['environment-setup', 'embedding', 'forward', 'training', 'fine-tuning', 'troubleshooting'], triggers: ['hyenadna', 'hyena-dna', 'LongSafari'], best_for: 'HyenaDNA long-context embeddings' },
   { id: 'nucleotide-transformer-v3', family: 'transformers-ntv3', tasks: ['environment-setup', 'embedding', 'fine-tuning', 'track-prediction', 'troubleshooting'], triggers: ['ntv3', 'species-conditioning', 'post-trained', 'bigwig', 'annotation'], best_for: 'Nucleotide Transformer v3' },
   { id: 'pangolin-workflows', family: 'tissue-specific-splice-prediction', tasks: ['environment-setup', 'variant-effect', 'prediction', 'interpretation', 'troubleshooting'], triggers: ['pangolin', 'pangolin splice', 'tissue-specific splice'], best_for: 'Pangolin tissue-specific splice scores' },
@@ -31,7 +32,7 @@ export const S2F_SKILLS: S2fSkill[] = [
 export const TASK_DEFAULTS: Record<string, string[]> = {
   'environment-setup': ['alphagenome-api', 'gpn-models', 'nucleotide-transformer-v3', 'borzoi-workflows', 'evo2-inference'],
   embedding: ['dnabert2', 'nucleotide-transformer-v3', 'evo2-inference'],
-  'variant-effect': ['alphagenome-api', 'borzoi-workflows', 'gpn-models', 'evo2-inference'],
+  'variant-effect': ['alphagenome-api', 'evo2-inference', 'gpn_msa', 'borzoi-workflows'],
   'fine-tuning': ['dnabert2', 'nucleotide-transformer-v3', 'bpnet-skill'],
   'track-prediction': ['alphagenome-api', 'nucleotide-transformer-v3', 'segment-nt', 'borzoi-workflows'],
 }
@@ -56,6 +57,10 @@ export const TASK_ALIASES: Array<[RegExp, string]> = [
 ]
 
 export const S2F_REPO = 'https://github.com/JiaqiLi1024/s2f-agent'
+export const S2F_PENGUIN_REPO = 'https://github.com/zwbao/s2f-penguin'
+/** Live GPN forward pass cannot score human variants (alignment channels zeroed). */
+export const HUMAN_UNSAFE_SKILLS = new Set(['gpn-models'])
+export const HUMAN_CONSTRAINT_SKILL = 'gpn_msa'
 export const S2F_WEIGHTS = {
   explicit: 120,
   skillId: 80,

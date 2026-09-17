@@ -1,4 +1,4 @@
-import { S2F_REPO, TASK_CONTRACTS } from './catalog.ts'
+import { S2F_PENGUIN_REPO, S2F_REPO, TASK_CONTRACTS } from './catalog.ts'
 import { routeQuery, type RouteResult } from './routing.ts'
 
 export interface ExtractedInputs {
@@ -67,10 +67,12 @@ export function buildPlan(query: string, taskHint?: string): S2fPlan {
   const skill = route.primary_skill ?? 'alphagenome-api'
   const q = query.replace(/'/g, '')
   const runnable = [
-    `git clone ${S2F_REPO} && cd s2f-agent && ./scripts/bootstrap.sh`,
-    `./scripts/route_query.sh --query '${q}' --format json`,
-    `./scripts/run_agent.sh --task ${task} --query '${q}' --format json`,
-    `./scripts/execute_plan.sh --task ${task} --query '${q}' --format text`,
+    `git clone ${S2F_PENGUIN_REPO} && cd s2f-penguin && ./install.sh`,
+    `s2f doctor`,
+    `s2f route '${q}'`,
+    `s2f translate '${q}'   # genomic → transcript → protein; needs --fetch-data once`,
+    `s2f batch request.json  # LongPi profile contract; constraint=gpn_msa table`,
+    `# legacy bash (JiaqiLi1024/s2f-agent) only if penguin CLI is absent: ${S2F_REPO}`,
   ]
 
   return {
@@ -88,6 +90,6 @@ export function buildPlan(query: string, taskHint?: string): S2fPlan {
       ],
       execute: 'dry-run-only-in-dsh',
     },
-    disclaimer_zh: 'DSH 内只做路由与计划，不在本机拉起 AlphaGenome/Evo2 GPU。执行请在 s2f-agent 仓库按 dry-run 审阅后再 --run。坐标必须写明 assembly（hg38/hg19）。模型输出不是临床诊断。',
+    disclaimer_zh: 'DSH 内只做路由与计划。执行走 zwbao/s2f-penguin 的 s2f CLI（收据+verify）。人类变异禁止 GPN live forward，用 gpn_msa 发表表或 AlphaGenome/Evo2。不做 hg19 liftover。模型输出不是临床诊断。',
   }
 }

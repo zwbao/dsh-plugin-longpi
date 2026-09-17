@@ -6,6 +6,7 @@ import { LAYERS, annotateMultiomics, annotateVariant, listDemoGenome } from './a
 import { appendAudit } from './audit.ts'
 import { lookupEvidence } from './evidence.ts'
 import { executeS2fRoute, s2fAvailable } from './execute.ts'
+import { buildBatchRequest } from './penguin.ts'
 import { buildPlan } from './plan.ts'
 import { buildOmicsReport, exportReportMarkdown } from './report.ts'
 import { routeQuery } from './routing.ts'
@@ -31,7 +32,7 @@ export function registerS2fTools(ctx: Context, config: () => Config): void {
     },
     output: { schema: { type: 'json' }, render: (_a, v) => jsonText(v) },
     async execute(args) {
-      return audited('s2f_route', args, { product_version: '1.0.0', ...routeQuery(args.query, args.task) })
+      return audited('s2f_route', args, { product_version: '1.0.1', ...routeQuery(args.query, args.task) })
     },
   }))
 
@@ -50,7 +51,7 @@ export function registerS2fTools(ctx: Context, config: () => Config): void {
 
   ctx.tools.register(defineTool({
     name: 's2f_execute',
-    description: 'Optional: run s2f-agent scripts/route_query.sh if s2fHome is configured and allowS2fExecute is true. Always dry-run routing only — never GPU inference.',
+    description: 'Optional: run s2f-penguin `s2f route` (preferred) or legacy route_query.sh. Routing/doctor only — never GPU inference from DSH.',
     parameters: {
       query: { type: 'string', required: true, description: 'Query forwarded to route_query.sh' },
       task: { type: 'string', description: 'Optional --task' },
@@ -61,14 +62,42 @@ export function registerS2fTools(ctx: Context, config: () => Config): void {
       if (!cfg.allowS2fExecute) {
         return audited('s2f_execute', args, {
           ran: false,
-          error: 'allowS2fExecute is false. Set cordis config allowS2fExecute: true and s2fHome to the s2f-agent checkout.',
+          error: 'allowS2fExecute is false. Set allowS2fExecute: true and s2fHome to a zwbao/s2f-penguin checkout (bin/s2f).',
         })
       }
       if (!s2fAvailable(cfg.s2fHome)) {
-        return audited('s2f_execute', args, { ran: false, error: 's2fHome does not contain scripts/route_query.sh' })
+        return audited('s2f_execute', args, { ran: false, error: 's2fHome has neither s2f-penguin bin/s2f nor legacy scripts/route_query.sh' })
       }
       const result = await executeS2fRoute({ home: cfg.s2fHome, query: args.query, task: args.task })
       return audited('s2f_execute', args, result)
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 's2f_batch_request',
+    description: 'Build the de-identified s2f-penguin profile-agent JSON (s2f batch). Does not run models. Human constraint axis is gpn_msa table, never live GPN.',
+    parameters: {
+      gene: { type: 'string', description: 'Gene symbol' },
+      rsid: { type: 'string', description: 'rsID' },
+      hgvs_c: { type: 'string', description: 'c. HGVS' },
+      hgvs_p: { type: 'string', description: 'p. HGVS' },
+      assembly: { type: 'string', description: 'Must be hg38' },
+      axes: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Subset of constraint, molecular, cellular, evidence',
+      },
+    },
+    output: { schema: { type: 'json' }, render: (_a, v) => jsonText(v) },
+    async execute(args) {
+      return audited('s2f_batch_request', args, buildBatchRequest({
+        gene: args.gene,
+        rsid: args.rsid,
+        hgvs_c: args.hgvs_c,
+        hgvs_p: args.hgvs_p,
+        assembly: args.assembly,
+        axes: args.axes as string[] | undefined,
+      }))
     },
   }))
 

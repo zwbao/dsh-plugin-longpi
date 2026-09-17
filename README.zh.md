@@ -58,7 +58,7 @@ dsh --profile web --dump-config   # 应出现 "# == dsh-plugin-longpi"
 | 输入区上方 | 四条建议提问（复制后粘贴进 Chat） |
 | 侧栏 | LongPi 圆点 |
 | 人设 | 健康助手，不是编程 agent |
-| 工具 18 个 | 与源码一致（8 个 concierge + 10 个基因组/组学/报告） |
+| 工具 19 个 | 与源码一致（8 个 concierge + 11 个基因组/组学/s2f） |
 | Skill 6 个 | 表型 / 指标 / 行程 / 基因组 / 多组学 / s2f 路由 |
 
 ### 工具（18）
@@ -75,7 +75,8 @@ dsh --profile web --dump-config   # 应出现 "# == dsh-plugin-longpi"
 | `handoff_concierge` | 转真人（每进程最多 1） | 是 |
 | `s2f_route` | 把基因组问题路由到 s2f-agent skill | 否 |
 | `s2f_plan` | 生成 dry-run 执行计划（不跑 GPU） | 否 |
-| `s2f_execute` | 可选：调用本机 s2f `route_query.sh`（需打开开关） | 否 |
+| `s2f_execute` | 可选：优先调 s2f-penguin `s2f route` | 否 |
+| `s2f_batch_request` | 生成去标识的 `s2f batch` JSON | 否 |
 | `read_personal_genome` | 12 位点长寿面板 | 否 |
 | `ingest_vcf` | 摄入本地 VCF SNP（hg38，上限可配） | 是（进程内） |
 | `annotate_variant` | 变异注释 + 文献 + s2f 推荐 | 否 |

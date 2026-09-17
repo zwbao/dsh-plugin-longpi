@@ -5,10 +5,10 @@ description: Route computational genomics work to s2f-agent skills (AlphaGenome,
 
 # s2f routing
 
-Port of JiaqiLi1024/s2f-agent: classify task → rank skills → check canonical inputs → emit dry-run plan.
+Routing follows **zwbao/s2f-penguin** scientific guards, not the raw s2f-agent bash defaults.
 
-Required for variant-effect: `assembly`, `coordinate-or-interval`, `ref-alt-or-variant-spec`.
-
-Missing inputs → ask one focused question. Do not assume hg38 if the user did not say it (demo genome is the exception, labeled 演示).
-
-Never print API keys. Never `rm -rf`. Never claim a delta-score that was not computed.
+- Human / hg38 variants: **never** `gpn-models` live forward (alignment channels would be zero). Use `gpn_msa` published table, `alphagenome-api`, or `evo2-inference`.
+- hg19 / GRCh37: refuse; no liftover.
+- Execution is `s2f` CLI (penguin), not family scripts from DSH. Prefer `s2f_batch_request` for the profile-agent JSON, then `s2f batch` outside DSH.
+- Orthogonal axes (constraint / molecular / cellular / evidence) combine by logic, never by averaging scores.
+- Missing inputs → one focused question. Never invent a delta-score. Never print API keys.
