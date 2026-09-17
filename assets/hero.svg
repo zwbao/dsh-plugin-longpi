@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720" role="img" aria-label="LongPi dashboard: composite biological age 41.2 versus chronological 45">
+  <rect width="1280" height="720" fill="#F5F1EA"/>
+  <rect x="48" y="40" width="1184" height="640" rx="24" fill="#FCFAF5" stroke="#E6DFCF"/>
+  <text x="80" y="88" fill="#B8935A" font-family="Georgia, 'Iowan Old Style', serif" font-size="14" letter-spacing="3">DEMO DATA · NOT A PERSONAL CHART</text>
+  <text x="80" y="128" fill="#6B7370" font-family="Georgia, serif" font-size="18">LongPi Health Assistant · Zhang Mingyuan (demo)</text>
+  <text x="80" y="230" fill="#2D5F5A" font-family="Georgia, serif" font-size="120" font-weight="500">41.2</text>
+  <text x="80" y="278" fill="#6B7370" font-family="Georgia, serif" font-size="22">Composite biological age · chronological 45</text>
+  <text x="80" y="318" fill="#A5ABA7" font-family="Georgia, serif" font-size="14">AI output is reference only and does not replace a physician.</text>
+
+  <g transform="translate(80,360)">
+    <rect width="200" height="112" rx="14" fill="#FFFFFF" stroke="#E6DFCF"/>
+    <text x="20" y="36" fill="#6B7370" font-size="13" font-family="Georgia, serif">Biological</text>
+    <text x="20" y="78" fill="#1A1F1D" font-size="32" font-family="Georgia, serif">43.1</text>
+  </g>
+  <g transform="translate(300,360)">
+    <rect width="200" height="112" rx="14" fill="#FFFFFF" stroke="#E6DFCF"/>
+    <text x="20" y="36" fill="#6B7370" font-size="13" font-family="Georgia, serif">Physiological</text>
+    <text x="20" y="78" fill="#1A1F1D" font-size="32" font-family="Georgia, serif">39.8</text>
+  </g>
+  <g transform="translate(520,360)">
+    <rect width="200" height="112" rx="14" fill="#FFFFFF" stroke="#E6DFCF"/>
+    <text x="20" y="36" fill="#6B7370" font-size="13" font-family="Georgia, serif">Psychological</text>
+    <text x="20" y="78" fill="#1A1F1D" font-size="32" font-family="Georgia, serif">42.0</text>
+  </g>
+  <g transform="translate(80,492)">
+    <rect width="200" height="112" rx="14" fill="#FFFFFF" stroke="#E6DFCF"/>
+    <text x="20" y="36" fill="#6B7370" font-size="13" font-family="Georgia, serif">Behavioral</text>
+    <text x="20" y="78" fill="#1A1F1D" font-size="32" font-family="Georgia, serif">40.4</text>
+  </g>
+  <g transform="translate(300,492)">
+    <rect width="200" height="112" rx="14" fill="#FFFFFF" stroke="#E6DFCF"/>
+    <text x="20" y="36" fill="#6B7370" font-size="13" font-family="Georgia, serif">Social / env</text>
+    <text x="20" y="78" fill="#1A1F1D" font-size="32" font-family="Georgia, serif">41.6</text>
+  </g>
+
+  <g transform="translate(860,200)">
+    <circle cx="160" cy="170" r="150" fill="none" stroke="#E6DFCF"/>
+    <circle cx="160" cy="170" r="100" fill="none" stroke="#C7D9D5"/>
+    <polygon points="160,55 287,147 238,297 82,297 33,147" fill="rgba(45,95,90,0.12)" stroke="#2D5F5A" stroke-width="2"/>
+    <text x="160" y="166" text-anchor="middle" fill="#2D5F5A" font-size="28" font-family="Georgia, serif">−3.8</text>
+    <text x="160" y="192" text-anchor="middle" fill="#6B7370" font-size="12" font-family="Georgia, serif">years vs chrono</text>
+    <text x="160" y="18" text-anchor="middle" fill="#6B7370" font-size="12" font-family="Georgia, serif">Biological</text>
+    <text x="310" y="150" fill="#6B7370" font-size="12" font-family="Georgia, serif">Physio</text>
+    <text x="250" y="318" fill="#6B7370" font-size="12" font-family="Georgia, serif">Psych</text>
+    <text x="40" y="318" fill="#6B7370" font-size="12" font-family="Georgia, serif">Behavior</text>
+    <text x="0" y="150" fill="#6B7370" font-size="12" font-family="Georgia, serif">Social</text>
+  </g>
+</svg>

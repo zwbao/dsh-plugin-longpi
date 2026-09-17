@@ -1,0 +1,85 @@
+{
+  "name": "dsh-plugin-longpi",
+  "version": "1.0.0",
+  "description": "LongPi 1.0.0 for DeepSeek Harness: longevity concierge, personal-genome panel, VCF ingest, multi-omics report, s2f-agent routing.",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": "./lib/client.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/index.d.ts",
+    "lib/client.js",
+    "cordis.patch.yml",
+    "skills",
+    "assets",
+    "docs",
+    "README.md",
+    "README.zh.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": "^22.19 || >=24"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "slots"
+      ]
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf lib",
+    "smoke": "node test/smoke.mjs",
+    "test": "npm run build && node test/smoke.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zwbao/dsh-plugin-longpi.git"
+  },
+  "homepage": "https://github.com/zwbao/dsh-plugin-longpi",
+  "bugs": {
+    "url": "https://github.com/zwbao/dsh-plugin-longpi/issues"
+  },
+  "keywords": [
+    "dsh-plugin",
+    "deepseek-harness",
+    "longpi",
+    "longevity",
+    "biological-age",
+    "phenotype",
+    "health",
+    "concierge"
+  ],
+  "license": "MIT",
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=0.1.0 || >=4.0.0",
+    "@deepseek-ai/dsh-tools": ">=0.1.0",
+    "@deepseek-ai/schemastery": ">=3.0.0",
+    "react": "^18.0.0 || ^19.0.0"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "^4.0.2",
+    "@deepseek-ai/dsh-tools": "^0.1.5-rc.1",
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "@types/node": "^22.20.0",
+    "@types/react": "^18.3.0",
+    "tsdown": "^0.22.2",
+    "typescript": "^5.9.0"
+  }
+}
