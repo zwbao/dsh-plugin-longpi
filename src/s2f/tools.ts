@@ -10,8 +10,9 @@ import { buildBatchRequest } from './penguin.ts'
 import { buildPlan } from './plan.ts'
 import { buildOmicsReport, exportReportMarkdown } from './report.ts'
 import { routeQuery } from './routing.ts'
+import { DEMO_VARIANTS } from './genome.ts'
 import { setIngest } from './store.ts'
-import { parseVcf } from './vcf.ts'
+import { normalizeChrom, parseVcf } from './vcf.ts'
 
 function jsonText(value: unknown): [{ type: 'text'; text: string }] {
   return [{ type: 'text', text: JSON.stringify(value, null, 2) }]
@@ -109,7 +110,7 @@ export function registerS2fTools(ctx: Context, config: () => Config): void {
     async execute() {
       return audited('read_personal_genome', {}, {
         ...listDemoGenome(),
-        report_hint: 'Call build_omics_report for the 1.0.0 combined phenotype+genome+omics document.',
+        report_hint: 'Call build_omics_report for the 1.0.1 combined phenotype+genome+omics document.',
       })
     },
   }))
@@ -143,10 +144,20 @@ export function registerS2fTools(ctx: Context, config: () => Config): void {
       const parsed = parseVcf(text, { maxVariants: config().maxVcfVariants })
       if (!parsed.ok) return audited('ingest_vcf', args, parsed)
       setIngest(parsed, label)
+      const panel_hits = parsed.variants.filter((v) =>
+        DEMO_VARIANTS.some((p) =>
+          p.rsid === v.rsid
+          || (p.chrom === normalizeChrom(v.chrom) && p.position === v.position && p.ref === v.ref && p.alt === v.alt),
+        ),
+      )
       return audited('ingest_vcf', args, {
-        ...parsed,
-        variants: parsed.variants.slice(0, 50),
-        variants_omitted: Math.max(0, parsed.variants.length - 50),
+        ok: true,
+        n_kept: parsed.n_kept,
+        n_dropped_nonsnp: parsed.n_dropped_nonsnp,
+        n_truncated: parsed.n_truncated,
+        panel_hit_count: panel_hits.length,
+        panel_hits: panel_hits.slice(0, 20).map((v) => ({ rsid: v.rsid, gt: v.genotype, hg38: `${v.chrom}:${v.position}` })),
+        variants_preview: parsed.variants.slice(0, 20),
         source: label,
         next: 'build_omics_report',
       })
@@ -185,7 +196,7 @@ export function registerS2fTools(ctx: Context, config: () => Config): void {
 
   ctx.tools.register(defineTool({
     name: 'build_omics_report',
-    description: 'Build the LongPi 1.0.0 combined report: phenotype dashboard + genome panel/VCF hits + omics layer status + evidence index.',
+    description: 'Build the LongPi 1.0.1 combined report: phenotype dashboard + genome panel/VCF hits + omics layer status + evidence index.',
     parameters: {},
     output: { schema: { type: 'json' }, render: (_a, v) => jsonText(v) },
     async execute() {
@@ -195,7 +206,7 @@ export function registerS2fTools(ctx: Context, config: () => Config): void {
 
   ctx.tools.register(defineTool({
     name: 'export_report',
-    description: 'Export the current 1.0.0 report as json or markdown.',
+    description: 'Export the current 1.0.1 report as json or markdown.',
     parameters: {
       format: { type: 'string', enum: ['json', 'markdown'], description: 'json (default) or markdown' },
     },

@@ -5,7 +5,7 @@
 ![dsh](https://img.shields.io/badge/DeepSeek%20Harness-0.1.5--rc-8A63D2)
 ![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-111)
 
-**Version 1.0.0.** Production bundle, not an MVP slice.
+**Version 1.0.1.** Production bundle, not an MVP slice.
 
 The **longevity concierge** for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): a North-Star biological-age dashboard, five phenotype modules, a medically guarded chat, and a launch-day itinerary — as one installable `dsh.bundle`.
 
@@ -61,13 +61,13 @@ Restart the GUI (or hard-refresh). Open a session → tab **LongPi**. Uninstall:
 | Surface | What you see |
 |---|---|
 | Conversation view **LongPi** | Composite age, Δ vs chronological, 5-module radar, status chips, insights, Oct 24 itinerary |
-| Composer dock | Four suggested questions (copy → paste into Chat) |
+| Composer dock | Suggested questions (copy → paste into Chat) |
 | Sidebar mark | LongPi dot |
 | Persona | Health assistant, not a coding agent |
 | Tools (19) | 8 concierge + 11 genome/omics/s2f — matches source |
 | Skills (6) | Phenotype, panel, itinerary, genome, multi-omics, s2f routing |
 
-### Tools (18)
+### Tools (19)
 
 | Tool | Answers | Writes |
 |---|---|---|
@@ -87,7 +87,7 @@ Restart the GUI (or hard-refresh). Open a session → tab **LongPi**. Uninstall:
 | `ingest_vcf` | Local VCF SNP ingest (hg38, capped) | in-process |
 | `annotate_variant` | Consequence, ClinVar note, literature, s2f skills | no |
 | `annotate_multiomics` | Five omics layers | no |
-| `build_omics_report` | 1.0.0 combined report | no |
+| `build_omics_report` | 1.0.1 combined report | no |
 | `export_report` | JSON or Markdown | no |
 | `lookup_longevity_evidence` | Curated index (not a GitHub crawl) | no |
 
@@ -98,7 +98,7 @@ Restart the GUI (or hard-refresh). Open a session → tab **LongPi**. Uninstall:
 - `event-day-itinerary` — launch-day path
 - `genome-personalization` — demo WGS panel + s2f scoring path
 - `multiomics-annotation` — layered omics, never fill missing layers
-- `s2f-routing` — port of JiaqiLi1024/s2f-agent router
+- `s2f-routing` — s2f-penguin guards + profile batch contract
 
 ## Quick start
 

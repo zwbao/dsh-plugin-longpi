@@ -66,7 +66,11 @@ function DashboardView(): React.ReactElement {
 
   React.useEffect(() => {
     let cancelled = false
-    fetch('/api/longpi/dashboard')
+    const token = new URLSearchParams(window.location.search).get('token')
+    const url = token
+      ? `/api/longpi/dashboard?token=${encodeURIComponent(token)}`
+      : '/api/longpi/dashboard'
+    fetch(url, { credentials: 'include' })
       .then(async (res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`)
         return res.json() as Promise<DashboardPayload>
@@ -101,7 +105,7 @@ function DashboardView(): React.ReactElement {
     data.banner
       ? React.createElement('div', { className: 'lp-banner' }, '演示数据 · 非个人病历 · DEMO DATA')
       : null,
-    React.createElement('div', { className: 'lp-kicker' }, `${data.brandName} · ${data.customer.display_name} · v${data.version ?? '1.0.0'}`),
+    React.createElement('div', { className: 'lp-kicker' }, `${data.brandName} · ${data.customer.display_name} · v${data.version ?? '1.0.1'}`),
     React.createElement('div', { className: 'lp-hero' },
       React.createElement('div', null,
         React.createElement('div', { className: 'lp-north' },

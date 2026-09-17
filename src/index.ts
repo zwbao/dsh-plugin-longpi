@@ -15,6 +15,7 @@ export { Config }
 export { retrieve } from './retrieve.ts'
 export { preGuard } from './guardrails.ts'
 export { CUSTOMER, findMetric, METRICS } from './fixture.ts'
+export { DEMO_VARIANTS } from './s2f/genome.ts'
 export { routeQuery } from './s2f/routing.ts'
 export { buildBatchRequest } from './s2f/penguin.ts'
 export { annotateVariant } from './s2f/annotate.ts'

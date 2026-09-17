@@ -127,6 +127,29 @@ declare const CUSTOMER: DemoCustomer;
 declare const METRICS: Metric[];
 declare function findMetric(code: string): Metric | undefined;
 //#endregion
+//#region src/s2f/genome.d.ts
+type OmicsLayer = 'genome' | 'epigenome' | 'transcriptome' | 'proteome' | 'metabolome';
+interface DemoVariant {
+  id: string;
+  rsid: string;
+  gene: string;
+  assembly: 'hg38';
+  chrom: string;
+  position: number;
+  ref: string;
+  alt: string;
+  genotype_demo: string;
+  consequence: string;
+  gnomad_af_note: string;
+  clinvar: string;
+  longevity_note_zh: string;
+  citation: string;
+  s2f_skills: string[];
+  layers: OmicsLayer[];
+}
+/** Synthetic 张明远 genome panel. Not a real person. */
+declare const DEMO_VARIANTS: DemoVariant[];
+//#endregion
 //#region src/s2f/routing.d.ts
 interface RankedSkill {
   id: string;
@@ -183,9 +206,6 @@ declare function buildBatchRequest(input: {
   code: string;
   message_zh: string;
 };
-//#endregion
-//#region src/s2f/genome.d.ts
-type OmicsLayer = 'genome' | 'epigenome' | 'transcriptome' | 'proteome' | 'metabolome';
 //#endregion
 //#region src/s2f/annotate.d.ts
 declare function annotateVariant(query: string): Record<string, unknown>;
@@ -298,4 +318,4 @@ declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): void;
 //#endregion
-export { CUSTOMER, Config, METRICS, PRODUCT_VERSION, annotateVariant, apply, buildBatchRequest, buildOmicsReport, findMetric, inject, lookupEvidence, name, parseVcf, preGuard, retrieve, routeQuery };
+export { CUSTOMER, Config, DEMO_VARIANTS, METRICS, PRODUCT_VERSION, annotateVariant, apply, buildBatchRequest, buildOmicsReport, findMetric, inject, lookupEvidence, name, parseVcf, preGuard, retrieve, routeQuery };

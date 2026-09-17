@@ -59,7 +59,8 @@ export function parseVcf(
       continue
     }
     records += 1
-    const cols = line.split('\t')
+    let cols = line.split('\t')
+    if (cols.length < 5) cols = line.trim().split(/\s+/)
     if (cols.length < 5) {
       dropped += 1
       continue

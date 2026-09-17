@@ -1,5 +1,5 @@
 import { routeQuery } from './routing.ts'
-import { DEMO_VARIANTS, findVariant, type DemoVariant, type OmicsLayer } from './genome.ts'
+import { DEMO_VARIANTS, findVariants, type DemoVariant, type OmicsLayer } from './genome.ts'
 
 export const LAYERS: OmicsLayer[] = ['genome', 'epigenome', 'transcriptome', 'proteome', 'metabolome']
 
@@ -12,18 +12,23 @@ const LAYER_HELP: Record<OmicsLayer, string> = {
 }
 
 export function annotateVariant(query: string): Record<string, unknown> {
-  const hit = findVariant(query)
-  const route = routeQuery(`variant-effect ${query} hg38 REF ALT`)
-  if (!hit) {
+  const hits = findVariants(query)
+  const route = routeQuery(`variant-effect ${query} hg38`)
+  if (!hits.length) {
     return {
       demo: true,
       found: false,
       message_zh: '不在演示基因组面板中。请提供 hg38 坐标 + REF/ALT，或 rsID。不会编造 ClinVar 致病性。',
       s2f_route: route,
-      how_to_score: '在 s2f-agent 中跑 alphagenome-api / gpn-models / spliceai-workflows（dry-run 先）。',
+      how_to_score: '在 s2f-penguin 中：constraint 用 gpn_msa 发表表；打分用 alphagenome / evo2。禁止 GPN live forward。',
     }
   }
-  return formatVariant(hit, route)
+  const primary = formatVariant(hits[0]!, route)
+  if (hits.length === 1) return primary
+  return {
+    ...primary,
+    also: hits.slice(1).map((h) => ({ rsid: h.rsid, gene: h.gene, genotype_demo: h.genotype_demo, hg38: `${h.chrom}:${h.position}` })),
+  }
 }
 
 function formatVariant(hit: DemoVariant, route: ReturnType<typeof routeQuery>) {
@@ -52,7 +57,7 @@ function formatVariant(hit: DemoVariant, route: ReturnType<typeof routeQuery>) {
       route,
     },
     not: ['diagnosis', 'polygenic score as clinical test', 'dose change'],
-    disclaimer_zh: '演示基因型。关联研究不是诊断。模型打分需在 s2f-agent 中执行，DSH 不发明 delta-score。',
+    disclaimer_zh: '演示基因型。关联研究不是诊断。模型打分走 s2f-penguin CLI，DSH 不发明 delta-score。人类变异禁止 GPN live forward。',
   }
 }
 
@@ -68,10 +73,10 @@ export function annotateMultiomics(layer: string, focus?: string): Record<string
     return v.rsid === f || v.gene.toLowerCase() === f || f.includes(v.rsid)
   })
   const tools: Record<OmicsLayer, string[]> = {
-    genome: ['s2f: alphagenome-api, gpn-models', 'ClinVar / gnomAD (external)'],
+    genome: ['s2f-penguin: alphagenome / evo2 / gpn_msa table', 'ClinVar / gnomAD (external)'],
     epigenome: ['pyaging / BioAge / methylclock (external)', 's2f: chrombpnet-skill, sei-workflows'],
     transcriptome: ['s2f: spliceai-workflows, pangolin-workflows, borzoi-workflows'],
-    proteome: ['s2f: gpn-models missense scoring', 'AlphaFold not bundled'],
+    proteome: ['s2f-penguin: gpn_msa table or alphagenome; not GPN live forward', 'AlphaFold not bundled'],
     metabolome: ['pair with LongPi blood panel (hs-CRP, lipids) — no MS pipeline bundled'],
   }
   return {

@@ -79,6 +79,7 @@ export function routeQuery(query: string, taskHint?: string): RouteResult {
 
   const task = classifyTask(query, taskHint)
   const human = looksHuman(query)
+    || (task === 'variant-effect' && !/\b(arabidopsis|plant|zea mays|oryza)\b/i.test(query))
   let ranking = S2F_SKILLS
     .map((s) => ({
       id: s.id,

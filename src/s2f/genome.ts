@@ -36,7 +36,7 @@ export const DEMO_VARIANTS: DemoVariant[] = [
     clinvar: 'not a Mendelian pathogenic assertion',
     longevity_note_zh: 'FOXO3 常见位点，多个人类长寿队列有关联报道。关联 ≠ 因果，不能据此改药。',
     citation: 'Willcox et al., PNAS 2008 (FOXO3A); Flachsbart et al., PNAS 2009',
-    s2f_skills: ['gpn-models', 'alphagenome-api'],
+    s2f_skills: ['alphagenome-api', 'gpn_msa'],
     layers: ['genome', 'transcriptome'],
   },
   {
@@ -54,7 +54,7 @@ export const DEMO_VARIANTS: DemoVariant[] = [
     clinvar: 'risk allele for AD/CVD is C (ε4); demo is T/T',
     longevity_note_zh: '演示基因型 TT，不是 ε4。ε4 与 Alzheimer / 心血管风险相关文献极多；此处只报告演示等位基因，不做诊断。',
     citation: 'Corder et al., Science 1993; Belloy et al., JAMA Neurol reviews',
-    s2f_skills: ['alphagenome-api', 'gpn-models'],
+    s2f_skills: ['alphagenome-api', 'gpn_msa'],
     layers: ['genome', 'proteome', 'metabolome'],
   },
   {
@@ -72,7 +72,7 @@ export const DEMO_VARIANTS: DemoVariant[] = [
     clinvar: 'not used as a diagnostic P/LP assertion here',
     longevity_note_zh: 'CETP 与 HDL / 长寿的观察性关联存在争议，需表型（血脂）一起看。',
     citation: 'Barzilai et al., JAMA 2003 (Ashkenazi centenarians, CETP)',
-    s2f_skills: ['gpn-models'],
+    s2f_skills: ['gpn_msa', 'alphagenome-api'],
     layers: ['genome', 'proteome', 'metabolome'],
   },
   {
@@ -108,7 +108,7 @@ export const DEMO_VARIANTS: DemoVariant[] = [
     clinvar: 'ε2 allele is T; demo is C/C',
     longevity_note_zh: '与 rs429358 共同定义 APOE ε2/ε3/ε4。演示不是 ε2。',
     citation: 'Corder et al., Science 1993; APOE haplotype reviews',
-    s2f_skills: ['alphagenome-api', 'gpn-models'],
+    s2f_skills: ['alphagenome-api', 'gpn_msa'],
     layers: ['genome', 'proteome', 'metabolome'],
   },
   {
@@ -126,7 +126,7 @@ export const DEMO_VARIANTS: DemoVariant[] = [
     clinvar: 'research association, not a Mendelian P/LP used here',
     longevity_note_zh: 'Klotho KL-VS 与认知/长寿的观察性报道，证据混杂。',
     citation: 'Arking et al., PNAS 2002; Dubal / Klotho literature',
-    s2f_skills: ['gpn-models'],
+    s2f_skills: ['gpn_msa', 'alphagenome-api'],
     layers: ['genome', 'proteome'],
   },
   {
@@ -136,9 +136,9 @@ export const DEMO_VARIANTS: DemoVariant[] = [
     assembly: 'hg38',
     chrom: 'chr5',
     position: 1286401,
-    ref: 'A',
-    alt: 'C',
-    genotype_demo: 'AC',
+    ref: 'C',
+    alt: 'A',
+    genotype_demo: 'CA',
     consequence: 'intron_variant',
     gnomad_af_note: 'common TERT GWAS hit (telomere length / cancer traits)',
     clinvar: 'trait-associated',
@@ -153,7 +153,7 @@ export const DEMO_VARIANTS: DemoVariant[] = [
     gene: 'CDKN2B-AS1',
     assembly: 'hg38',
     chrom: 'chr9',
-    position: 22124477,
+    position: 22124478,
     ref: 'A',
     alt: 'G',
     genotype_demo: 'AG',
@@ -180,7 +180,7 @@ export const DEMO_VARIANTS: DemoVariant[] = [
     clinvar: 'not interpreted as a standalone disease diagnosis here',
     longevity_note_zh: '叶酸代谢常见位点。没有同型半胱氨酸化验时只做生化背景说明。',
     citation: 'Frosst et al., Nat Genet 1995',
-    s2f_skills: ['gpn-models'],
+    s2f_skills: ['gpn_msa', 'alphagenome-api'],
     layers: ['genome', 'metabolome'],
   },
   {
@@ -198,7 +198,7 @@ export const DEMO_VARIANTS: DemoVariant[] = [
     clinvar: 'trait-associated',
     longevity_note_zh: '线粒体抗氧化酶常见错义，文献对表型效应不一致。',
     citation: 'SOD2 Ala16Val association reviews',
-    s2f_skills: ['gpn-models'],
+    s2f_skills: ['gpn_msa', 'alphagenome-api'],
     layers: ['genome', 'proteome'],
   },
   {
@@ -239,11 +239,18 @@ export const DEMO_VARIANTS: DemoVariant[] = [
   },
 ]
 
-export function findVariant(q: string): DemoVariant | undefined {
+export function findVariants(q: string): DemoVariant[] {
   const s = q.trim().toLowerCase()
-  return DEMO_VARIANTS.find((v) =>
-    v.rsid === s || v.gene.toLowerCase() === s || v.id === s || s.includes(v.rsid) || s.includes(v.gene.toLowerCase()),
+  if (!s) return []
+  const exact = DEMO_VARIANTS.filter((v) => v.rsid.toLowerCase() === s || v.id === s)
+  if (exact.length) return exact
+  return DEMO_VARIANTS.filter((v) =>
+    v.gene.toLowerCase() === s || s.includes(v.rsid.toLowerCase()) || s.includes(v.gene.toLowerCase()),
   )
+}
+
+export function findVariant(q: string): DemoVariant | undefined {
+  return findVariants(q)[0]
 }
 
 export function genomeBlock(): string {

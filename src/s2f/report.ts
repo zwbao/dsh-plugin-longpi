@@ -77,10 +77,10 @@ export function buildOmicsReport() {
     evidence_index: lookupEvidence('').matches.map((e) => ({ id: e.id, name: e.name, url: e.url })),
     next_steps: [
       'Review panel hits with a clinician; do not change medication from this report.',
-      'For model scoring (AlphaGenome / SpliceAI / GPN), run s2f_plan then s2f_execute dry-run if S2F_HOME is set.',
+      'For model scoring, emit s2f_batch_request then run s2f-penguin `s2f batch` (constraint=gpn_msa table; never live GPN on human variants).',
       'Methylation clocks (pyaging / BioAge) are listed as unmeasured unless you ingest those assays separately.',
     ],
-    disclaimer_zh: 'LongPi 1.0.0 正式报告：表型为演示面板；基因组为演示或本地 VCF SNP 与长寿面板的交集。不是医疗器械，不是诊断，不替代医师。',
+    disclaimer_zh: 'LongPi 1.0.1 正式报告：表型为演示面板；基因组为演示或本地 VCF SNP 与长寿面板的交集。不是医疗器械，不是诊断，不替代医师。人类变异禁止 GPN live forward。',
   }
 }
 

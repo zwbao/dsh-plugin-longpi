@@ -5,7 +5,7 @@
 ![dsh](https://img.shields.io/badge/DeepSeek%20Harness-0.1.5--rc-8A63D2)
 ![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-111)
 
-**1.0.0 正式版**，不是 MVP 切片。
+**1.0.1 正式版**，不是 MVP 切片。
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 上的 **长寿管家**：综合生物年龄 Dashboard、五维表型、带医学守则的对话、发布会当日行程 —— 一个可 `dsh plugin add` 的 bundle。
 
@@ -55,13 +55,13 @@ dsh --profile web --dump-config   # 应出现 "# == dsh-plugin-longpi"
 | 表面 | 内容 |
 |---|---|
 | 会话页 **LongPi** | 综合年龄、相对实际年龄的 Δ、五维雷达、指标芯片、洞察、10/24 行程 |
-| 输入区上方 | 四条建议提问（复制后粘贴进 Chat） |
+| 输入区上方 | 建议提问（复制后粘贴进 Chat） |
 | 侧栏 | LongPi 圆点 |
 | 人设 | 健康助手，不是编程 agent |
 | 工具 19 个 | 与源码一致（8 个 concierge + 11 个基因组/组学/s2f） |
 | Skill 6 个 | 表型 / 指标 / 行程 / 基因组 / 多组学 / s2f 路由 |
 
-### 工具（18）
+### 工具（19）
 
 | 工具 | 做什么 | 写入 |
 |---|---|---|
@@ -81,7 +81,7 @@ dsh --profile web --dump-config   # 应出现 "# == dsh-plugin-longpi"
 | `ingest_vcf` | 摄入本地 VCF SNP（hg38，上限可配） | 是（进程内） |
 | `annotate_variant` | 变异注释 + 文献 + s2f 推荐 | 否 |
 | `annotate_multiomics` | 五层组学 | 否 |
-| `build_omics_report` | 1.0.0 表型+基因组+组学正式报告 | 否 |
+| `build_omics_report` | 1.0.1 表型+基因组+组学正式报告 | 否 |
 | `export_report` | JSON / Markdown 导出 | 否 |
 | `lookup_longevity_evidence` | 精选抗衰索引（非全网爬取） | 否 |
 

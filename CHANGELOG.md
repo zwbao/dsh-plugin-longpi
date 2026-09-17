@@ -9,6 +9,8 @@ Integrate scientific guards and the profile contract from [zwbao/s2f-penguin](ht
 - `s2f_execute` prefers penguin `s2f route` binary; legacy `route_query.sh` is fallback only.
 - New `s2f_batch_request` emits the de-identified `s2f batch` JSON for LongPi as the profile agent.
 - Plans point at `s2f doctor` / `s2f translate` / `s2f batch`, not GPU from DSH.
+- Correct rs10757278 to GRCh38 `9:22124478`; TERT rs2736100 alleles to plus-strand C/A.
+- `annotate_variant('APOE')` returns both ε SNPs. Dashboard fetch forwards the DSH `token` query param.
 
 ## 1.0.0 — 2026-09-17
 
