@@ -5,7 +5,7 @@
 ![dsh](https://img.shields.io/badge/DeepSeek%20Harness-0.1.5--rc-8A63D2)
 ![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-111)
 
-**Version 1.0.1.** Production bundle, not an MVP slice.
+**Version 1.1.0.** Production bundle, not an MVP slice.
 
 The **longevity concierge** for [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness): a North-Star biological-age dashboard, five phenotype modules, a medically guarded chat, and a launch-day itinerary — as one installable `dsh.bundle`.
 
@@ -26,7 +26,7 @@ Health plugins fail the same way: a number appears on a dashboard and nobody can
 The headline age is computed, not authored:
 
 ```sh
-npm test   # prints: smoke ok { version: '1.0.1', ... }
+npm test   # prints: smoke ok { version: '1.1.0', ... }
 ```
 
 `test/smoke.mjs` recomputes the published PhenoAge model (Levine 2018) from the nine-marker demo panel and asserts the engine lands on `52.52920526313869` years. Change a coefficient, a unit or the Gompertz back-projection and the test fails. That value, plus the five module weights, produces the composite **45.1** against a chronological **45**.
@@ -113,7 +113,7 @@ Restart the GUI (or hard-refresh). Open a session → tab **LongPi**. Uninstall:
 | `ingest_vcf` | Local VCF SNP ingest (hg38, capped) | in-process |
 | `annotate_variant` | Consequence, ClinVar note, literature, s2f skills | no |
 | `annotate_multiomics` | Five omics layers | no |
-| `build_omics_report` | 1.0.1 combined report | no |
+| `build_omics_report` | 1.1.0 combined report | no |
 | `export_report` | JSON or Markdown | no |
 | `lookup_longevity_evidence` | Curated index with verified licence and integration mode per row | no |
 

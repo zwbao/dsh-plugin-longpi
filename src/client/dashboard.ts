@@ -128,7 +128,7 @@ function DashboardView(): React.ReactElement {
     data.banner
       ? React.createElement('div', { className: 'lp-banner' }, '演示数据 · 非个人病历 · DEMO DATA')
       : null,
-    React.createElement('div', { className: 'lp-kicker' }, `${data.brandName} · ${data.customer.display_name} · v${data.version ?? '1.0.1'}`),
+    React.createElement('div', { className: 'lp-kicker' }, `${data.brandName} · ${data.customer.display_name} · v${data.version ?? 'unknown'}`),
     React.createElement('div', { className: 'lp-hero' },
       React.createElement('div', null,
         React.createElement('div', { className: 'lp-north' },

@@ -37,7 +37,7 @@ export function registerCommands(ctx: Context): void {
     })
     scoped.commands.register({
       name: 'longpi-report',
-      description: '导出 LongPi 1.0.1 多组学报告（Markdown）。',
+      description: `导出 LongPi ${PRODUCT_VERSION} 多组学报告（Markdown）。`,
       handler: () => ({ kind: 'success', text: exportReportMarkdown(buildOmicsReport()) }),
     })
     scoped.commands.register({

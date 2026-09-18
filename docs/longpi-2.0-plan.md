@@ -277,7 +277,7 @@ npm test          # 一行命令，输出黄金向量
 
 **未做（诚实清单）**
 
-- 版本号仍是 1.0.1，但功能已超出——`package.json` 与 `src/s2f/report.ts` 的 `PRODUCT_VERSION` 是两处独立来源，**应该改成单一来源**再发版
+- ~~版本号仍是 1.0.1~~ → 已在 1.1.0 解决：`PRODUCT_VERSION`（`src/s2f/report.ts`）成为代码内唯一来源，所有散落的 `1.0.1` 字面量改为引用它；`package.json` 仍是发布版本，由 smoke 测试断言两者一致（实测把 package.json 改成 9.9.9 会让测试变红）
 - 甲基化/KDM 时钟未实现（原因见模型卡）
 - 未提 awesome PR
 - 未做真实截图/GIF

@@ -428,7 +428,14 @@ declare function parseVcf(text: string, options?: {
 }): VcfIngestResult | VcfIngestError;
 //#endregion
 //#region src/s2f/report.d.ts
-declare const PRODUCT_VERSION = "1.0.1";
+/**
+ * The single source of truth for the product version in code.
+ *
+ * `package.json` carries the release version and `test/smoke.mjs` asserts the two
+ * agree, so they cannot drift apart unnoticed. Do not hardcode a version string
+ * anywhere else: import this constant, or reference it in prose from the README.
+ */
+declare const PRODUCT_VERSION = "1.1.0";
 declare function buildOmicsReport(): {
   product: string;
   version: string;

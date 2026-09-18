@@ -5,7 +5,14 @@ import { DEMO_VARIANTS, type OmicsLayer } from './genome.ts'
 import { getGenomeStore } from './store.ts'
 import { normalizeChrom, type ParsedVariant } from './vcf.ts'
 
-export const PRODUCT_VERSION = '1.0.1'
+/**
+ * The single source of truth for the product version in code.
+ *
+ * `package.json` carries the release version and `test/smoke.mjs` asserts the two
+ * agree, so they cannot drift apart unnoticed. Do not hardcode a version string
+ * anywhere else: import this constant, or reference it in prose from the README.
+ */
+export const PRODUCT_VERSION = '1.1.0'
 
 function matchPanel(v: ParsedVariant) {
   return DEMO_VARIANTS.find((p) => {
@@ -80,7 +87,7 @@ export function buildOmicsReport() {
       'For model scoring, emit s2f_batch_request then run s2f-penguin `s2f batch` (constraint=gpn_msa table; never live GPN on human variants).',
       'Methylation clocks (pyaging / BioAge) are listed as unmeasured unless you ingest those assays separately.',
     ],
-    disclaimer_zh: 'LongPi 1.0.1 正式报告：表型为演示面板；基因组为演示或本地 VCF SNP 与长寿面板的交集。不是医疗器械，不是诊断，不替代医师。人类变异禁止 GPN live forward。',
+    disclaimer_zh: `LongPi ${PRODUCT_VERSION} 正式报告：表型为演示面板；基因组为演示或本地 VCF SNP 与长寿面板的交集。不是医疗器械，不是诊断，不替代医师。人类变异禁止 GPN live forward。`,
   }
 }
 

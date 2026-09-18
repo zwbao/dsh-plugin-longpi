@@ -8,7 +8,7 @@ import { lookupEvidence } from './evidence.ts'
 import { executeS2fRoute, s2fAvailable } from './execute.ts'
 import { buildBatchRequest } from './penguin.ts'
 import { buildPlan } from './plan.ts'
-import { buildOmicsReport, exportReportMarkdown } from './report.ts'
+import { buildOmicsReport, exportReportMarkdown, PRODUCT_VERSION } from './report.ts'
 import { routeQuery } from './routing.ts'
 import { DEMO_VARIANTS } from './genome.ts'
 import { setIngest } from './store.ts'
@@ -33,7 +33,7 @@ export function registerS2fTools(ctx: Context, config: () => Config): void {
     },
     output: { schema: { type: 'json' }, render: (_a, v) => jsonText(v) },
     async execute(args) {
-      return audited('s2f_route', args, { product_version: '1.0.1', ...routeQuery(args.query, args.task) })
+      return audited('s2f_route', args, { product_version: PRODUCT_VERSION, ...routeQuery(args.query, args.task) })
     },
   }))
 
@@ -110,7 +110,7 @@ export function registerS2fTools(ctx: Context, config: () => Config): void {
     async execute() {
       return audited('read_personal_genome', {}, {
         ...listDemoGenome(),
-        report_hint: 'Call build_omics_report for the 1.0.1 combined phenotype+genome+omics document.',
+        report_hint: `Call build_omics_report for the ${PRODUCT_VERSION} combined phenotype+genome+omics document.`,
       })
     },
   }))
@@ -196,7 +196,7 @@ export function registerS2fTools(ctx: Context, config: () => Config): void {
 
   ctx.tools.register(defineTool({
     name: 'build_omics_report',
-    description: 'Build the LongPi 1.0.1 combined report: phenotype dashboard + genome panel/VCF hits + omics layer status + evidence index.',
+    description: `Build the LongPi ${PRODUCT_VERSION} combined report: phenotype dashboard + genome panel/VCF hits + omics layer status + evidence index.`,
     parameters: {},
     output: { schema: { type: 'json' }, render: (_a, v) => jsonText(v) },
     async execute() {
@@ -206,7 +206,7 @@ export function registerS2fTools(ctx: Context, config: () => Config): void {
 
   ctx.tools.register(defineTool({
     name: 'export_report',
-    description: 'Export the current 1.0.1 report as json or markdown.',
+    description: `Export the current ${PRODUCT_VERSION} report as json or markdown.`,
     parameters: {
       format: { type: 'string', enum: ['json', 'markdown'], description: 'json (default) or markdown' },
     },

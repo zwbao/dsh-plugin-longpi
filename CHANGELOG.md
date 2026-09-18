@@ -1,10 +1,13 @@
 # Changelog
 
-## Unreleased — biological-age engine
+## 1.1.0 — 2026-09-18
 
-The headline number is now computed instead of authored. `composite_age` moves from the
+The headline number is computed instead of authored. `composite_age` moves from the
 literal `41.2` to `45.1`, derived from a PhenoAge result of `52.52920526313869` and the
 five published module weights.
+
+Version strings are no longer duplicated: `PRODUCT_VERSION` is the single source in code,
+`package.json` carries the release, and `test/smoke.mjs` asserts the two agree.
 
 - New `src/bioage.ts`: PhenoAge (Levine 2018) with constants transcribed from the paper,
   homeostatic-dysregulation machinery, and the composite-age arithmetic. Every result carries

@@ -5,7 +5,7 @@
 ![dsh](https://img.shields.io/badge/DeepSeek%20Harness-0.1.5--rc-8A63D2)
 ![dsh-plugin](https://img.shields.io/badge/topic-dsh--plugin-111)
 
-**1.0.1 正式版**，不是 MVP 切片。
+**1.1.0 正式版**，不是 MVP 切片。
 
 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 上的 **长寿管家**：综合生物年龄 Dashboard、五维表型、带医学守则的对话、发布会当日行程 —— 一个可 `dsh plugin add` 的 bundle。
 
@@ -26,7 +26,7 @@ Awesome 列表里还没有第二个插件做这件事。临床文书请用 [dsh-
 头条数字是算出来的，不是写死的：
 
 ```sh
-npm test   # 输出 smoke ok { version: '1.0.1', ... }
+npm test   # 输出 smoke ok { version: '1.1.0', ... }
 ```
 
 `test/smoke.mjs` 用九项标志物的演示面板重算已发表的 PhenoAge 模型（Levine 2018），断言引擎落在 `52.52920526313869` 岁。任何一个系数、单位或 Gompertz 回投影被改动，测试立刻失败。这个值加上五维权重，得出综合年龄 **45.1**（实足 **45**）。
@@ -107,7 +107,7 @@ dsh --profile web --dump-config   # 应出现 "# == dsh-plugin-longpi"
 | `ingest_vcf` | 摄入本地 VCF SNP（hg38，上限可配） | 是（进程内） |
 | `annotate_variant` | 变异注释 + 文献 + s2f 推荐 | 否 |
 | `annotate_multiomics` | 五层组学 | 否 |
-| `build_omics_report` | 1.0.1 表型+基因组+组学正式报告 | 否 |
+| `build_omics_report` | 1.1.0 表型+基因组+组学正式报告 | 否 |
 | `export_report` | JSON / Markdown 导出 | 否 |
 | `lookup_longevity_evidence` | 精选抗衰索引，每行带已核对的许可与使用方式 | 否 |
 

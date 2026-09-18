@@ -8,12 +8,20 @@ const require = createRequire(import.meta.url)
 const root = dirname(fileURLToPath(import.meta.url))
 const pkg = require('../package.json')
 assert.equal(pkg.name, 'dsh-plugin-longpi')
-assert.equal(pkg.version, '1.0.1')
+assert.equal(pkg.version, '1.1.0')
 assert.ok(pkg.dsh.bundle.patch)
 
 const mod = await import('../lib/index.js')
 assert.equal(mod.name, 'dsh-plugin-longpi')
-assert.equal(mod.PRODUCT_VERSION, '1.0.1')
+assert.equal(mod.PRODUCT_VERSION, '1.1.0')
+// The release version lives in package.json and the code version in PRODUCT_VERSION.
+// They are two sources by necessity, so pin them together: a bump that updates only
+// one of them fails here instead of shipping a mislabelled report.
+assert.equal(
+  pkg.version,
+  mod.PRODUCT_VERSION,
+  `package.json says ${pkg.version} but PRODUCT_VERSION says ${mod.PRODUCT_VERSION}`,
+)
 assert.equal(mod.preGuard('我想把药减到 1mg').code, 'no_medication')
 assert.equal(mod.preGuard('我胸痛喘不上气').code, 'emergency')
 assert.equal(mod.findMetric('crp')?.code, 'hs_crp')
@@ -88,7 +96,7 @@ assert.equal(mod.PHENOAGE_MARKER_KEYS.length, 9)
 // ---- evidence index: the dead links must not come back ----
 const ev = mod.lookupEvidence('')
 assert.ok(ev.matches.length >= 12)
-// These three were broken/stale in 1.0.1; a regression here is a published dead link.
+// These three were broken/stale before 1.1.0; a regression here is a published dead link.
 const allUrls = ev.matches.map((m) => m.url).concat(
   mod.lookupEvidence('biolearn').matches.map((m) => m.url),
   mod.lookupEvidence('pyaging').matches.map((m) => m.url),
@@ -191,7 +199,7 @@ assert.equal(parsed.n_kept, 7)
 assert.ok(parsed.variants.some((v) => v.rsid === 'rs2802292' && v.genotype === 'GT'))
 
 const report = mod.buildOmicsReport()
-assert.equal(report.version, '1.0.1')
+assert.equal(report.version, '1.1.0')
 assert.equal(report.omics.length, 5)
 assert.ok(report.genome.panel_hits.length >= 4)
 
