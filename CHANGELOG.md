@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased — biological-age engine
+
+The headline number is now computed instead of authored. `composite_age` moves from the
+literal `41.2` to `45.1`, derived from a PhenoAge result of `52.52920526313869` and the
+five published module weights.
+
+- New `src/bioage.ts`: PhenoAge (Levine 2018) with constants transcribed from the paper,
+  homeostatic-dysregulation machinery, and the composite-age arithmetic. Every result carries
+  model, citation, required units and a claim ceiling.
+- Refusal semantics: missing marker → `MISSING_INPUT`; implausible unit → `OUT_OF_RANGE`
+  (with the expected unit); non-physiological age → `BAD_AGE`; HD without a reference cohort →
+  `NO_REFERENCE`. The engine never fills missing inputs with means or invents a reference.
+- Four new tools (19 → 23): `compute_biological_age`, `read_bioage_model`,
+  `read_demo_lab_panel`, `compute_composite_age`.
+- Demo panel now carries the nine PhenoAge markers; `iage` is derived from the engine.
+- Dashboard API exposes a `bioage` provenance block; the GUI marks each module as
+  engine-computed or demo input instead of presenting all five as computed.
+- `cordis.patch.yml`: annotated, commented-out Tycho Engine MCP wiring (44 `mcp__tycho__*`
+  tools) plus the boundary rule — LongPi proposes candidates with a claim ceiling, Tycho
+  decides what is true about the individual.
+- `test/smoke.mjs` pins the PhenoAge golden vector, the refusal paths, the HD no-reference
+  path, and asserts all 23 tools register.
+- Plan and absorption list: [docs/longpi-2.0-plan.md](docs/longpi-2.0-plan.md).
+
+Not included: KDM, methylation clocks (Horvath / GrimAge / DunedinPACE) and ATAC clocks.
+`read_bioage_model` lists each with the reason rather than omitting them silently.
+
 ## 1.0.1 — 2026-09-17
 
 Integrate scientific guards and the profile contract from [zwbao/s2f-penguin](https://github.com/zwbao/s2f-penguin) without embedding PenguinHarness.

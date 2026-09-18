@@ -10,3 +10,44 @@
         s2fHome: ''
         maxVcfVariants: 5000
         allowS2fExecute: false
+
+# ---------------------------------------------------------------------------
+# Tycho 数字孪生（可选，默认关闭）
+#
+# Tycho Engine 是本机的个人数字孪生引擎（本地优先、哈希链账本、预测结算与
+# 校准、N-of-1 序贯分析、安全门）。它通过 MCP stdio 暴露 44 个工具。
+#
+# 分工：LongPi 负责「最前沿证据 → 有边界的候选」；Tycho 负责「这个人自己的
+# 纵向数据、可证伪的预测、N-of-1 试验」。LongPi 不重实现这些，也不把预测
+# 说成结论。
+#
+# 为什么默认注释掉：工具定义会进入每一次模型请求，44 个工具是真实 token 成本；
+# 且 Tycho 未初始化时 `tycho serve` 以退出码 2 失败，可能拖慢启动。
+#
+# 启用前先确认本机状态：
+#   tycho paths          # 家目录、twin_root
+#   tycho list-tools     # 应输出 44 个工具
+#   tycho serve          # 没有 twin 时退出码 2 —— 先跑 `tycho init`
+#
+# 确认后取消下面这段的注释。工具会以 mcp__tycho__<tool> 出现，例如：
+#   mcp__tycho__twin_summary、mcp__tycho__twin_labs、mcp__tycho__forecast_append、
+#   mcp__tycho__n1_design、mcp__tycho__safety_check、mcp__tycho__screening_risk
+#
+# 职责边界（应写进 system prompt，不要靠模型自觉）：
+#   - 任何个体化结论在展示前必须过 mcp__tycho__safety_check。
+#   - 前瞻性声明必须先写后验：forecast_append 先落账，再由 resolver 结算；
+#     不许事后改窗口，不许把未结算的预测说成结论。
+#   - N-of-1 必须先 preregister 再看数据。
+#   - 基因/组学解释走 LongPi 的 s2f 工具，不重复造 Tycho 的 twin_genotype。
+#
+# - insert:
+#     - id: mcp-tycho
+#       name: '@deepseek-ai/dsh-mcp-client'
+#       config:
+#         serverName: tycho
+#         transport: stdio
+#         command: tycho
+#         args: ['serve']
+#         # 需要指向非默认孪生目录时再打开（默认取 ~/.tycho）：
+#         # env:
+#         #   TYCHO_HOME: /absolute/path/to/tycho-home

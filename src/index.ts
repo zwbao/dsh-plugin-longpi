@@ -3,6 +3,7 @@ import './host-shims.ts'
 import { Config } from './config.ts'
 import { extractUserText, preGuard, wrapGuardMessage } from './guardrails.ts'
 import { registerCommands } from './commands.ts'
+import { registerBioageTools } from './bioage-tools.ts'
 import { registerPrompt, formatRetrieveHint } from './prompt.ts'
 import { registerRoutes } from './routes.ts'
 import { registerSkills } from './skills.ts'
@@ -14,7 +15,25 @@ export const inject = ['tools']
 export { Config }
 export { retrieve } from './retrieve.ts'
 export { preGuard } from './guardrails.ts'
-export { CUSTOMER, findMetric, METRICS } from './fixture.ts'
+export {
+  CUSTOMER,
+  DEMO_COMPOSITE,
+  DEMO_LAB_PANEL,
+  DEMO_PHENOAGE,
+  findMetric,
+  METRICS,
+  PHENOAGE_LAB_METRICS,
+  PHENOAGE_MARKER_KEYS,
+} from './fixture.ts'
+export {
+  compositeAge,
+  HD_PROVENANCE,
+  homeostaticDysregulation,
+  lnCrp,
+  MODULE_WEIGHTS_FOR_AGE,
+  phenoAge,
+  PHENOAGE_PROVENANCE,
+} from './bioage.ts'
 export { DEMO_VARIANTS } from './s2f/genome.ts'
 export { routeQuery } from './s2f/routing.ts'
 export { buildBatchRequest } from './s2f/penguin.ts'
@@ -35,6 +54,7 @@ export function apply(ctx: Context, config: Config): void {
   const configSource = () => config
 
   registerTools(ctx, configSource)
+  registerBioageTools(ctx)
   registerS2fTools(ctx, configSource)
   registerSkills(ctx)
   registerPrompt(ctx, configSource)
