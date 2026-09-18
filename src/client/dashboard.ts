@@ -30,6 +30,22 @@ interface DashboardPayload {
   }
   metrics: Metric[]
   insights: { title_zh: string; body_zh: string }[]
+  bioage?: {
+    phenoage: {
+      model: string
+      phenoage: number
+      phenoage_advance: number
+      mortality_10y: number
+      citation: string
+      citation_url: string
+      all_inputs_synthetic: boolean
+    }
+    composite: {
+      method: string
+      weights: Record<string, number>
+      module_source: Record<string, string>
+    }
+  }
   genome?: { variants: { rsid: string; gene: string; gt: string; hg38: string }[] }
   itinerary: { date: string; items: { t: string; title_zh: string; place_zh: string }[] }
 }
@@ -98,8 +114,15 @@ function DashboardView(): React.ReactElement {
     )
   }
 
-  const delta = (data.customer.composite_age - data.customer.chrono_age).toFixed(1)
+  const delta = data.customer.composite_age - data.customer.chrono_age
   const modules = Object.entries(data.customer.modules)
+  const one = (n: number) => n.toFixed(1)
+  const signed = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(1)}`
+  const pheno = data.bioage?.phenoage
+  const composite = data.bioage?.composite
+  const demoModules = composite
+    ? Object.entries(composite.module_source).filter(([, s]) => s === 'demo').map(([k]) => k)
+    : []
 
   return React.createElement('div', { className: 'lp-dash' },
     data.banner
@@ -109,10 +132,24 @@ function DashboardView(): React.ReactElement {
     React.createElement('div', { className: 'lp-hero' },
       React.createElement('div', null,
         React.createElement('div', { className: 'lp-north' },
-          React.createElement('div', { className: 'lp-age' }, String(data.customer.composite_age)),
+          React.createElement('div', { className: 'lp-age' }, one(data.customer.composite_age)),
           React.createElement('div', { className: 'lp-chrono' },
-            `综合生物年龄 · 实际 ${data.customer.chrono_age} 岁 · Δ ${delta}`),
+            `综合生物年龄 · 实际 ${data.customer.chrono_age} 岁 · Δ ${signed(delta)}`),
         ),
+        // Provenance line: the headline is only trustworthy if the viewer can see which
+        // parts were computed and which are demo inputs.
+        pheno
+          ? React.createElement('p', { className: 'lp-prov' },
+            React.createElement('span', { className: 'lp-prov-tag' }, '引擎计算'),
+            ` 生物学维 = ${pheno.model}：表型年龄 ${one(pheno.phenoage)} 岁（${signed(pheno.phenoage_advance)} 年），`
+            + `10 年全因死亡概率 ${(pheno.mortality_10y * 100).toFixed(2)}%。`,
+            React.createElement('br', null),
+            React.createElement('span', { className: 'lp-prov-tag lp-prov-demo' }, '演示输入'),
+            demoModules.length
+              ? ` 其余 ${demoModules.length} 维（${demoModules.join(' / ')}）为固定演示值，不是算出来的。`
+              : ' 五维均来自引擎。',
+          )
+          : null,
         React.createElement('p', { className: 'lp-disc' }, data.customer.disclaimer_zh),
       ),
       React.createElement(ModuleRadar, {
@@ -123,7 +160,10 @@ function DashboardView(): React.ReactElement {
     React.createElement('div', { className: 'lp-modules' },
       ...modules.map(([key, mod]) => React.createElement('div', { className: 'lp-card', key },
         React.createElement('h3', null, mod.label_zh),
-        React.createElement('div', { className: 'n' }, String(mod.age)),
+        React.createElement('div', { className: 'n' }, one(mod.age)),
+        composite && composite.module_source[key] === 'engine'
+          ? React.createElement('div', { className: 'lp-card-src' }, '引擎')
+          : React.createElement('div', { className: 'lp-card-src lp-card-src-demo' }, '演示输入'),
       )),
     ),
     React.createElement('div', { className: 'lp-metrics' },

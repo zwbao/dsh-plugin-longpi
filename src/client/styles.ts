@@ -41,6 +41,38 @@ const CSS = `
   margin: 8px 0 24px;
   max-width: 52ch;
 }
+.lp-prov {
+  font-size: 12px;
+  line-height: 1.7;
+  color: #4A5450;
+  margin: 10px 0 0;
+  max-width: 60ch;
+  padding: 10px 12px;
+  background: #F4F1E8;
+  border-left: 3px solid #2D5F5A;
+  border-radius: 0 8px 8px 0;
+}
+.lp-prov-tag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #FCFAF5;
+  background: #2D5F5A;
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-right: 4px;
+}
+.lp-prov-tag.lp-prov-demo {
+  background: #A56A2D;
+}
+.lp-card-src {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #2D5F5A;
+}
+.lp-card-src.lp-card-src-demo {
+  color: #A56A2D;
+}
 .lp-modules {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
