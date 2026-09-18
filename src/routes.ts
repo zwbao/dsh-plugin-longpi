@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
-import { CUSTOMER, DEFAULT_ITINERARY, INSIGHTS, METRICS } from './fixture.ts'
+import { CUSTOMER, DEFAULT_ITINERARY, DEMO_COMPOSITE, DEMO_PHENOAGE, INSIGHTS, METRICS } from './fixture.ts'
 import { listDemoGenome } from './s2f/annotate.ts'
 import { buildOmicsReport, PRODUCT_VERSION } from './s2f/report.ts'
 import { getGenomeStore } from './s2f/store.ts'
@@ -27,6 +27,26 @@ export function registerRoutes(ctx: Context, config: () => Config): void {
           banner: config().demoBanner,
           brandName: config().brandName,
           customer: CUSTOMER,
+          // Provenance for the headline number. The dashboard shows this, so a viewer can
+          // tell a computed age from a demo input without reading the source.
+          bioage: {
+            phenoage: {
+              model: DEMO_PHENOAGE.model,
+              phenoage: DEMO_PHENOAGE.phenoage,
+              phenoage_advance: DEMO_PHENOAGE.phenoage_advance,
+              mortality_10y: DEMO_PHENOAGE.mortality_10y,
+              citation: DEMO_PHENOAGE.provenance.citation,
+              citation_url: DEMO_PHENOAGE.provenance.citation_url,
+              inputs_used: DEMO_PHENOAGE.inputs_used,
+              all_inputs_synthetic: DEMO_PHENOAGE.unit_notes.length > 0,
+            },
+            composite: {
+              method: DEMO_COMPOSITE.method,
+              weights: DEMO_COMPOSITE.weights,
+              contributions: DEMO_COMPOSITE.contributions,
+              module_source: DEMO_COMPOSITE.module_source,
+            },
+          },
           metrics: METRICS,
           insights: INSIGHTS,
           genome: listDemoGenome(),
