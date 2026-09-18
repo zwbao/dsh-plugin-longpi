@@ -1,3 +1,12 @@
+import {
+  compositeAge,
+  lnCrp,
+  phenoAge,
+  type BiomarkerInput,
+  type CompositeAgeResult,
+  type PhenoAgeResult,
+} from './bioage.ts'
+
 export type ModuleCode =
   | 'biological'
   | 'physiological'
@@ -64,22 +73,92 @@ export interface DemoCustomer {
   disclaimer_zh: string
 }
 
+/** Demo lab panel for the 9 PhenoAge markers. Synthetic — belongs to no real person. */
+export const DEMO_LAB_PANEL: BiomarkerInput[] = [
+  { key: 'albumin_gL', value: 41.0, layer: 'demo_synthetic', source_ref: 'demo_panel#张明远' },
+  { key: 'creatinine_umolL', value: 92.0, layer: 'demo_synthetic', source_ref: 'demo_panel#张明远' },
+  { key: 'glucose_mmolL', value: 5.6, layer: 'demo_synthetic', source_ref: 'demo_panel#张明远' },
+  { key: 'ln_crp_mgL', value: lnCrp(4.2), layer: 'demo_synthetic', source_ref: 'demo_panel#hs_crp=4.2 mg/L' },
+  { key: 'lymphocyte_pct', value: 24.0, layer: 'demo_synthetic', source_ref: 'demo_panel#张明远' },
+  { key: 'mcv_fL', value: 93.0, layer: 'demo_synthetic', source_ref: 'demo_panel#张明远' },
+  { key: 'rdw_pct', value: 14.2, layer: 'demo_synthetic', source_ref: 'demo_panel#张明远' },
+  { key: 'alp_UL', value: 88.0, layer: 'demo_synthetic', source_ref: 'demo_panel#张明远' },
+  { key: 'wbc_1000uL', value: 7.1, layer: 'demo_synthetic', source_ref: 'demo_panel#张明远' },
+]
+
+const DEMO_CHRONO_AGE = 45
+
+/** Display metadata for the nine PhenoAge markers. Reference ranges are adult, assay-typical. */
+const LAB_META: Record<string, { name_zh: string; name_en: string; unit: string; ref: string }> = {
+  albumin_gL: { name_zh: '白蛋白', name_en: 'Albumin', unit: 'g/L', ref: '35–50' },
+  creatinine_umolL: { name_zh: '肌酐', name_en: 'Creatinine', unit: 'µmol/L', ref: '62–106（男）' },
+  glucose_mmolL: { name_zh: '空腹血糖', name_en: 'Fasting glucose', unit: 'mmol/L', ref: '4.0–5.6' },
+  ln_crp_mgL: { name_zh: 'hs-CRP（对数）', name_en: 'ln(hs-CRP)', unit: 'ln(mg/L)', ref: '<1.0 mg/L 最优' },
+  lymphocyte_pct: { name_zh: '淋巴细胞百分比', name_en: 'Lymphocyte %', unit: '%', ref: '20–45' },
+  mcv_fL: { name_zh: '平均红细胞体积', name_en: 'MCV', unit: 'fL', ref: '80–100' },
+  rdw_pct: { name_zh: '红细胞分布宽度', name_en: 'RDW', unit: '%', ref: '11.5–14.5' },
+  alp_UL: { name_zh: '碱性磷酸酶', name_en: 'ALP', unit: 'U/L', ref: '40–130' },
+  wbc_1000uL: { name_zh: '白细胞计数', name_en: 'WBC', unit: '10⁹/L', ref: '4.0–11.0' },
+}
+
+/** One Metric per PhenoAge input, so the panel that feeds the clock is visible in the dashboard. */
+export const PHENOAGE_LAB_METRICS: Metric[] = DEMO_LAB_PANEL.map((b) => {
+  const meta = LAB_META[b.key]!
+  return {
+    code: b.key,
+    name_zh: meta.name_zh,
+    name_en: meta.name_en,
+    value: Math.round(b.value * 1000) / 1000,
+    unit: meta.unit,
+    status: 'normal' as MetricStatus,
+    ref: meta.ref,
+    module: 'biological' as ModuleCode,
+    aliases: [b.key, meta.name_en.toLowerCase(), meta.name_zh],
+  }
+})
+
+/** Marker keys that feed PhenoAge — exported so a caller can check coverage before scoring. */
+export const PHENOAGE_MARKER_KEYS = DEMO_LAB_PANEL.map((b) => b.key)
+
+/** Biological module age — computed by the engine, not authored as a constant. */
+export const DEMO_PHENOAGE: PhenoAgeResult = (() => {
+  const r = phenoAge(DEMO_LAB_PANEL, DEMO_CHRONO_AGE)
+  if (!r.ok) {
+    throw new Error(`demo panel must produce a PhenoAge: ${r.code} ${r.message_zh}`)
+  }
+  return r
+})()
+
+const DEMO_MODULE_AGES = {
+  biological: DEMO_PHENOAGE.phenoage,
+  physiological: 39.8,
+  psychological: 42.0,
+  behavioral: 42.6,
+  social_env: 42.2,
+}
+
+export const DEMO_COMPOSITE: CompositeAgeResult = (() => {
+  const r = compositeAge(DEMO_MODULE_AGES, DEMO_CHRONO_AGE, { biological: 'engine' })
+  if (!r.ok) throw new Error(`demo composite must compute: ${r.message_zh}`)
+  return r
+})()
+
 export const CUSTOMER: DemoCustomer = {
   id: 'demo_zhang_mingyuan',
   display_name: '张明远（演示）',
-  age: 45,
+  age: DEMO_CHRONO_AGE,
   sex: '男',
   tier: 'Distinction',
   language: 'zh',
   months_enrolled: 18,
-  chrono_age: 45,
-  composite_age: 41.2,
+  chrono_age: DEMO_CHRONO_AGE,
+  composite_age: DEMO_COMPOSITE.composite_age,
   modules: {
-    biological: { age: 43.1, label_zh: '生物学' },
-    physiological: { age: 39.8, label_zh: '生理学' },
-    psychological: { age: 42.0, label_zh: '心理学' },
-    behavioral: { age: 40.4, label_zh: '行为学' },
-    social_env: { age: 41.6, label_zh: '社会与环境' },
+    biological: { age: DEMO_MODULE_AGES.biological, label_zh: '生物学' },
+    physiological: { age: DEMO_MODULE_AGES.physiological, label_zh: '生理学' },
+    psychological: { age: DEMO_MODULE_AGES.psychological, label_zh: '心理学' },
+    behavioral: { age: DEMO_MODULE_AGES.behavioral, label_zh: '行为学' },
+    social_env: { age: DEMO_MODULE_AGES.social_env, label_zh: '社会与环境' },
   },
   disclaimer_zh: '以上为演示数据，不是您的个人病历。AI 生成内容仅供参考，不替代医师诊断。',
 }
@@ -99,15 +178,15 @@ export const METRICS: Metric[] = [
   },
   {
     code: 'iage',
-    name_zh: '炎症年龄',
-    name_en: 'Inflammatory age',
-    value: 57,
+    name_zh: '炎症/表型年龄',
+    name_en: 'Phenotypic age (PhenoAge)',
+    value: Math.round(DEMO_PHENOAGE.phenoage * 10) / 10,
     unit: '岁',
-    status: 'high',
-    ref: '接近实际年龄',
+    status: DEMO_PHENOAGE.phenoage_advance > 0 ? 'high' : 'optimal',
+    ref: `引擎计算值；实足 ${DEMO_CHRONO_AGE} 岁，加速 ${DEMO_PHENOAGE.phenoage_advance >= 0 ? '+' : ''}${DEMO_PHENOAGE.phenoage_advance.toFixed(1)} 年`,
     previous: 59,
     module: 'biological',
-    aliases: ['炎症年龄', 'iage'],
+    aliases: ['炎症年龄', 'iage', 'phenoage', '表型年龄', '生物年龄'],
   },
   {
     code: 'vo2max',
@@ -169,6 +248,7 @@ export const METRICS: Metric[] = [
     module: 'social_env',
     aliases: ['pm2.5', '空气'],
   },
+  ...PHENOAGE_LAB_METRICS,
 ]
 
 export const INSIGHTS: Insight[] = [
@@ -184,8 +264,8 @@ export const INSIGHTS: Insight[] = [
   {
     id: 'ins-crp',
     type: 'risk_watch',
-    title_zh: 'hs-CRP 仍高于最优区间',
-    body_zh: '当前 4.2 mg/L，上次 4.5，有下降但仍高于 <1.0 最优。',
+    title_zh: 'hs-CRP 仍高于最优区间，且是表型年龄加速的主因',
+    body_zh: `当前 4.2 mg/L，上次 4.5，有下降但仍高于 <1.0 最优。它把表型年龄推到 ${DEMO_PHENOAGE.phenoage.toFixed(1)} 岁（实足 ${DEMO_CHRONO_AGE}，加速 +${DEMO_PHENOAGE.phenoage_advance.toFixed(1)} 年）。`,
     next_step_zh: '与医师复核抗炎方案，勿自行改药。',
     metric_codes: ['hs_crp', 'iage'],
     reviewed: true,
@@ -210,14 +290,14 @@ export const FAQ: FaqDoc[] = [
   },
   {
     id: 'faq-iage',
-    question: '炎症年龄比实际年龄大意味着什么？',
-    answer: '炎症年龄是平台根据炎症相关指标合成的等效年龄，用于观察趋势。演示数据中炎症年龄 57 岁、实际 45 岁。解释权在医师，助手只说明数字来源。',
-    tags: ['iage', '炎症年龄'],
+    question: '炎症年龄 / 表型年龄比实际年龄大意味着什么？',
+    answer: `表型年龄（PhenoAge，Levine 2018）由 9 项血液指标 + 实足年龄经 Gompertz 死亡风险模型算出，本仓内置实现，可离线复算。演示数据算出 ${DEMO_PHENOAGE.phenoage.toFixed(1)} 岁，实足 ${DEMO_CHRONO_AGE} 岁，加速 ${DEMO_PHENOAGE.phenoage_advance >= 0 ? '+' : ''}${DEMO_PHENOAGE.phenoage_advance.toFixed(1)} 年，主要由 hs-CRP 4.2 mg/L 拉动。它是人群模型给出的相对位置，不是诊断，也不能当治疗靶点。`,
+    tags: ['iage', '炎症年龄', 'phenoage', '表型年龄'],
   },
   {
     id: 'faq-composite',
     question: '综合生物年龄怎么算？',
-    answer: '综合年龄 = 实际年龄 + 五维模块偏差加权。默认权重：生物学 0.35、生理学 0.30、心理学 0.15、行为学 0.10、社会与环境 0.10。',
+    answer: `综合年龄 = 生物学×0.35 + 生理学×0.30 + 心理学×0.15 + 行为学×0.10 + 社会与环境×0.10。其中生物学维来自引擎算出的 PhenoAge，其余四维目前是演示输入。演示数据：${DEMO_MODULE_AGES.biological.toFixed(1)}×0.35 + 39.8×0.30 + 42.0×0.15 + 42.6×0.10 + 42.2×0.10 = ${DEMO_COMPOSITE.composite_age.toFixed(1)} 岁（实足 ${DEMO_CHRONO_AGE}）。`,
     tags: ['综合', '生物年龄', '权重'],
   },
   {
