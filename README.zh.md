@@ -19,7 +19,7 @@ dsh plugin --profile web add link:/path/to/dsh-plugin-longpi
 
 | 字段 | 含义 |
 | --- | --- |
-| `skillsHome` | longevity-skills 的检出目录。空则试环境变量 `LONGEVITY_SKILLS_HOME`，再试 `~/Projects/longevity-skills`。 |
+| `skillsHome` | longevity-skills 的检出目录。空则试环境变量 `LONGEVITY_SKILLS_HOME`，再试 `~/longevity-skills`，然后才是 `~/Projects/longevity-skills`。 |
 | `mirobodyPluginHome` | dsh-plugin-mirobody 的检出目录。空则试 `MIROBODY_PLUGIN_HOME`，再试 `~/Projects/dsh-plugin-mirobody`。 |
 | `pythonBin` | 能导入 mirobody 的解释器。空则优先用该目录下的 `.venv`。 |
 | `mirobodyHome` | 可选，把 Mirobody 源码加进 `sys.path`。 |

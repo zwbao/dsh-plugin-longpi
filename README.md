@@ -19,7 +19,7 @@ Restart `dsh web`. Open the **健康看板** tab. Defaults look for `~/Projects/
 
 | Field | Meaning |
 | --- | --- |
-| `skillsHome` | Checkout of longevity-skills. Empty tries `LONGEVITY_SKILLS_HOME`, then `~/Projects/longevity-skills`. |
+| `skillsHome` | Checkout of longevity-skills. Empty tries `LONGEVITY_SKILLS_HOME`, then `~/longevity-skills`, then `~/Projects/longevity-skills`. |
 | `mirobodyPluginHome` | Checkout of dsh-plugin-mirobody. Empty tries `MIROBODY_PLUGIN_HOME`, then `~/Projects/dsh-plugin-mirobody`. |
 | `pythonBin` | Interpreter that can `import mirobody`. Empty prefers that checkout's `.venv`. |
 | `mirobodyHome` | Optional Mirobody source added to `sys.path`. |

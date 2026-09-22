@@ -16,8 +16,8 @@ export function resolveSkillsHome(configured: string): string {
   return firstExisting([
     configured,
     process.env.LONGEVITY_SKILLS_HOME ?? '',
-    join(homedir(), 'Projects', 'longevity-skills'),
     join(homedir(), 'longevity-skills'),
+    join(homedir(), 'Projects', 'longevity-skills'),
   ], (dir) => existsSync(join(dir, 'skills')) && existsSync(join(dir, 'README.md')))
 }
 
