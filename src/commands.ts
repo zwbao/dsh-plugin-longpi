@@ -1,0 +1,64 @@
+import type { Context } from '@deepseek-ai/cordis'
+import { loadCatalog } from './catalog.ts'
+import type { Config } from './config.ts'
+import { matchSkills } from './match.ts'
+import type { MountState } from './mirobody.ts'
+import { clampMatches, resolveDataDir, resolveSkillsHome } from './paths.ts'
+import { readProfile } from './profile.ts'
+import { readReceipts } from './runner.ts'
+import { PRODUCT_NAME, PRODUCT_VERSION } from './version.ts'
+
+function argsOf(raw: string, name: string): string {
+  const text = raw.trim().replace(/^\//, '')
+  if (text === name) return ''
+  if (text.startsWith(`${name} `)) return text.slice(name.length).trim()
+  return text
+}
+
+export function registerCommands(ctx: Context, config: () => Config, mount: MountState): void {
+  ctx.inject(['commands'], (scoped) => {
+    scoped.commands.register({
+      name: 'longpi',
+      description: '打印个人看板摘要：技能库版本、档案、Mirobody 是否接上。不含检验数值。',
+      handler: () => {
+        const current = config()
+        const home = resolveSkillsHome(current.skillsHome)
+        const catalog = loadCatalog(home)
+        const profile = readProfile(resolveDataDir(current.dataDir))
+        const lines = [
+          `${PRODUCT_NAME} ${PRODUCT_VERSION}`,
+          catalog.error
+            ? `skills unavailable: ${catalog.error}`
+            : `skills ${catalog.cards.length}  revision ${catalog.revision || 'unknown'}`,
+          `profile age ${profile.age ?? 'unset'}  sex ${profile.sex}  birth ${profile.birthYear ?? 'unset'}`,
+          mount.mounted
+            ? `mirobody mounted${mount.peer ? ' (already loaded beside this plugin)' : ''}`
+            : `mirobody not mounted: ${mount.error || 'checkout missing'}`,
+          current.mcpUrl.trim() ? 'record server configured' : 'record server not configured',
+        ]
+        const last = readReceipts(resolveDataDir(current.dataDir), 1)[0]
+        if (last) lines.push(`last skill ${last.skill}  ok ${last.ok}`)
+        return { kind: catalog.error ? 'error' : 'success', text: lines.join('\n') }
+      },
+    })
+    scoped.commands.register({
+      name: 'longpi-skills',
+      description: '按一句话匹配长寿技能。例：/longpi-skills 表型年龄',
+      handler: (invocation) => {
+        const question = argsOf(invocation.rawInput, 'longpi-skills')
+        const current = config()
+        const catalog = loadCatalog(resolveSkillsHome(current.skillsHome))
+        if (catalog.error) return { kind: 'error', text: catalog.error }
+        const matched = matchSkills(catalog.cards, question, [], clampMatches(current.maxSkillMatches))
+        if (matched.matches.length === 0) return { kind: 'success', text: matched.note }
+        const lines = matched.matches.map((item) => `${item.name}  ${item.why.join('；') || item.domain}`)
+        return { kind: 'success', text: lines.join('\n') }
+      },
+    })
+    scoped.commands.register({
+      name: 'longpi-version',
+      description: '打印 dsh-plugin-longpi 版本。',
+      handler: () => ({ kind: 'success', text: `${PRODUCT_NAME} ${PRODUCT_VERSION}` }),
+    })
+  })
+}

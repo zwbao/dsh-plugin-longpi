@@ -1,0 +1,20 @@
+# Personal longevity harness. dsh loads this row after `dsh plugin add`.
+# A later layer with the same id replaces the whole config object.
+# Mirobody is mounted from mirobodyPluginHome inside this process.
+# Do not also install dsh-plugin-mirobody; its tool names would collide.
+- insert:
+    - id: dsh-plugin-longpi
+      name: dsh-plugin-longpi
+      config:
+        skillsHome: ''
+        mirobodyPluginHome: ''
+        pythonBin: ''
+        mirobodyHome: ''
+        mcpUrl: ''
+        mcpToken: ''
+        member: ''
+        timeoutMs: 30000
+        skillPython: ''
+        skillTimeoutMs: 120000
+        dataDir: ''
+        maxSkillMatches: 8

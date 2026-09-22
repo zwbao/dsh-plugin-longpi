@@ -1,0 +1,7 @@
+dsh-plugin-longpi loads a local checkout of dsh-plugin-mirobody (Apache-2.0)
+and calls its Python bridge. It does not reimplement LOINC or UCUM.
+Mirobody and its terminology licences stay with that project:
+https://github.com/thetahealth/mirobody
+
+The longevity methods stay in the private longevity-skills checkout
+configured by skillsHome. This package does not redistribute those skills.
