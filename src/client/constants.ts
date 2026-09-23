@@ -2,8 +2,8 @@ export const NAMESPACE = 'dsh-plugin-longpi'
 export const VIEW_ID = 'longpi-board'
 
 export const SUGGESTED = [
-  { id: 'dispatch', zh: '根据我现在的档案和检查，能调度哪些长寿技能？' },
-  { id: 'pheno', zh: '如果九项血指标都在记录里，用表型年龄读我自己，缺的不要补。' },
-  { id: 'loinc', zh: '把我最近的检查名解析成 LOINC，解析不了的就说未解析。' },
-  { id: 'meds', zh: '我的用药计划里有哪些药？只读，不要建议加减量。' },
+  { id: 'dispatch', zh: '根据我的档案和检查，现在能跑哪些长寿方法？还差哪几项？' },
+  { id: 'pheno', zh: '用我记录里的血检算表型年龄，数值和单位按记录原样传，缺的不要补。' },
+  { id: 'evidence', zh: 'NMN 和二甲双胍在收录的论文里有什么说法？分人群、动物和细胞说，不要给剂量。' },
+  { id: 'meds', zh: '我的用药计划在收录的论文里有什么说法？只读，不要建议加减量。' },
 ] as const

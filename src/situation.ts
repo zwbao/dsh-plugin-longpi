@@ -2,6 +2,7 @@ export interface IndicatorRow {
   name: string
   value: string
   unit: string
+  loinc?: string
 }
 
 export interface MedicationRow {
@@ -29,9 +30,9 @@ function firstText(rec: Record<string, unknown>, keys: readonly string[]): strin
   return ''
 }
 
-export function summarizeIndicators(payload: unknown): IndicatorRow[] {
+export function summarizeIndicators(payload: unknown, max = 40): IndicatorRow[] {
   const rows: IndicatorRow[] = []
-  walkIndicators(payload, rows, 0)
+  walkIndicators(payload, rows, 0, Math.max(max * 2, 80))
   const seen = new Set<string>()
   const unique: IndicatorRow[] = []
   for (const row of rows) {
@@ -39,20 +40,20 @@ export function summarizeIndicators(payload: unknown): IndicatorRow[] {
     if (seen.has(key)) continue
     seen.add(key)
     unique.push(row)
-    if (unique.length >= 40) break
+    if (unique.length >= max) break
   }
   return unique
 }
 
-function walkIndicators(value: unknown, rows: IndicatorRow[], depth: number): void {
-  if (depth > 8 || rows.length >= 80) return
+function walkIndicators(value: unknown, rows: IndicatorRow[], depth: number, cap: number): void {
+  if (depth > 8 || rows.length >= cap) return
   if (Array.isArray(value)) {
     for (const item of value) {
       if (typeof item === 'string') {
         const name = item.trim()
         if (name) rows.push({ name, value: '', unit: '' })
       } else {
-        walkIndicators(item, rows, depth + 1)
+        walkIndicators(item, rows, depth + 1, cap)
       }
     }
     return
@@ -62,10 +63,11 @@ function walkIndicators(value: unknown, rows: IndicatorRow[], depth: number): vo
   const name = firstText(rec, ['indicator', 'indicator_name', 'name', 'title'])
   const measurement = firstText(rec, ['value', 'latest', 'result', 'last_value'])
   const unit = firstText(rec, ['unit', 'ucum'])
-  if (name && (measurement || unit)) rows.push({ name, value: measurement, unit })
+  const loinc = firstText(rec, ['loinc', 'loinc_code', 'loincCode'])
+  if (name && (measurement || unit)) rows.push(loinc ? { name, value: measurement, unit, loinc } : { name, value: measurement, unit })
   for (const [key, child] of Object.entries(rec)) {
     if (key === 'name' || key === 'value' || key === 'unit') continue
-    if (child && typeof child === 'object') walkIndicators(child, rows, depth + 1)
+    if (child && typeof child === 'object') walkIndicators(child, rows, depth + 1, cap)
   }
 }
 

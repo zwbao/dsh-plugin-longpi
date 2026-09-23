@@ -18,3 +18,5 @@
         skillTimeoutMs: 120000
         dataDir: ''
         maxSkillMatches: 8
+        skillRuntimes: {}
+        skillsVersion: ''

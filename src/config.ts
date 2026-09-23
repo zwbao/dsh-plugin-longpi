@@ -13,6 +13,8 @@ export interface Config {
   skillTimeoutMs: number
   dataDir: string
   maxSkillMatches: number
+  skillRuntimes: Record<string, string>
+  skillsVersion: string
 }
 
 export const Config: Schema<Config> = Schema.object({
@@ -28,4 +30,6 @@ export const Config: Schema<Config> = Schema.object({
   skillTimeoutMs: Schema.number().default(120000),
   dataDir: Schema.string().default(''),
   maxSkillMatches: Schema.number().default(8),
+  skillRuntimes: Schema.dict(Schema.string()).default({}),
+  skillsVersion: Schema.string().default(''),
 })

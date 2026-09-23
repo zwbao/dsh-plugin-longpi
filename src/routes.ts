@@ -9,6 +9,9 @@ import { clampMatches, resolveDataDir, resolveSkillsHome } from './paths.ts'
 import { normalizeProfile, writeProfile } from './profile.ts'
 import { loadRecords } from './records.ts'
 import { readReceipts } from './runner.ts'
+import { latestOutputs } from './history.ts'
+import { loadEvidenceLexicon } from './intents.ts'
+import { buildStats } from './stats.ts'
 import { PRODUCT_NAME, PRODUCT_VERSION } from './version.ts'
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
@@ -69,6 +72,7 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
             mount,
             receipts: readReceipts(dataDir, 5),
             limit: clampMatches(current.maxSkillMatches),
+            outputs: latestOutputs(dataDir),
           }))
         })().catch(() => sendJson(res, 500, { ok: false, error: 'board failed' }))
       },
@@ -85,13 +89,20 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
         void (async () => {
           const current = config()
           const dataDir = resolveDataDir(current.dataDir)
-          const catalog = loadCatalog(resolveSkillsHome(current.skillsHome))
+          const home = resolveSkillsHome(current.skillsHome)
+          const catalog = loadCatalog(home)
           const records = await loadRecords(current, dataDir, mount.pluginHome)
           const matched = matchSkills(
             catalog.cards,
             questionOf(req.url),
-            records.indicators.map((item) => item.name),
+            records.indicators,
             clampMatches(current.maxSkillMatches),
+            {
+              intents: catalog.intents,
+              profile: { age: records.profile.age, sex: records.profile.sex },
+              outputs: latestOutputs(dataDir),
+              lexicon: loadEvidenceLexicon(home),
+            },
           )
           sendJson(res, 200, {
             revision: catalog.revision,
@@ -100,6 +111,31 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
             ...matched,
           })
         })().catch(() => sendJson(res, 500, { ok: false, error: 'match failed' }))
+      },
+    })
+
+    scoped.webServer.register({
+      kind: 'exact',
+      path: '/api/longpi/stats',
+      handler: (req, res) => {
+        if (req.method !== 'GET') {
+          sendJson(res, 405, { ok: false, error: 'GET only' })
+          return
+        }
+        sendJson(res, 200, buildStats(resolveDataDir(config().dataDir)))
+      },
+    })
+
+    scoped.webServer.register({
+      kind: 'exact',
+      path: '/api/longpi/intents',
+      handler: (req, res) => {
+        if (req.method !== 'GET') {
+          sendJson(res, 405, { ok: false, error: 'GET only' })
+          return
+        }
+        const catalog = loadCatalog(resolveSkillsHome(config().skillsHome))
+        sendJson(res, 200, { version: catalog.version, intents: catalog.intents.map((item) => ({ id: item.id, label: item.label_zh, skills: item.skills })) })
       },
     })
 

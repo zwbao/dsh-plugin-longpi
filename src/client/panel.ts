@@ -3,12 +3,13 @@ import { SUGGESTED, VIEW_ID } from './constants.ts'
 
 interface IndicatorRow { name?: string; value?: string; unit?: string }
 interface MedicationRow { name?: string; status?: string }
-interface MatchHit { name: string; blurb?: string; why?: string[]; has_script?: boolean }
+interface MatchHit { name: string; blurb?: string; why?: string[]; has_script?: boolean; runnable?: { status?: string; missing?: string[] } }
+interface Readout { key: string; label_zh?: string; value?: number | string | null; unit?: string; at?: string; skill?: string }
 interface Board {
   version?: string
   profile?: { displayName?: string; birthYear?: number | null; age?: number | null; sex?: string }
   estimated_age?: number | null
-  skills?: { count?: number; revision?: string; error?: string; domains?: Array<{ domain: string; count: number }> }
+  skills?: { count?: number; personal?: number; version?: string; revision?: string; error?: string; domains?: Array<{ domain: string; count: number }> }
   mirobody?: {
     mounted?: boolean
     error?: string
@@ -17,7 +18,9 @@ interface Board {
   }
   records?: { status?: string; error?: string; indicators?: IndicatorRow[]; medications?: MedicationRow[] }
   dispatch?: { matches?: MatchHit[]; note?: string }
-  receipts?: Array<{ at?: string; skill?: string; ok?: boolean }>
+  near?: MatchHit[]
+  readouts?: Readout[]
+  receipts?: Array<{ at?: string; skill?: string; ok?: boolean; error_kind?: string }>
   boundary?: string
 }
 
@@ -135,7 +138,8 @@ function PanelView(): React.ReactElement {
       React.createElement('section', { className: 'lp-card' },
         React.createElement('h3', null, '技能库'),
         React.createElement('p', { className: board?.skills?.error ? 'lp-bad' : 'lp-ok' },
-          board?.skills?.error || `${board?.skills?.count ?? 0} 个技能 · ${board?.skills?.revision || '未读到版本'}`)),
+          board?.skills?.error || `${board?.skills?.personal ?? board?.skills?.count ?? 0} 个个人可用 · 共 ${board?.skills?.count ?? 0} 个`),
+        React.createElement('p', { className: 'lp-muted' }, `版本 ${board?.skills?.version || '未发布'} · ${board?.skills?.revision || '未读到提交'}`)),
       React.createElement('section', { className: 'lp-card' },
         React.createElement('h3', null, '数据缝'),
         React.createElement('p', { className: engine?.ok ? 'lp-ok' : 'lp-bad' }, engineLine),
@@ -159,10 +163,24 @@ function PanelView(): React.ReactElement {
           React.createElement('option', { value: 'other' }, '其他')),
         React.createElement('button', { type: 'submit', disabled: busy }, busy ? '保存中' : '保存')),
     ),
+    (board?.readouts ?? []).length > 0
+      ? React.createElement('section', { className: 'lp-block', style: { marginTop: 12 } },
+        React.createElement('h3', null, '最近读出'),
+        ...(board?.readouts ?? []).map((item) => React.createElement('div', { className: 'lp-row', key: item.key },
+          React.createElement('span', null, item.label_zh || item.key),
+          React.createElement('span', null, `${formatValue(item.value)}${item.unit && item.unit !== '1' ? ` ${unitLabel(item.unit)}` : ''} · ${(item.at || '').slice(0, 10)}`))))
+      : null,
+    (board?.near ?? []).length > 0
+      ? React.createElement('section', { className: 'lp-block', style: { marginTop: 12 } },
+        React.createElement('h3', null, '差一两项就能跑'),
+        ...(board?.near ?? []).map((item) => React.createElement('div', { className: 'lp-skill', key: `near-${item.name}` },
+          React.createElement('span', { className: 'lp-name' }, item.name),
+          React.createElement('span', { className: 'lp-why' }, `还缺 ${(item.runnable?.missing ?? []).join('、')}`))))
+      : null,
     React.createElement('section', { className: 'lp-block', style: { marginTop: 12 } },
       React.createElement('h3', null, '这次调度'),
       React.createElement('form', { className: 'lp-search', onSubmit: (event: React.FormEvent) => { void ask(event) } },
-        React.createElement('input', { 'aria-label': '想读的方法', placeholder: '例如：表型年龄、睡眠小时、端粒', value: question, onChange: (event: React.ChangeEvent<HTMLInputElement>) => setQuestion(event.target.value) }),
+        React.createElement('input', { 'aria-label': '想读的方法', placeholder: '例如：我的生物年龄、甲基化、NMN 有用吗', value: question, onChange: (event: React.ChangeEvent<HTMLInputElement>) => setQuestion(event.target.value) }),
         React.createElement('button', { type: 'submit', disabled: busy }, '匹配')),
       note ? React.createElement('p', { className: 'lp-muted' }, note) : null,
       ...(matches ?? []).map((item) => React.createElement('div', { className: 'lp-skill', key: item.name },
@@ -189,10 +207,20 @@ function PanelView(): React.ReactElement {
         React.createElement('h3', null, '最近一次读出'),
         ...(board?.receipts ?? []).map((item) => React.createElement('div', { className: 'lp-row', key: `${item.at}-${item.skill}` },
           React.createElement('span', null, item.skill),
-          React.createElement('span', null, item.ok ? '脚本跑完' : '脚本没有给出读出'))))
+          React.createElement('span', null, item.ok ? '脚本跑完' : (item.error_kind === 'input_problems' || item.error_kind === 'invalid_inputs' ? '输入没有通过检查' : '脚本没有给出读出')))))
       : null,
     React.createElement('p', { className: 'lp-note' }, board?.boundary || '这不是诊断，也不能改处方。紧急情况请拨打 120。'),
   )
+}
+
+function formatValue(value: number | string | null | undefined): string {
+  if (value == null) return '未计算'
+  if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(2)
+  return value
+}
+
+function unitLabel(unit: string): string {
+  return unit === 'a' ? '岁' : unit
 }
 
 export function registerDock(ctx: {
