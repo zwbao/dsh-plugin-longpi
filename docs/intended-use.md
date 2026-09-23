@@ -12,6 +12,8 @@ What the harness will not do:
 - Store a second copy of the chart. Labs, medicines, and genotypes stay on the Mirobody server.
 - Provide accounts, consent, or multi-person isolation. Those stay outside this plugin.
 
-The refusal to discuss a dose change, and the emergency stop, are intercepts in the plugin. Editing a skill file does not remove them.
+The refusal to discuss a dose change, and the emergency stop, are intercepts in the plugin. The medication intercept fires when a message both mentions a medicine or supplement (generically, by a common name, or by a name on the person's plan) and asks to start, stop, continue, switch or dose it; a question about evidence is not intercepted and is answered from the collected papers without a dose. Editing a skill file does not remove the intercepts.
 
-Session receipts record which skill ran, the revision of the skill checkout, the exit code, and a short excerpt. They are the replay line for a readout. The staged inputs stay in the local run directory.
+Before a skill runs, the harness refuses a measurement whose unit is missing where it matters, whose unit is not one the skill declares, or whose value is outside the skill's plausible range. It does not correct a value. The script repeats the same checks.
+
+Session receipts record which skill ran, the revision of the skill checkout, the exit code, the error kind, which input keys were used or missing, and a short excerpt. Earlier readouts keep only the outputs a skill declares. The weekly statistics file holds counts only. They are the replay line for a readout. The staged inputs stay in the local run directory.

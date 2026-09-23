@@ -1,0 +1,55 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      SKILLS_TOKEN: ${{ secrets.LONGEVITY_SKILLS_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: dsh-plugin-longpi
+
+      # longevity-skills is private. With the secret set, the dispatch regression
+      # and the unit-case drift check run against it; without it they skip.
+      - name: Check out longevity-skills
+        if: env.SKILLS_TOKEN != ''
+        uses: actions/checkout@v4
+        with:
+          repository: zwbao/longevity-skills
+          token: ${{ secrets.LONGEVITY_SKILLS_TOKEN }}
+          path: longevity-skills
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dsh-plugin-longpi/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install
+        working-directory: dsh-plugin-longpi
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: dsh-plugin-longpi
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: dsh-plugin-longpi
+        env:
+          LONGEVITY_SKILLS_HOME: ${{ github.workspace }}/longevity-skills
+        run: npm test
+
+      - name: lib/ matches src/
+        working-directory: dsh-plugin-longpi
+        run: git diff --exit-code -- lib/ || (echo "lib/ is stale; run npm run build and commit lib/" && exit 1)
