@@ -1,0 +1,8 @@
+{
+  "schema": "longevity-intents/1",
+  "intents": [
+    {"id": "biological_age", "label_zh": "我的生物年龄", "description_zh": "临床生物年龄。", "data": ["routine_labs"], "triggers": ["生物年龄", "衰老速度"], "skills": ["demo-phenoage", "special-runtime"]},
+    {"id": "intervention_evidence", "label_zh": "干预证据", "description_zh": "查证据。", "data": [], "triggers": ["有用吗", "证据"], "entities": ["nmn"], "skills": ["longevity-evidence"]},
+    {"id": "model_organism", "label_zh": "模式生物", "description_zh": "动物研究。", "data": [], "triggers": ["小鼠"], "skills": []}
+  ]
+}
