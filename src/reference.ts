@@ -58,6 +58,8 @@ export interface EffectRow {
   quote: string
   note_zh?: string
   verified: boolean
+  /** person, or quote_match: a script matched the quote against the source text and found every number in it. */
+  verified_by?: 'person' | 'quote_match'
 }
 
 export interface Reference {

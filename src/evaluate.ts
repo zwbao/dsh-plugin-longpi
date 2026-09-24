@@ -231,7 +231,8 @@ function expectationText(row: EffectRow): string {
   const per = effect.kind === 'per_unit' && effect.per ? `，按每${effect.per}` : ''
   const weeks = row.duration_weeks ? `，约 ${row.duration_weeks} 周` : ''
   const design = row.design === 'meta-analysis' ? '荟萃分析' : row.design === 'rct' ? '随机对照试验' : row.design
-  return `${row.intervention_zh}对${row.marker_zh}：试验组比对照组平均 ${amount}${ci}${per}${weeks}；${row.population}；${design}。`
+  const checked = row.verified_by === 'person' ? '' : '（数字已由脚本对照原文引文核对，尚未人工复核）'
+  return `${row.intervention_zh}对${row.marker_zh}：试验组比对照组平均 ${amount}${ci}${per}${weeks}；${row.population}；${design}。${checked}`
 }
 
 /** The published effect in the marker's unit, or null when it cannot be put there. */
