@@ -1,342 +1,112 @@
-# dsh-plugin-longpi
+# LongPi
 
 **[English](README.md)** · **中文**
 
-面向个人的长寿抗衰 harness。装进 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)（DSH）之后，一个人有一块健康看板：方法在 [longevity-skills](https://github.com/zwbao/longevity-skills)，病历在 [Mirobody](https://github.com/thetahealth/mirobody)。这个插件按这个人的问题和已经在档的检查决定用哪个技能，在技能运行前检查数值和单位，跟踪这个人自己的干预方案，并查询收录论文里的证据。
+LongPi 是运行在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 上的个人长寿助手。它把体检报告、化验结果和可穿戴设备数据，与 170 余项经过论文复现的衰老研究方法连接起来：直接从已有检查中计算生物年龄、十年心血管病风险等个人指标；在用户制定干预方案之后持续追踪执行情况，依据个体生物变异判断每一项指标的变化是真实改善还是正常波动；并推演指标达到目标后可能带来的变化。每个结果都可以追溯到原始论文，每个方法都注明适用边界。
 
-不是医疗器械。不下诊断，不给剂量。紧急情况是「拨打 120」（在美国是 988），然后停下。见 [docs/intended-use.md](docs/intended-use.md)。
+- **生物年龄与疾病风险**：按表型年龄（Levine）、China-PAR 等已发表模型计算，历次体检自动形成趋势。
+- **干预方案追踪**：保存用户自己的方案，结合手环数据、服药记录和打卡计算执行率。
+- **效果判定**：以参考变化值区分真实变化与正常波动，并与临床试验的平均效应对照。
+- **证据检索**：查询收录论文中关于药物、补剂、饮食与基因的结论，按人群、动物、细胞研究分组。
 
-## 从头安装
+## 安装
 
-装好之后有四块，各自独立：
-
-| 部分 | 是什么 | 装在哪 |
-| --- | --- | --- |
-| Mirobody 服务器 | 病历、化验单、手环数据；插件通过它的 MCP 接口只读访问 | Docker，`http://127.0.0.1:18060` |
-| longevity-skills | 方法库（技能脚本）和两张参考表 | `~/longpi/longevity-skills` |
-| Python 环境 | Mirobody 术语引擎（LOINC、单位换算）和技能脚本的依赖 | `~/longpi/.venv` |
-| DSH + 本插件 | 对话、工具和健康看板；[dsh-plugin-mirobody](https://github.com/zwbao/dsh-plugin-mirobody) 已随插件附带，不用另装 | `~/.dsh/profiles/web` |
-
-下面的命令按顺序复制执行。默认都装在 `~/longpi`；**每开一个新终端，先执行一次第 0 步开头的 `export`。**
-
-### 0. 准备工具
-
-需要：macOS 或 Linux；Node.js 22.19 以上；pnpm（`dsh plugin` 用它装包）；Python 3.12 以上；git 和 git-lfs；Docker（跑 Mirobody）；一个 [DeepSeek API Key](https://platform.deepseek.com/api_keys)（在 DSH 网页里填）。
+在 macOS 或 Linux 终端中运行：
 
 ```bash
-export LONGPI_HOME=~/longpi
-mkdir -p "$LONGPI_HOME"
-
-node -v                                   # 需要 v22.19 以上
-npm install -g pnpm@10 @deepseek-ai/dsh   # 权限不够时用 sudo，或改用 nvm/fnm 装的 Node
-pnpm -v && dsh --version                  # 本文用 pnpm 10、dsh 0.1.5-rc.3 验证过
-python3.12 --version                      # 没有就装：brew install python@3.12，或 uv python install 3.12
-git lfs version                           # 没有就装：brew install git-lfs / apt install git-lfs
-docker info --format '{{.ServerVersion}}' # Docker 要在运行
+curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/install.sh | bash
 ```
 
-### 1. 启动 Mirobody（病历服务器）
+安装脚本会安装 DeepSeek Harness 命令行（如尚未安装），下载方法库，在 `~/longpi` 下创建包含 Mirobody 术语引擎的 Python 环境，并将插件安装、配置到 DeepSeek Harness。运行前需要 Node.js 22.19 及以上、Python 3.12 及以上和 git；重复运行即可更新。
+
+健康记录由 [Mirobody](https://github.com/thetahealth/mirobody) 提供。已有 Mirobody 时，追加 `--mcp-url` 传入其个人 MCP 地址；尚未部署时，追加 `--with-mirobody`，由脚本通过 Docker 在本机部署一个带演示数据的实例：
 
 ```bash
-cd "$LONGPI_HOME"
-git clone --depth 1 https://github.com/thetahealth/mirobody.git
-cd mirobody
-git lfs install && git lfs pull   # LOINC 词表；不拉的话只有一个指针文件
-./deploy.sh                       # Postgres + Redis + 服务 + worker，约 800 MB 内存
+curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/install.sh | bash -s -- --with-mirobody
 ```
 
-浏览器打开 <http://127.0.0.1:18060>，用演示账号 `you@mirobody.ai`、验证码 `111111` 登录。默认 `SEED_DEMO_DATA=true`，两个演示账号里已经有 2019 条检查记录，用来验证插件足够。
+其他选项见 `install.sh --help`；逐步安装说明见 [docs/install.zh.md](docs/install.zh.md)。
 
-- 要放自己的真实数据：第一次启动前在 `mirobody/.env` 里设 `SEED_DEMO_DATA=false`，然后用第 2 步的方式注册自己的账号。
-- 上传化验单 PDF 或照片需要一个模型 Key（OpenRouter、Gemini、OpenAI、Anthropic、DeepSeek 任选其一），写进 `mirobody/.env` 后 `docker compose restart`。只读已有数据不需要。
-- 起不来时 `deploy.sh` 会直接打印原因和修法（比如子网冲突、Docker 不支持命名卷）。
+## 使用
 
-### 2. 拿到记录服务器地址（MCP）
+运行 `dsh web` 启动 DeepSeek Harness。首次打开时按提示填写 DeepSeek API Key 并选择工作区，然后：
 
-插件通过一个「个人 MCP 地址」读你的记录。在网页里是 **设置 → MCP → 生成个人地址**；命令行也可以：
+1. **建立档案**：填写年龄、性别，以及计算心血管病风险所需的六项情况（吸烟、糖尿病、近两周是否服用降压药、居住在南方或北方、城市或农村、早发心血管病家族史）。可以在健康看板底部的「记录、方法和档案」中填写，也可以直接在对话中告知。
+2. **查看结果**：在会话顶部的视图标签中打开「健康看板」。记录中有同一天测齐的九项血检时，看板自动计算历次体检的表型年龄和十年心血管病风险。
+3. **制定方案**：在对话中描述干预方案，或上传医生、长寿师提供的方案。LongPi 复述要点、经确认后保存，并在看板上显示时间线、复测日期和目标推演。
+4. **追踪与复盘**：手环数据自动计入执行率，其余项目可在对话中说明或在看板上打卡。复测结果进入 Mirobody 后，看板给出「有效」「波动内」「反向」或「无法判断」的判定及依据。
 
-```bash
-MIROBODY=http://127.0.0.1:18060
+常用提问示例：
 
-# 演示账号：验证码登录
-JWT=$(curl -s -X POST "$MIROBODY/email/verify" -H 'Content-Type: application/json' \
-  -d '{"email":"you@mirobody.ai","code":"111111"}' \
-  | python3 -c 'import sys, json; print(json.load(sys.stdin)["data"]["access_token"])')
+| 目的 | 示例 |
+| --- | --- |
+| 查看已有检查 | 我的记录里有哪些检查指标？ |
+| 计算生物年龄 | 用我记录里的血检算一下表型年龄 |
+| 评估心血管风险 | 帮我算十年心血管病风险 |
+| 保存干预方案 | 帮我保存方案：每天快走 8000 步，每周三次力量训练，11 点前睡觉 |
+| 评估方案效果 | 我的方案有没有效果？哪些还看不出来？ |
+| 推演目标 | 如果空腹血糖降到 5.0，表型年龄会怎样变化？ |
+| 查询证据 | NMN 和二甲双胍在收录的论文里有什么结论？ |
 
-# 自己的账号：把上面一段换成注册（只需一次）和密码登录
-# curl -s -X POST "$MIROBODY/password/register" -H 'Content-Type: application/json' \
-#   -d '{"email":"me@example.com","password":"至少8位的密码"}'
-# JWT=$(curl -s -X POST "$MIROBODY/password/login" -H 'Content-Type: application/json' \
-#   -d '{"email":"me@example.com","password":"至少8位的密码"}' \
-#   | python3 -c 'import sys, json; print(json.load(sys.stdin)["data"]["access_token"])')
+在输入框中输入 `/longpi` 可查看运行状态，包括方法库版本、Mirobody 连接情况和档案。
 
-MCP_URL=$(curl -s -X POST "$MIROBODY/personal/mcp" -H "Authorization: Bearer $JWT" \
-  | python3 -c 'import sys, json; print(json.load(sys.stdin)["data"]["url"])')
-echo "$MCP_URL"   # 形如 http://127.0.0.1:18060/mcp/<一长串密钥>
+## 工作原理
+
+```mermaid
+flowchart LR
+    U(用户) --> DSH["DeepSeek Harness<br/>对话 · 工具调用 · 网页界面"]
+    DSH <--> LP["LongPi 插件<br/>调度 · 校验 · 追踪 · 看板"]
+    LP -- "MCP（只读）" --> MB[("Mirobody<br/>体检 · 化验 · 可穿戴")]
+    LP -- "运行脚本" --> SK["longevity-skills<br/>方法库 · 参考表"]
+    LP --> LD[("本机数据<br/>档案 · 方案 · 打卡")]
 ```
 
-这个地址本身就是凭证，谁拿到都能读这份病历，别贴到聊天或截图里。默认 30 天有效（Mirobody `.env` 里的 `MCP_URL_TTL_DAYS` 可改），过期后重跑这一步、改第 6 步的配置即可，DSH 会热加载，不用重启。
+LongPi 由三部分协作完成：
 
-### 3. Python 环境
+- **DeepSeek Harness** 承载对话、工具调用和网页界面，LongPi 以插件形式向其注册工具、命令和健康看板。
+- **Mirobody** 保存健康记录，并将不同来源的化验名称统一为 LOINC 编码、单位统一为 UCUM。LongPi 通过 MCP 接口只读访问记录，术语引擎在本机运行。
+- **[longevity-skills](https://github.com/zwbao/longevity-skills)** 是方法库。每个方法对应一篇已发表论文，包含机器可读的输入清单（LOINC 编码、单位与合理范围）、复现论文公式的脚本，以及以论文印出数值为期望值的测试；方法库每周随新论文更新。
 
-一个虚拟环境同时给 Mirobody 术语引擎和技能脚本用。
+主要机制：
 
-```bash
-cd "$LONGPI_HOME"
-python3.12 -m venv .venv
-.venv/bin/pip install --upgrade pip
-.venv/bin/pip install mirobody numpy scipy openpyxl
-# 用 uv 的话：uv venv --python 3.12 .venv && uv pip install --python .venv/bin/python mirobody numpy scipy openpyxl
+- **技能调度**：问题先匹配意图，再按记录中已有的检查对方法排序。能够直接计算的方法优先，缺少输入的方法会列出所缺项目。
+- **输入校验**：数值按记录原样传入，插件依据清单换算单位并检查合理范围；单位缺失或不符时在运行前拒绝，不作推测。
+- **效果判定**：两次检查的变化超过参考变化值（RCV = √2 × 1.96 × √(CVA² + CVI²)）才视为真实变化，其中个体内生物变异（CVI）取自期刊论文。判定同时考虑执行率、复测间隔以及同期的其他变化。
+- **模型估计**：生物年龄、疾病风险和目标推演均由方法脚本计算，并标注为模型估计，不给出个人寿命预测。
 
-.venv/bin/python -c "import mirobody; print(mirobody.__version__, mirobody.BUNDLE_VERSION)"
-# 应输出类似：1.5.0 loinc-2.83+2026.09.17-aacb2c715b56
-```
+**数据与隐私**：LongPi 不上传任何数据。档案、方案和打卡记录保存在本机 `~/.dsh/longpi`，健康记录保留在用户自己的 Mirobody 中。对话内容和工具结果由 DeepSeek Harness 发送给所配置的模型服务；DeepSeek Harness 默认还会随请求上传会话日志，如需关闭，可在 `~/.dsh/profiles/web/cordis.patch.yml` 中加入：
 
-少数技能依赖更重（比如 pyaging），它们在 `skill.json` 里声明了 runtime 名；没配置对应解释器时插件会直接拒绝运行，不会拿别的环境硬跑。需要时见下面配置项里的 `skillRuntimes`。
-
-### 4. 技能库
-
-```bash
-cd "$LONGPI_HOME"
-git clone https://github.com/zwbao/longevity-skills.git
-ls longevity-skills/catalog.json longevity-skills/data   # 应看到 catalog.json、biological_variation.json、effects.jsonl
-```
-
-### 5. 安装插件
-
-```bash
-dsh plugin --profile web add github:zwbao/dsh-plugin-longpi
-```
-
-web profile 不存在时会自动创建。输出里的 `missing peer @deepseek-ai/...` 警告是正常的：这些包由 DSH 自己提供。不需要 `allowBuilds`，插件仓库里已经带着构建好的 `lib/`。
-
-```bash
-ls ~/.dsh/profiles/web/node_modules/dsh-plugin-longpi/vendor/dsh-plugin-mirobody   # 附带的 Mirobody 插件
-grep -A 6 '"bundles"' ~/.dsh/profiles/web/package.json                             # 列表里应有 dsh-plugin-longpi
-```
-
-不要再单独 `dsh plugin add` Mirobody 插件：LongPi 已经在同一进程里挂上它，再装一份会让同一组工具注册两遍。
-
-### 6. 写配置
-
-配置写在 profile 的补丁文件里。补丁会整体替换这一行的 `config`，所以每个键都要写上。下面的脚本会先备份原文件；如果备份里除了 `[]` 还有你自己的内容，请手动合并回来。
-
-```bash
-P="${DSH_HOME:-$HOME/.dsh}/profiles/web/cordis.patch.yml"
-cp "$P" "$P.bak.$(date +%Y%m%d%H%M%S)"
-cat > "$P" <<EOF
-# LongPi。补丁整体替换这一行的 config，所以每个键都要写。
-- id: dsh-plugin-longpi
+```yaml
+- id: session-log-deepseek
   config:
-    skillsHome: $LONGPI_HOME/longevity-skills
-    skillsVersion: ''
-    mirobodyPluginHome: ''
-    pythonBin: $LONGPI_HOME/.venv/bin/python
-    mirobodyHome: ''
-    mcpUrl: '$MCP_URL'
-    mcpToken: ''
-    member: ''
-    timeoutMs: 30000
-    skillPython: $LONGPI_HOME/.venv/bin/python
-    skillTimeoutMs: 120000
-    skillRuntimes: {}
-    dataDir: ''
-    maxSkillMatches: 8
-EOF
-chmod 600 "$P"
-
-dsh --profile web --dump-config | grep -B 1 -A 24 'id: dsh-plugin-longpi'
+    enabled: false
 ```
 
-最后一条命令应该打印 `# == dsh-plugin-longpi, patched by …/cordis.patch.yml`，下面是你刚写的值（`mcpUrl` 是明文，别外传）。每个键的含义见后面的 [配置项](#配置项)。
+## 配置
 
-### 7. 启动 DSH
+安装脚本会自动写入配置。如需调整，编辑 `~/.dsh/profiles/web/cordis.patch.yml` 中 `dsh-plugin-longpi` 的配置块，保存后即时生效。全部配置项见 [docs/reference.zh.md](docs/reference.zh.md#配置)。
 
-插件只在启动时加载。如果 DSH 已经在跑，先在它的终端里按 Ctrl+C 停掉。
-
-```bash
-cd "$LONGPI_HOME" && dsh web
-```
-
-终端会打印 `dsh web: http://127.0.0.1:3080/?token=…` 并打开浏览器（加 `--no-open` 则不打开）。第一次打开：
-
-1. 「内测声明」点 **继续**；
-2. 「添加一个 API Key 开始使用」里粘贴 DeepSeek API Key，点 **保存并继续**（存在 `~/.dsh/.credentials.yaml`；也可以之后在 **设置 → 模型** 里填）；
-3. 输入框上方选一个工作区（任意文件夹，比如 `~/longpi`），就可以开始会话。
-
-### 8. 确认插件在正常工作
-
-**8.1 命令行检查（不需要模型）。** `TOKEN` 是第 7 步打印的地址里 `token=` 后面那一段。
-
-```bash
-TOKEN='粘贴 token= 后面的内容'
-curl -s "http://127.0.0.1:3080/api/longpi/version?token=$TOKEN"; echo
-curl -s "http://127.0.0.1:3080/api/longpi/board?token=$TOKEN" | python3 -c '
-import json, sys
-d = json.load(sys.stdin); s, m, r = d["skills"], d["mirobody"], d["records"]
-print("技能库  ", s["count"], "个，版本", s["version"], s["error"] or "")
-print("Mirobody", "已挂载" if m["mounted"] else "未挂载：" + m["error"])
-e = m["engine"]; print("术语引擎", ("正常 " + str(e.get("version"))) if e.get("ok") else ("异常：" + str(e.get("error"))))
-print("病历    ", r["status"], r["indicator_count"], "项指标", r["error"] or "")'
-curl -s "http://127.0.0.1:3080/api/mirobody/resolve?q=%E8%A1%80%E7%BA%A2%E8%9B%8B%E7%99%BD&token=$TOKEN" \
-  | python3 -c 'import json, sys; x = json.load(sys.stdin)["results"][0]; print(x["term"], "→", x["loinc"])'
-```
-
-应看到类似下面的输出（数字以你的为准）：
-
-```text
-{"product":"dsh-plugin-longpi","version":"4.2.0"}
-技能库   171 个，版本 2026.39.0
-Mirobody 已挂载
-术语引擎 正常 1.5.0
-病历     ok 21 项指标
-血红蛋白 → 718-7
-```
-
-**8.2 网页里检查（不需要模型）。**
-
-- 输入框上方有一行 **LongPi** 建议问题（点一下复制到剪贴板），侧边栏底部有 **LongPi** 标记。
-- 在输入框输入 `/longpi` 回车，应看到：
-
-  ```text
-  dsh-plugin-longpi 4.2.0
-  skills 171 (personal 98)  version 2026.39.0  revision …  from catalog.json
-  profile age unset  sex unknown  birth unset
-  mirobody mounted
-  record server configured
-  ```
-
-  `/longpi-version` 只打印版本，`/longpi-skills 表型年龄` 打印会被选中的技能。
-- 看板是一个名为 **健康看板** 的会话视图。会话里有了对话之后，它出现在顶部的视图标签里，和对话视图并列（空白会话时 DSH 不显示标签栏）。看板顶部应显示「Mirobody 已连接 · N 项指标」。
-- 展开看板底部的 **记录、方法和档案**，填上年龄、性别和 China-PAR 需要的几个是否项并保存。记录里有同一天测齐九项血检的体检时，「身体年龄」卡片会出现表型年龄，「目标」里出现 China-PAR 十年风险。注意：年龄要单独填，出生年只用来估算，不会当作模型输入。
-
-**8.3 和模型对话检查（需要 DeepSeek Key）。** 依次发下面几句，每次都应看到对应的工具调用卡片：
-
-| 发送 | 应调用 |
-| --- | --- |
-| 看看我的记录里有哪些检查指标 | `read_personal_situation` |
-| 我 53 岁，男，1972 年出生，不吸烟，没有糖尿病，没吃降压药，住北方城市，家里没有早发心血管病。帮我存到档案 | `save_personal_profile` |
-| 用我记录里的血检算表型年龄，数值和单位按记录原样传，缺的不要补 | `run_longevity_skill` |
-| 帮我保存干预方案：从 2026-09-01 起每天快走 8000 步，每周 3 次力量训练，11 点前睡觉；目标空腹血糖 5.0 | `save_intervention_plan`（先读给你确认，你说「确认」后才保存） |
-| 我的干预方案有没有效果？哪些有效，哪些还看不出来？ | `review_interventions` |
-| 如果空腹血糖降到 5.0、超敏 CRP 降到 1，表型年龄会怎样？ | `model_intervention_goals` |
-
-有问题时发「帮我查一下 longpi 状态」，模型会调 `longpi_status`，里面有技能库、运行时和 Mirobody 的状态（不含病历和 token）。
-
-### 9. 常见问题
-
-| 现象 | 原因和处理 |
-| --- | --- |
-| `dsh plugin` 报找不到 pnpm | `npm install -g pnpm@10`，确认 `pnpm -v` 能用。 |
-| `skills unavailable` / 技能库 0 个 | `skillsHome` 不对或没克隆。`ls $LONGPI_HOME/longevity-skills/catalog.json`。 |
-| `mirobody not mounted: … not found` | 没通过 `dsh plugin add` 安装，或 `mirobodyPluginHome` 指向了不存在的目录。留空并重新执行第 5 步。 |
-| `mirobody not mounted: Cannot find package '@deepseek-ai/…'` | `mirobodyPluginHome` 指向了 DSH profile 之外的源码目录，那里找不到 DSH 的包。留空，用插件附带的那份。 |
-| 术语引擎异常 / `No module named mirobody` | `pythonBin` 指的解释器没装 mirobody，重做第 3 步。 |
-| 病历 `error`，提示 refused 或 401 | MCP 地址过期或复制错了。重做第 2 步，改配置里的 `mcpUrl`（热加载）。 |
-| 病历 `error`，提示 Could not reach | Mirobody 没在跑：`cd $LONGPI_HOME/mirobody && docker compose ps`。 |
-| 看板提示缺实足年龄 | 在看板档案里填年龄，或在对话里告诉它。 |
-| 技能返回 `runtime_missing` | 这个技能要专门的解释器，在 `skillRuntimes` 里按它声明的 runtime 名配置。 |
-| 改了配置没生效 | `--dump-config` 看这一行是否 `patched by` 你的文件；补丁里漏掉的键会回到默认值。 |
-| DSH 启动失败 | 终端会打印出错的插件；完整记录在 `~/.dsh/logs/startup-*.log`。 |
-| 没有「健康看板」标签 | 先发一条消息或命令让会话开始；插件改动后要重启 `dsh web`。 |
-
-### 更新和卸载
-
-```bash
-dsh plugin --profile web update dsh-plugin-longpi   # 更新到 GitHub 上最新的 main，然后重启 dsh web
-git -C "$LONGPI_HOME/longevity-skills" pull          # 更新技能库，不用重启
-dsh plugin --profile web remove dsh-plugin-longpi   # 卸载；再删掉 cordis.patch.yml 里 LongPi 那一行
-```
-
-要固定版本，安装时用 `github:zwbao/dsh-plugin-longpi#v4.2.0` 这样的标签。卸载不会删除 `~/.dsh/longpi` 里的档案、方案和打卡记录。
-
-### 不装 DSH，先看一眼（开发者）
+## 开发
 
 ```bash
 git clone https://github.com/zwbao/dsh-plugin-longpi.git && cd dsh-plugin-longpi
 npm ci
-LONGEVITY_SKILLS_HOME="$LONGPI_HOME/longevity-skills" npm test   # 单位、调度、Mirobody 格式、干预评估
-npm run preview && python3 -m http.server 4173 -d preview/out     # 浏览器打开 http://127.0.0.1:4173
+npm test          # 需要同级目录中的 longevity-skills，或设置 LONGEVITY_SKILLS_HOME
+npm run preview   # 以演示数据渲染健康看板，无需 DeepSeek Harness
 ```
 
-`npm run preview` 用演示数据（假的 Mirobody 记录、真实的技能）把看板渲染成普通网页。改了本地代码想装进 DSH 试：`npm pack`，再 `dsh plugin --profile web add ./dsh-plugin-longpi-<版本>.tgz`。附带的 Mirobody 插件用 `npm run vendor:mirobody` 从它的发布标签更新。
+## 文档
 
-## 配置项
+- [手动安装](docs/install.zh.md)
+- [参考：配置、工具、接口与评估规则](docs/reference.zh.md)
+- [架构](docs/architecture.md)
+- [适用范围](docs/intended-use.md)
+- [更新记录](CHANGELOG.md)
 
-| 字段 | 含义 |
-| --- | --- |
-| `skillsHome` | longevity-skills 的检出目录。空则试环境变量 `LONGEVITY_SKILLS_HOME`，再试 `~/longevity-skills`，然后是 `~/Projects/longevity-skills`。 |
-| `skillsVersion` | 可选，锁定技能库的发布版本，例如 `2026.39.0`。`longpi_status` 会报告检出是否对得上。 |
-| `mirobodyPluginHome` | 留空：用插件附带的 `vendor/dsh-plugin-mirobody`。只有调试 Mirobody 插件本身时才指向别的目录，而且那个目录要在 DSH profile 里。 |
-| `pythonBin` | 能 `import mirobody` 的解释器。空则试 `MIROBODY_PYTHON`，再依次试 `python3.14`、`python3.13`、`python3.12`、`python3`。 |
-| `mirobodyHome` | 可选，把 Mirobody 源码目录加进 `sys.path`（源码要先 `git lfs pull`）。用 pip 装的 mirobody 时留空。 |
-| `mcpUrl` | 记录服务器：第 2 步的个人地址 `…/mcp/<密钥>`；或 `http://127.0.0.1:18060/mcp` 加 `mcpToken`。只做术语解析时可以空着。 |
-| `mcpToken` | 地址里不带密钥时，填登录返回的 `access_token`（默认 30 天有效）。 |
-| `member` | 关怀圈成员 id。空表示这个账号本人。 |
-| `skillPython` | 跑技能脚本的解释器，建议和 `pythonBin` 用同一个虚拟环境。空则是 `python3`。 |
-| `skillRuntimes` | 依赖较重的技能用的解释器，按 `skill.json` 里的 runtime 名配置，例如 `{ "pyaging": "/opt/pyaging/.venv/bin/python", "scientific": "/opt/sci/.venv/bin/python" }`。没配的技能直接拒绝，不会换别的解释器硬跑。 |
-| `skillTimeoutMs` | 脚本时限，默认 `120000`。 |
-| `dataDir` | 档案、回执、以前的读出、干预方案和打卡。空则是 `~/.dsh/longpi`。 |
-| `maxSkillMatches` | 一个问题最多点名几个技能，默认 `8`。 |
-| `timeoutMs` | Mirobody 桥和 MCP 请求的时限，默认 `30000`。 |
+## 免责声明
 
-## 工具
+LongPi 用于个人健康管理与研究参考，不是医疗器械，不提供诊断、处方或用药剂量建议。所有模型结果均为估计值，不能替代专业医疗意见；遇到紧急情况请立即拨打 120。
 
-LongPi 自己 14 个。挂上 Mirobody 之后，同一进程里还有它的 8 个：LOINC、单位、检查、用药、基因型、状态。
+## 许可
 
-| 工具 | 返回 |
-| --- | --- |
-| `read_personal_situation` | 保存的年龄、性别、出生年；检查的名字、数值和单位；用药计划；以前算过的读出；记录现在能跑哪些方法、差一两项的缺什么。 |
-| `list_longevity_intents` | 技能库能回答哪几类问题，以及这个人每一类里哪些技能已经能跑。 |
-| `match_longevity_skills` | 按这个问题和这份记录排出的技能，带上识别出的意图、为什么选中、还缺什么。 |
-| `read_longevity_skill` | 该技能的说明和清单：每个输入的单位、可接受的单位、合理范围，以及从记录还是档案里来。 |
-| `run_longevity_skill` | 脚本写的读出。用 `measurements` 照记录原样传数值和单位；插件换算声明过的单位、检查范围、从档案补实足年龄和性别，缺单位或单位不对时在脚本运行前拒收。路径只能留在本次运行目录里。 |
-| `query_longevity_evidence` | 收录论文对某个药物、补剂、饮食或基因的说法，按人群、动物、细胞分组，每条带出处。不给剂量。 |
-| `list_longevity_domains` | 方法目录（动物和细胞研究单独计数）。 |
-| `save_personal_profile` | 只写本地档案（称呼、出生年、年龄、性别，以及 China-PAR 需要的是否项：吸烟、糖尿病、两周内用降压药、南北方、城乡、家族史），不写 Mirobody。 |
-| `longpi_status` | 技能库版本和锁定情况、已配置的运行时、Mirobody 状态。没有病历，没有 token。 |
-| `save_intervention_plan` | 检查这个人说出或分享的干预方案，先返回读回请对方确认；带 `confirm: true` 再调一次才保存新版本。药物和补剂只按名字保存，剂量留在 Mirobody。 |
-| `log_intervention_checkin` | 记下某天是否完成某一项，可标注生病、出差、换了检测机构等会干扰检查结果的情况。 |
-| `read_intervention_plan` | 当前方案、以前的版本和最近的打卡。 |
-| `review_interventions` | 每一项、每个目标指标：开始前的基线、够间隔的复测、对照个体正常波动（参考变化值）的变化、近 12 周执行率、同期其他变化、试验平均效应；历次体检的表型年龄；模型估计；下一步。 |
-| `model_intervention_goals` | 不保存的“如果达到某个目标值”：用表型年龄技能（China-PAR 校验通过后也算）计算。模型估计。 |
-
-命令：`/longpi`、`/longpi-skills 我的生物年龄`、`/longpi-stats`、`/longpi-version`。
-
-HTTP：`GET /api/longpi/board`、`GET /api/longpi/tracking`、`GET /api/longpi/match?q=`、`GET /api/longpi/intents`、`GET /api/longpi/stats`、`GET /api/longpi/report`、`POST /api/longpi/profile`、`POST /api/longpi/checkin`、`POST /api/longpi/run-ready`、`GET /api/longpi/version`。都要带上打开 DSH 时地址里的 `token`（查询参数或 `Authorization: Bearer`），看板会自动带上。
-
-## 干预方案和效果
-
-方案是这个人自己的（或医生、长寿师给的）。插件整理成条目读给对方确认后才保存，每次保存都留一个版本，放在本机 `dataDir/interventions/`，不上传。
-
-判断一项干预对某个指标有没有用，要同时满足：开始前 180 天内有基线；复测晚于该指标的最短间隔（如 HbA1c 约 3 个月）；变化超出个体生物变异加检测误差合成的参考变化值（CRP、甘油三酯按对数正态计算，家庭血压按 7 天平均）；近 12 周执行率够（手环阈值、Mirobody 服用记录或打卡，没有记录的天算未知，不算没做）。个体变异来自 longevity-skills 的 `data/biological_variation.json`，每一行都注明期刊出处；没有可核对来源的指标不给噪声带，结论写「无法判断」。同期还有别的干预或用药变化时照实说明只能评价组合。结论只有四种：有效、波动内、反向、无法判断。下一步只包括补执行、按时复测、补测、一次只改一项、和医生或长寿师讨论，不涉及任何药物和剂量。
-
-表型年龄在每次九项血检齐全的体检上由技能脚本回算；达成目标的估计也由技能脚本（`--targets`、`levers.json`）给出，都标“模型估计”。不输出个人“能多活几年”。
-
-## 怎么调度
-
-1. **意图**：问题先对 longevity-skills 的 `intents.json`（生物年龄、甲基化年龄、器官年龄、可穿戴和睡眠、端粒、干预证据、基因、前后对比、影像、认知、衰弱、免疫、模式生物）。证据库里点名的药物、补剂和基因也算。模型也可以直接传意图 id。
-2. **记录能跑什么**：每个技能的 `skill.json` 声明了输入的 LOINC、化验单上的叫法、单位和范围。输入在记录里（或在以前的读出里）都齐的技能排前面并标成能跑；差一两项的列出来，写明缺什么。
-3. **排序**：意图自己的顺序、是否能跑、问题和技能说明重合的词。C 类技能（动物和细胞研究，或者输入只能是队列统计量）只在问题点名该生物时进入名单。没有实质对上时返回空名单，不拿弱匹配凑数。
-
-`test/dispatch-cases.json` 有 50 个日常问题，`test/dispatch-heldout.json` 另有 15 个没用来调参的问题。前 3 名命中率低于 90%（50 题）或 80%（留出题），或者动物技能出现在没点名生物的问题里，`npm test` 就不通过。
-
-## 单位和拒收
-
-公式在技能脚本里，搬运由插件负责。数值照记录原样传。插件和技能里的 `skillkit.py` 用同一套规则：
-- 用输入的键名（如 `crp_mg_dl`）写的行，单位就是键名里的单位。
-- 用化验单叫法写的行，按输入的单位读。技能声明必须写单位的项例外：比如 CRP，mg/L 误读成 mg/dL 仍在合理范围内。
-- 声明过的其他单位会被换算。
-- 超出合理范围的值会停下并说明原因。
-
-技能拒收输入时退出码是 3，原因放在 `problems` 里返回。
-
-## 回执、读出和统计
-
-- `dataDir/receipts.jsonl` 记录每次运行：技能、检出版本、退出码、错误类型、用了哪些输入键、缺了哪些输入键。
-- `dataDir/history.jsonl` 保存每次运行声明过的输出（例如 `phenoage`），供前后对比的技能使用。
-- `/longpi-stats` 写出一周的计数：每个技能跑了几次、失败原因、缺了哪些输入。不含任何数值和报告文字，是否分享给技能维护者由本人决定。
-
-插件不上传任何东西。
-
-结构见 [docs/architecture.md](docs/architecture.md)。这里没有 Penguin，也没有序列到功能的工具。账号和同意不在这个插件里。
+[MIT](LICENSE)。随附的 `vendor/dsh-plugin-mirobody` 采用 Apache-2.0；方法库及其数据的许可见 [longevity-skills](https://github.com/zwbao/longevity-skills/blob/main/THIRD_PARTY_NOTICES.md)。
