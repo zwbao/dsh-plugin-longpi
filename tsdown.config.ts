@@ -12,7 +12,8 @@ const lib = {
   external: [/^@deepseek-ai\//, /^node:/],
 }
 
-const CLIENT_EXTERNALS = ['react']
+// Shared by DSH's module loader at runtime; never bundled.
+const CLIENT_EXTERNALS = ['react', 'react-dom', '@deepseek-ai/dsh-client-ui-primitives']
 
 const client = {
   name: 'dsh-plugin-longpi/client',

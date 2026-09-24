@@ -1,0 +1,842 @@
+{
+ "product": "dsh-plugin-longpi",
+ "version": "4.2.0",
+ "profile": {
+  "displayName": "陈明",
+  "birthYear": 1972,
+  "age": 53,
+  "sex": "male",
+  "risk": {
+   "smoker": false,
+   "diabetes": false,
+   "bp_treated": false,
+   "north": true,
+   "urban": true,
+   "family_history": false
+  }
+ },
+ "estimated_age": 54,
+ "skills": {
+  "home_set": true,
+  "revision": "05de8db",
+  "version": "2026.39.0",
+  "count": 171,
+  "personal": 98,
+  "error": "",
+  "domains": [
+   {
+    "domain": "临床年龄与可穿戴",
+    "count": 11
+   },
+   {
+    "domain": "免疫与炎症",
+    "count": 8
+   },
+   {
+    "domain": "工具与证据库",
+    "count": 8
+   },
+   {
+    "domain": "蛋白、代谢与器官年龄",
+    "count": 14
+   },
+   {
+    "domain": "营养感应",
+    "count": 2
+   },
+   {
+    "domain": "影像",
+    "count": 9
+   },
+   {
+    "domain": "脑、认知与痴呆",
+    "count": 12
+   },
+   {
+    "domain": "甲基化",
+    "count": 8
+   },
+   {
+    "domain": "线粒体",
+    "count": 2
+   },
+   {
+    "domain": "长寿基因",
+    "count": 4
+   },
+   {
+    "domain": "心血管",
+    "count": 1
+   },
+   {
+    "domain": "衰弱与死亡风险",
+    "count": 7
+   },
+   {
+    "domain": "端粒",
+    "count": 2
+   },
+   {
+    "domain": "基质、软骨与纤维化",
+    "count": 2
+   },
+   {
+    "domain": "皮肤",
+    "count": 1
+   },
+   {
+    "domain": "卵巢与生殖",
+    "count": 4
+   },
+   {
+    "domain": "骨骼肌",
+    "count": 1
+   },
+   {
+    "domain": "再生",
+    "count": 1
+   },
+   {
+    "domain": "昼夜节律",
+    "count": 1
+   }
+  ],
+  "intents": [
+   {
+    "id": "biological_age",
+    "label": "我的生物年龄和衰老速度"
+   },
+   {
+    "id": "epigenetic_age",
+    "label": "甲基化和表观年龄"
+   },
+   {
+    "id": "proteomic_organ_age",
+    "label": "蛋白组和器官年龄"
+   },
+   {
+    "id": "metabolomic_age",
+    "label": "代谢组年龄"
+   },
+   {
+    "id": "wearable_sleep",
+    "label": "可穿戴、睡眠和作息节律"
+   },
+   {
+    "id": "telomere",
+    "label": "端粒"
+   },
+   {
+    "id": "intervention_evidence",
+    "label": "某个干预有没有证据"
+   },
+   {
+    "id": "gene_variant",
+    "label": "基因和变异"
+   },
+   {
+    "id": "lab_meaning",
+    "label": "某项体检指标意味着什么"
+   },
+   {
+    "id": "before_after",
+    "label": "干预前后对比"
+   },
+   {
+    "id": "imaging",
+    "label": "影像里的器官年龄"
+   },
+   {
+    "id": "cognition_dementia",
+    "label": "认知和痴呆"
+   },
+   {
+    "id": "frailty_mortality",
+    "label": "衰弱和寿命风险"
+   },
+   {
+    "id": "immune_inflammation",
+    "label": "免疫和炎症衰老"
+   },
+   {
+    "id": "model_organism",
+    "label": "模式生物和比较生物学"
+   }
+  ]
+ },
+ "mirobody": {
+  "mounted": true,
+  "peer": "dsh-plugin-mirobody",
+  "error": "",
+  "engine": {
+   "ok": false,
+   "error": "mirobody bridge script is missing"
+  },
+  "mcp": {
+   "configured": true,
+   "host": "127.0.0.1:50330",
+   "token_set": false
+  }
+ },
+ "records": {
+  "status": "ok",
+  "error": "",
+  "indicator_count": 21,
+  "indicators": [
+   {
+    "name": "Albumin-ALB",
+    "value": "45.6",
+    "unit": "g/L",
+    "loinc": "1751-7",
+    "count": 4,
+    "first_date": "2025-10-18",
+    "last_date": "2026-08-26",
+    "label": "白蛋白",
+    "date": "2026-08-26"
+   },
+   {
+    "name": "Alkaline Phosphatase-ALP",
+    "value": "70",
+    "unit": "U/L",
+    "loinc": "6768-6",
+    "count": 4,
+    "first_date": "2025-10-18",
+    "last_date": "2026-08-26",
+    "label": "碱性磷酸酶",
+    "date": "2026-08-26"
+   },
+   {
+    "name": "Creatinine-Cr",
+    "value": "81",
+    "unit": "umol/L",
+    "loinc": "2160-0",
+    "count": 4,
+    "first_date": "2025-10-18",
+    "last_date": "2026-08-26",
+    "label": "肌酐",
+    "date": "2026-08-26"
+   },
+   {
+    "name": "Fasting Blood Glucose-FBG",
+    "value": "5.4",
+    "unit": "mmol/L",
+    "loinc": "14771-0",
+    "count": 4,
+    "first_date": "2025-10-18",
+    "last_date": "2026-08-26",
+    "label": "空腹血糖",
+    "date": "2026-08-26"
+   },
+   {
+    "name": "Glycated Hemoglobin-HbA1c",
+    "value": "5.6",
+    "unit": "%",
+    "loinc": "4548-4",
+    "count": 4,
+    "first_date": "2025-10-18",
+    "last_date": "2026-08-26",
+    "label": "糖化血红蛋白",
+    "date": "2026-08-26"
+   },
+   {
+    "name": "HDL Cholesterol-HDL-C",
+    "value": "1.26",
+    "unit": "mmol/L",
+    "loinc": "2085-9",
+    "count": 4,
+    "first_date": "2025-10-18",
+    "last_date": "2026-08-26",
+    "label": "高密度脂蛋白胆固醇",
+    "date": "2026-08-26"
+   },
+   {
+    "name": "LDL Cholesterol-LDL-C",
+    "value": "3.0",
+    "unit": "mmol/L",
+    "loinc": "13457-7",
+    "count": 4,
+    "first_date": "2025-10-18",
+    "last_date": "2026-08-26",
+    "label": "低密度脂蛋白胆固醇",
+    "date": "2026-08-26"
+   },
+   {
+    "name": "Lymphocyte Percentage-LYM%",
+    "value": "32.0",
+    "unit": "%",
+    "loinc": "736-9",
+    "count": 4,
+    "first_date": "2025-10-18",
+    "last_date": "2026-08-26",
+    "label": "淋巴细胞百分比",
+    "date": "2026-08-26"
+   },
+   {
+    "name": "Mean Corpuscular Volume-MCV",
+    "value": "90.1",
+    "unit": "fL",
+    "loinc": "787-2",
+    "count": 4,
+    "first_date": "2025-10-18",
+    "last_date": "2026-08-26",
+    "label": "平均红细胞体积",
+    "date": "2026-08-26"
+   },
+   {
+    "name": "Red Cell Distribution Width-RDW-CV",
+    "value": "12.9",
+    "unit": "%",
+    "loinc": "788-0",
+    "count": 4,
+    "first_date": "2025-10-18",
+    "last_date": "2026-08-26",
+    "label": "红细胞分布宽度",
+    "date": "2026-08-26"
+   },
+   {
+    "name": "Total Cholesterol-TC",
+    "value": "4.9",
+    "unit": "mmol/L",
+    "loinc": "2093-3",
+    "count": 4,
+    "first_date": "2025-10-18",
+    "last_date": "2026-08-26",
+    "label": "总胆固醇",
+    "date": "2026-08-26"
+   },
+   {
+    "name": "Triglycerides-TG",
+    "value": "1.2",
+    "unit": "mmol/L",
+    "loinc": "2571-8",
+    "count": 4,
+    "first_date": "2025-10-18",
+    "last_date": "2026-08-26",
+    "label": "甘油三酯",
+    "date": "2026-08-26"
+   },
+   {
+    "name": "Waist Circumference-WC",
+    "value": "88",
+    "unit": "cm",
+    "loinc": "8280-0",
+    "count": 4,
+    "first_date": "2025-10-18",
+    "last_date": "2026-08-26",
+    "label": "腰围",
+    "date": "2026-08-26"
+   },
+   {
+    "name": "White Blood Cell Count-WBC",
+    "value": "6.0",
+    "unit": "10^9/L",
+    "loinc": "6690-2",
+    "count": 4,
+    "first_date": "2025-10-18",
+    "last_date": "2026-08-26",
+    "label": "白细胞计数",
+    "date": "2026-08-26"
+   },
+   {
+    "name": "bodyMasss",
+    "value": "75.1",
+    "unit": "kg",
+    "count": 51,
+    "first_date": "2025-10-01",
+    "last_date": "2026-09-16",
+    "date": "2026-09-16"
+   },
+   {
+    "name": "dailyRestingHeartRates",
+    "value": "63",
+    "unit": "count/min",
+    "count": 355,
+    "first_date": "2025-10-01",
+    "last_date": "2026-09-20",
+    "date": "2026-09-20"
+   },
+   {
+    "name": "dailySteps",
+    "value": "6293",
+    "unit": "count",
+    "count": 355,
+    "first_date": "2025-10-01",
+    "last_date": "2026-09-20",
+    "date": "2026-09-20"
+   },
+   {
+    "name": "dailyTotalSleepTime",
+    "value": "7.7",
+    "unit": "hours",
+    "count": 355,
+    "first_date": "2025-10-01",
+    "last_date": "2026-09-20",
+    "date": "2026-09-20"
+   },
+   {
+    "name": "diastolicPressures",
+    "value": "80",
+    "unit": "mmHg",
+    "count": 119,
+    "first_date": "2025-10-01",
+    "last_date": "2026-09-20",
+    "date": "2026-09-20"
+   },
+   {
+    "name": "hs-CRP",
+    "value": "1.2",
+    "unit": "mg/L",
+    "loinc": "30522-7",
+    "count": 4,
+    "first_date": "2025-10-18",
+    "last_date": "2026-08-26",
+    "label": "超敏C反应蛋白",
+    "date": "2026-08-26"
+   }
+  ],
+  "medications": [
+   {
+    "name": "鱼油(Omega-3)",
+    "status": "active",
+    "recorded_dose": "",
+    "schedule": "每日1次",
+    "since": "2026-03-01",
+    "plan_id": "p-fishoil"
+   },
+   {
+    "name": "维生素D3",
+    "status": "active",
+    "recorded_dose": "",
+    "schedule": "每日1次",
+    "since": "2025-11-01",
+    "plan_id": "p-vitd"
+   }
+  ]
+ },
+ "dispatch": {
+  "matches": [
+   {
+    "name": "accelerated-biological-aging-risk",
+    "domain": "临床年龄与可穿戴",
+    "blurb": "九项血液指标和实足年龄的表型年龄。",
+    "score": 6,
+    "why": [
+     "记录里的输入已经齐了"
+    ],
+    "has_script": true,
+    "tier": "A",
+    "runnable": {
+     "status": "ready",
+     "missing": []
+    }
+   },
+   {
+    "name": "ageing-clocks-digital-twins",
+    "domain": "临床年龄与可穿戴",
+    "blurb": "已经算好的生物年龄的稳定度。",
+    "score": 6,
+    "why": [
+     "记录里的输入已经齐了"
+    ],
+    "has_script": true,
+    "tier": "A",
+    "runnable": {
+     "status": "ready",
+     "missing": []
+    }
+   },
+   {
+    "name": "aging-biomarker-framework",
+    "domain": "临床年龄与可穿戴",
+    "blurb": "预测年龄相对实足年龄的偏差。",
+    "score": 6,
+    "why": [
+     "记录里的输入已经齐了"
+    ],
+    "has_script": true,
+    "tier": "A",
+    "runnable": {
+     "status": "ready",
+     "missing": []
+    }
+   },
+   {
+    "name": "biological-aging-generational-shifts",
+    "domain": "临床年龄与可穿戴",
+    "blurb": "年龄、出生年和已经算好的衰老测量。",
+    "score": 6,
+    "why": [
+     "记录里的输入已经齐了"
+    ],
+    "has_script": true,
+    "tier": "A",
+    "runnable": {
+     "status": "ready",
+     "missing": []
+    }
+   },
+   {
+    "name": "genome-wide-proteomics-frailty",
+    "domain": "衰弱与死亡风险",
+    "blurb": "已经算好的医院衰弱风险分。",
+    "score": 6,
+    "why": [
+     "记录里的输入已经齐了"
+    ],
+    "has_script": true,
+    "tier": "A",
+    "runnable": {
+     "status": "ready",
+     "missing": []
+    }
+   },
+   {
+    "name": "hospital-infection-epilepsy-risk",
+    "domain": "免疫与炎症",
+    "blurb": "感染距指数日的年数和部位。",
+    "score": 6,
+    "why": [
+     "记录里的输入已经齐了"
+    ],
+    "has_script": true,
+    "tier": "A",
+    "runnable": {
+     "status": "ready",
+     "missing": []
+    }
+   }
+  ],
+  "note": "按问题、个人记录和已经算过的读出排序。名单以外的技能这次不调度。"
+ },
+ "near": [
+  {
+   "name": "hippocampal-neurogenesis-adulthood-ageing",
+   "domain": "脑、认知与痴呆",
+   "blurb": "年龄，以及情景记忆是持平或更好、更差，还是未知。",
+   "score": 2,
+   "why": [
+    "还缺 情景记忆比较（相对 50–59 岁）"
+   ],
+   "has_script": true,
+   "tier": "A",
+   "runnable": {
+    "status": "partial",
+    "missing": [
+     "情景记忆比较（相对 50–59 岁）"
+    ]
+   }
+  },
+  {
+   "name": "sleep-study-life-expectancy",
+   "domain": "衰弱与死亡风险",
+   "blurb": "年龄估计减实足年龄。",
+   "score": 2,
+   "why": [
+    "还缺 年龄估计"
+   ],
+   "has_script": true,
+   "tier": "A",
+   "runnable": {
+    "status": "partial",
+    "missing": [
+     "年龄估计"
+    ]
+   }
+  },
+  {
+   "name": "wearable-aging-clock",
+   "domain": "临床年龄与可穿戴",
+   "blurb": "腕部脉搏波年龄相对实足年龄。",
+   "score": 2,
+   "why": [
+    "还缺 脉搏波年龄（PpgAge）"
+   ],
+   "has_script": true,
+   "tier": "A",
+   "runnable": {
+    "status": "partial",
+    "missing": [
+     "脉搏波年龄（PpgAge）"
+    ]
+   }
+  },
+  {
+   "name": "wearable-circadian-aging-biomarker",
+   "domain": "昼夜节律",
+   "blurb": "MESOR、振幅、峰值相位和年龄到齐时的 CosinorAge。缺一项就不算。",
+   "score": 2,
+   "why": [
+    "还缺 MESOR（节律中值）、振幅"
+   ],
+   "has_script": true,
+   "tier": "A",
+   "runnable": {
+    "status": "partial",
+    "missing": [
+     "MESOR（节律中值）",
+     "振幅"
+    ]
+   }
+  }
+ ],
+ "readouts": [
+  {
+   "key": "phenoage",
+   "value": 44.760596280763465,
+   "unit": "a",
+   "label_zh": "表型年龄",
+   "at": "2026-09-24T19:50:57.168Z",
+   "skill": "accelerated-biological-aging-risk",
+   "measured_at": "2026-08-26"
+  },
+  {
+   "key": "phenoage_advance",
+   "value": -8.139403719236533,
+   "unit": "a",
+   "label_zh": "表型年龄减实足年龄",
+   "at": "2026-09-24T19:50:57.168Z",
+   "skill": "accelerated-biological-aging-risk",
+   "measured_at": "2026-08-26"
+  },
+  {
+   "key": "mortality_10y_pct",
+   "value": 2.901563410926211,
+   "unit": "%",
+   "label_zh": "10 年死亡风险（PhenoAge 模型估计）",
+   "at": "2026-09-24T19:50:57.168Z",
+   "skill": "accelerated-biological-aging-risk",
+   "measured_at": "2026-08-26"
+  },
+  {
+   "key": "risk_10y_pct",
+   "value": 3.9970047614126147,
+   "unit": "%",
+   "label_zh": "10 年动脉粥样硬化性心血管病风险（China-PAR 模型估计）",
+   "at": "2026-09-24T19:50:57.330Z",
+   "skill": "china-par-ascvd-risk",
+   "measured_at": "2026-09-24"
+  },
+  {
+   "key": "risk_category",
+   "value": "低危",
+   "unit": "",
+   "label_zh": "风险分层（2019 中国指南）",
+   "at": "2026-09-24T19:50:57.330Z",
+   "skill": "china-par-ascvd-risk",
+   "measured_at": "2026-09-24"
+  }
+ ],
+ "receipts": [
+  {
+   "at": "2026-09-24T19:50:57.330Z",
+   "skill": "china-par-ascvd-risk",
+   "revision": "05de8db",
+   "exit_code": 0,
+   "ok": true,
+   "excerpt": "论文只把系数印到两位小数，女性基线生存率只印到 0.99，都复现不了论文自己的结果。这里男性六个连续项系数由补充表 1 的“系数×值”列反推，女性基线生存率由女性计算示例反推；两者都复现论文表 2（四个年龄）误差在 1% 以内。\nChina-PAR 用中国四个队列的 2 万多名成人建立男女分开的 Cox 方程，按年龄、收缩压及是否降压治疗、总胆固醇、高密度脂蛋白胆固醇、腰围、吸烟、糖尿病、南北方，以及男性的城乡和家族史，估计 10 年动脉粥样硬化性心血管病风险，被 2019 年中国心血管病风险评估指南采用。\n- 年龄 53 岁，男\n- 论文印出的两位小数系数和女性基线生存率不够精确，复现不了论文自己的结果。这里男性的六个连续项系数、女性的基线生存率由论文印出的计算示例反推，复现论文表 2 的误差在 1% 以内（见 references/contract.md）。\n边界: China-PAR 给出的是和你条件相同的中国成人的平均 10 年风险，是模型估计，不是诊断，也不决定是否用药。正式评估以医生或 cvdrisk.com.cn 官方计算器为准。",
+   "input_keys": [
+    "sbp_mmhg",
+    "tc_mg_dl",
+    "hdl_mg_dl",
+    "waist_cm"
+   ]
+  },
+  {
+   "at": "2026-09-24T19:50:57.168Z",
+   "skill": "accelerated-biological-aging-risk",
+   "revision": "05de8db",
+   "exit_code": 0,
+   "ok": true,
+   "excerpt": "# 表型年龄\n**表型年龄**\n这项研究在英国生物银行的大型成年人队列里，用常规临床指标算出两种生物年龄，再看生物学上更老的人日后出现抑郁和焦虑的机会是否更高。个人报告只用你交来的九项血液指标和实足年龄，按原始系数算表型年龄和它与实足年龄的差，不算另一种生物年龄，也不把队列里的风险比写成你的风险。\n用你给的九项血液指标算出了表型年龄，是 44.76 岁。表型年龄减去实足年龄是 -8.14 岁。KDM 生物年龄和按队列回归得到的残差没有计算。\n实足年龄 52.9 岁。表型年龄 44.76 岁。表型年龄减去实足年龄是 -8.14 岁。",
+   "input_keys": [
+    "albumin_gL",
+    "creat_umol",
+    "glucose_mmol",
+    "crp_mg_dl",
+    "lymph_pct",
+    "mcv_fl",
+    "rdw_pct",
+    "alp_u_l",
+    "wbc_10e3"
+   ]
+  },
+  {
+   "at": "2026-09-24T19:50:56.903Z",
+   "skill": "accelerated-biological-aging-risk",
+   "revision": "05de8db",
+   "exit_code": 0,
+   "ok": true,
+   "excerpt": "# 表型年龄\n**表型年龄**\n这项研究在英国生物银行的大型成年人队列里，用常规临床指标算出两种生物年龄，再看生物学上更老的人日后出现抑郁和焦虑的机会是否更高。个人报告只用你交来的九项血液指标和实足年龄，按原始系数算表型年龄和它与实足年龄的差，不算另一种生物年龄，也不把队列里的风险比写成你的风险。\n用你给的九项血液指标算出了表型年龄，是 44.76 岁。表型年龄减去实足年龄是 -8.14 岁。KDM 生物年龄和按队列回归得到的残差没有计算。\n实足年龄 52.9 岁。表型年龄 44.76 岁。表型年龄减去实足年龄是 -8.14 岁。",
+   "input_keys": [
+    "albumin_gL",
+    "creat_umol",
+    "glucose_mmol",
+    "crp_mg_dl",
+    "lymph_pct",
+    "mcv_fl",
+    "rdw_pct",
+    "alp_u_l",
+    "wbc_10e3"
+   ]
+  },
+  {
+   "at": "2026-09-24T19:50:56.816Z",
+   "skill": "accelerated-biological-aging-risk",
+   "revision": "05de8db",
+   "exit_code": 0,
+   "ok": true,
+   "excerpt": "# 表型年龄\n**表型年龄**\n这项研究在英国生物银行的大型成年人队列里，用常规临床指标算出两种生物年龄，再看生物学上更老的人日后出现抑郁和焦虑的机会是否更高。个人报告只用你交来的九项血液指标和实足年龄，按原始系数算表型年龄和它与实足年龄的差，不算另一种生物年龄，也不把队列里的风险比写成你的风险。\n用你给的九项血液指标算出了表型年龄，是 44.76 岁。表型年龄减去实足年龄是 -8.14 岁。KDM 生物年龄和按队列回归得到的残差没有计算。\n实足年龄 52.9 岁。表型年龄 44.76 岁。表型年龄减去实足年龄是 -8.14 岁。",
+   "input_keys": [
+    "albumin_gL",
+    "creat_umol",
+    "glucose_mmol",
+    "crp_mg_dl",
+    "lymph_pct",
+    "mcv_fl",
+    "rdw_pct",
+    "alp_u_l",
+    "wbc_10e3"
+   ]
+  },
+  {
+   "at": "2026-09-24T19:50:56.746Z",
+   "skill": "accelerated-biological-aging-risk",
+   "revision": "05de8db",
+   "exit_code": 0,
+   "ok": true,
+   "excerpt": "# 表型年龄\n**表型年龄**\n这项研究在英国生物银行的大型成年人队列里，用常规临床指标算出两种生物年龄，再看生物学上更老的人日后出现抑郁和焦虑的机会是否更高。个人报告只用你交来的九项血液指标和实足年龄，按原始系数算表型年龄和它与实足年龄的差，不算另一种生物年龄，也不把队列里的风险比写成你的风险。\n用你给的九项血液指标算出了表型年龄，是 46.48 岁。表型年龄减去实足年龄是 -6.12 岁。KDM 生物年龄和按队列回归得到的残差没有计算。\n实足年龄 52.6 岁。表型年龄 46.48 岁。表型年龄减去实足年龄是 -6.12 岁。",
+   "input_keys": [
+    "albumin_gL",
+    "creat_umol",
+    "glucose_mmol",
+    "crp_mg_dl",
+    "lymph_pct",
+    "mcv_fl",
+    "rdw_pct",
+    "alp_u_l",
+    "wbc_10e3"
+   ]
+  }
+ ],
+ "boundary": "这不是诊断，也不能改处方。技能没写出的数字不要补。紧急情况请拨打 120。",
+ "readiness": {
+  "ready": [
+   {
+    "name": "accelerated-biological-aging-risk",
+    "blurb": "九项血液指标和实足年龄的表型年龄。",
+    "domain": "临床年龄与可穿戴"
+   },
+   {
+    "name": "ageing-clocks-digital-twins",
+    "blurb": "已经算好的生物年龄的稳定度。",
+    "domain": "临床年龄与可穿戴"
+   },
+   {
+    "name": "aging-biomarker-framework",
+    "blurb": "预测年龄相对实足年龄的偏差。",
+    "domain": "临床年龄与可穿戴"
+   },
+   {
+    "name": "biological-aging-generational-shifts",
+    "blurb": "年龄、出生年和已经算好的衰老测量。",
+    "domain": "临床年龄与可穿戴"
+   },
+   {
+    "name": "genome-wide-proteomics-frailty",
+    "blurb": "已经算好的医院衰弱风险分。",
+    "domain": "衰弱与死亡风险"
+   },
+   {
+    "name": "hospital-infection-epilepsy-risk",
+    "blurb": "感染距指数日的年数和部位。",
+    "domain": "免疫与炎症"
+   },
+   {
+    "name": "life-cycle-biological-clock",
+    "blurb": "年龄和常规检验对照临床时钟。",
+    "domain": "临床年龄与可穿戴"
+   },
+   {
+    "name": "principal-component-clinical-aging",
+    "blurb": "并存病、可替宁、自评健康和尿白蛋白肌酐比。",
+    "domain": "临床年龄与可穿戴"
+   },
+   {
+    "name": "testis-transcriptomic-atlas-lifespan",
+    "blurb": "年龄，可带体质指数，对照睾丸衰老阶段。",
+    "domain": "卵巢与生殖"
+   }
+  ],
+  "near": [
+   {
+    "name": "hippocampal-neurogenesis-adulthood-ageing",
+    "blurb": "年龄，以及情景记忆是持平或更好、更差，还是未知。",
+    "missing": [
+     "情景记忆比较（相对 50–59 岁）"
+    ]
+   },
+   {
+    "name": "sleep-study-life-expectancy",
+    "blurb": "年龄估计减实足年龄。",
+    "missing": [
+     "年龄估计"
+    ]
+   },
+   {
+    "name": "wearable-aging-clock",
+    "blurb": "腕部脉搏波年龄相对实足年龄。",
+    "missing": [
+     "脉搏波年龄（PpgAge）"
+    ]
+   },
+   {
+    "name": "wearable-circadian-aging-biomarker",
+    "blurb": "MESOR、振幅、峰值相位和年龄到齐时的 CosinorAge。缺一项就不算。",
+    "missing": [
+     "MESOR（节律中值）",
+     "振幅"
+    ]
+   }
+  ],
+  "unlock": [
+   {
+    "item": "z 标准化对数端粒",
+    "skills": [
+     "leukocyte-telomere-length"
+    ]
+   },
+   {
+    "item": "前一次（基线）临床生物年龄",
+    "skills": [
+     "fasting-mimicking-diet"
+    ]
+   },
+   {
+    "item": "年龄估计",
+    "skills": [
+     "sleep-study-life-expectancy"
+    ]
+   },
+   {
+    "item": "情景记忆比较（相对 50–59 岁）",
+    "skills": [
+     "hippocampal-neurogenesis-adulthood-ageing"
+    ]
+   },
+   {
+    "item": "睡眠时长",
+    "skills": [
+     "sleep-chart-biological-ageing"
+    ]
+   },
+   {
+    "item": "脉搏波年龄（PpgAge）",
+    "skills": [
+     "wearable-aging-clock"
+    ]
+   }
+  ],
+  "declared": 20
+ },
+ "today": "2026-09-24"
+}

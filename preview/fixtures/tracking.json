@@ -1,0 +1,2703 @@
+{
+ "status": "ok",
+ "today": "2026-09-24",
+ "plan": {
+  "schema": "longpi-plan/1",
+  "title": "2025 秋季方案",
+  "source": "chat",
+  "note": "",
+  "items": [
+   {
+    "id": "imufy5xey0",
+    "category": "diet",
+    "title": "地中海饮食",
+    "detail": "橄榄油、深海鱼、坚果和全谷物，少红肉",
+    "start": "2025-10-20",
+    "end": null,
+    "frequency": null,
+    "target": null,
+    "markers": [
+     "hs-CRP",
+     "甘油三酯",
+     "空腹血糖"
+    ],
+    "mirobody": null
+   },
+   {
+    "id": "imufy5xey1",
+    "category": "exercise",
+    "title": "每天快走 8000 步",
+    "detail": "",
+    "start": "2026-01-05",
+    "end": null,
+    "frequency": null,
+    "target": {
+     "metric": "dailySteps",
+     "op": ">=",
+     "value": 8000,
+     "unit": "count"
+    },
+    "markers": [
+     "糖化血红蛋白",
+     "收缩压"
+    ],
+    "mirobody": null
+   },
+   {
+    "id": "imufy5xez2",
+    "category": "supplement",
+    "title": "鱼油",
+    "detail": "",
+    "start": "2026-03-01",
+    "end": null,
+    "frequency": null,
+    "target": null,
+    "markers": [
+     "甘油三酯"
+    ],
+    "mirobody": {
+     "medication": "鱼油(Omega-3)",
+     "plan_id": "p-fishoil"
+    }
+   },
+   {
+    "id": "imufy5xez3",
+    "category": "sleep",
+    "title": "23 点前睡、睡够 7 小时",
+    "detail": "",
+    "start": "2026-09-18",
+    "end": null,
+    "frequency": null,
+    "target": {
+     "metric": "dailyTotalSleepTime",
+     "op": ">=",
+     "value": 7,
+     "unit": "hours"
+    },
+    "markers": [
+     "超敏C反应蛋白"
+    ],
+    "mirobody": null
+   }
+  ],
+  "goals": [
+   {
+    "marker": "空腹血糖",
+    "value": 5,
+    "unit": "mmol/L"
+   },
+   {
+    "marker": "hs-CRP",
+    "value": 1,
+    "unit": "mg/L"
+   },
+   {
+    "marker": "收缩压",
+    "value": 120,
+    "unit": "mmHg"
+   }
+  ],
+  "version": 1,
+  "saved_at": "2026-09-24T19:50:56.363Z"
+ },
+ "versions": [
+  {
+   "version": 1,
+   "saved_at": "2026-09-24T19:50:56.363Z",
+   "title": "2025 秋季方案",
+   "items": 4
+  }
+ ],
+ "items": [
+  {
+   "id": "imufy5xey0",
+   "title": "地中海饮食",
+   "category": "diet",
+   "category_zh": "饮食",
+   "start": "2025-10-20",
+   "end": null,
+   "days": 339,
+   "adherence": {
+    "source": "check_in",
+    "rate": 0.875,
+    "coverage": 0.47619047619047616,
+    "known_days": 40,
+    "done_days": 35,
+    "window_days": 84,
+    "level": "good",
+    "streak": 0,
+    "calendar": [
+     {
+      "date": "2026-07-03",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-04",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-05",
+      "status": "missed"
+     },
+     {
+      "date": "2026-07-06",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-07",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-08",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-09",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-10",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-11",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-12",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-13",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-14",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-15",
+      "status": "missed"
+     },
+     {
+      "date": "2026-07-16",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-17",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-18",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-19",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-20",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-21",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-22",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-23",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-24",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-25",
+      "status": "missed"
+     },
+     {
+      "date": "2026-07-26",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-27",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-28",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-29",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-30",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-31",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-01",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-02",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-03",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-04",
+      "status": "missed"
+     },
+     {
+      "date": "2026-08-05",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-06",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-07",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-08",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-09",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-10",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-11",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-12",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-13",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-14",
+      "status": "missed"
+     },
+     {
+      "date": "2026-08-15",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-16",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-17",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-18",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-19",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-20",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-21",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-22",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-23",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-24",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-25",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-26",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-27",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-28",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-29",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-30",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-31",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-01",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-02",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-03",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-04",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-05",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-06",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-07",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-08",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-09",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-10",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-11",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-12",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-13",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-14",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-15",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-16",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-17",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-18",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-19",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-20",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-21",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-22",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-23",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-24",
+      "status": "unknown"
+     }
+    ],
+    "note_zh": "打卡：执行率 88%（覆盖 48% 的天数）。"
+   },
+   "verdicts": [
+    {
+     "item": "imufy5xey0",
+     "item_title": "地中海饮食",
+     "marker": "超敏C反应蛋白",
+     "indicator": "hs-CRP",
+     "unit": "mg/L",
+     "verdict": "有效",
+     "reason_zh": "变化 -71%，超出正常波动，是真实的改善。期间还有其他变化（2025-11-01 开始用维生素D3（Mirobody 用药记录）；2026-03-01 开始用鱼油(Omega-3)（Mirobody 用药记录）），结论要打折扣。",
+     "baseline": {
+      "date": "2025-10-18",
+      "value": 4.2
+     },
+     "followup": {
+      "date": "2026-08-26",
+      "value": 1.2
+     },
+     "change": {
+      "abs": -3,
+      "pct": -0.7142857142857143
+     },
+     "band": {
+      "up_pct": 144.75958807470795,
+      "down_pct": -59.14358216296842,
+      "verified": true,
+      "cva_default": true
+     },
+     "direction": "improved",
+     "confounders": [
+      "2025-11-01 开始用维生素D3（Mirobody 用药记录）",
+      "2026-03-01 开始用鱼油(Omega-3)（Mirobody 用药记录）"
+     ],
+     "combined_with": [],
+     "expected": [
+      {
+       "id": "mediterranean-hscrp",
+       "text_zh": "地中海饮食对超敏 C 反应蛋白：试验组比对照组平均 -0.98 mg/L（95% 区间 -1.48 至 -0.49）；19 岁以上成人；荟萃分析。（数字已由脚本对照原文引文核对，尚未人工复核）",
+       "doi": "10.1016/j.numecd.2014.03.003",
+       "verified": true,
+       "comparison": "larger"
+      }
+     ],
+     "next_retest": null
+    },
+    {
+     "item": "imufy5xey0",
+     "item_title": "地中海饮食",
+     "marker": "甘油三酯",
+     "indicator": "Triglycerides-TG",
+     "unit": "mmol/L",
+     "verdict": "有效",
+     "reason_zh": "变化 -50%，超出正常波动，是真实的改善。同期还有鱼油，只能说明组合有效，分不出是哪一项。期间还有其他变化（2025-11-01 开始用维生素D3（Mirobody 用药记录）），结论要打折扣。",
+     "baseline": {
+      "date": "2025-10-18",
+      "value": 2.4
+     },
+     "followup": {
+      "date": "2026-08-26",
+      "value": 1.2
+     },
+     "change": {
+      "abs": -1.2,
+      "pct": -0.5
+     },
+     "band": {
+      "up_pct": 83.78568736996638,
+      "down_pct": -45.58879887164616,
+      "verified": true,
+      "cva_default": true
+     },
+     "direction": "improved",
+     "confounders": [
+      "2025-11-01 开始用维生素D3（Mirobody 用药记录）"
+     ],
+     "combined_with": [
+      "鱼油"
+     ],
+     "expected": [],
+     "next_retest": null
+    },
+    {
+     "item": "imufy5xey0",
+     "item_title": "地中海饮食",
+     "marker": "空腹血糖",
+     "indicator": "Fasting Blood Glucose-FBG",
+     "unit": "mmol/L",
+     "verdict": "波动内",
+     "reason_zh": "变化 -11%，在正常波动范围（-15% 至 +15%）内，还不能算真实变化。",
+     "baseline": {
+      "date": "2025-10-18",
+      "value": 6.1
+     },
+     "followup": {
+      "date": "2026-08-26",
+      "value": 5.4
+     },
+     "change": {
+      "abs": -0.6999999999999993,
+      "pct": -0.11475409836065563
+     },
+     "band": {
+      "up_pct": 14.565450902735556,
+      "down_pct": -14.565450902735556,
+      "verified": true,
+      "cva_default": true
+     },
+     "direction": "within",
+     "confounders": [
+      "2025-11-01 开始用维生素D3（Mirobody 用药记录）",
+      "2026-03-01 开始用鱼油(Omega-3)（Mirobody 用药记录）"
+     ],
+     "combined_with": [],
+     "expected": [],
+     "next_retest": null
+    }
+   ],
+   "headline": "有效"
+  },
+  {
+   "id": "imufy5xey1",
+   "title": "每天快走 8000 步",
+   "category": "exercise",
+   "category_zh": "运动",
+   "start": "2026-01-05",
+   "end": null,
+   "days": 262,
+   "adherence": {
+    "source": "wearable",
+    "rate": 0.65,
+    "coverage": 0.9523809523809523,
+    "known_days": 80,
+    "done_days": 52,
+    "window_days": 84,
+    "level": "partial",
+    "streak": 0,
+    "calendar": [
+     {
+      "date": "2026-07-03",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-04",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-05",
+      "status": "missed"
+     },
+     {
+      "date": "2026-07-06",
+      "status": "missed"
+     },
+     {
+      "date": "2026-07-07",
+      "status": "missed"
+     },
+     {
+      "date": "2026-07-08",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-09",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-10",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-11",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-12",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-13",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-14",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-15",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-16",
+      "status": "missed"
+     },
+     {
+      "date": "2026-07-17",
+      "status": "missed"
+     },
+     {
+      "date": "2026-07-18",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-19",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-20",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-21",
+      "status": "missed"
+     },
+     {
+      "date": "2026-07-22",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-23",
+      "status": "missed"
+     },
+     {
+      "date": "2026-07-24",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-25",
+      "status": "missed"
+     },
+     {
+      "date": "2026-07-26",
+      "status": "missed"
+     },
+     {
+      "date": "2026-07-27",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-28",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-29",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-30",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-31",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-01",
+      "status": "missed"
+     },
+     {
+      "date": "2026-08-02",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-03",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-04",
+      "status": "missed"
+     },
+     {
+      "date": "2026-08-05",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-06",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-07",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-08",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-09",
+      "status": "missed"
+     },
+     {
+      "date": "2026-08-10",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-11",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-12",
+      "status": "missed"
+     },
+     {
+      "date": "2026-08-13",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-14",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-15",
+      "status": "missed"
+     },
+     {
+      "date": "2026-08-16",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-17",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-18",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-19",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-20",
+      "status": "missed"
+     },
+     {
+      "date": "2026-08-21",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-22",
+      "status": "missed"
+     },
+     {
+      "date": "2026-08-23",
+      "status": "missed"
+     },
+     {
+      "date": "2026-08-24",
+      "status": "missed"
+     },
+     {
+      "date": "2026-08-25",
+      "status": "missed"
+     },
+     {
+      "date": "2026-08-26",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-27",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-28",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-29",
+      "status": "missed"
+     },
+     {
+      "date": "2026-08-30",
+      "status": "missed"
+     },
+     {
+      "date": "2026-08-31",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-01",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-02",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-03",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-04",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-05",
+      "status": "missed"
+     },
+     {
+      "date": "2026-09-06",
+      "status": "missed"
+     },
+     {
+      "date": "2026-09-07",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-08",
+      "status": "missed"
+     },
+     {
+      "date": "2026-09-09",
+      "status": "missed"
+     },
+     {
+      "date": "2026-09-10",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-11",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-12",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-13",
+      "status": "missed"
+     },
+     {
+      "date": "2026-09-14",
+      "status": "missed"
+     },
+     {
+      "date": "2026-09-15",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-16",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-17",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-18",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-19",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-20",
+      "status": "missed"
+     },
+     {
+      "date": "2026-09-21",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-22",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-23",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-24",
+      "status": "unknown"
+     }
+    ],
+    "note_zh": "手环数据：执行率 65%（覆盖 95% 的天数）。"
+   },
+   "verdicts": [
+    {
+     "item": "imufy5xey1",
+     "item_title": "每天快走 8000 步",
+     "marker": "糖化血红蛋白",
+     "indicator": "Glycated Hemoglobin-HbA1c",
+     "unit": "%",
+     "verdict": "有效",
+     "reason_zh": "变化 -8%，超出正常波动，是真实的改善。期间还有其他变化（2025-11-01 开始用维生素D3（Mirobody 用药记录）；2026-03-01 开始用鱼油(Omega-3)（Mirobody 用药记录）），结论要打折扣。",
+     "baseline": {
+      "date": "2025-10-18",
+      "value": 6.1
+     },
+     "followup": {
+      "date": "2026-08-26",
+      "value": 5.6
+     },
+     "change": {
+      "abs": -0.5,
+      "pct": -0.0819672131147541
+     },
+     "band": {
+      "up_pct": 3.718838528358014,
+      "down_pct": -3.718838528358014,
+      "verified": true,
+      "cva_default": true
+     },
+     "direction": "improved",
+     "confounders": [
+      "2025-11-01 开始用维生素D3（Mirobody 用药记录）",
+      "2026-03-01 开始用鱼油(Omega-3)（Mirobody 用药记录）"
+     ],
+     "combined_with": [],
+     "expected": [
+      {
+       "id": "exercise-t2d-hba1c",
+       "text_zh": "结构化运动训练对糖化血红蛋白：试验组比对照组平均 -0.67 %（95% 区间 -0.84 至 -0.49）；2 型糖尿病患者；荟萃分析。（数字已由脚本对照原文引文核对，尚未人工复核）",
+       "doi": "10.1001/jama.2011.576",
+       "verified": true,
+       "comparison": "consistent"
+      }
+     ],
+     "next_retest": null
+    },
+    {
+     "item": "imufy5xey1",
+     "item_title": "每天快走 8000 步",
+     "marker": "收缩压",
+     "indicator": "systolicPressures",
+     "unit": "mmHg",
+     "verdict": "波动内",
+     "reason_zh": "变化 -10%，在正常波动范围（-12% 至 +12%）内，还不能算真实变化。",
+     "baseline": {
+      "date": "2026-01-05",
+      "value": 138.67
+     },
+     "followup": {
+      "date": "2026-09-20",
+      "value": 124.67
+     },
+     "change": {
+      "abs": -13.999999999999986,
+      "pct": -0.10095911155981818
+     },
+     "band": {
+      "up_pct": 11.641806045455318,
+      "down_pct": -11.641806045455318,
+      "verified": true,
+      "cva_default": false
+     },
+     "direction": "within",
+     "confounders": [
+      "2026-03-01 开始用鱼油(Omega-3)（Mirobody 用药记录）"
+     ],
+     "combined_with": [],
+     "expected": [
+      {
+       "id": "aerobic-sbp",
+       "text_zh": "有氧耐力训练对收缩压：试验组比对照组平均 -3.5 mmHg（95% 区间 -4.6 至 -2.3）；18 岁以上健康成人；荟萃分析。（数字已由脚本对照原文引文核对，尚未人工复核）",
+       "doi": "10.1161/JAHA.112.004473",
+       "verified": true,
+       "comparison": "larger"
+      }
+     ],
+     "next_retest": null
+    }
+   ],
+   "headline": "有效"
+  },
+  {
+   "id": "imufy5xez2",
+   "title": "鱼油",
+   "category": "supplement",
+   "category_zh": "补剂",
+   "start": "2026-03-01",
+   "end": null,
+   "days": 207,
+   "adherence": {
+    "source": "dose_log",
+    "rate": 0.8875,
+    "coverage": 0.9523809523809523,
+    "known_days": 80,
+    "done_days": 71,
+    "window_days": 84,
+    "level": "good",
+    "streak": 0,
+    "calendar": [
+     {
+      "date": "2026-07-03",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-04",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-05",
+      "status": "missed"
+     },
+     {
+      "date": "2026-07-06",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-07",
+      "status": "missed"
+     },
+     {
+      "date": "2026-07-08",
+      "status": "missed"
+     },
+     {
+      "date": "2026-07-09",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-10",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-11",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-12",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-13",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-14",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-15",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-16",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-17",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-18",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-19",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-20",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-21",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-22",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-23",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-24",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-25",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-26",
+      "status": "missed"
+     },
+     {
+      "date": "2026-07-27",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-28",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-29",
+      "status": "missed"
+     },
+     {
+      "date": "2026-07-30",
+      "status": "done"
+     },
+     {
+      "date": "2026-07-31",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-01",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-02",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-03",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-04",
+      "status": "missed"
+     },
+     {
+      "date": "2026-08-05",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-06",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-07",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-08",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-09",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-10",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-11",
+      "status": "missed"
+     },
+     {
+      "date": "2026-08-12",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-13",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-14",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-15",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-16",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-17",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-18",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-19",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-20",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-21",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-22",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-23",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-24",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-25",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-26",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-27",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-28",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-29",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-30",
+      "status": "done"
+     },
+     {
+      "date": "2026-08-31",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-01",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-02",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-03",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-04",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-05",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-06",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-07",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-08",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-09",
+      "status": "missed"
+     },
+     {
+      "date": "2026-09-10",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-11",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-12",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-13",
+      "status": "missed"
+     },
+     {
+      "date": "2026-09-14",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-15",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-16",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-17",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-18",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-19",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-20",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-21",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-22",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-23",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-24",
+      "status": "unknown"
+     }
+    ],
+    "note_zh": "Mirobody 服用记录：执行率 89%（覆盖 95% 的天数）。"
+   },
+   "verdicts": [
+    {
+     "item": "imufy5xez2",
+     "item_title": "鱼油",
+     "marker": "甘油三酯",
+     "indicator": "Triglycerides-TG",
+     "unit": "mmol/L",
+     "verdict": "波动内",
+     "reason_zh": "变化 -37%，在正常波动范围（-46% 至 +84%）内，还不能算真实变化。",
+     "baseline": {
+      "date": "2026-01-20",
+      "value": 1.9
+     },
+     "followup": {
+      "date": "2026-08-26",
+      "value": 1.2
+     },
+     "change": {
+      "abs": -0.7,
+      "pct": -0.3684210526315789
+     },
+     "band": {
+      "up_pct": 83.78568736996638,
+      "down_pct": -45.58879887164616,
+      "verified": true,
+      "cva_default": true
+     },
+     "direction": "within",
+     "confounders": [],
+     "combined_with": [
+      "地中海饮食"
+     ],
+     "expected": [
+      {
+       "id": "omega3-2g-tg",
+       "text_zh": "ω-3（鱼油）补充对甘油三酯：试验组比对照组平均 -42.61 mg/dL（95% 区间 -53.41 至 -31.8），约 13 周；成人（90 项试验中 52 项为高血脂人群）；荟萃分析。（数字已由脚本对照原文引文核对，尚未人工复核）",
+       "doi": "10.1161/JAHA.123.029512",
+       "verified": true,
+       "comparison": "larger"
+      }
+     ],
+     "next_retest": null
+    }
+   ],
+   "headline": "波动内"
+  },
+  {
+   "id": "imufy5xez3",
+   "title": "23 点前睡、睡够 7 小时",
+   "category": "sleep",
+   "category_zh": "睡眠",
+   "start": "2026-09-18",
+   "end": null,
+   "days": 6,
+   "adherence": {
+    "source": "wearable",
+    "rate": 0.6666666666666666,
+    "coverage": 0.42857142857142855,
+    "known_days": 3,
+    "done_days": 2,
+    "window_days": 7,
+    "level": "partial",
+    "streak": 0,
+    "calendar": [
+     {
+      "date": "2026-07-03",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-04",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-05",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-06",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-07",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-08",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-09",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-10",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-11",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-12",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-13",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-14",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-15",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-16",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-17",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-18",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-19",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-20",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-21",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-22",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-23",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-24",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-25",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-26",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-27",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-28",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-29",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-30",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-07-31",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-01",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-02",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-03",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-04",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-05",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-06",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-07",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-08",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-09",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-10",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-11",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-12",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-13",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-14",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-15",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-16",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-17",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-18",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-19",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-20",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-21",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-22",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-23",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-24",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-25",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-26",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-27",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-28",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-29",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-30",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-08-31",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-01",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-02",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-03",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-04",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-05",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-06",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-07",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-08",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-09",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-10",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-11",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-12",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-13",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-14",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-15",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-16",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-17",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-18",
+      "status": "missed"
+     },
+     {
+      "date": "2026-09-19",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-20",
+      "status": "done"
+     },
+     {
+      "date": "2026-09-21",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-22",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-23",
+      "status": "unknown"
+     },
+     {
+      "date": "2026-09-24",
+      "status": "unknown"
+     }
+    ],
+    "note_zh": "手环数据：执行率 67%（覆盖 43% 的天数）。"
+   },
+   "verdicts": [
+    {
+     "item": "imufy5xez3",
+     "item_title": "23 点前睡、睡够 7 小时",
+     "marker": "超敏C反应蛋白",
+     "indicator": "hs-CRP",
+     "unit": "mg/L",
+     "verdict": "无法判断",
+     "reason_zh": "开始才 6 天。超敏C反应蛋白至少要隔 14 天复测才有意义，2026-10-02 之后复测。",
+     "baseline": {
+      "date": "2026-08-26",
+      "value": 1.2
+     },
+     "followup": null,
+     "change": null,
+     "band": null,
+     "direction": "unknown",
+     "confounders": [],
+     "combined_with": [],
+     "expected": [],
+     "next_retest": "2026-10-02"
+    }
+   ],
+   "headline": "无法判断"
+  }
+ ],
+ "suggestions": [
+  {
+   "kind": "review",
+   "priority": 3,
+   "item": "imufy5xey0",
+   "marker": "空腹血糖",
+   "text_zh": "「地中海饮食」执行得很好，但空腹血糖的变化还在波动范围内。可以再复测一次确认，或和医生、长寿师讨论是否调整这一项。"
+  },
+  {
+   "kind": "adherence",
+   "priority": 3,
+   "item": "imufy5xey1",
+   "text_zh": "「每天快走 8000 步」执行率 65%。先把执行稳定在八成以上，再判断它有没有用。"
+  },
+  {
+   "kind": "review",
+   "priority": 3,
+   "item": "imufy5xez2",
+   "marker": "甘油三酯",
+   "text_zh": "「鱼油」执行得很好，但甘油三酯的变化还在波动范围内。可以再复测一次确认，或和医生、长寿师讨论是否调整这一项。"
+  },
+  {
+   "kind": "one_change",
+   "priority": 4,
+   "item": "imufy5xey0",
+   "text_zh": "甘油三酯的改善来自「地中海饮食」和鱼油的组合。下次调整一次只改一项，才分得清谁起作用。"
+  },
+  {
+   "kind": "lever",
+   "priority": 4,
+   "text_zh": "按表型年龄模型，血糖从 5.4 mmol/L 到 5 mmol/L，表型年龄约 -0.9 岁（模型估计）。它是你当前最大的杠杆。"
+  },
+  {
+   "kind": "retest",
+   "priority": 5,
+   "marker": "超敏C反应蛋白",
+   "date": "2026-10-02",
+   "text_zh": "2026-10-02 之后复测超敏C反应蛋白。"
+  }
+ ],
+ "charts": [
+  {
+   "key": "crp",
+   "label": "超敏C反应蛋白",
+   "indicator": "hs-CRP",
+   "unit": "mg/L",
+   "better": "lower",
+   "points": [
+    {
+     "date": "2025-10-18",
+     "value": 4.2
+    },
+    {
+     "date": "2026-01-20",
+     "value": 2.9
+    },
+    {
+     "date": "2026-04-22",
+     "value": 1.8
+    },
+    {
+     "date": "2026-08-26",
+     "value": 1.2
+    }
+   ],
+   "band": {
+    "base": 4.2,
+    "base_date": "2025-10-18",
+    "low": 1.7159695491553264,
+    "high": 10.279902699137734,
+    "verified": true
+   },
+   "goal": 1,
+   "items": [
+    "imufy5xey0"
+   ]
+  },
+  {
+   "key": "tg",
+   "label": "甘油三酯",
+   "indicator": "Triglycerides-TG",
+   "unit": "mmol/L",
+   "better": "lower",
+   "points": [
+    {
+     "date": "2025-10-18",
+     "value": 2.4
+    },
+    {
+     "date": "2026-01-20",
+     "value": 1.9
+    },
+    {
+     "date": "2026-04-22",
+     "value": 1.4
+    },
+    {
+     "date": "2026-08-26",
+     "value": 1.2
+    }
+   ],
+   "band": {
+    "base": 2.4,
+    "base_date": "2025-10-18",
+    "low": 1.3058688270804921,
+    "high": 4.410856496879193,
+    "verified": true
+   },
+   "goal": null,
+   "items": [
+    "imufy5xey0",
+    "imufy5xez2"
+   ]
+  },
+  {
+   "key": "glucose",
+   "label": "空腹血糖",
+   "indicator": "Fasting Blood Glucose-FBG",
+   "unit": "mmol/L",
+   "better": "lower",
+   "points": [
+    {
+     "date": "2025-10-18",
+     "value": 6.1
+    },
+    {
+     "date": "2026-01-20",
+     "value": 5.9
+    },
+    {
+     "date": "2026-04-22",
+     "value": 5.6
+    },
+    {
+     "date": "2026-08-26",
+     "value": 5.4
+    }
+   ],
+   "band": {
+    "base": 6.1,
+    "base_date": "2025-10-18",
+    "low": 5.211507494933131,
+    "high": 6.988492505066868,
+    "verified": true
+   },
+   "goal": 5,
+   "items": [
+    "imufy5xey0"
+   ]
+  },
+  {
+   "key": "hba1c",
+   "label": "糖化血红蛋白",
+   "indicator": "Glycated Hemoglobin-HbA1c",
+   "unit": "%",
+   "better": "lower",
+   "points": [
+    {
+     "date": "2025-10-18",
+     "value": 6.1
+    },
+    {
+     "date": "2026-01-20",
+     "value": 5.9
+    },
+    {
+     "date": "2026-04-22",
+     "value": 5.7
+    },
+    {
+     "date": "2026-08-26",
+     "value": 5.6
+    }
+   ],
+   "band": {
+    "base": 6.1,
+    "base_date": "2025-10-18",
+    "low": 5.873150849770161,
+    "high": 6.3268491502298385,
+    "verified": true
+   },
+   "goal": null,
+   "items": [
+    "imufy5xey1"
+   ]
+  },
+  {
+   "key": "sbp",
+   "label": "收缩压",
+   "indicator": "systolicPressures",
+   "unit": "mmHg",
+   "better": "lower",
+   "points": [
+    {
+     "date": "2025-09-29",
+     "value": 137.5
+    },
+    {
+     "date": "2025-10-06",
+     "value": 134.5
+    },
+    {
+     "date": "2025-10-13",
+     "value": 134.3
+    },
+    {
+     "date": "2025-10-20",
+     "value": 138.5
+    },
+    {
+     "date": "2025-10-27",
+     "value": 136
+    },
+    {
+     "date": "2025-11-03",
+     "value": 137
+    },
+    {
+     "date": "2025-11-10",
+     "value": 135
+    },
+    {
+     "date": "2025-11-17",
+     "value": 134.5
+    },
+    {
+     "date": "2025-11-24",
+     "value": 134
+    },
+    {
+     "date": "2025-12-01",
+     "value": 136
+    },
+    {
+     "date": "2025-12-08",
+     "value": 132.5
+    },
+    {
+     "date": "2025-12-15",
+     "value": 132.3
+    },
+    {
+     "date": "2025-12-22",
+     "value": 134.5
+    },
+    {
+     "date": "2025-12-29",
+     "value": 139
+    },
+    {
+     "date": "2026-01-05",
+     "value": 133
+    },
+    {
+     "date": "2026-01-12",
+     "value": 134.5
+    },
+    {
+     "date": "2026-01-19",
+     "value": 130.5
+    },
+    {
+     "date": "2026-01-26",
+     "value": 135
+    },
+    {
+     "date": "2026-02-02",
+     "value": 134.5
+    },
+    {
+     "date": "2026-02-09",
+     "value": 130.5
+    },
+    {
+     "date": "2026-02-16",
+     "value": 135.7
+    },
+    {
+     "date": "2026-02-23",
+     "value": 133.5
+    },
+    {
+     "date": "2026-03-02",
+     "value": 133.5
+    },
+    {
+     "date": "2026-03-09",
+     "value": 131.7
+    },
+    {
+     "date": "2026-03-16",
+     "value": 128.5
+    },
+    {
+     "date": "2026-03-23",
+     "value": 133.5
+    },
+    {
+     "date": "2026-03-30",
+     "value": 134
+    },
+    {
+     "date": "2026-04-06",
+     "value": 134.5
+    },
+    {
+     "date": "2026-04-13",
+     "value": 133
+    },
+    {
+     "date": "2026-04-20",
+     "value": 134
+    },
+    {
+     "date": "2026-04-27",
+     "value": 132
+    },
+    {
+     "date": "2026-05-04",
+     "value": 128.5
+    },
+    {
+     "date": "2026-05-11",
+     "value": 130
+    },
+    {
+     "date": "2026-05-18",
+     "value": 128.5
+    },
+    {
+     "date": "2026-05-25",
+     "value": 124.5
+    },
+    {
+     "date": "2026-06-01",
+     "value": 133.3
+    },
+    {
+     "date": "2026-06-08",
+     "value": 130
+    },
+    {
+     "date": "2026-06-15",
+     "value": 123
+    },
+    {
+     "date": "2026-06-22",
+     "value": 129.3
+    },
+    {
+     "date": "2026-06-29",
+     "value": 131.5
+    },
+    {
+     "date": "2026-07-06",
+     "value": 129.5
+    },
+    {
+     "date": "2026-07-13",
+     "value": 128
+    },
+    {
+     "date": "2026-07-20",
+     "value": 127
+    },
+    {
+     "date": "2026-07-27",
+     "value": 128
+    },
+    {
+     "date": "2026-08-03",
+     "value": 129
+    },
+    {
+     "date": "2026-08-10",
+     "value": 130
+    },
+    {
+     "date": "2026-08-17",
+     "value": 124.5
+    },
+    {
+     "date": "2026-08-24",
+     "value": 122.3
+    },
+    {
+     "date": "2026-08-31",
+     "value": 121.5
+    },
+    {
+     "date": "2026-09-07",
+     "value": 125.5
+    },
+    {
+     "date": "2026-09-14",
+     "value": 124.7
+    }
+   ],
+   "band": {
+    "base": 133,
+    "base_date": "2026-01-05",
+    "low": 117.51639795954443,
+    "high": 148.4836020404556,
+    "verified": true
+   },
+   "goal": 120,
+   "items": [
+    "imufy5xey1"
+   ]
+  }
+ ],
+ "bioage": {
+  "status": "ok",
+  "note_zh": "按 4 次同时测齐九项血检的检查回算。",
+  "missing": [],
+  "points": [
+   {
+    "date": "2025-10-18",
+    "phenoage": 50.72422697703739,
+    "advance": -1.375773022962612,
+    "mortality_10y_pct": 4.9162527977913095
+   },
+   {
+    "date": "2026-01-20",
+    "phenoage": 48.27345273314829,
+    "advance": -4.026547266851708,
+    "mortality_10y_pct": 3.961141129492496
+   },
+   {
+    "date": "2026-04-22",
+    "phenoage": 46.47793474195487,
+    "advance": -6.122065258045133,
+    "mortality_10y_pct": 3.379206714609162
+   },
+   {
+    "date": "2026-08-26",
+    "phenoage": 44.760596280763465,
+    "advance": -8.139403719236533,
+    "mortality_10y_pct": 2.901563410926211
+   }
+  ],
+  "band_years": 2.9394333204431686,
+  "band_verified": true,
+  "band_missing": [
+   "淋巴细胞百分比",
+   "红细胞分布宽度"
+  ],
+  "runs": 4
+ },
+ "models": [
+  {
+   "model": "phenoage",
+   "title_zh": "表型年龄",
+   "status": "ok",
+   "note_zh": "按 2026-08-26 的血检，达到方案目标时表型年龄 年轻 1.06 岁。",
+   "measured_on": "2026-08-26",
+   "now": {
+    "phenoage": 44.760596280763465,
+    "mortality_10y_pct": 2.901563410926211,
+    "age": 52.9
+   },
+   "goal": {
+    "phenoage": 43.70125781299734,
+    "mortality_10y_pct": 2.640766758197677,
+    "phenoage_delta": -1.0593384677661248
+   },
+   "levers": [
+    {
+     "label": "血糖",
+     "from": "5.4 mmol/L",
+     "to": "5 mmol/L",
+     "years": -0.8664967559474093
+    },
+    {
+     "label": "C反应蛋白",
+     "from": "1.2 mg/L",
+     "to": "1 mg/L",
+     "years": -0.19284171181871557
+    }
+   ],
+   "sensitivity": [
+    {
+     "label": "红细胞分布宽度",
+     "unit": "%",
+     "years_per_step": 4.730151655298098,
+     "step": "1.29 %"
+    },
+    {
+     "label": "血糖",
+     "unit": "mmol/L",
+     "years_per_step": 0.5497921916616532,
+     "step": "0.254 mmol/L"
+    },
+    {
+     "label": "淋巴细胞百分比",
+     "unit": "%",
+     "years_per_step": -0.425880197426001,
+     "step": "3.2 %"
+    },
+    {
+     "label": "白蛋白",
+     "unit": "g/L",
+     "years_per_step": -0.42473961071129585,
+     "step": "1.14 g/L"
+    },
+    {
+     "label": "肌酐",
+     "unit": "umol/L",
+     "years_per_step": 0.37576813536366616,
+     "step": "3.56 umol/L"
+    }
+   ],
+   "boundary_zh": "模型估计，基于人群数据拟合，不是对你个人的预测，也不是寿命预测。"
+  },
+  {
+   "model": "china-par",
+   "title_zh": "10 年动脉粥样硬化性心血管病风险（China-PAR）",
+   "status": "ok",
+   "note_zh": "达到方案目标时的 10 年风险按同一模型计算。",
+   "measured_on": "2026-08-26",
+   "now": {
+    "risk_pct": 3.9970047614126147
+   },
+   "goal": {
+    "risk_pct": 3.516797774197289,
+    "risk_delta_pct": -0.48020698721532584
+   },
+   "levers": [
+    {
+     "label": "收缩压",
+     "from": "125 mmHg",
+     "to": "120 mmHg",
+     "years": -0.48020698721532584
+    }
+   ],
+   "sensitivity": [],
+   "boundary_zh": "模型估计：China-PAR 按中国成人队列建立，给出的是和你条件相同的人群平均风险，不是诊断，也不决定是否用药。",
+   "category_zh": {
+    "now": "低危",
+    "goal": "低危"
+   },
+   "missing_labs": [],
+   "missing_facts": []
+  }
+ ],
+ "checkins": [
+  {
+   "at": "2026-09-24T19:50:56.367Z",
+   "date": "2026-08-20",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.367Z",
+   "date": "2026-08-19",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.367Z",
+   "date": "2026-08-17",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.367Z",
+   "date": "2026-08-16",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.366Z",
+   "date": "2026-08-15",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.366Z",
+   "date": "2026-08-14",
+   "item": "imufy5xey0",
+   "done": false,
+   "amount": null,
+   "unit": "",
+   "note": "外食",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.366Z",
+   "date": "2026-08-13",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.366Z",
+   "date": "2026-08-12",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.366Z",
+   "date": "2026-08-10",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.366Z",
+   "date": "2026-08-09",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.366Z",
+   "date": "2026-08-07",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.366Z",
+   "date": "2026-08-06",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.366Z",
+   "date": "2026-08-05",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.366Z",
+   "date": "2026-08-04",
+   "item": "imufy5xey0",
+   "done": false,
+   "amount": null,
+   "unit": "",
+   "note": "外食",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.366Z",
+   "date": "2026-08-03",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.365Z",
+   "date": "2026-08-02",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.365Z",
+   "date": "2026-07-31",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.365Z",
+   "date": "2026-07-30",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.365Z",
+   "date": "2026-07-28",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.365Z",
+   "date": "2026-07-27",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.365Z",
+   "date": "2026-07-26",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.365Z",
+   "date": "2026-07-25",
+   "item": "imufy5xey0",
+   "done": false,
+   "amount": null,
+   "unit": "",
+   "note": "外食",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.365Z",
+   "date": "2026-07-24",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.365Z",
+   "date": "2026-07-23",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.365Z",
+   "date": "2026-07-21",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.365Z",
+   "date": "2026-07-20",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.365Z",
+   "date": "2026-07-18",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.365Z",
+   "date": "2026-07-17",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.365Z",
+   "date": "2026-07-16",
+   "item": "imufy5xey0",
+   "done": true,
+   "amount": null,
+   "unit": "",
+   "note": "",
+   "tags": [],
+   "source": "chat"
+  },
+  {
+   "at": "2026-09-24T19:50:56.365Z",
+   "date": "2026-07-15",
+   "item": "imufy5xey0",
+   "done": false,
+   "amount": null,
+   "unit": "",
+   "note": "外食",
+   "tags": [],
+   "source": "chat"
+  }
+ ],
+ "reference": {
+  "biovar_markers": 16,
+  "biovar_verified": 16,
+  "effects": 25,
+  "effects_verified": 25
+ },
+ "errors": []
+}
