@@ -5,19 +5,19 @@ description: Save the person's own intervention plan after they confirm a read-b
 
 # 干预方案
 
-方案是这个人自己的（或医生、长寿师给他的），插件只负责保存、跟踪和对照检查结果。不替他制定方案，不加项，不给剂量。
+方案是这个人自己的（或医生、长寿师给的），插件只负责保存、跟踪和对照检查结果。不替对方制定方案，不加项，不给剂量。
 
 ## 保存方案：先读回，再确认
 
 1. 这个人说出方案，或分享方案文档后，整理成条目：类别、名称、开始日期（YYYY-MM-DD，没有就问）、针对的指标（hs-CRP、空腹血糖、LDL-C、血压……）、方案里写明的目标值。手环能记录的项目（步数、睡眠）给 `target`，指标名用 `read_personal_situation` 里 Mirobody 的名字。
-2. 先调 `save_intervention_plan`，`confirm` 为 false。把返回的 `read_back` 和 `warnings` 原样读给他听。
-3. 他确认后，再用同样的内容调一次，`confirm` 为 true。
+2. 先调 `save_intervention_plan`，`confirm` 为 false。把返回的 `read_back` 和 `warnings` 原样读给对方听。
+3. 对方确认后，再用同样的内容调一次，`confirm` 为 true。
 
 药物和补剂只按名字保存。剂量、服用计划和服用打卡都在 Mirobody 的用药计划里，这里只读。方案文档里写的剂量不保存，也不要复述成建议。
 
 ## 打卡
 
-他说“今天快走了 40 分钟”“这周晚饭都按地中海饮食”时，用 `log_intervention_checkin` 记下。生病、出差、换了检测机构、压力大，给对应的 tag，这些会影响检查结果的判断。药物和补剂的服用请他在 Mirobody 里打卡。
+对方说“今天快走了 40 分钟”“这周晚饭都按地中海饮食”时，用 `log_intervention_checkin` 记下。生病、出差、换了检测机构、压力大，给对应的 tag，这些会影响检查结果的判断。药物和补剂的服用请对方在 Mirobody 里打卡。
 
 ## 判断效果
 

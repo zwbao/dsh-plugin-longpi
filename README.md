@@ -34,7 +34,7 @@ Restart `dsh web`. Open the **健康看板** tab. Defaults look for `~/Projects/
 
 ## What the model can call
 
-Nine LongPi tools. Mounting Mirobody adds its eight tools in the same process (LOINC, units, indicators, medications, genotypes, status).
+Fourteen LongPi tools. Mounting Mirobody adds its eight tools in the same process (LOINC, units, indicators, medications, genotypes, status).
 
 | Tool | What it returns |
 | --- | --- |
