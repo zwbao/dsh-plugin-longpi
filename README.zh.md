@@ -34,7 +34,7 @@ dsh plugin --profile web add link:/path/to/dsh-plugin-longpi
 
 ## 工具
 
-LongPi 自己 9 个。挂上 Mirobody 之后，同一进程里还有它的 8 个：LOINC、单位、检查、用药、基因型、状态。
+LongPi 自己 14 个。挂上 Mirobody 之后，同一进程里还有它的 8 个：LOINC、单位、检查、用药、基因型、状态。
 
 | 工具 | 返回 |
 | --- | --- |
@@ -47,10 +47,25 @@ LongPi 自己 9 个。挂上 Mirobody 之后，同一进程里还有它的 8 个
 | `list_longevity_domains` | 方法目录（动物和细胞研究单独计数）。 |
 | `save_personal_profile` | 只写本地档案，不写 Mirobody。 |
 | `longpi_status` | 技能库版本和锁定情况、已配置的运行时、Mirobody 状态。没有病历，没有 token。 |
+| `save_intervention_plan` | 检查这个人说出或分享的干预方案，先返回读回让他确认；带 `confirm: true` 再调一次才保存新版本。药物和补剂只按名字保存，剂量留在 Mirobody。 |
+| `log_intervention_checkin` | 记下某天是否完成某一项，可标注生病、出差、换了检测机构等会干扰检查结果的情况。 |
+| `read_intervention_plan` | 当前方案、以前的版本和最近的打卡。 |
+| `review_interventions` | 每一项、每个目标指标：开始前的基线、够间隔的复测、对照个体正常波动（参考变化值）的变化、近 12 周执行率、同期其他变化、试验平均效应；历次体检的表型年龄；模型估计；下一步。 |
+| `model_intervention_goals` | 不保存的“如果达到某个目标值”：用表型年龄技能（China-PAR 校验通过后也算）计算。模型估计。 |
 
 命令：`/longpi`、`/longpi-skills 我的生物年龄`、`/longpi-stats`、`/longpi-version`。
 
-HTTP：`GET /api/longpi/board`、`GET /api/longpi/match?q=`、`GET /api/longpi/intents`、`GET /api/longpi/stats`、`POST /api/longpi/profile`、`GET /api/longpi/version`。看板会带上打开页面时的 DSH `token`。
+HTTP：`GET /api/longpi/board`、`GET /api/longpi/tracking`、`GET /api/longpi/match?q=`、`GET /api/longpi/intents`、`GET /api/longpi/stats`、`GET /api/longpi/report`、`POST /api/longpi/profile`、`POST /api/longpi/checkin`、`POST /api/longpi/run-ready`、`GET /api/longpi/version`。看板会带上打开页面时的 DSH `token`。
+
+`npm run preview` 用演示数据（假的 Mirobody 记录、真实技能）在普通网页里渲染看板，不需要 DeepSeek Harness。
+
+## 干预方案和效果
+
+方案是这个人自己的（或医生、长寿师给他的）。插件整理成条目读给他确认后才保存，每次保存都留一个版本，放在本机 `dataDir/interventions/`，不上传。
+
+判断一项干预对某个指标有没有用，要同时满足：开始前 180 天内有基线；复测晚于该指标的最短间隔（如 HbA1c 约 3 个月）；变化超出个体生物变异加检测误差合成的参考变化值（CRP、甘油三酯按对数正态计算，家庭血压按 7 天平均）；近 12 周执行率够（手环阈值、Mirobody 服用记录或打卡，没有记录的天算未知，不算没做）。同期还有别的干预或用药变化时照实说明只能评价组合。结论只有四种：有效、波动内、反向、无法判断。下一步只包括补执行、按时复测、补测、一次只改一项、和医生或长寿师讨论，不涉及任何药物和剂量。
+
+表型年龄在每次九项血检齐全的体检上由技能脚本回算；达成目标的估计也由技能脚本（`--targets`、`levers.json`）给出，都标“模型估计”。不输出个人“能多活几年”。
 
 ## 怎么调度
 

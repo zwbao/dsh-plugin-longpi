@@ -47,10 +47,17 @@ Nine LongPi tools. Mounting Mirobody adds its eight tools in the same process (L
 | `list_longevity_domains` | The method menu (animal and cell work counted separately). |
 | `save_personal_profile` | Local profile only. It does not write Mirobody. |
 | `longpi_status` | Checkout version and pin, configured runtimes, Mirobody status. No chart, no token. |
+| `save_intervention_plan` | Checks a plan the person described or shared and returns a read-back; saves a new version only when called again with `confirm: true`. Medicines and supplements are kept by name; doses stay in Mirobody. |
+| `log_intervention_checkin` | Records that the person did (or did not do) a plan item on a day, with tags for illness, travel or a different lab. |
+| `read_intervention_plan` | The saved plan, earlier versions and recent check-ins. |
+| `review_interventions` | For every item and marker: baseline, retest, change against the reference change value, adherence, what else changed, the trial average; phenotypic age at every checkup; model cards; next steps. |
+| `model_intervention_goals` | What-if goal values run through the phenotypic-age skill (and China-PAR once verified). Model estimates. |
 
 Commands: `/longpi`, `/longpi-skills 我的生物年龄`, `/longpi-stats`, `/longpi-version`.
 
-HTTP: `GET /api/longpi/board`, `GET /api/longpi/match?q=`, `GET /api/longpi/intents`, `GET /api/longpi/stats`, `POST /api/longpi/profile`, `GET /api/longpi/version`. The board forwards the DSH `token` query parameter.
+HTTP: `GET /api/longpi/board`, `GET /api/longpi/tracking`, `GET /api/longpi/match?q=`, `GET /api/longpi/intents`, `GET /api/longpi/stats`, `GET /api/longpi/report`, `POST /api/longpi/profile`, `POST /api/longpi/checkin`, `POST /api/longpi/run-ready`, `GET /api/longpi/version`. The board forwards the DSH `token` query parameter.
+
+`npm run preview` renders the board with demo data (fake Mirobody record, real skills) in a plain page; no DeepSeek Harness needed.
 
 ## Dispatch
 
