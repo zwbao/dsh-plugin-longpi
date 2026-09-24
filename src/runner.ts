@@ -69,7 +69,7 @@ export interface Levers {
   schema: 'longevity-levers/1'
   model: string
   model_zh?: string
-  current: Record<string, number | null>
+  current: Record<string, number | string | null>
   sensitivity: Array<{ key: string; label_zh: string; unit: string; value: number; years_per_unit?: number; per_unit?: number }>
   levers: Array<{ key: string; label_zh: string; unit: string; from: number; to: number; phenoage_delta?: number; mortality_delta_pct?: number; risk_delta_pct?: number }>
   targets?: Record<string, unknown>

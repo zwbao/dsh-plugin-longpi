@@ -619,6 +619,50 @@
    "file": "2026-08 年度体检报告.pdf"
   },
   {
+   "indicator": "Waist Circumference-WC",
+   "name": "腰围",
+   "system": "loinc",
+   "code": "8280-0",
+   "unit": "cm",
+   "date": "2025-10-18",
+   "time": "2025-10-18 08:30:00",
+   "value": "94",
+   "file": "2025-10 年度体检报告.pdf"
+  },
+  {
+   "indicator": "Waist Circumference-WC",
+   "name": "腰围",
+   "system": "loinc",
+   "code": "8280-0",
+   "unit": "cm",
+   "date": "2026-01-20",
+   "time": "2026-01-20 08:30:00",
+   "value": "92",
+   "file": "2026-01 复查.pdf"
+  },
+  {
+   "indicator": "Waist Circumference-WC",
+   "name": "腰围",
+   "system": "loinc",
+   "code": "8280-0",
+   "unit": "cm",
+   "date": "2026-04-22",
+   "time": "2026-04-22 08:30:00",
+   "value": "90",
+   "file": "2026-04 复查.pdf"
+  },
+  {
+   "indicator": "Waist Circumference-WC",
+   "name": "腰围",
+   "system": "loinc",
+   "code": "8280-0",
+   "unit": "cm",
+   "date": "2026-08-26",
+   "time": "2026-08-26 08:30:00",
+   "value": "88",
+   "file": "2026-08 年度体检报告.pdf"
+  },
+  {
    "indicator": "dailySteps",
    "name": "",
    "system": "device",

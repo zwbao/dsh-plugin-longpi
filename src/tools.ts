@@ -5,7 +5,7 @@ import type { Config } from './config.ts'
 import { matchSkills, domainSummary } from './match.ts'
 import type { MountState } from './mirobody.ts'
 import { clampMatches, resolveDataDir, resolveSkillsHome } from './paths.ts'
-import { normalizeProfile, readProfile, writeProfile, estimatedAge } from './profile.ts'
+import { normalizeProfile, readProfile, writeProfile, estimatedAge, RISK_FACTS } from './profile.ts'
 import { loadRecords, type RecordSnapshot } from './records.ts'
 import { readReceipts, runSkill } from './runner.ts'
 import { PRODUCT_VERSION } from './version.ts'
@@ -356,12 +356,18 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
 
   ctx.tools.register(defineTool({
     name: 'save_personal_profile',
-    description: 'Save the display name, birth year, chronological age, and sex this person stated. This is the profile the skills may use. It does not write the Mirobody chart. Pass only fields the person just gave. Age must be the age they stated; do not store an age you computed unless they confirmed it. Sex is female, male, other, or unknown.',
+    description: 'Save the display name, birth year, chronological age, sex, and the yes/no facts a risk equation needs (smoker, diabetes, blood-pressure medicine in the last two weeks, northern China, urban, family history of heart attack or stroke) that this person stated. This is the profile the skills may use. It does not write the Mirobody chart. Pass only fields the person just gave; never infer a yes/no fact from a lab value or a medicine name. Age must be the age they stated; do not store an age you computed unless they confirmed it. Sex is female, male, other, or unknown.',
     parameters: {
       displayName: { type: 'string', description: 'Name they want on the board, at most 40 characters. Omit to leave blank.' },
       birthYear: { type: 'integer', description: 'Four-digit birth year, if they gave one.' },
       age: { type: 'integer', description: 'Chronological age they stated, 0–130.' },
       sex: { type: 'string', enum: ['female', 'male', 'other', 'unknown'], description: 'Sex they stated.' },
+      smoker: { type: 'boolean', description: 'They smoke cigarettes now (China-PAR).' },
+      diabetes: { type: 'boolean', description: 'They have diabetes: a diagnosis, fasting glucose at or above 7.0 mmol/L, or diabetes medicine (as they state it).' },
+      bp_treated: { type: 'boolean', description: 'They took blood-pressure medicine in the last two weeks.' },
+      north: { type: 'boolean', description: 'They live in northern China (north of the Yangtze); false for southern China.' },
+      urban: { type: 'boolean', description: 'They live in a city; false for a rural area.' },
+      family_history: { type: 'boolean', description: 'A parent or sibling had a heart attack or stroke.' },
     },
     output: jsonOut,
     timeoutMs: 10000,
@@ -369,11 +375,17 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
     async execute(args) {
       const dataDir = resolveDataDir(config().dataDir)
       const current = readProfile(dataDir)
+      const risk = { ...current.risk }
+      for (const key of RISK_FACTS) {
+        const value = (args as Record<string, unknown>)[key]
+        if (typeof value === 'boolean') risk[key] = value
+      }
       const next = {
         displayName: args.displayName ?? current.displayName,
         birthYear: args.birthYear ?? current.birthYear,
         age: args.age ?? current.age,
         sex: args.sex ?? current.sex,
+        risk,
       }
       const normalized = normalizeProfile(next)
       if (!normalized.ok) return asJson({ ok: false, error: normalized.error })

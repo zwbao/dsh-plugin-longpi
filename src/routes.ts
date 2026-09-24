@@ -6,7 +6,7 @@ import type { Config } from './config.ts'
 import { matchSkills } from './match.ts'
 import type { MountState } from './mirobody.ts'
 import { clampMatches, resolveDataDir, resolveSkillsHome } from './paths.ts'
-import { normalizeProfile, writeProfile } from './profile.ts'
+import { mergeProfile, normalizeProfile, readProfile, writeProfile } from './profile.ts'
 import { loadRecords } from './records.ts'
 import { readReceipts } from './runner.ts'
 import { latestOutputs } from './history.ts'
@@ -253,12 +253,14 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
             sendJson(res, 400, { ok: false, error: 'profile must be JSON' })
             return
           }
-          const normalized = normalizeProfile(parsed)
+          const dataDir = resolveDataDir(config().dataDir)
+          const update = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null
+          const normalized = update ? normalizeProfile(mergeProfile(readProfile(dataDir), update)) : normalizeProfile(parsed)
           if (!normalized.ok) {
             sendJson(res, 400, { ok: false, error: normalized.error })
             return
           }
-          writeProfile(resolveDataDir(config().dataDir), normalized.profile)
+          writeProfile(dataDir, normalized.profile)
           invalidateTracking()
           sendJson(res, 200, { ok: true, profile: normalized.profile })
         })().catch((error: unknown) => {

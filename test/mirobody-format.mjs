@@ -22,12 +22,12 @@ for (const [name, item] of Object.entries(cases)) {
 
 // 2. the parser reads every shape
 const catalogue = mod.parseCompact(cases.catalogue.payload.result)
-assert.equal(catalogue.rows.length, 20)
-assert.equal(catalogue.meta.total, 20)
+assert.equal(catalogue.rows.length, 21)
+assert.equal(catalogue.meta.total, 21)
 assert.deepEqual(catalogue.rows[0], { indicator: 'Albumin-ALB', system: 'loinc', code: '1751-7', count: '4', first_date: '2025-10-18', last_date: '2026-08-26' })
 
 const latest = mod.parseCompact(cases.latest.payload.result)
-assert.equal(latest.rows.length, 14)
+assert.equal(latest.rows.length, 15)
 const crp = latest.rows.find((row) => row.indicator === 'hs-CRP')
 assert.equal(crp.value, '1.2')
 assert.equal(crp.unit, 'mg/L')

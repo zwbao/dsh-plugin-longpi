@@ -81,7 +81,7 @@ declare function preGuard(text: string): GuardHit | null;
 declare function wrapGuardMessage(text: string, hit: GuardHit): string;
 //#endregion
 //#region src/version.d.ts
-declare const PRODUCT_VERSION = "4.0.0";
+declare const PRODUCT_VERSION = "4.1.0";
 declare const TOOL_NAMES: readonly ["read_personal_situation", "list_longevity_intents", "match_longevity_skills", "read_longevity_skill", "run_longevity_skill", "query_longevity_evidence", "list_longevity_domains", "save_personal_profile", "longpi_status", "save_intervention_plan", "log_intervention_checkin", "read_intervention_plan", "review_interventions", "model_intervention_goals"];
 declare const HARNESS_SKILLS: readonly ["longpi-dispatch", "longpi-board", "longpi-boundary", "longpi-interventions"];
 //#endregion
@@ -384,11 +384,19 @@ declare function versionCheck(catalog: Catalog, pinned: string): {
 //#region src/profile.d.ts
 declare const SEXES: readonly ["female", "male", "other", "unknown"];
 type Sex = (typeof SEXES)[number];
+/**
+ * Yes/no facts a risk equation needs and a record does not hold (China-PAR).
+ * The person states them; absent means not stated, never "no".
+ */
+declare const RISK_FACTS: readonly ["smoker", "diabetes", "bp_treated", "north", "urban", "family_history"];
+type RiskFact = (typeof RISK_FACTS)[number];
+declare const RISK_FACT_ZH: Record<RiskFact, string>;
 interface Profile {
   displayName: string;
   birthYear: number | null;
   age: number | null;
   sex: Sex;
+  risk: Partial<Record<RiskFact, boolean>>;
 }
 declare const EMPTY_PROFILE: Profile;
 type Failure = {
@@ -399,6 +407,8 @@ declare function normalizeProfile(input: unknown): {
   ok: true;
   profile: Profile;
 } | Failure;
+/** Apply a partial update: fields that are absent keep their saved value; a risk fact set to null is cleared. */
+declare function mergeProfile(current: Profile, update: Record<string, unknown>): Record<string, unknown>;
 declare function estimatedAge(birthYear: number | null, nowYear: number): number | null;
 declare function readProfile(dataDir: string): Profile;
 declare function writeProfile(dataDir: string, profile: Profile): void;
@@ -599,7 +609,7 @@ interface Levers {
   schema: 'longevity-levers/1';
   model: string;
   model_zh?: string;
-  current: Record<string, number | null>;
+  current: Record<string, number | string | null>;
   sensitivity: Array<{
     key: string;
     label_zh: string;
@@ -1066,6 +1076,13 @@ interface ModelCard {
   measured_on: string | null;
   now: Record<string, number | null>;
   goal: Record<string, number | null> | null;
+  /** The skill's own risk category (低危, 中危, 高危), now and at the goals. */
+  category_zh?: {
+    now: string;
+    goal: string | null;
+  };
+  /** Stated facts the model still needs, by their Chinese name. */
+  missing?: string[];
   levers: LeverHint[];
   sensitivity: Array<{
     label: string;
@@ -1181,4 +1198,4 @@ declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { Config, EMPTY_PROFILE, HARNESS_SKILLS, PHENOAGE_SKILL, PRODUCT_VERSION, RISK_SKILL, TOOL_NAMES, addCheckIns, addDays, adherenceFor, apply, buildBoard, buildReport, buildStats, buildTracking, cellNumber, commandExcerpt, currentPlan, daysBetween, detectIntents, domainSummary, effectsFor, estimatedAge, evaluateMarker, evaluatePlan, foldName, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, latestOutputs, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, matchSkills, mentionedEntities, modelGoals, name, nameVariants, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, rcvBand, readCheckIns, readHistory, readPlans, readProfile, readReceipts, readResultFile, readiness, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, runReady, runSkill, runnableFrom, savePlan, seriesOf, stageMeasurements, suggestNext, summarizeIndicators, summarizeMedications, tableOf, unitFactor, versionCheck, wrapGuardMessage, writeProfile, writeStats };
+export { Config, EMPTY_PROFILE, HARNESS_SKILLS, PHENOAGE_SKILL, PRODUCT_VERSION, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, TOOL_NAMES, addCheckIns, addDays, adherenceFor, apply, buildBoard, buildReport, buildStats, buildTracking, cellNumber, commandExcerpt, currentPlan, daysBetween, detectIntents, domainSummary, effectsFor, estimatedAge, evaluateMarker, evaluatePlan, foldName, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, latestOutputs, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, matchSkills, mentionedEntities, mergeProfile, modelGoals, name, nameVariants, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, rcvBand, readCheckIns, readHistory, readPlans, readProfile, readReceipts, readResultFile, readiness, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, runReady, runSkill, runnableFrom, savePlan, seriesOf, stageMeasurements, suggestNext, summarizeIndicators, summarizeMedications, tableOf, unitFactor, versionCheck, wrapGuardMessage, writeProfile, writeStats };
