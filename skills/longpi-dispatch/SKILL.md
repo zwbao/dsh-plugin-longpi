@@ -14,6 +14,7 @@ description: Dispatch longevity-skills for one person. Detect what they are aski
 - **我的身体怎么样**（生物年龄、甲基化年龄、器官年龄、睡眠节律、端粒）：跑 A 类技能。`read_longevity_skill` 说 `structured_measurements` 时，用 `measurements` 传值，数值和单位照记录原样抄，不要自己换算。插件会换算声明过的单位、检查范围、从档案补实足年龄和性别。
 - **某个东西有没有用**（NMN、二甲双胍、雷帕霉素、断食、某个基因）：用 `query_longevity_evidence`。`match_longevity_skills` 返回的 `mentioned_entities` 可以直接传进去。报告按人群、动物、细胞分开，照着分开说。
 - **前后对比**：`earlier_readouts` 是这个人以前的读出，带日期引用。
+- **我的方案有没有用、怎么调整**：见 `longpi-interventions`。先 `read_intervention_plan`，再 `review_interventions`；想知道达到某个目标值会怎样，用 `model_intervention_goals`。保存方案、打卡分别用 `save_intervention_plan`（先读回再确认）和 `log_intervention_checkin`。
 
 ## 不做的事
 
