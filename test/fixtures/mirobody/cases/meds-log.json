@@ -1,0 +1,13 @@
+{
+ "args": {
+  "view": "log",
+  "start": "2026-09-01",
+  "end": "2026-09-20"
+ },
+ "payload": {
+  "result": "(constants: slot=morning, recorded_by=self)\ndate|time|medication|status|plan_id\n2026-09-20|2026-09-20 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-20|2026-09-20 08:05:00|维生素D3|taken|p-vitd\n2026-09-19|2026-09-19 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-19|2026-09-19 08:05:00|维生素D3|taken|p-vitd\n2026-09-18|2026-09-18 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-18|2026-09-18 08:05:00|维生素D3|taken|p-vitd\n2026-09-17|2026-09-17 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-17|2026-09-17 08:05:00|维生素D3|taken|p-vitd\n2026-09-16|2026-09-16 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-16|2026-09-16 08:05:00|维生素D3|taken|p-vitd\n2026-09-15|2026-09-15 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-15|2026-09-15 08:05:00|维生素D3|skipped|p-vitd\n2026-09-14|2026-09-14 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-14|2026-09-14 08:05:00|维生素D3|taken|p-vitd\n2026-09-13|2026-09-13 08:05:00|鱼油(Omega-3)|skipped|p-fishoil\n2026-09-13|2026-09-13 08:05:00|维生素D3|skipped|p-vitd\n2026-09-12|2026-09-12 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-12|2026-09-12 08:05:00|维生素D3|taken|p-vitd\n2026-09-11|2026-09-11 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-11|2026-09-11 08:05:00|维生素D3|taken|p-vitd\n2026-09-10|2026-09-10 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-10|2026-09-10 08:05:00|维生素D3|skipped|p-vitd\n2026-09-09|2026-09-09 08:05:00|鱼油(Omega-3)|skipped|p-fishoil\n2026-09-09|2026-09-09 08:05:00|维生素D3|taken|p-vitd\n2026-09-08|2026-09-08 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-08|2026-09-08 08:05:00|维生素D3|taken|p-vitd\n2026-09-07|2026-09-07 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-07|2026-09-07 08:05:00|维生素D3|taken|p-vitd\n2026-09-06|2026-09-06 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-06|2026-09-06 08:05:00|维生素D3|taken|p-vitd\n2026-09-05|2026-09-05 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-05|2026-09-05 08:05:00|维生素D3|taken|p-vitd\n2026-09-04|2026-09-04 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-04|2026-09-04 08:05:00|维生素D3|taken|p-vitd\n2026-09-03|2026-09-03 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-03|2026-09-03 08:05:00|维生素D3|taken|p-vitd\n2026-09-02|2026-09-02 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-02|2026-09-02 08:05:00|维生素D3|taken|p-vitd\n2026-09-01|2026-09-01 08:05:00|鱼油(Omega-3)|taken|p-fishoil\n2026-09-01|2026-09-01 08:05:00|维生素D3|taken|p-vitd\n\n(window=2026-09-01..2026-09-20, tz=Asia/Shanghai, dates=tz_exact, rows=40)\nnotes: a dose missing from the log is not evidence it was not taken",
+  "status": "ok",
+  "row_count": 40,
+  "truncated": false
+ }
+}

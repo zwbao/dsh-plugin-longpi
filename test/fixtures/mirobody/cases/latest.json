@@ -1,0 +1,27 @@
+{
+ "args": {
+  "indicators": [
+   "Albumin-ALB",
+   "Creatinine-Cr",
+   "Fasting Blood Glucose-FBG",
+   "hs-CRP",
+   "Lymphocyte Percentage-LYM%",
+   "Mean Corpuscular Volume-MCV",
+   "Red Cell Distribution Width-RDW-CV",
+   "Alkaline Phosphatase-ALP",
+   "White Blood Cell Count-WBC",
+   "Glycated Hemoglobin-HbA1c",
+   "Total Cholesterol-TC",
+   "LDL Cholesterol-LDL-C",
+   "HDL Cholesterol-HDL-C",
+   "Triglycerides-TG"
+  ],
+  "aggregate": "latest"
+ },
+ "payload": {
+  "result": "(constants: date=2026-08-26, time=2026-08-26 08:30:00, system=loinc)\nindicator|name|value|unit|code\nAlbumin-ALB|白蛋白|45.6|g/L|1751-7\nCreatinine-Cr|肌酐|81|umol/L|2160-0\nFasting Blood Glucose-FBG|空腹血糖|5.4|mmol/L|14771-0\nhs-CRP|超敏C反应蛋白|1.5|mg/L|30522-7\nLymphocyte Percentage-LYM%|淋巴细胞百分比|32.0|%|736-9\nMean Corpuscular Volume-MCV|平均红细胞体积|90.1|fL|787-2\nRed Cell Distribution Width-RDW-CV|红细胞分布宽度|12.9|%|788-0\nAlkaline Phosphatase-ALP|碱性磷酸酶|70|U/L|6768-6\nWhite Blood Cell Count-WBC|白细胞计数|6.0|10^9/L|6690-2\nGlycated Hemoglobin-HbA1c|糖化血红蛋白|5.6|%|4548-4\nTotal Cholesterol-TC|总胆固醇|4.9|mmol/L|2093-3\nLDL Cholesterol-LDL-C|低密度脂蛋白胆固醇|3.0|mmol/L|13457-7\nHDL Cholesterol-HDL-C|高密度脂蛋白胆固醇|1.26|mmol/L|2085-9\nTriglycerides-TG|甘油三酯|1.3|mmol/L|2571-8\n\n(window=all recorded data, tz=Asia/Shanghai, dates=tz_exact, aggregate=latest/readings, rows=14)",
+  "status": "ok",
+  "row_count": 14,
+  "truncated": false
+ }
+}

@@ -1,14 +1,28 @@
+import { tableOf, type CompactTable } from './compact.ts'
+
 export interface IndicatorRow {
+  /** Mirobody's indicator name: the handle a later query must pass back verbatim. */
   name: string
   value: string
   unit: string
   loinc?: string
+  /** The name as printed on the source report (白蛋白), when Mirobody kept it. */
+  label?: string
+  /** Local date of the value. */
+  date?: string
+  count?: number
+  first_date?: string
+  last_date?: string
 }
 
 export interface MedicationRow {
   name: string
   status: string
   recorded_dose: string
+  schedule?: string
+  since?: string
+  until?: string
+  plan_id?: string
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -30,9 +44,36 @@ function firstText(rec: Record<string, unknown>, keys: readonly string[]): strin
   return ''
 }
 
+function loincOf(row: Record<string, string>): string {
+  return (row.system ?? '').toLowerCase() === 'loinc' ? (row.code ?? '').trim() : ''
+}
+
+/** Rows of a Mirobody catalogue or latest table as indicator rows. */
+export function indicatorsFromTable(table: CompactTable): IndicatorRow[] {
+  const out: IndicatorRow[] = []
+  for (const row of table.rows) {
+    const name = (row.indicator ?? '').trim()
+    if (!name) continue
+    const item: IndicatorRow = { name, value: (row.value ?? row.last ?? '').trim(), unit: (row.unit ?? '').trim() }
+    const loinc = loincOf(row)
+    if (loinc) item.loinc = loinc
+    const label = (row.name ?? '').trim()
+    if (label && label !== name) item.label = label
+    const date = (row.date || row.last_date || (row.time ?? '').slice(0, 10)).trim()
+    if (date && item.value) item.date = date
+    if (row.count && /^\d+$/.test(row.count)) item.count = Number(row.count)
+    if (row.first_date) item.first_date = row.first_date
+    if (row.last_date) item.last_date = row.last_date
+    out.push(item)
+  }
+  return out
+}
+
 export function summarizeIndicators(payload: unknown, max = 40): IndicatorRow[] {
+  const table = tableOf(payload)
   const rows: IndicatorRow[] = []
-  walkIndicators(payload, rows, 0, Math.max(max * 2, 80))
+  if (table) rows.push(...indicatorsFromTable(table))
+  else walkIndicators(payload, rows, 0, Math.max(max * 2, 80))
   const seen = new Set<string>()
   const unique: IndicatorRow[] = []
   for (const row of rows) {
@@ -72,8 +113,22 @@ function walkIndicators(value: unknown, rows: IndicatorRow[], depth: number, cap
 }
 
 export function summarizeMedications(payload: unknown): MedicationRow[] {
+  const table = tableOf(payload)
   const rows: MedicationRow[] = []
-  walkMedications(payload, rows, 0)
+  if (table) {
+    for (const row of table.rows) {
+      const name = (row.medication ?? '').trim()
+      if (!name) continue
+      const item: MedicationRow = { name, status: (row.status ?? '').trim(), recorded_dose: (row.dose ?? '').trim() }
+      if (row.schedule) item.schedule = row.schedule
+      if (row.since) item.since = row.since
+      if (row.until) item.until = row.until
+      if (row.plan_id) item.plan_id = row.plan_id
+      rows.push(item)
+    }
+  } else {
+    walkMedications(payload, rows, 0)
+  }
   const seen = new Set<string>()
   const unique: MedicationRow[] = []
   for (const row of rows) {

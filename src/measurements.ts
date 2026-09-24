@@ -24,7 +24,8 @@ export interface Staged {
   values: Record<string, number>
   csv: string
   problems: Problem[]
-  used: Array<{ key: string; from: string; unit: string; factor: number }>
+  /** Each accepted value: which input it filled, and the unit conversion applied. */
+  used: Array<{ key: string; from: string; unit: string; factor: number; given_unit: string; raw: number; value: number }>
 }
 
 export interface RecordIndicator {
@@ -32,6 +33,8 @@ export interface RecordIndicator {
   value: string
   unit: string
   loinc?: string
+  label?: string
+  date?: string
 }
 
 function fmt(value: number): string {
@@ -144,7 +147,7 @@ export function stageMeasurements(card: SkillCard, items: readonly MeasurementIn
       continue
     }
     values[spec.key] = value
-    used.push({ key: spec.key, from: String(item.key), unit: spec.unit ?? '', factor })
+    used.push({ key: spec.key, from: String(item.key), unit: spec.unit ?? '', factor, given_unit: unit, raw: number, value })
   }
   for (const spec of specs) {
     if (spec.required && !(spec.key in values) && !problems.some((problem) => problem.key === spec.key)) {
@@ -226,6 +229,7 @@ function matchIndicator(spec: InputSpec, indicators: readonly RecordIndicator[],
   for (const row of indicators) {
     if (parseNumber(row.value) == null) continue
     if (nameVariants(row.name).some((variant) => names.has(variant))) return row
+    if (row.label && nameVariants(row.label).some((variant) => names.has(variant))) return row
   }
   return null
 }

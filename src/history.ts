@@ -16,11 +16,14 @@ export interface HistoryRow {
   skill: string
   revision: string
   outputs: Record<string, OutputValue>
+  /** Local date of the measurements the run read, when it read an earlier checkup. */
+  measured_at?: string
 }
 
 export interface LatestOutput extends OutputValue {
   at: string
   skill: string
+  measured_at?: string
 }
 
 function historyPath(dataDir: string): string {
@@ -60,24 +63,34 @@ export function readHistory(dataDir: string, limit = 200): HistoryRow[] {
   return rows
 }
 
-/** The most recent non-null value of each output key. */
+function whenOf(row: HistoryRow): string {
+  return row.measured_at || row.at
+}
+
+/** The value of each output key read from the most recent measurements (not the most recent run). */
 export function latestOutputs(dataDir: string): Record<string, LatestOutput> {
   const latest: Record<string, LatestOutput> = {}
   for (const row of readHistory(dataDir)) {
     for (const [key, item] of Object.entries(row.outputs)) {
       if (item.value == null) continue
-      latest[key] = { ...item, at: row.at, skill: row.skill }
+      const prior = latest[key]
+      if (prior && (prior.measured_at || prior.at) > whenOf(row)) continue
+      latest[key] = { ...item, at: row.at, skill: row.skill, ...(row.measured_at ? { measured_at: row.measured_at } : {}) }
     }
   }
   return latest
 }
 
-/** Every recorded value of one output key, oldest first, for before-and-after readings. */
-export function seriesOf(dataDir: string, key: string): Array<{ at: string; value: number | string; skill: string }> {
-  const out: Array<{ at: string; value: number | string; skill: string }> = []
+/**
+ * Every recorded value of one output key, oldest measurement first, one per
+ * measurement date (a rerun on the same checkup replaces the earlier run).
+ */
+export function seriesOf(dataDir: string, key: string): Array<{ at: string; value: number | string; skill: string; measured_at?: string }> {
+  const byDate = new Map<string, { at: string; value: number | string; skill: string; measured_at?: string }>()
   for (const row of readHistory(dataDir, 1000)) {
     const item = row.outputs[key]
-    if (item && item.value != null) out.push({ at: row.at, value: item.value, skill: row.skill })
+    if (!item || item.value == null) continue
+    byDate.set(whenOf(row), { at: row.at, value: item.value, skill: row.skill, ...(row.measured_at ? { measured_at: row.measured_at } : {}) })
   }
-  return out
+  return [...byDate.values()].sort((a, b) => (a.measured_at || a.at).localeCompare(b.measured_at || b.at))
 }

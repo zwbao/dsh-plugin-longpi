@@ -1,0 +1,11 @@
+{
+ "args": {
+  "view": "plan"
+ },
+ "payload": {
+  "result": "(constants: status=active, schedule=每日1次, source=self)\nmedication|today|since|plan_id\n鱼油(Omega-3)|taken|2026-03-01|p-fishoil\n维生素D3|pending|2025-11-01|p-vitd\n\n(window=all recorded data, tz=Asia/Shanghai, dates=tz_exact, rows=2)\nnotes: a plan is what the person intends to take; it is not a record of doses taken",
+  "status": "ok",
+  "row_count": 2,
+  "truncated": false
+ }
+}

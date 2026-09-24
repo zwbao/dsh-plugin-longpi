@@ -1,0 +1,18 @@
+{
+ "args": {
+  "indicators": [
+   "dailySteps"
+  ],
+  "start": "2026-06-01",
+  "end": "2026-06-30",
+  "resolution": "raw",
+  "aggregate": "none",
+  "limit": 5
+ },
+ "payload": {
+  "result": "(constants: indicator=dailySteps, unit=count, system=device, code=dailySteps)\ntime|value\n2026-06-30 23:59:00|7940\n2026-06-29 23:59:00|7552\n2026-06-28 23:59:00|9272\n2026-06-27 23:59:00|5019\n2026-06-26 23:59:00|9849\n\n(window=2026-06-01..2026-06-30, tz=Asia/Shanghai, dates=tz_exact, resolution=raw, rows=5, truncated)",
+  "status": "ok",
+  "row_count": 5,
+  "truncated": true
+ }
+}

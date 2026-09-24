@@ -30,6 +30,16 @@ export interface RunRequest {
   useProfile?: boolean
   runtimes?: Record<string, string>
   reportLimit?: number
+  /** Local date the measurements were taken, when the run reads an earlier checkup. */
+  measuredAt?: string
+}
+
+export interface Conversion {
+  key: string
+  label: string
+  from: string
+  to: string
+  line_zh: string
 }
 
 export interface RunResult {
@@ -48,6 +58,9 @@ export interface RunResult {
   problems?: Problem[]
   autofilled?: string[]
   runtime?: string
+  /** Unit conversions the harness applied before the script ran. */
+  conversions?: Conversion[]
+  measured_at?: string
 }
 
 export interface Receipt {
@@ -91,6 +104,11 @@ function checkArg(arg: string): string | null {
     if (!OUT_PATH.test(arg)) return 'only staged file names and out/ are accepted as paths'
   }
   return null
+}
+
+function formatNumber(value: number): string {
+  if (Number.isInteger(value)) return String(value)
+  return String(Number(value.toPrecision(4)))
 }
 
 export function reportExcerpt(text: string): string {
@@ -213,6 +231,7 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
 
   let args = [...request.args]
   const inputKeys: string[] = []
+  const conversions: Conversion[] = []
   if (request.measurements && request.measurements.length > 0) {
     if (card.inputsStatus === 'none' || !card.entry?.measurements_flag) {
       return fail(request.name, catalog.revision, 'invalid_arguments', 'this skill does not declare measurement inputs', 'Stage the file its command names with files and args instead.')
@@ -238,6 +257,13 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
     }
     files.push({ name: MEASUREMENTS_FILE, text: staged.csv })
     inputKeys.push(...Object.keys(staged.values))
+    for (const item of staged.used) {
+      if (item.factor === 1) continue
+      const label = card.inputs.find((spec) => spec.key === item.key)?.label_zh ?? item.key
+      const from = `${formatNumber(item.raw)} ${item.given_unit}`.trim()
+      const to = `${formatNumber(item.value)} ${item.unit}`.trim()
+      conversions.push({ key: item.key, label, from, to, line_zh: `${label} ${from} → ${to}` })
+    }
     const flag = card.entry.measurements_flag
     const at = args.indexOf(flag)
     if (at >= 0) args.splice(at, 2)
@@ -322,6 +348,8 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
     ...(problems.length > 0 ? { problems } : {}),
     ...(filled.filled.length > 0 ? { autofilled: filled.filled } : {}),
     ...(runtime ? { runtime } : {}),
+    ...(conversions.length > 0 ? { conversions } : {}),
+    ...(request.measuredAt ? { measured_at: request.measuredAt } : {}),
     ...(result.error ? { error: result.error } : {}),
     ...(errorKind ? { error_kind: errorKind } : {}),
     ...(errorKind === 'script_failed' ? { error: 'the skill script did not exit 0' } : {}),
@@ -342,7 +370,15 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
     input_keys: inputKeys,
     ...(problems.length > 0 ? { problem_kinds: [...new Set(problems.map((item) => item.kind))], missing: problems.filter((item) => item.kind === 'missing').map((item) => item.key) } : {}),
   })
-  if (ok) recordOutputs(request.dataDir, { at: new Date().toISOString(), skill: request.name, revision: catalog.revision, outputs })
+  if (ok) {
+    recordOutputs(request.dataDir, {
+      at: new Date().toISOString(),
+      skill: request.name,
+      revision: catalog.revision,
+      outputs,
+      ...(request.measuredAt ? { measured_at: request.measuredAt } : {}),
+    })
+  }
   pruneRuns(runs)
   return payload
 }

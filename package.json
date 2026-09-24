@@ -46,7 +46,7 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf lib",
     "smoke": "node test/smoke.mjs",
-    "test": "npm run build && node test/smoke.mjs && node test/units.mjs && node test/guard.mjs && node test/v2.mjs && node test/dispatch.mjs",
+    "test": "npm run build && node test/smoke.mjs && node test/units.mjs && node test/guard.mjs && node test/v2.mjs && node test/dispatch.mjs && node test/mirobody-format.mjs",
     "eval:dispatch": "node test/dispatch.mjs --verbose"
   },
   "keywords": [
