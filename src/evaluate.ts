@@ -361,7 +361,8 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
 
   // trial averages for this intervention and marker
   const years = Math.max(0, daysBetween(baseline.date, followup.date)) / 365.25
-  base.expected = effectsFor(input.effects, item, marker.biovar, marker.loinc).slice(0, 4).map((row) => ({
+  // Only rows a person checked against the paper are set beside a change.
+  base.expected = effectsFor(input.effects, item, marker.biovar, marker.loinc).filter((row) => row.verified).slice(0, 4).map((row) => ({
     id: row.id, text_zh: expectationText(row), doi: row.doi, verified: row.verified,
     comparison: compare(row, base.change, marker.unit, marker.biovar, years),
   }))
