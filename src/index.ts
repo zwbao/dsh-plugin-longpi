@@ -9,6 +9,7 @@ import { resolveMirobodyPlugin } from './paths.ts'
 import { registerPrompt } from './prompt.ts'
 import { registerRoutes } from './routes.ts'
 import { registerTools } from './tools.ts'
+import { registerTrackingTools } from './tools-tracking.ts'
 
 export const name = 'dsh-plugin-longpi'
 export const inject = ['tools']
@@ -30,6 +31,10 @@ export { loadRecords, loadSeries, loadDoseLog, loadCourses, invalidateRecords } 
 export { runSkill, reportExcerpt, readReceipts } from './runner.ts'
 export { resolveSkillsHome, resolveMirobodyPlugin, resolveDataDir } from './paths.ts'
 export { buildBoard } from './board.ts'
+export { normalizePlan, savePlan, currentPlan, readPlans, addCheckIns, readCheckIns, isoDay, addDays, daysBetween } from './interventions.ts'
+export { adherenceFor, evaluateMarker, evaluatePlan, resolveMarkers, suggestNext } from './evaluate.ts'
+export { loadReference, markerFor, rcvBand, effectsFor } from './reference.ts'
+export { buildTracking, invalidateTracking, modelGoals, PHENOAGE_SKILL, RISK_SKILL } from './tracking.ts'
 
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const pluginHome = resolveMirobodyPlugin(config.mirobodyPluginHome)
@@ -42,6 +47,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }, pluginHome)
   const source = () => config
   registerTools(ctx, source, mount)
+  registerTrackingTools(ctx, source, mount)
   registerHarnessSkills(ctx)
   registerPrompt(ctx, source, mount)
   registerRoutes(ctx, source, mount)

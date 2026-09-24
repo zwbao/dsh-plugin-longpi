@@ -220,6 +220,13 @@ export function runnableFrom(
   return { status, have, missing, from_record: fromRecord }
 }
 
+/** The record indicator that holds one declared input, by LOINC code first, then by name. */
+export function indicatorFor(spec: InputSpec, indicators: readonly RecordIndicator[]): RecordIndicator | null {
+  const byLoinc = new Map<string, RecordIndicator>()
+  for (const row of indicators) if (row.loinc) byLoinc.set(row.loinc, row)
+  return matchIndicator(spec, indicators, byLoinc)
+}
+
 function matchIndicator(spec: InputSpec, indicators: readonly RecordIndicator[], byLoinc: Map<string, RecordIndicator>): RecordIndicator | null {
   for (const code of spec.loinc ?? []) {
     const row = byLoinc.get(code)

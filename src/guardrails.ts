@@ -55,17 +55,30 @@ const DRUGS = [
 ]
 
 // Asking to start, stop, continue, or dose. Checked only when a medicine is mentioned.
-const CHANGE = new RegExp([
-  '停药', '把药停', '停掉', '停了', '停用', '停吃', '能停', '可以停', '要不要停', '该不该停', '断药', '戒掉',
-  '不吃', '别吃', '不用吃', '不用再吃', '不再吃', '能不能不吃', '可以不吃',
-  '继续吃', '还要吃', '还用吃', '要不要吃', '该不该吃', '能不能吃', '可以吃吗', '能吃吗',
-  '开始吃', '开始服', '开始用', '开始打', '吃多少', '吃几', '几片', '几粒', '几颗', '多少毫克', '多少mg', '多少微克',
-  '一天吃', '每天吃', '一次吃', '怎么吃', '吃法', '剂量', '用量', '加量', '减量', '加药', '减药', '换药', '换成',
-  '改剂量', '调整剂量', '加大', '减半',
+// STRONG phrases ask for advice or a change on their own. WEAK phrases also
+// appear in plain records ("鱼油每天吃 2 克" in an uploaded plan, "鱼油停了两天"
+// in a check-in), so they only count with a question or a change intent.
+const STRONG = new RegExp([
+  '停药', '断药', '加药', '减药', '换药', '加量', '减量', '减半', '加大剂量', '改剂量', '调整剂量',
+  '能停', '可以停', '要不要停', '该不该停', '能不能停', '能不能不吃', '可以不吃',
+  '要不要吃', '该不该吃', '能不能吃', '可以吃吗', '能吃吗', '吃多少', '吃几', '多少毫克', '多少mg', '多少微克',
+  '怎么吃', '吃法',
   'increase (the |my )?dose', 'decrease (the |my )?dose', 'change (my |the )?dose', 'dosage',
   'how much [a-z0-9 -]{0,40}(should|can|do|to) i? ?take', 'should i (take|stop|start|keep|quit)',
-  'stop (taking|my|the)', 'start taking', 'keep taking', 'quit (taking|my)', 'come off',
+  'start taking', 'keep taking', 'quit (taking|my)', 'come off',
 ].join('|'), 'i')
+
+const WEAK = new RegExp([
+  '停掉', '停了', '停用', '停吃', '戒掉', '不吃', '别吃', '不用吃', '不用再吃', '不再吃',
+  '继续吃', '还要吃', '还用吃', '开始吃', '开始服', '开始用', '开始打', '一天吃', '每天吃', '一次吃',
+  '剂量', '用量', '换成', '加大', 'stop (taking|my|the)',
+].join('|'), 'i')
+
+// A question, or a request for advice.
+const ASK = /(吗|？|\?|要不要|该不该|能不能|可不可以|是否|应不应该|应该|需不需要|建议|怎么办|怎么样|如何|多少|合适|推荐|should|could|can i|how much|how many|recommend|advise)/i
+
+// An intent to change, unless it is an intent to record ("帮我记录", "我想上传").
+const INTENT = /(我想|打算|准备|考虑|帮我|给我|请你|请帮)(?!记录|记一下|记下|保存|存下|存一下|打卡|上传|录入|整理|看看|查)/
 
 let rememberedDrugs: string[] = []
 
@@ -96,7 +109,7 @@ export function preGuard(text: string): GuardHit | null {
       reply_zh: '如果您正在经历紧急不适，请立即拨打 120 或当地急救电话。在美国可拨打或发短信至 988。我不能替代急救，也不会给出处理步骤。',
     }
   }
-  if (CHANGE.test(text) && mentionsMedicine(text)) {
+  if ((STRONG.test(text) || (WEAK.test(text) && (ASK.test(text) || INTENT.test(text)))) && mentionsMedicine(text)) {
     return {
       code: 'no_medication_change',
       reply_zh: '我不能建议开始、停止、继续、加量、减量或更换药物和补剂，也不给剂量。用药记录只读。调整处方请联系开具该药的医生或药师。',

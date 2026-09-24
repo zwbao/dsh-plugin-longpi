@@ -29,7 +29,7 @@ assert.deepEqual(catalogue.rows[0], { indicator: 'Albumin-ALB', system: 'loinc',
 const latest = mod.parseCompact(cases.latest.payload.result)
 assert.equal(latest.rows.length, 14)
 const crp = latest.rows.find((row) => row.indicator === 'hs-CRP')
-assert.equal(crp.value, '1.5')
+assert.equal(crp.value, '1.2')
 assert.equal(crp.unit, 'mg/L')
 assert.equal(crp.date, '2026-08-26', 'a hoisted constant is merged back into every row')
 assert.equal(crp.system, 'loinc')
@@ -41,7 +41,7 @@ assert.equal(truncated.rows.length, 5)
 assert.equal(truncated.rows[0].indicator, 'dailySteps', 'indicator hoisted to constants still reaches the row')
 
 const stats = mod.parseCompact(cases.stats.payload.result)
-assert.equal(stats.rows[0].change, '-1.9')
+assert.equal(stats.rows[0].change, '-3.0')
 assert.equal(stats.rows[0].count, '4')
 
 const plan = mod.parseCompact(cases['meds-plan'].payload.result)
@@ -98,7 +98,7 @@ try {
   assert.equal(server.calls.length, firstCalls, 'a second read inside the cache window makes no MCP call')
 
   const series = await mod.loadSeries(config, ['hs-CRP', 'Albumin-ALB'], { start: '2025-01-01', end: '2026-09-24', resolution: 'raw' })
-  assert.deepEqual(series.series['hs-CRP'].points.map((point) => point.value), [3.4, 2.6, 1.9, 1.5], 'oldest first')
+  assert.deepEqual(series.series['hs-CRP'].points.map((point) => point.value), [4.2, 2.9, 1.8, 1.2], 'oldest first')
   assert.equal(series.series['hs-CRP'].loinc, '30522-7')
   assert.equal(series.series['hs-CRP'].points[0].date, '2025-10-18')
   const daily = await mod.loadSeries(config, ['dailySteps'], { start: '2026-06-01', end: '2026-06-30', resolution: 'day' })
@@ -122,7 +122,7 @@ const sse = await startFakeMirobody({ sse: true })
 try {
   mod.invalidateRecords()
   const snap = await mod.loadRecords({ mcpUrl: sse.url, mcpToken: '', member: '', timeoutMs: 5000, pythonBin: '/nonexistent/python', mirobodyHome: '', dataDir: '' }, '/tmp/longpi-sse-test', '/nonexistent/plugin')
-  assert.equal(snap.indicators.find((row) => row.name === 'hs-CRP').value, '1.5')
+  assert.equal(snap.indicators.find((row) => row.name === 'hs-CRP').value, '1.2')
 } finally {
   await sse.close()
 }

@@ -38,6 +38,9 @@ export interface EntrySpec {
   labs_flag?: string
   out_flag?: string
   result_json?: boolean
+  /** Flag for a CSV of target values; the script then writes out/levers.json. */
+  targets_flag?: string
+  levers_json?: boolean
 }
 
 export interface IntentSpec {

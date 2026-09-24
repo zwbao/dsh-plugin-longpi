@@ -61,6 +61,30 @@ export interface RunResult {
   /** Unit conversions the harness applied before the script ran. */
   conversions?: Conversion[]
   measured_at?: string
+  /** out/levers.json (schema longevity-levers/1), when the skill writes it. */
+  levers?: Levers
+}
+
+export interface Levers {
+  schema: 'longevity-levers/1'
+  model: string
+  model_zh?: string
+  current: Record<string, number | null>
+  sensitivity: Array<{ key: string; label_zh: string; unit: string; value: number; years_per_unit?: number; per_unit?: number }>
+  levers: Array<{ key: string; label_zh: string; unit: string; from: number; to: number; phenoage_delta?: number; mortality_delta_pct?: number; risk_delta_pct?: number }>
+  targets?: Record<string, unknown>
+  note_zh?: string
+}
+
+function readLevers(runDir: string): Levers | null {
+  const path = join(runDir, 'out', 'levers.json')
+  if (!existsSync(path)) return null
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as Levers
+    return parsed && parsed.schema === 'longevity-levers/1' ? parsed : null
+  } catch {
+    return null
+  }
 }
 
 export interface Receipt {
@@ -330,6 +354,7 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
   const excerpt = reportExcerpt(report || result.stdout)
   const outputs = readResultFile(join(runDir, 'out', 'result.json'))
   const problems = readProblems(runDir)
+  const levers = readLevers(runDir)
   const ok = result.code === 0 && !result.error
   let errorKind = ''
   if (result.error) errorKind = 'unavailable'
@@ -349,6 +374,7 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
     ...(filled.filled.length > 0 ? { autofilled: filled.filled } : {}),
     ...(runtime ? { runtime } : {}),
     ...(conversions.length > 0 ? { conversions } : {}),
+    ...(levers ? { levers } : {}),
     ...(request.measuredAt ? { measured_at: request.measuredAt } : {}),
     ...(result.error ? { error: result.error } : {}),
     ...(errorKind ? { error_kind: errorKind } : {}),
