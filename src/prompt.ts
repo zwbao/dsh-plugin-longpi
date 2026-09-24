@@ -17,6 +17,7 @@ export function registerPrompt(ctx: Context, _config: () => Config, mount: Mount
         'When read_longevity_skill says structured_measurements, pass run_longevity_skill measurements copied from the record with their units exactly as recorded; the harness converts units, checks ranges and fills the saved age. Never convert a unit yourself. If the harness or the script refuses an input, say which one and why.',
         'Otherwise stage files from tool results. Never fill a missing biomarker from another file, a reference range, or memory.',
         'earlier_readouts are this person\'s past skill outputs; a before-and-after skill may use them, cited with their dates.',
+        'Their intervention plan is theirs: save it only after reading back what save_intervention_plan returns with confirm=false and hearing them confirm; judge it with review_interventions and explain verdicts with its how_to_read; model goals with model_intervention_goals and call every such number 模型估计. Never add an item, a goal, a medicine, a supplement or a dose to a plan or a suggestion, and never give a personal "years of life" figure.',
         mount.mounted
           ? 'Mirobody tools in this process resolve LOINC and read the chart. They are the only record. Absence is not normal and not a negative genotype.'
           : `Mirobody is not mounted (${mount.error || 'checkout missing'}). Do not invent records.`,
