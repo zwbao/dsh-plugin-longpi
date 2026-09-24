@@ -145,7 +145,7 @@ cat > "$P" <<EOF
 EOF
 chmod 600 "$P"
 
-dsh --profile web --dump-config | grep -A 17 'id: dsh-plugin-longpi'
+dsh --profile web --dump-config | grep -B 1 -A 24 'id: dsh-plugin-longpi'
 ```
 
 The last command should print `# == dsh-plugin-longpi, patched by …/cordis.patch.yml` followed by your values (`mcpUrl` in clear text, so do not share the output). Each key is described under [Configuration](#configuration).

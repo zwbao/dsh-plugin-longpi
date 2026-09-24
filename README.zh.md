@@ -145,7 +145,7 @@ cat > "$P" <<EOF
 EOF
 chmod 600 "$P"
 
-dsh --profile web --dump-config | grep -A 17 'id: dsh-plugin-longpi'
+dsh --profile web --dump-config | grep -B 1 -A 24 'id: dsh-plugin-longpi'
 ```
 
 最后一条命令应该打印 `# == dsh-plugin-longpi, patched by …/cordis.patch.yml`，下面是你刚写的值（`mcpUrl` 是明文，别外传）。每个键的含义见后面的 [配置项](#配置项)。
