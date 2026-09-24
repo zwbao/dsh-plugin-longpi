@@ -22,8 +22,9 @@ import sys
 from datetime import date, timedelta
 from pathlib import Path
 
-SITE = os.environ.get("MIROBODY_SITE", "/private/tmp/mirobody-venv/lib/python3.14/site-packages")
-sys.path.insert(0, SITE)
+SITE = os.environ.get("MIROBODY_SITE", "")
+if SITE:
+    sys.path.insert(0, SITE)  # a site-packages that has mirobody 1.5 installed
 
 from mirobody.agent.tools._render import envelope_meta, render_compact  # noqa: E402
 from mirobody.kernel import meds as meds_kernel  # noqa: E402
