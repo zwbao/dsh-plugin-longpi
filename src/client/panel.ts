@@ -1,6 +1,6 @@
 import React from 'react'
 import { AdherenceStrip, fmt, fmtAuto, LeverBars, LineChart, Ring, TableTwin, Timeline } from './charts.ts'
-import { SUGGESTED, VIEW_ID } from './constants.ts'
+import { RISK_FACTS, SUGGESTED, VIEW_ID } from './constants.ts'
 
 const h = React.createElement
 
@@ -19,7 +19,7 @@ interface Readiness {
 interface Board {
   version?: string
   today?: string
-  profile?: { displayName?: string; birthYear?: number | null; age?: number | null; sex?: string }
+  profile?: { displayName?: string; birthYear?: number | null; age?: number | null; sex?: string; risk?: Record<string, boolean> }
   estimated_age?: number | null
   skills?: { count?: number; personal?: number; version?: string; revision?: string; error?: string; domains?: Array<{ domain: string; count: number }> }
   mirobody?: { mounted?: boolean; error?: string; engine?: { ok?: boolean; version?: string; error?: string }; mcp?: { configured?: boolean; host?: string } }
@@ -54,6 +54,7 @@ interface Chart {
 interface ModelCard {
   model: string; title_zh?: string; status?: string; note_zh?: string; measured_on?: string | null
   now?: Record<string, number | null>; goal?: Record<string, number | null> | null
+  category_zh?: { now: string; goal: string | null }; missing?: string[]
   levers?: Array<{ label: string; from: string; to: string; years: number }>
   sensitivity?: Array<{ label: string; unit: string; years_per_step: number; step: string }>
   boundary_zh?: string
@@ -413,11 +414,22 @@ function Goals(props: { tracking: Tracking | null }): React.ReactElement | null 
       risk ? h('div', { className: 'lp-card lp-model' },
         h('div', { className: 'lp-label' }, '10 年心血管病风险 · China-PAR'),
         risk.status === 'unavailable'
-          ? h('div', null, h('div', { className: 'lp-tile-figure lp-muted-ink' }, '待系数校验'), h('p', { className: 'lp-muted' }, risk.note_zh ?? ''))
-          : h('div', { className: 'lp-model-figures' },
-            h('div', null, h('div', { className: 'lp-muted' }, '现在'), h('div', { className: 'lp-tile-figure' }, `${fmt(risk.now?.risk_pct)}%`)),
-            risk.goal ? h(Icon, { name: 'arrow', size: 20, className: 'lp-muted-ink' }) : null,
-            risk.goal ? h('div', null, h('div', { className: 'lp-muted' }, '达到目标'), h('div', { className: 'lp-tile-figure' }, `${fmt(risk.goal.risk_pct)}%`)) : null),
+          ? h('div', null,
+            h('div', { className: 'lp-tile-figure lp-muted-ink' }, (risk.missing ?? []).length > 0 ? '还差几项' : '暂不显示'),
+            h('p', { className: 'lp-muted' }, risk.note_zh ?? ''))
+          : h('div', null,
+            h('div', { className: 'lp-model-figures' },
+              h('div', null, h('div', { className: 'lp-muted' }, '现在'),
+                h('div', { className: 'lp-tile-figure' }, risk.now?.risk_pct == null ? '—' : `${risk.now.risk_pct.toFixed(1)}%`),
+                risk.category_zh?.now ? h('span', { className: 'lp-pill' }, risk.category_zh.now) : null),
+              risk.goal ? h(Icon, { name: 'arrow', size: 20, className: 'lp-muted-ink' }) : null,
+              risk.goal ? h('div', null, h('div', { className: 'lp-muted' }, '达到方案目标'),
+                h('div', { className: 'lp-tile-figure lp-good-ink-strong' }, risk.goal.risk_pct == null ? '—' : `${risk.goal.risk_pct.toFixed(1)}%`),
+                risk.category_zh?.goal ? h('span', { className: 'lp-pill lp-pill-good' }, risk.category_zh.goal) : null) : null),
+            (risk.levers ?? []).length > 0
+              ? h('div', null, h('div', { className: 'lp-subhead' }, '每个目标单独的贡献'),
+                h(LeverBars, { rows: (risk.levers ?? []).map((row) => ({ label: row.label, detail: `${row.from} → ${row.to}`, value: row.years, unit: '个百分点' })) }))
+              : h('p', { className: 'lp-muted' }, risk.note_zh ?? '')),
         h('div', { className: 'lp-fine' }, risk.boundary_zh ?? '')) : null,
       h('div', { className: 'lp-card lp-model lp-model-note' },
         h('div', { className: 'lp-label' }, '关于“能多活几年”'),
@@ -515,6 +527,7 @@ export function PanelView(): React.ReactElement {
   const [birthYear, setBirthYear] = React.useState('')
   const [age, setAge] = React.useState('')
   const [sex, setSex] = React.useState('unknown')
+  const [riskFacts, setRiskFacts] = React.useState<Record<string, string>>({})
   const [question, setQuestion] = React.useState('')
   const [matches, setMatches] = React.useState<MatchHit[] | null>(null)
   const [note, setNote] = React.useState('')
@@ -536,6 +549,7 @@ export function PanelView(): React.ReactElement {
         setBirthYear(json.profile?.birthYear ? String(json.profile.birthYear) : '')
         setAge(json.profile?.age == null ? '' : String(json.profile.age))
         setSex(json.profile?.sex || 'unknown')
+        setRiskFacts(Object.fromEntries(Object.entries(json.profile?.risk ?? {}).map(([key, value]) => [key, value ? 'yes' : 'no'])))
         setMatches(json.dispatch?.matches ?? [])
         setNote(json.dispatch?.note ?? '')
       })
@@ -576,7 +590,8 @@ export function PanelView(): React.ReactElement {
     event.preventDefault()
     setBusy(true)
     try {
-      await postJson('/api/longpi/profile', { displayName, birthYear: birthYear.trim() ? Number(birthYear) : null, age: age.trim() ? Number(age) : null, sex })
+      const risk = Object.fromEntries(RISK_FACTS.map((item) => [item.key, riskFacts[item.key] === 'yes' ? true : riskFacts[item.key] === 'no' ? false : null]))
+      await postJson('/api/longpi/profile', { displayName, birthYear: birthYear.trim() ? Number(birthYear) : null, age: age.trim() ? Number(age) : null, sex, risk })
       setNotice('档案已保存。')
       load()
     } catch (err) {
@@ -612,6 +627,14 @@ export function PanelView(): React.ReactElement {
     h('input', { 'aria-label': '实足年龄', placeholder: '实足年龄', inputMode: 'numeric', value: age, onChange: (event: React.ChangeEvent<HTMLInputElement>) => setAge(event.target.value) }),
     h('select', { 'aria-label': '性别', value: sex, onChange: (event: React.ChangeEvent<HTMLSelectElement>) => setSex(event.target.value) },
       h('option', { value: 'unknown' }, '性别未填'), h('option', { value: 'female' }, '女'), h('option', { value: 'male' }, '男'), h('option', { value: 'other' }, '其他')),
+    h('div', { className: 'lp-facts' },
+      h('div', { className: 'lp-fine lp-facts-note' }, '心血管风险模型还需要这几项（照实填，不确定就留空）：'),
+      ...RISK_FACTS.map((item) => h('label', { key: item.key, className: 'lp-fact' },
+        h('span', null, item.zh),
+        h('select', {
+          id: `lp-risk-${item.key}`, value: riskFacts[item.key] ?? '',
+          onChange: (event: React.ChangeEvent<HTMLSelectElement>) => setRiskFacts((current) => ({ ...current, [item.key]: event.target.value })),
+        }, h('option', { value: '' }, '未填'), h('option', { value: 'yes' }, '是'), h('option', { value: 'no' }, '否'))))),
     h('button', { type: 'submit', className: 'lp-btn', disabled: busy }, busy ? '保存中' : '保存'))
 
   const searchForm = h('div', null,

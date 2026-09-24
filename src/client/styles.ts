@@ -257,6 +257,10 @@ const CSS = `
   background: var(--lp-surface); color: var(--lp-ink); min-width: 0;
 }
 .lp-search { display: flex; gap: 8px; margin-bottom: 8px; }
+.lp-facts { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px 14px; margin: 4px 0; }
+.lp-facts-note { grid-column: 1 / -1; margin: 0; }
+.lp-fact { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; color: var(--lp-ink-2); }
+.lp-fact select { border: 1px solid var(--lp-hair); border-radius: 8px; padding: 4px 6px; font: inherit; font-size: 13px; background: var(--lp-surface); color: var(--lp-ink); }
 .lp-search input { flex: 1; }
 .lp-more { margin-top: 34px; }
 .lp-more > summary { list-style: none; cursor: pointer; font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 8px; }

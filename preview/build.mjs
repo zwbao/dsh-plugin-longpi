@@ -26,7 +26,7 @@ try {
     mcpUrl: server.url, mcpToken: '', member: '', timeoutMs: 10000, pythonBin: '/nonexistent/python', mirobodyHome: '',
     dataDir, skillPython: 'python3', skillTimeoutMs: 60000, skillRuntimes: {}, skillsHome: home, maxSkillMatches: 6,
   }
-  mod.writeProfile(dataDir, { displayName: '陈明', birthYear: 1972, age: 53, sex: 'male' })
+  mod.writeProfile(dataDir, { displayName: '陈明', birthYear: 1972, age: 53, sex: 'male', risk: { smoker: false, diabetes: false, bp_treated: false, north: true, urban: true, family_history: false } })
   mod.invalidateRecords()
   const records = await mod.loadRecords(config, dataDir, '/nonexistent/plugin')
   const plan = mod.normalizePlan({
@@ -37,7 +37,7 @@ try {
       { category: 'supplement', title: '鱼油', start: '2026-03-01', medication: '鱼油', markers: ['甘油三酯'] },
       { category: 'sleep', title: '23 点前睡、睡够 7 小时', start: '2026-09-18', target: { metric: 'dailyTotalSleepTime', op: '>=', value: 7, unit: 'hours' }, markers: ['超敏C反应蛋白'] },
     ],
-    goals: [{ marker: '空腹血糖', value: 5.0, unit: 'mmol/L' }, { marker: 'hs-CRP', value: 1.0, unit: 'mg/L' }],
+    goals: [{ marker: '空腹血糖', value: 5.0, unit: 'mmol/L' }, { marker: 'hs-CRP', value: 1.0, unit: 'mg/L' }, { marker: '收缩压', value: 120, unit: 'mmHg' }],
   }, { today: TODAY, medications: records.medications.map((row) => ({ name: row.name, plan_id: row.plan_id })), previous: null })
   mod.savePlan(dataDir, plan.plan)
   const entries = []

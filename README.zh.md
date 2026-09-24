@@ -45,7 +45,7 @@ LongPi 自己 14 个。挂上 Mirobody 之后，同一进程里还有它的 8 �
 | `run_longevity_skill` | 脚本写的读出。用 `measurements` 照记录原样传数值和单位；插件换算声明过的单位、检查范围、从档案补实足年龄和性别，缺单位或单位不对时在脚本运行前拒收。路径只能留在本次运行目录里。 |
 | `query_longevity_evidence` | 收录论文对某个药物、补剂、饮食或基因的说法，按人群、动物、细胞分组，每条带出处。不给剂量。 |
 | `list_longevity_domains` | 方法目录（动物和细胞研究单独计数）。 |
-| `save_personal_profile` | 只写本地档案，不写 Mirobody。 |
+| `save_personal_profile` | 只写本地档案（称呼、出生年、年龄、性别，以及 China-PAR 需要的是否项：吸烟、糖尿病、两周内用降压药、南北方、城乡、家族史），不写 Mirobody。 |
 | `longpi_status` | 技能库版本和锁定情况、已配置的运行时、Mirobody 状态。没有病历，没有 token。 |
 | `save_intervention_plan` | 检查这个人说出或分享的干预方案，先返回读回请对方确认；带 `confirm: true` 再调一次才保存新版本。药物和补剂只按名字保存，剂量留在 Mirobody。 |
 | `log_intervention_checkin` | 记下某天是否完成某一项，可标注生病、出差、换了检测机构等会干扰检查结果的情况。 |

@@ -45,7 +45,7 @@ Fourteen LongPi tools. Mounting Mirobody adds its eight tools in the same proces
 | `run_longevity_skill` | The script's readout. Pass `measurements` as recorded; the harness converts declared units, checks ranges, fills the saved age and sex, and refuses a missing or wrong unit before the script runs. Paths stay inside the run directory. |
 | `query_longevity_evidence` | What the collected papers state about a drug, supplement, diet or gene, grouped into human, animal and cell evidence, each cited. No doses. |
 | `list_longevity_domains` | The method menu (animal and cell work counted separately). |
-| `save_personal_profile` | Local profile only. It does not write Mirobody. |
+| `save_personal_profile` | Local profile only (name, birth year, age, sex, and the yes/no facts China-PAR needs: smoking, diabetes, blood-pressure medicine, north/south, urban/rural, family history). It does not write Mirobody. |
 | `longpi_status` | Checkout version and pin, configured runtimes, Mirobody status. No chart, no token. |
 | `save_intervention_plan` | Checks a plan the person described or shared and returns a read-back; saves a new version only when called again with `confirm: true`. Medicines and supplements are kept by name; doses stay in Mirobody. |
 | `log_intervention_checkin` | Records that the person did (or did not do) a plan item on a day, with tags for illness, travel or a different lab. |

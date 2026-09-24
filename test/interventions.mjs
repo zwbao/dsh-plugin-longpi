@@ -27,7 +27,8 @@ try {
     mcpUrl: server.url, mcpToken: '', member: '', timeoutMs: 10000, pythonBin: '/nonexistent/python', mirobodyHome: '',
     dataDir, skillPython: 'python3', skillTimeoutMs: 60000, skillRuntimes: {}, skillsHome: home,
   }
-  mod.writeProfile(dataDir, { displayName: '陈明', birthYear: 1972, age: 53, sex: 'male' })
+  const facts = { smoker: false, diabetes: false, bp_treated: false, north: true, urban: true, family_history: false }
+  mod.writeProfile(dataDir, { displayName: '陈明', birthYear: 1972, age: 53, sex: 'male', risk: facts })
   mod.invalidateRecords()
   const records = await mod.loadRecords(config, dataDir, '/nonexistent/plugin')
   assert.equal(records.record_status, 'ok', records.record_error)
@@ -42,7 +43,7 @@ try {
       { category: 'sleep', title: '早睡', start: '2026-09-18', target: { metric: 'dailyTotalSleepTime', op: '>=', value: 7, unit: 'hours' }, markers: ['超敏C反应蛋白'] },
       { category: 'behavior', title: '减少久坐', start: '2026-02-01', markers: ['腰围'] },
     ],
-    goals: [{ marker: '空腹血糖', value: 5.0, unit: 'mmol/L' }, { marker: 'hs-CRP', value: 1.0, unit: 'mg/L' }],
+    goals: [{ marker: '空腹血糖', value: 5.0, unit: 'mmol/L' }, { marker: 'hs-CRP', value: 1.0, unit: 'mg/L' }, { marker: '收缩压', value: 120, unit: 'mmHg' }],
   }
   const normalized = mod.normalizePlan(raw, {
     today: TODAY,
@@ -137,8 +138,13 @@ try {
   assert.ok(pheno.levers.length === 2 && pheno.levers.every((row) => row.years < 0))
   assert.match(pheno.boundary_zh, /模型估计/)
   const risk = tracking.models.find((card) => card.model === 'china-par')
-  assert.equal(risk.status, 'unavailable')
-  assert.match(risk.note_zh, /校验/)
+  assert.equal(risk.status, 'ok', risk.note_zh)
+  assert.ok(risk.now.risk_pct > 0 && risk.now.risk_pct < 30, `risk ${risk.now.risk_pct}`)
+  assert.ok(risk.goal.risk_pct < risk.now.risk_pct, 'a lower blood-pressure goal lowers the modelled risk')
+  assert.ok(['低危', '中危', '高危'].includes(risk.category_zh.now))
+  assert.equal(risk.levers.length, 1)
+  assert.match(risk.levers[0].from, /mmHg/, 'the lever is shown in the units of the record')
+  assert.match(risk.boundary_zh, /模型估计/)
 
   // 6. a marker that got worse beyond noise
   const reverse = mod.evaluateMarker(
@@ -156,6 +162,16 @@ try {
   const card = whatIf.models.find((row) => row.model === 'phenoage')
   assert.equal(card.levers.length, 1)
   assert.equal(mod.readPlans(dataDir).length, 1, 'a what-if does not change the saved plan')
+
+  // without the stated yes/no facts the risk card says what is missing instead of guessing
+  mod.writeProfile(dataDir, { displayName: '陈明', birthYear: 1972, age: 53, sex: 'male', risk: { north: true } })
+  mod.invalidateRecords()
+  const unstated = await mod.modelGoals({ config, dataDir, skillsHome: home, catalog, records: await mod.loadRecords(config, dataDir, '/nonexistent/plugin'), today: TODAY }, [])
+  const blank = unstated.models.find((row) => row.model === 'china-par')
+  assert.equal(blank.status, 'unavailable')
+  assert.ok(blank.missing.includes('现在吸烟') && !blank.missing.includes('住在北方（长江以北）'))
+  const merged = mod.mergeProfile(mod.readProfile(dataDir), { risk: { smoker: true, north: null } })
+  assert.deepEqual(mod.normalizeProfile(merged).profile.risk, { smoker: true }, 'a partial update keeps other fields and clears a null')
 
   // the history keeps one phenotypic age per checkup date
   const history = readFileSync(join(dataDir, 'history.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line))

@@ -10,6 +10,7 @@ import type { Config } from './config.ts'
 import { adherenceFor, evaluatePlan, resolveMarkers, suggestNext, type Adherence, type ItemSummary, type LeverHint, type ResolvedMarker, type Suggestion } from './evaluate.ts'
 import { readHistory, seriesOf } from './history.ts'
 import { addDays, CATEGORY_ZH, currentPlan, daysBetween, readCheckIns, readPlans, type CheckIn, type PlanItem, type PlanVersion } from './interventions.ts'
+import { RISK_FACT_ZH, type RiskFact } from './profile.ts'
 import { aliasIndex, indicatorFor, measurementInputs, resolveInput, stageMeasurements, type MeasurementIn } from './measurements.ts'
 import { loadCourses, loadDoseLog, loadSeries, type CourseRow, type RecordSnapshot, type SeriesPoint } from './records.ts'
 import { loadReference, markerFor, rcvBand, type Reference } from './reference.ts'
@@ -58,6 +59,10 @@ export interface ModelCard {
   measured_on: string | null
   now: Record<string, number | null>
   goal: Record<string, number | null> | null
+  /** The skill's own risk category (低危, 中危, 高危), now and at the goals. */
+  category_zh?: { now: string; goal: string | null }
+  /** Stated facts the model still needs, by their Chinese name. */
+  missing?: string[]
   levers: LeverHint[]
   sensitivity: Array<{ label: string; unit: string; years_per_step: number; step: string }>
   boundary_zh: string
@@ -91,7 +96,6 @@ export interface Tracking {
 }
 
 const memo = new Map<string, { at: number; value: Promise<Tracking> }>()
-const leverMemo = new Map<string, Levers | null>()
 
 export function invalidateTracking(): void {
   memo.clear()
@@ -305,11 +309,33 @@ async function leversAt(
   age: number,
   targets: MeasurementIn[],
   date: string,
+  extraArgs: string[] = [],
 ): Promise<Levers | null> {
-  const key = JSON.stringify([card.name, context.catalog.revision, date, measurements, age, targets])
-  if (leverMemo.has(key)) return leverMemo.get(key) ?? null
+  return (await runModel(context, card, measurements, age, targets, date, extraArgs))?.levers ?? null
+}
+
+interface ModelRun {
+  levers: Levers | null
+  outputs: Record<string, { value: number | string | null }>
+  error: string
+}
+
+const runMemo = new Map<string, ModelRun>()
+
+async function runModel(
+  context: TrackingContext,
+  card: SkillCard,
+  measurements: MeasurementIn[],
+  age: number,
+  targets: MeasurementIn[],
+  date: string,
+  extraArgs: string[],
+): Promise<ModelRun> {
+  const key = JSON.stringify([card.name, context.catalog.revision, date, measurements, age, targets, extraArgs, context.records.profile.sex])
+  const hit = runMemo.get(key)
+  if (hit) return hit
   const files: Array<{ name: string; text: string }> = []
-  const args: string[] = []
+  const args: string[] = [...extraArgs]
   const flag = card.entry?.targets_flag
   if (flag && targets.length > 0) {
     const staged = stageMeasurements(card, targets)
@@ -322,10 +348,14 @@ async function leversAt(
     python: context.config.skillPython, runtimes: context.config.skillRuntimes, timeoutMs: context.config.skillTimeoutMs,
     revision: context.catalog.revision, measuredAt: date,
   })
-  const levers = result.ok ? result.levers ?? null : null
-  leverMemo.set(key, levers)
-  if (leverMemo.size > 50) leverMemo.delete(leverMemo.keys().next().value as string)
-  return levers
+  const run: ModelRun = {
+    levers: result.ok ? result.levers ?? null : null,
+    outputs: result.outputs ?? {},
+    error: result.ok ? '' : (result.error || result.error_kind || '').slice(0, 300),
+  }
+  if (result.ok) runMemo.set(key, run)
+  if (runMemo.size > 50) runMemo.delete(runMemo.keys().next().value as string)
+  return run
 }
 
 function latestMeasurements(pairs: ReturnType<typeof pairsFor>, byDate: Map<string, Map<string, SeriesPoint>>, date: string): MeasurementIn[] {
@@ -387,6 +417,10 @@ function goalTargets(card: SkillCard, goals: PlanVersion['goals'], reference: Re
   return out
 }
 
+function numberOrNull(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
 function fmt(value: number): string {
   return Number.isInteger(value) ? String(value) : String(Number(value.toPrecision(3)))
 }
@@ -437,7 +471,7 @@ async function modelCards(context: TrackingContext, reference: Reference, goals:
               ? `按 ${date} 的血检，达到方案目标时表型年龄 ${target.phenoage_delta != null && target.phenoage_delta <= 0 ? '年轻' : '变化'} ${fmt(Math.abs(target.phenoage_delta ?? 0))} 岁。`
               : '方案里还没有和九项血检对应的目标值。设定目标（如空腹血糖、超敏 CRP）后，这里会算出达到目标时的表型年龄。',
             measured_on: date,
-            now: { phenoage: levers.current.phenoage ?? null, mortality_10y_pct: levers.current.mortality_10y_pct ?? null, age },
+            now: { phenoage: numberOrNull(levers.current.phenoage), mortality_10y_pct: numberOrNull(levers.current.mortality_10y_pct), age },
             goal: target ? { phenoage: target.phenoage ?? null, mortality_10y_pct: target.mortality_10y_pct ?? null, phenoage_delta: target.phenoage_delta ?? null } : null,
             levers: levers.levers.map((row) => ({
               label: row.label_zh,
@@ -456,47 +490,103 @@ async function modelCards(context: TrackingContext, reference: Reference, goals:
   return cards
 }
 
+const RISK_FLAGS: Array<{ fact: RiskFact; flag: string; men_only?: boolean }> = [
+  { fact: 'bp_treated', flag: '--treated' },
+  { fact: 'smoker', flag: '--smoker' },
+  { fact: 'diabetes', flag: '--diabetes' },
+  { fact: 'north', flag: '--north' },
+  { fact: 'urban', flag: '--urban', men_only: true },
+  { fact: 'family_history', flag: '--family-history', men_only: true },
+]
+
+/** The home-cuff reading a risk equation should see: the mean of the last week of readings, not one reading. */
+async function weeklyBloodPressure(context: TrackingContext, indicator: string): Promise<{ value: number; unit: string } | null> {
+  const read = await loadSeries(context.config, [indicator], { start: addDays(context.today, -30), end: context.today, resolution: 'raw' })
+  const points = read.series[indicator]?.points ?? []
+  const last = points.at(-1)
+  if (!last) return null
+  const week = points.filter((point) => point.date >= addDays(last.date, -6))
+  return { value: Math.round((week.reduce((sum, point) => sum + point.value, 0) / week.length) * 10) / 10, unit: last.unit }
+}
+
 async function riskCard(context: TrackingContext, reference: Reference, card: SkillCard | undefined, goals: PlanVersion['goals']): Promise<ModelCard> {
   const base: ModelCard = {
     model: 'china-par', title_zh: '10 年动脉粥样硬化性心血管病风险（China-PAR）', status: 'unavailable', note_zh: '', measured_on: null,
     now: {}, goal: null, levers: [], sensitivity: [],
-    boundary_zh: '模型估计：China-PAR 按中国成人队列建立，给出的是和你条件相同的人群平均风险，不是诊断。',
+    boundary_zh: '模型估计：China-PAR 按中国成人队列建立，给出的是和你条件相同的人群平均风险，不是诊断，也不决定是否用药。',
   }
   if (!card || !card.script || card.inputsStatus !== 'verified') {
     base.note_zh = '风险模型还没有通过系数校验，暂不显示数值。'
     return base
   }
-  if (context.records.record_status !== 'ok' || context.records.profile.age == null) {
-    base.note_zh = '需要 Mirobody 记录和档案里的实足年龄。'
+  const profile = context.records.profile
+  if (context.records.record_status !== 'ok') {
+    base.note_zh = '需要接上 Mirobody 记录。'
     return base
   }
-  const specs = measurementInputs(card)
-  const measurements: MeasurementIn[] = []
-  const missing: string[] = []
-  for (const spec of specs) {
-    const row = indicatorFor(spec, context.records.indicators)
-    if (row) measurements.push({ key: spec.key, value: row.value, unit: row.unit })
-    else if (spec.required) missing.push(spec.label_zh)
+  const missingFacts: string[] = []
+  if (profile.age == null) missingFacts.push('实足年龄')
+  if (profile.sex !== 'male' && profile.sex !== 'female') missingFacts.push('性别')
+  const args: string[] = []
+  for (const item of RISK_FLAGS) {
+    if (item.men_only && profile.sex !== 'male') continue
+    const value = profile.risk?.[item.fact]
+    if (value == null) missingFacts.push(RISK_FACT_ZH[item.fact])
+    else args.push(item.flag, value ? 'yes' : 'no')
   }
-  if (missing.length > 0) {
-    base.note_zh = `还缺${missing.join('、')}。`
+  const measurements: MeasurementIn[] = []
+  const missingLabs: string[] = []
+  let measuredOn = ''
+  for (const spec of measurementInputs(card)) {
+    const row = indicatorFor(spec, context.records.indicators)
+    if (!row) {
+      if (spec.required) missingLabs.push(spec.label_zh)
+      continue
+    }
+    if (spec.key === 'sbp_mmhg' && !row.loinc) {
+      const week = await weeklyBloodPressure(context, row.name)
+      if (week) {
+        measurements.push({ key: spec.key, value: week.value, unit: week.unit })
+        continue
+      }
+    }
+    measurements.push({ key: spec.key, value: row.value, unit: row.unit })
+    if (row.date && row.date > measuredOn) measuredOn = row.date
+  }
+  if (missingFacts.length > 0 || missingLabs.length > 0) {
+    base.missing = [...missingLabs, ...missingFacts]
+    base.note_zh = `还缺${[...missingLabs, ...missingFacts].join('、')}。${missingFacts.length > 0 ? '是否项在档案里填，或在对话里告诉我。' : ''}`
     return base
   }
   const targets = goalTargets(card, goals, reference)
-  const levers = await leversAt(context, card, measurements, context.records.profile.age, targets, context.today)
-  if (!levers) {
-    base.note_zh = '风险模型没有算出结果，请在对话里运行它查看原因。'
+  const run = await runModel(context, card, measurements, profile.age as number, targets, context.today, args)
+  if (!run.levers) {
+    base.note_zh = run.error ? `风险模型没有算出结果：${run.error}` : '风险模型没有算出结果，请在对话里运行它查看原因。'
     return base
   }
-  const target = levers.targets as { risk_pct?: number; risk_delta_pct?: number } | undefined
+  const target = run.levers.targets as { risk_pct?: number; risk_delta_pct?: number; category?: string } | undefined
+  const category = typeof run.levers.current.category === 'string' ? run.levers.current.category
+    : typeof run.outputs.risk_category?.value === 'string' ? run.outputs.risk_category.value : ''
+  const inTheirUnits = (key: string, fallback: { from: string; to: string }) => {
+    const now = measurements.find((row) => row.key === key)
+    const goal = targets.find((row) => row.key === key)
+    return now && goal ? { from: `${fmt(Number(now.value))} ${now.unit}`.trim(), to: `${fmt(Number(goal.value))} ${goal.unit}`.trim() } : fallback
+  }
   return {
     ...base,
     status: target ? 'ok' : 'no_goal',
-    note_zh: target ? '达到方案目标时的 10 年风险按同一模型计算。' : '设定血压、血脂等目标后，这里会算出达到目标时的风险。',
-    measured_on: context.today,
-    now: { risk_pct: (levers.current.risk_pct as number | undefined) ?? null },
+    note_zh: target
+      ? '达到方案目标时的 10 年风险按同一模型计算。'
+      : '方案里还没有血压、总胆固醇、HDL-C 或腰围的目标。设定后，这里会算出达到目标时的风险。',
+    measured_on: measuredOn || context.today,
+    now: { risk_pct: numberOrNull(run.levers.current.risk_pct) },
     goal: target ? { risk_pct: target.risk_pct ?? null, risk_delta_pct: target.risk_delta_pct ?? null } : null,
-    levers: levers.levers.map((row) => ({ label: row.label_zh, from: `${fmt(row.from)} ${row.unit}`, to: `${fmt(row.to)} ${row.unit}`, years: row.risk_delta_pct ?? 0 })),
+    category_zh: { now: category, goal: target?.category ?? null },
+    levers: run.levers.levers.map((row) => ({
+      label: row.label_zh,
+      ...inTheirUnits(row.key, { from: `${fmt(row.from)} ${row.unit}`, to: `${fmt(row.to)} ${row.unit}` }),
+      years: row.risk_delta_pct ?? 0,
+    })),
   }
 }
 
