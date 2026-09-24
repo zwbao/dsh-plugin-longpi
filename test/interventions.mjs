@@ -85,7 +85,13 @@ try {
   assert.equal(crp.baseline.value, 4.2)
   assert.equal(crp.followup.value, 1.2)
   assert.equal(crp.verdict, '有效', crp.reason_zh)
-  assert.ok(crp.band.down_pct < -60 && crp.band.down_pct > -70, `CRP band ${crp.band.down_pct}`)
+  // Log-normal band from the table's own CRP row (CVA defaults to half of CVI).
+  const crpRow = JSON.parse(readFileSync(join(home, 'data', 'biological_variation.json'), 'utf8')).markers.find((row) => row.key === 'crp')
+  const cvi = crpRow.cvi_pct / 100
+  const cva = (crpRow.cva_pct ?? crpRow.cvi_pct * 0.5) / 100
+  const expectedDown = 100 * (Math.exp(-1.96 * Math.SQRT2 * Math.sqrt(Math.log(1 + cvi * cvi) + Math.log(1 + cva * cva))) - 1)
+  assert.ok(Math.abs(crp.band.down_pct - expectedDown) < 0.5, `CRP band ${crp.band.down_pct} vs ${expectedDown.toFixed(1)}`)
+  assert.ok(crp.band.down_pct < -50 && crp.band.down_pct > -70, `CRP band ${crp.band.down_pct}`)
   assert.ok(crp.expected.some((row) => row.id === 'mediterranean-hscrp'), 'the trial average for this diet and marker is shown')
 
   const glucose = verdict('地中海饮食', '空腹血糖')

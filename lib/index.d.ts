@@ -81,7 +81,7 @@ declare function preGuard(text: string): GuardHit | null;
 declare function wrapGuardMessage(text: string, hit: GuardHit): string;
 //#endregion
 //#region src/version.d.ts
-declare const PRODUCT_VERSION = "4.1.0";
+declare const PRODUCT_VERSION = "4.2.0";
 declare const TOOL_NAMES: readonly ["read_personal_situation", "list_longevity_intents", "match_longevity_skills", "read_longevity_skill", "run_longevity_skill", "query_longevity_evidence", "list_longevity_domains", "save_personal_profile", "longpi_status", "save_intervention_plan", "log_intervention_checkin", "read_intervention_plan", "review_interventions", "model_intervention_goals"];
 declare const HARNESS_SKILLS: readonly ["longpi-dispatch", "longpi-board", "longpi-boundary", "longpi-interventions"];
 //#endregion

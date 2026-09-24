@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 function firstExisting(candidates: string[], marker: (dir: string) => boolean): string {
   for (const candidate of candidates) {
@@ -21,11 +22,19 @@ export function resolveSkillsHome(configured: string): string {
   ], (dir) => existsSync(join(dir, 'skills')) && existsSync(join(dir, 'README.md')))
 }
 
+/**
+ * The dsh-plugin-mirobody release shipped in this package (`npm run vendor:mirobody`). Installed
+ * with `dsh plugin add`, it sits inside the DSH profile, where the host's packages resolve for it.
+ */
+export function vendoredMirobodyPlugin(): string {
+  return join(dirname(fileURLToPath(import.meta.url)), '..', 'vendor', 'dsh-plugin-mirobody')
+}
+
 export function resolveMirobodyPlugin(configured: string): string {
   return firstExisting([
     configured,
     process.env.MIROBODY_PLUGIN_HOME ?? '',
-    join(homedir(), 'Projects', 'dsh-plugin-mirobody'),
+    vendoredMirobodyPlugin(),
   ], (dir) => existsSync(join(dir, 'lib', 'index.js')) && existsSync(join(dir, 'bridge', 'dsh_bridge.py')))
 }
 

@@ -143,6 +143,6 @@ export function buildReport(input: { name: string; today: string; records: Recor
       lines.push('')
     }
   }
-  lines.push('---', '', '判断依据：变化超过个体内生物变异与检测误差合成的参考变化值（RCV）才算真实变化；变异数据来自 EFLM 生物变异数据库和同行评审研究。试验效应是人群平均，不是个人预测。模型估计不是寿命预测。')
+  lines.push('---', '', '判断依据：变化超过个体内生物变异与检测误差合成的参考变化值（RCV）才算真实变化；变异数据来自 longevity-skills 的 data/biological_variation.json，每一行都注明期刊出处。试验效应是人群平均，不是个人预测。模型估计不是寿命预测。')
   return `${lines.join('\n')}\n`
 }

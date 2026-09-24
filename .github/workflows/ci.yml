@@ -9,21 +9,17 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
-    env:
-      SKILLS_TOKEN: ${{ secrets.LONGEVITY_SKILLS_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
           path: dsh-plugin-longpi
 
-      # longevity-skills is private. With the secret set, the dispatch regression
-      # and the unit-case drift check run against it; without it they skip.
+      # The dispatch regression, the unit-case drift check and the intervention
+      # tests run against the public skills repository.
       - name: Check out longevity-skills
-        if: env.SKILLS_TOKEN != ''
         uses: actions/checkout@v4
         with:
           repository: zwbao/longevity-skills
-          token: ${{ secrets.LONGEVITY_SKILLS_TOKEN }}
           path: longevity-skills
 
       - uses: actions/setup-node@v4
