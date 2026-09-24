@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-longpi",
-  "version": "2.0.0",
-  "description": "Personal longevity harness for DeepSeek Harness: dispatch longevity-skills from one person's Mirobody record, and show a health board.",
+  "version": "4.0.0",
+  "description": "Personal longevity harness for DeepSeek Harness: dispatch longevity-skills by intent from one person's Mirobody record, convert and check measurement units before a skill runs, look up collected evidence, and show a health board.",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
@@ -36,7 +36,9 @@
     },
     "client": {
       "platform": "web",
-      "inject": ["slots"]
+      "inject": [
+        "slots"
+      ]
     }
   },
   "scripts": {
@@ -44,7 +46,9 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf lib",
     "smoke": "node test/smoke.mjs",
-    "test": "npm run build && node test/smoke.mjs"
+    "test": "npm run build && node test/smoke.mjs && node test/units.mjs && node test/guard.mjs && node test/v2.mjs && node test/dispatch.mjs && node test/mirobody-format.mjs && node test/interventions.mjs",
+    "eval:dispatch": "node test/dispatch.mjs --verbose",
+    "preview": "npm run build && node preview/build.mjs && echo 'serve with: python3 -m http.server 4173 -d preview/out'"
   },
   "keywords": [
     "dsh-plugin",

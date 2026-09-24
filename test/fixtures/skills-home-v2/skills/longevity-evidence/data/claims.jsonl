@@ -1,0 +1,2 @@
+{"id": "demo:rapamycin", "entity": "rapamycin", "entity_zh": "雷帕霉素", "entity_type": "drug", "aliases": ["sirolimus"], "claim_zh": "在果蝇实验里延长了寿命。", "species": ["drosophila"], "evidence": "animal", "source": {"skill": "mouse-thing"}}
+{"id": "demo:FOXO3", "entity": "FOXO3", "entity_type": "gene", "claim_zh": "百岁老人里点名的基因。", "species": ["human"], "evidence": "case_control", "source": {"skill": "demo-phenoage"}}

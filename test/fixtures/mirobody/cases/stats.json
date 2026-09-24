@@ -1,0 +1,17 @@
+{
+ "args": {
+  "indicators": [
+   "hs-CRP",
+   "Fasting Blood Glucose-FBG"
+  ],
+  "start": "2025-10-01",
+  "end": "2026-09-24",
+  "aggregate": "stats"
+ },
+ "payload": {
+  "result": "(constants: count=4, first_date=2025-10-18, last_date=2026-08-26, mixed_units=False, system=loinc)\nindicator|min|max|avg|first|last|change|unit|code\nhs-CRP|1.2|4.2|2.525|4.2|1.2|-3.0|mg/L|30522-7\nFasting Blood Glucose-FBG|5.4|6.1|5.75|6.1|5.4|-0.7|mmol/L|14771-0\n\n(window=2025-10-01..2026-09-24, tz=Asia/Shanghai, dates=tz_exact, aggregate=stats/readings, rows=2)",
+  "status": "ok",
+  "row_count": 2,
+  "truncated": false
+ }
+}

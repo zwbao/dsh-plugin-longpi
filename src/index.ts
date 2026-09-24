@@ -9,19 +9,33 @@ import { resolveMirobodyPlugin } from './paths.ts'
 import { registerPrompt } from './prompt.ts'
 import { registerRoutes } from './routes.ts'
 import { registerTools } from './tools.ts'
+import { registerTrackingTools } from './tools-tracking.ts'
 
 export const name = 'dsh-plugin-longpi'
 export const inject = ['tools']
 export { Config }
-export { preGuard, wrapGuardMessage } from './guardrails.ts'
+export { preGuard, wrapGuardMessage, rememberMedications } from './guardrails.ts'
 export { PRODUCT_VERSION, TOOL_NAMES, HARNESS_SKILLS } from './version.ts'
 export { parseFrontmatter, loadCatalog, parseReadme, commandExcerpt } from './catalog.ts'
-export { matchSkills, domainSummary } from './match.ts'
+export { matchSkills, domainSummary, organismsAsked, organismOf } from './match.ts'
+export { detectIntents, mentionedEntities, loadEvidenceLexicon } from './intents.ts'
+export { normalizeUnit, foldName, nameVariants, parseNumber } from './units.ts'
+export { stageMeasurements, runnableFrom, unitFactor } from './measurements.ts'
+export { recordOutputs, readHistory, latestOutputs, seriesOf, readResultFile } from './history.ts'
+export { buildStats, writeStats } from './stats.ts'
+export { manifestSummary, versionCheck } from './tools.ts'
 export { normalizeProfile, readProfile, writeProfile, EMPTY_PROFILE, estimatedAge } from './profile.ts'
-export { summarizeIndicators, summarizeMedications } from './situation.ts'
+export { summarizeIndicators, summarizeMedications, indicatorsFromTable } from './situation.ts'
+export { parseCompact, tableOf, cellNumber } from './compact.ts'
+export { loadRecords, loadSeries, loadDoseLog, loadCourses, invalidateRecords } from './records.ts'
 export { runSkill, reportExcerpt, readReceipts } from './runner.ts'
 export { resolveSkillsHome, resolveMirobodyPlugin, resolveDataDir } from './paths.ts'
 export { buildBoard } from './board.ts'
+export { readiness, runReady, buildReport } from './overview.ts'
+export { normalizePlan, savePlan, currentPlan, readPlans, addCheckIns, readCheckIns, isoDay, addDays, daysBetween } from './interventions.ts'
+export { adherenceFor, evaluateMarker, evaluatePlan, resolveMarkers, suggestNext } from './evaluate.ts'
+export { loadReference, markerFor, rcvBand, effectsFor } from './reference.ts'
+export { buildTracking, invalidateTracking, modelGoals, PHENOAGE_SKILL, RISK_SKILL } from './tracking.ts'
 
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const pluginHome = resolveMirobodyPlugin(config.mirobodyPluginHome)
@@ -34,6 +48,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }, pluginHome)
   const source = () => config
   registerTools(ctx, source, mount)
+  registerTrackingTools(ctx, source, mount)
   registerHarnessSkills(ctx)
   registerPrompt(ctx, source, mount)
   registerRoutes(ctx, source, mount)

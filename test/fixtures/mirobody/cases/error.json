@@ -1,0 +1,15 @@
+{
+ "args": {
+  "indicators": [
+   "nope"
+  ],
+  "aggregate": "latest"
+ },
+ "payload": {
+  "result": "error (invalid_arguments): indicator 'nope' is not in this record. Fix the arguments and try once more.",
+  "status": "error",
+  "row_count": 0,
+  "truncated": false,
+  "error_kind": "invalid_arguments"
+ }
+}

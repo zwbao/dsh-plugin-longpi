@@ -1,0 +1,26 @@
+{
+ "args": {
+  "indicators": [
+   "Albumin-ALB",
+   "Creatinine-Cr",
+   "Fasting Blood Glucose-FBG",
+   "hs-CRP",
+   "Lymphocyte Percentage-LYM%",
+   "Mean Corpuscular Volume-MCV",
+   "Red Cell Distribution Width-RDW-CV",
+   "Alkaline Phosphatase-ALP",
+   "White Blood Cell Count-WBC"
+  ],
+  "start": "2025-01-01",
+  "end": "2026-09-24",
+  "resolution": "raw",
+  "aggregate": "none",
+  "limit": 500
+ },
+ "payload": {
+  "result": "(constants: system=loinc)\nindicator|name|time|value|unit|code|file\nAlbumin-ALB|白蛋白|2026-08-26 08:30:00|45.6|g/L|1751-7|2026-08 年度体检报告.pdf\nAlbumin-ALB|白蛋白|2026-04-22 08:30:00|45.2|g/L|1751-7|2026-04 复查.pdf\nAlbumin-ALB|白蛋白|2026-01-20 08:30:00|44.8|g/L|1751-7|2026-01 复查.pdf\nAlbumin-ALB|白蛋白|2025-10-18 08:30:00|44.1|g/L|1751-7|2025-10 年度体检报告.pdf\nCreatinine-Cr|肌酐|2026-08-26 08:30:00|81|umol/L|2160-0|2026-08 年度体检报告.pdf\nCreatinine-Cr|肌酐|2026-04-22 08:30:00|79|umol/L|2160-0|2026-04 复查.pdf\nCreatinine-Cr|肌酐|2026-01-20 08:30:00|80|umol/L|2160-0|2026-01 复查.pdf\nCreatinine-Cr|肌酐|2025-10-18 08:30:00|82|umol/L|2160-0|2025-10 年度体检报告.pdf\nFasting Blood Glucose-FBG|空腹血糖|2026-08-26 08:30:00|5.4|mmol/L|14771-0|2026-08 年度体检报告.pdf\nFasting Blood Glucose-FBG|空腹血糖|2026-04-22 08:30:00|5.6|mmol/L|14771-0|2026-04 复查.pdf\nFasting Blood Glucose-FBG|空腹血糖|2026-01-20 08:30:00|5.9|mmol/L|14771-0|2026-01 复查.pdf\nFasting Blood Glucose-FBG|空腹血糖|2025-10-18 08:30:00|6.1|mmol/L|14771-0|2025-10 年度体检报告.pdf\nhs-CRP|超敏C反应蛋白|2026-08-26 08:30:00|1.2|mg/L|30522-7|2026-08 年度体检报告.pdf\nhs-CRP|超敏C反应蛋白|2026-04-22 08:30:00|1.8|mg/L|30522-7|2026-04 复查.pdf\nhs-CRP|超敏C反应蛋白|2026-01-20 08:30:00|2.9|mg/L|30522-7|2026-01 复查.pdf\nhs-CRP|超敏C反应蛋白|2025-10-18 08:30:00|4.2|mg/L|30522-7|2025-10 年度体检报告.pdf\nLymphocyte Percentage-LYM%|淋巴细胞百分比|2026-08-26 08:30:00|32.0|%|736-9|2026-08 年度体检报告.pdf\nLymphocyte Percentage-LYM%|淋巴细胞百分比|2026-04-22 08:30:00|31.2|%|736-9|2026-04 复查.pdf\nLymphocyte Percentage-LYM%|淋巴细胞百分比|2026-01-20 08:30:00|30.1|%|736-9|2026-01 复查.pdf\nLymphocyte Percentage-LYM%|淋巴细胞百分比|2025-10-18 08:30:00|28.5|%|736-9|2025-10 年度体检报告.pdf\nMean Corpuscular Volume-MCV|平均红细胞体积|2026-08-26 08:30:00|90.1|fL|787-2|2026-08 年度体检报告.pdf\nMean Corpuscular Volume-MCV|平均红细胞体积|2026-04-22 08:30:00|90.5|fL|787-2|2026-04 复查.pdf\nMean Corpuscular Volume-MCV|平均红细胞体积|2026-01-20 08:30:00|89.8|fL|787-2|2026-01 复查.pdf\nMean Corpuscular Volume-MCV|平均红细胞体积|2025-10-18 08:30:00|90.2|fL|787-2|2025-10 年度体检报告.pdf\nRed Cell Distribution Width-RDW-CV|红细胞分布宽度|2026-08-26 08:30:00|12.9|%|788-0|2026-08 年度体检报告.pdf\nRed Cell Distribution Width-RDW-CV|红细胞分布宽度|2026-04-22 08:30:00|13.1|%|788-0|2026-04 复查.pdf\nRed Cell Distribution Width-RDW-CV|红细胞分布宽度|2026-01-20 08:30:00|13.2|%|788-0|2026-01 复查.pdf\nRed Cell Distribution Width-RDW-CV|红细胞分布宽度|2025-10-18 08:30:00|13.4|%|788-0|2025-10 年度体检报告.pdf\nAlkaline Phosphatase-ALP|碱性磷酸酶|2026-08-26 08:30:00|70|U/L|6768-6|2026-08 年度体检报告.pdf\nAlkaline Phosphatase-ALP|碱性磷酸酶|2026-04-22 08:30:00|72|U/L|6768-6|2026-04 复查.pdf\nAlkaline Phosphatase-ALP|碱性磷酸酶|2026-01-20 08:30:00|74|U/L|6768-6|2026-01 复查.pdf\nAlkaline Phosphatase-ALP|碱性磷酸酶|2025-10-18 08:30:00|78|U/L|6768-6|2025-10 年度体检报告.pdf\nWhite Blood Cell Count-WBC|白细胞计数|2026-08-26 08:30:00|6.0|10^9/L|6690-2|2026-08 年度体检报告.pdf\nWhite Blood Cell Count-WBC|白细胞计数|2026-04-22 08:30:00|6.3|10^9/L|6690-2|2026-04 复查.pdf\nWhite Blood Cell Count-WBC|白细胞计数|2026-01-20 08:30:00|6.8|10^9/L|6690-2|2026-01 复查.pdf\nWhite Blood Cell Count-WBC|白细胞计数|2025-10-18 08:30:00|7.1|10^9/L|6690-2|2025-10 年度体检报告.pdf\n\n(window=2025-01-01..2026-09-24, tz=Asia/Shanghai, dates=tz_exact, resolution=raw, rows=36)",
+  "status": "ok",
+  "row_count": 36,
+  "truncated": false
+ }
+}

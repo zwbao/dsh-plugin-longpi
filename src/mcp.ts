@@ -1,3 +1,5 @@
+import { PRODUCT_VERSION } from './version.ts'
+
 export interface McpCallResult {
   success?: boolean
   error_kind?: string
@@ -123,7 +125,7 @@ export async function callMcpTool(options: {
       params: {
         protocolVersion: '2025-06-18',
         capabilities: {},
-        clientInfo: { name: 'dsh-plugin-longpi', version: '2.0.0' },
+        clientInfo: { name: 'dsh-plugin-longpi', version: PRODUCT_VERSION },
       },
     }, '', options.timeoutMs)
     if (init.status === 401 || init.status === 403) {

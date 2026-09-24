@@ -6,6 +6,7 @@ import type { MountState } from './mirobody.ts'
 import { clampMatches, resolveDataDir, resolveSkillsHome } from './paths.ts'
 import { readProfile } from './profile.ts'
 import { readReceipts } from './runner.ts'
+import { writeStats } from './stats.ts'
 import { PRODUCT_NAME, PRODUCT_VERSION } from './version.ts'
 
 function argsOf(raw: string, name: string): string {
@@ -29,7 +30,7 @@ export function registerCommands(ctx: Context, config: () => Config, mount: Moun
           `${PRODUCT_NAME} ${PRODUCT_VERSION}`,
           catalog.error
             ? `skills unavailable: ${catalog.error}`
-            : `skills ${catalog.cards.length}  revision ${catalog.revision || 'unknown'}`,
+            : `skills ${catalog.cards.length} (personal ${catalog.cards.filter((card) => card.tier !== 'C').length})  version ${catalog.version || 'unversioned'}  revision ${catalog.revision || 'unknown'}  from ${catalog.source}`,
           `profile age ${profile.age ?? 'unset'}  sex ${profile.sex}  birth ${profile.birthYear ?? 'unset'}`,
           mount.mounted
             ? `mirobody mounted${mount.peer ? ' (already loaded beside this plugin)' : ''}`
@@ -49,10 +50,18 @@ export function registerCommands(ctx: Context, config: () => Config, mount: Moun
         const current = config()
         const catalog = loadCatalog(resolveSkillsHome(current.skillsHome))
         if (catalog.error) return { kind: 'error', text: catalog.error }
-        const matched = matchSkills(catalog.cards, question, [], clampMatches(current.maxSkillMatches))
+        const matched = matchSkills(catalog.cards, question, [], clampMatches(current.maxSkillMatches), { intents: catalog.intents })
         if (matched.matches.length === 0) return { kind: 'success', text: matched.note }
         const lines = matched.matches.map((item) => `${item.name}  ${item.why.join('；') || item.domain}`)
         return { kind: 'success', text: lines.join('\n') }
+      },
+    })
+    scoped.commands.register({
+      name: 'longpi-stats',
+      description: '把最近 7 天的匿名运行统计写到本地文件：技能名、是否跑完、失败原因和缺了哪些输入。不含任何数值。',
+      handler: () => {
+        const path = writeStats(resolveDataDir(config().dataDir))
+        return { kind: 'success', text: `wrote ${path}\nIt holds counts only. Share it with the skill maintainers if you want to.` }
       },
     })
     scoped.commands.register({

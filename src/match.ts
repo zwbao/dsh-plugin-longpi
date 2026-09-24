@@ -1,4 +1,6 @@
-import type { SkillCard } from './catalog.ts'
+import type { IntentSpec, SkillCard } from './catalog.ts'
+import { detectIntents, type EvidenceLexicon, type IntentHit } from './intents.ts'
+import { runnableFrom, type RecordIndicator, type Runnable } from './measurements.ts'
 
 export interface MatchHit {
   name: string
@@ -7,6 +9,8 @@ export interface MatchHit {
   score: number
   why: string[]
   has_script: boolean
+  tier: string
+  runnable: { status: Runnable['status']; missing: string[] }
 }
 
 export interface DomainRow {
@@ -15,22 +19,39 @@ export interface DomainRow {
   names: string[]
 }
 
+export interface MatchOptions {
+  intents?: readonly IntentSpec[]
+  explicitIntents?: readonly string[]
+  profile?: { age: number | null; sex: string }
+  outputs?: Record<string, unknown>
+  lexicon?: EvidenceLexicon
+}
+
+export interface MatchResult {
+  matches: MatchHit[]
+  near: MatchHit[]
+  intents: IntentHit[]
+  note: string
+}
+
 const WEAK = new Set([
   'age', 'aging', 'ageing', 'aged', 'biological', 'blood', 'human', 'cell', 'cells',
   'gene', 'genes', 'protein', 'risk', 'health', 'study', 'paper', 'user', 'when',
   '年龄', '血液', '指标', '检查', '个人', '这个', '一个', '什么', '怎么', '可以',
-  '记录', '技能', '方法', '实足', '没有', '不是',
+  '记录', '技能', '方法', '实足', '没有', '不是', '衰老', '抗衰', '延缓', '我的',
 ])
 
-const ORGANISMS: Array<{ id: string; re: RegExp }> = [
-  { id: 'mouse', re: /小鼠|mouse|mice/i },
-  { id: 'worm', re: /线虫|elegans/i },
-  { id: 'fly', re: /果蝇|drosophila/i },
-  { id: 'mole', re: /裸鼹鼠|naked mole/i },
-  { id: 'planarian', re: /涡虫|planarian/i },
-  { id: 'butterfly', re: /蝴蝶|butterfly|helicon/i },
-  { id: 'whale', re: /弓头鲸|bowhead/i },
-  { id: 'fish', re: /青鳉|killifish|斑马鱼|zebrafish/i },
+const ORGANISMS: Array<{ id: string; species: string[]; re: RegExp }> = [
+  { id: 'mouse', species: ['mouse', 'rat'], re: /小鼠|大鼠|老鼠|mouse|mice|(?<![A-Za-z])rats?(?![A-Za-z])/i },
+  { id: 'worm', species: ['c_elegans'], re: /线虫|elegans/i },
+  { id: 'fly', species: ['drosophila'], re: /果蝇|drosophila/i },
+  { id: 'mole', species: ['naked_mole_rat'], re: /裸鼹鼠|naked[ -]?mole/i },
+  { id: 'planarian', species: ['planarian'], re: /涡虫|planarian/i },
+  { id: 'butterfly', species: ['butterfly'], re: /蝴蝶|butterfl|helicon/i },
+  { id: 'whale', species: ['bowhead_whale'], re: /弓头鲸|鲸|bowhead|whale/i },
+  { id: 'fish', species: ['zebrafish', 'killifish'], re: /青鳉|鳉鱼|killifish|斑马鱼|zebrafish/i },
+  { id: 'yeast', species: ['yeast'], re: /酵母|yeast/i },
+  { id: 'cells', species: ['cell_line'], re: /细胞实验|细胞系|cell line/i },
 ]
 
 const SIGNALS: Array<{ skill: string; needles: string[]; need: number; why: string }> = [
@@ -40,24 +61,9 @@ const SIGNALS: Array<{ skill: string; needles: string[]; need: number; why: stri
     need: 3,
     why: '检查名里出现了表型年龄会用到的指标',
   },
-  {
-    skill: 'leukocyte-telomere-length',
-    needles: ['telomere', '端粒'],
-    need: 1,
-    why: '记录里有端粒',
-  },
-  {
-    skill: 'digital-telomere-measurement-sequencing',
-    needles: ['telomere', '端粒'],
-    need: 1,
-    why: '记录里有端粒',
-  },
-  {
-    skill: 'sleep-chart-biological-ageing',
-    needles: ['sleep duration', '睡眠'],
-    need: 1,
-    why: '记录里有睡眠',
-  },
+  { skill: 'leukocyte-telomere-length', needles: ['telomere', '端粒'], need: 1, why: '记录里有端粒' },
+  { skill: 'digital-telomere-measurement-sequencing', needles: ['telomere', '端粒'], need: 1, why: '记录里有端粒' },
+  { skill: 'sleep-chart-biological-ageing', needles: ['sleep duration', '睡眠'], need: 1, why: '记录里有睡眠' },
 ]
 
 export function domainSummary(cards: readonly SkillCard[]): DomainRow[] {
@@ -67,11 +73,7 @@ export function domainSummary(cards: readonly SkillCard[]): DomainRow[] {
     names.push(card.name)
     map.set(card.domain, names)
   }
-  return [...map.entries()].map(([domain, names]) => ({
-    domain,
-    count: names.length,
-    names,
-  }))
+  return [...map.entries()].map(([domain, names]) => ({ domain, count: names.length, names }))
 }
 
 function englishTerms(query: string): string[] {
@@ -84,7 +86,7 @@ function englishTerms(query: string): string[] {
 
 function cjkGrams(query: string): string[] {
   const found = new Set<string>()
-  for (const match of query.matchAll(/[\u4e00-\u9fff]{2,}/g)) {
+  for (const match of query.matchAll(/[一-鿿]{2,}/g)) {
     const run = match[0] ?? ''
     const max = Math.min(run.length, 8)
     for (let size = 2; size <= max; size += 1) {
@@ -96,9 +98,66 @@ function cjkGrams(query: string): string[] {
   return [...found]
 }
 
-function organismOf(card: SkillCard): { id: string; re: RegExp } | null {
-  const hay = `${card.name} ${card.domain} ${card.blurb}`
-  return ORGANISMS.find((item) => item.re.test(hay)) ?? null
+export function organismsAsked(question: string): Set<string> {
+  return new Set(ORGANISMS.filter((item) => item.re.test(question)).map((item) => item.id))
+}
+
+export function organismOf(card: SkillCard): string | null {
+  if (card.species.length > 0) {
+    if (card.species.includes('human')) return null
+    const found = ORGANISMS.find((item) => item.species.some((species) => card.species.includes(species)))
+    return found?.id ?? 'other'
+  }
+  const hay = `${card.name} ${card.domain} ${card.blurb} ${card.description}`
+  return ORGANISMS.find((item) => item.re.test(hay))?.id ?? null
+}
+
+const GENERIC_NAME_TOKENS = new Set(['age', 'aging', 'ageing', 'clock', 'clocks', 'biological', 'human', 'risk', 'score', 'aged', 'the'])
+
+/** A short token the question names exactly (CT, MRI, NMN) that is also a word of the skill's directory name. */
+function nameTokenBonus(card: SkillCard, asked: string): number {
+  const tokens = new Set(card.name.split('-').filter((token) => token.length >= 2 && !GENERIC_NAME_TOKENS.has(token)))
+  for (const match of asked.matchAll(/(?<![A-Za-z0-9])([A-Za-z][A-Za-z0-9]{1,11})(?![A-Za-z0-9])/g)) {
+    if (tokens.has((match[1] ?? '').toLowerCase())) return 8
+  }
+  return 0
+}
+
+function lexical(card: SkillCard, asked: string): { score: number; specific: number; strong: boolean; why: string[] } {
+  const why: string[] = []
+  let score = 0
+  let specific = 0
+  let strong = false
+  if (!asked) return { score, specific, strong, why }
+  const hay = `${card.name}\n${card.description}\n${card.blurb}\n${card.lead}`.toLowerCase()
+  const terms = englishTerms(asked)
+  if (terms.some((term) => term === card.name || card.name.includes(term))) {
+    score += 8
+    specific += 1
+    why.push('名字对上了问题')
+  }
+  for (const term of terms) {
+    if (term === card.name || card.name.includes(term) || !hay.includes(term)) continue
+    if (WEAK.has(term)) {
+      score += 1
+    } else {
+      score += 3
+      specific += 1
+      why.push(`说明里有「${term}」`)
+    }
+  }
+  for (const gram of cjkGrams(asked)) {
+    if (!hay.includes(gram)) continue
+    if (WEAK.has(gram)) {
+      score += 1
+      continue
+    }
+    score += gram.length >= 4 ? 4 : gram.length === 3 ? 3 : 2
+    specific += 1
+    if (gram.length >= 3) why.push(`说明里有「${gram}」`)
+    if (gram.length >= 4) strong = true
+  }
+  return { score, specific, strong, why }
 }
 
 function signalWhy(skill: string, indicatorHay: string): string {
@@ -109,78 +168,111 @@ function signalWhy(skill: string, indicatorHay: string): string {
   return hits.length >= rule.need ? rule.why : ''
 }
 
+function asRows(indicators: readonly (string | RecordIndicator)[]): RecordIndicator[] {
+  return indicators.map((item) => (typeof item === 'string' ? { name: item, value: '', unit: '' } : item))
+}
+
 export function matchSkills(
   cards: readonly SkillCard[],
   query: string,
-  indicatorNames: readonly string[],
+  indicators: readonly (string | RecordIndicator)[],
   limit: number,
-): { matches: MatchHit[]; note: string } {
+  options: MatchOptions = {},
+): MatchResult {
   const asked = query.trim()
-  const terms = englishTerms(asked)
-  const grams = cjkGrams(asked)
-  const indicatorHay = indicatorNames.join('\n').toLowerCase()
+  const rows = asRows(indicators)
+  const indicatorHay = rows.map((row) => row.name).join('\n').toLowerCase()
+  const profile = options.profile ?? { age: null, sex: 'unknown' }
+  const specs = options.intents ?? []
+  const explicit = (options.explicitIntents ?? []).filter((id) => specs.some((spec) => spec.id === id))
+  const detected: IntentHit[] = explicit.length > 0
+    ? explicit.map((id) => ({ id, label_zh: specs.find((spec) => spec.id === id)?.label_zh ?? id, score: 10, hits: ['模型指定'] }))
+    : detectIntents(asked, specs, options.lexicon)
+  const organisms = organismsAsked(asked)
+  const organismIntent = detected.some((hit) => hit.id === 'model_organism')
   const hits: MatchHit[] = []
+  const near: MatchHit[] = []
   for (const card of cards) {
+    const organism = organismOf(card)
+    if (card.tier === 'C' && !organismIntent && organisms.size === 0) continue
+    if (organism && organisms.size > 0 && !organisms.has(organism) && organism !== 'other') continue
     const why: string[] = []
     let score = 0
     let specific = 0
-    const hay = `${card.name}\n${card.description}\n${card.blurb}\n${card.lead}`.toLowerCase()
-    if (asked) {
-      if (terms.some((term) => term === card.name || card.name.includes(term))) {
-        score += 8
+    detected.forEach((hit, rank) => {
+      const spec = specs.find((item) => item.id === hit.id)
+      const position = spec ? spec.skills.indexOf(card.name) : -1
+      const weight = 1 / (1 + rank)
+      if (position >= 0) {
+        score += (30 - 2 * position) * weight
         specific += 1
-        why.push('名字对上了问题')
-      }
-      for (const term of terms) {
-        if (term === card.name || card.name.includes(term)) continue
-        if (!hay.includes(term.toLowerCase())) continue
-        if (WEAK.has(term)) {
-          score += 1
-        } else {
-          score += 3
-          specific += 1
-          why.push(`说明里有「${term}」`)
-        }
-      }
-      for (const gram of grams) {
-        if (!hay.includes(gram)) continue
-        if (WEAK.has(gram)) {
-          score += 1
-          continue
-        }
-        score += gram.length >= 4 ? 4 : gram.length === 3 ? 3 : 2
+        why.push(`对上意图「${hit.label_zh}」`)
+      } else if (card.intents.includes(hit.id)) {
+        score += 10 * weight
         specific += 1
-        if (gram.length >= 3) why.push(`说明里有「${gram}」`)
+        why.push(`对上意图「${hit.label_zh}」`)
       }
+    })
+    const run = runnableFrom(card, rows, profile, options.outputs)
+    if (run.status === 'ready') {
+      score += 6
+      why.push('记录里的输入已经齐了')
+    } else if (run.status === 'partial') {
+      score += 2
+      why.push(`还缺 ${run.missing.join('、')}`)
     }
-    const signal = signalWhy(card.name, indicatorHay)
+    const words = lexical(card, asked)
+    score += Math.min(words.score, 12) * (detected.length > 0 && !words.strong ? 0.5 : 1)
+    specific += words.specific
+    why.push(...words.why)
+    const token = nameTokenBonus(card, asked)
+    if (token) {
+      score += token
+      specific += 1
+      why.push('问题点了这个方法名里的词')
+    }
+    const signal = card.inputs.length === 0 ? signalWhy(card.name, indicatorHay) : ''
     if (signal) {
       score += 6
       specific += 1
       why.push(signal)
     }
-    const organism = organismOf(card)
-    if (organism && !organism.re.test(asked)) score -= 8
-    if (organism && organism.re.test(asked)) {
-      score += 4
+    if (organism && organisms.has(organism)) {
+      score += 6
       specific += 1
       why.push('问题点了这个模式生物')
+    } else if (organism && !card.tier) {
+      score -= 8
     }
-    if (asked && specific === 0) score = Math.min(score, 2)
-    if (score <= 0) continue
-    hits.push({
+    if (card.tier === 'B' && detected[0] && !['intervention_evidence', 'gene_variant'].includes(detected[0].id)) score -= 2
+    const hit: MatchHit = {
       name: card.name,
       domain: card.domain,
       blurb: card.blurb,
-      score,
-      why: why.slice(0, 4),
+      score: Math.round(score * 10) / 10,
+      why: [...new Set(why)].slice(0, 4),
       has_script: Boolean(card.script),
-    })
+      tier: card.tier,
+      runnable: { status: run.status, missing: run.missing },
+    }
+    if (!asked && run.status === 'partial' && card.tier !== 'C') near.push(hit)
+    if (asked) {
+      if (specific === 0) continue
+    } else if (run.status !== 'ready' && !signal) {
+      continue
+    }
+    if (score <= 0) continue
+    hits.push(hit)
   }
   hits.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+  near.sort((a, b) => a.runnable.missing.length - b.runnable.missing.length || b.score - a.score || a.name.localeCompare(b.name))
   const matches = hits.slice(0, limit)
-  let note = '按问题和个人记录排序。名单以外的技能这次不调度。'
-  if (matches.length === 0 && asked) note = '没有技能的说明对上这个问题。可以先看领域目录，换一种说法。'
-  if (matches.length === 0 && !asked) note = '还没有问题，记录里也没有对上已知指标。先说出要读的方法，或接上检查。'
-  return { matches, note }
+  let note = '按问题、个人记录和已经算过的读出排序。名单以外的技能这次不调度。'
+  if (matches.length === 0 && asked) {
+    note = detected.some((hit) => hit.id === 'intervention_evidence')
+      ? '没有技能直接对上。这是查证据的问题，用 query_longevity_evidence。'
+      : '没有技能的说明对上这个问题。可以先看 list_longevity_intents，换一种说法。'
+  }
+  if (matches.length === 0 && !asked) note = '还没有问题，记录里也没有哪项方法的输入是齐的。先说出想了解什么，或接上检查。'
+  return { matches, near: near.slice(0, 6), intents: detected, note }
 }

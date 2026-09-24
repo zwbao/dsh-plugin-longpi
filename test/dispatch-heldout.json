@@ -1,0 +1,20 @@
+{
+  "description": "Held-out dispatch questions, written after the matcher was tuned on dispatch-cases.json and not used for tuning. Reported separately; the build fails below 0.8.",
+  "cases": [
+    { "q": "我的血检能看出我老得快还是慢吗", "labs": "labs9", "expect": ["accelerated-biological-aging-risk"] },
+    { "q": "想知道身体年龄，这份血常规和生化够不够", "labs": "labs9", "expect": ["accelerated-biological-aging-risk"] },
+    { "q": "有没有办法用甲基化结果看衰老速度", "expect": ["pyaging", "epigenetic-frailty-risk-score"] },
+    { "q": "我买了一个表观年龄检测，拿到了 β 值表格", "expect": ["pyaging", "epigenetic-frailty-risk-score"] },
+    { "q": "手表记录的睡眠和活动能不能看衰老", "expect": ["wearable-circadian-aging-biomarker", "sleep-chart-biological-ageing", "wearable-aging-clock", "circadian-frailty-older-adults"] },
+    { "q": "NR 和 NMN 哪个证据多", "expect": ["longevity-evidence", "evipedia", "ai4l"] },
+    { "q": "吃鱼油能延缓衰老吗", "expect": ["longevity-evidence", "evipedia", "ai4l"] },
+    { "q": "热量限制对人有用吗", "expect": ["longevity-evidence", "evipedia", "ai4l"] },
+    { "q": "运动能让生物年龄变年轻吗", "expect": ["longevity-evidence", "evipedia", "ai4l", "accelerated-biological-aging-risk"] },
+    { "q": "我是 APOE ε4 携带者", "expect": ["longevity-evidence", "opengenes", "biomcp"] },
+    { "q": "我的端粒是 z 值 -0.8", "expect": ["leukocyte-telomere-length"] },
+    { "q": "我去年和今年各测了一次表型年龄，差了三岁", "expect": ["ageing-clocks-digital-twins", "epigenetic-clock-reliability", "fasting-mimicking-diet"] },
+    { "q": "我想用 Olink 数据算大脑年龄", "expect": ["plasma-proteomics-brain-immune", "organ-specific-proteomic-aging", "organ-aging-plasma-proteome"] },
+    { "q": "我有轻度认知障碍，血液指标有什么研究", "expect": ["plasma-proteome-future-dementia", "plasma-proteome-dementia-biomarkers", "neurodegeneration-proteomics-biomarker", "blood-metabolome-brain-health", "longevity-evidence"] },
+    { "q": "果蝇的雷帕霉素实验说明了什么", "organism": true, "expect": ["rapamycin-early-adult-autophagy", "rapamycin-enterocyte-sex", "longevity-evidence"] }
+  ]
+}
