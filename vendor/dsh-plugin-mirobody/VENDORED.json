@@ -1,0 +1,13 @@
+{
+  "repo": "https://github.com/zwbao/dsh-plugin-mirobody",
+  "tag": "v1.0.0",
+  "version": "1.0.0",
+  "files": [
+    "package.json",
+    "LICENSE",
+    "NOTICE",
+    "lib/index.js",
+    "bridge/dsh_bridge.py",
+    "skills"
+  ]
+}

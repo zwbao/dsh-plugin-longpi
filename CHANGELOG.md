@@ -1,5 +1,12 @@
 # Changelog
 
+## 4.2.0
+
+- **One install.** A tagged release of [dsh-plugin-mirobody](https://github.com/zwbao/dsh-plugin-mirobody) (now public) ships in `vendor/dsh-plugin-mirobody`, so `dsh plugin --profile web add github:zwbao/dsh-plugin-longpi` installs both. The copy sits inside the DSH profile, where the host's `@deepseek-ai` packages resolve for it; a checkout outside the profile could not load them (`Cannot find package '@deepseek-ai/schemastery'`), which a real DSH 0.1.5-rc.3 install showed. `npm run vendor:mirobody` refreshes it from a release tag. `mirobodyPluginHome` now defaults to the bundled copy; the `~/Projects/dsh-plugin-mirobody` fallback is gone.
+- **Install guide.** README and README.zh rewritten as a from-scratch install: Mirobody server, the personal MCP address, the Python environment, the skill library, `dsh plugin add`, the profile patch, first start, and checks from the command line, the web page and the chat, with a troubleshooting table.
+- **longevity-skills is public.** CI checks it out without a token. Its `data/biological_variation.json` now takes every lab value from a journal article (EuBIVAS and the EFLM working group's published meta-analyses) with the quoted line; the report footer says so.
+- Test: the CRP noise-band check derives its expectation from the table's own CRP row.
+
 ## 4.1.0
 
 - **China-PAR for men and women on the board.** With longevity-skills' verified China-PAR (constants derived from the paper's own printed numbers, Table 2 reproduced within 1%), the model card shows the 10-year ASCVD risk now and at the plan's blood-pressure, cholesterol or waist goals, with the guideline category and each goal's contribution in percentage points. Home blood pressure enters as the mean of the last week of readings.
