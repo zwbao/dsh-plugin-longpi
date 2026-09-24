@@ -1,6 +1,6 @@
-// Board preview with demo data: the real plugin code (records, tracking,
-// skills) against the fake Mirobody record, rendered by the built lib/client.js
-// in a plain page. No DeepSeek Harness needed.
+// Page preview with demo data: the real plugin code (records, self
+// measurements, tracking, journey, skills) against the fake Mirobody record,
+// rendered by the built lib/client.js in a plain page. No DeepSeek Harness needed.
 //
 //   npm run build && node preview/build.mjs && python3 -m http.server 4173 -d preview/out
 //
@@ -26,7 +26,21 @@ try {
     mcpUrl: server.url, mcpToken: '', member: '', timeoutMs: 10000, pythonBin: '/nonexistent/python', mirobodyHome: '',
     dataDir, skillPython: 'python3', skillTimeoutMs: 60000, skillRuntimes: {}, skillsHome: home, maxSkillMatches: 6,
   }
-  mod.writeProfile(dataDir, { displayName: '陈明', birthYear: 1972, age: 53, sex: 'male', risk: { smoker: false, diabetes: false, bp_treated: false, north: true, urban: true, family_history: false } })
+  mod.writeProfile(dataDir, {
+    displayName: '陈明', birthYear: 1972, age: 53, sex: 'male',
+    risk: { smoker: false, diabetes: false, bp_treated: false, north: true, urban: true, family_history: false },
+    focus: ['bioage', 'cardio'], consent: null,
+  })
+  mod.setConsent(dataDir, true, new Date(`${TODAY}T09:00:00+08:00`))
+  // A tape-measure waist and a week of home blood pressure, entered by the person.
+  const selfEntries = [{ key: 'waist', value: 88, unit: 'cm', date: mod.addDays(TODAY, -2) }]
+  const cuff = [[128, 82], [124, 80], [131, 84], [126, 81], [122, 79], [127, 83], [125, 80]]
+  cuff.forEach(([sbp, dbp], index) => {
+    const date = mod.addDays(TODAY, index - 6)
+    selfEntries.push({ key: 'sbp', value: sbp, date }, { key: 'dbp', value: dbp, date })
+  })
+  const self = mod.addSelf(dataDir, selfEntries, { today: TODAY, now: new Date(`${TODAY}T09:00:00+08:00`) })
+  if (self.problems.length > 0) throw new Error(self.problems.join('; '))
   mod.invalidateRecords()
   const records = await mod.loadRecords(config, dataDir, '/nonexistent/plugin')
   const plan = mod.normalizePlan({
@@ -50,10 +64,13 @@ try {
   mod.addCheckIns(dataDir, entries, { today: TODAY, source: 'chat' })
 
   const catalog = mod.loadCatalog(home)
+  const mount = { mounted: true, pluginHome: '', peer: false, error: '' }
   const tracking = await mod.buildTracking({ config, dataDir, skillsHome: home, catalog, records, today: TODAY })
+  const journey = await mod.buildJourney({ config, dataDir, skillsHome: home, catalog, records, today: TODAY, mount })
+  const selfRows = { rows: mod.readSelf(dataDir).reverse() }
   const outputs = mod.latestOutputs(dataDir)
   const board = {
-    ...mod.buildBoard({ catalog, records, mount: { mounted: true, pluginHome: '', peer: 'dsh-plugin-mirobody', error: '' }, receipts: mod.readReceipts(dataDir, 5), limit: 6, outputs }),
+    ...mod.buildBoard({ catalog, records, mount, receipts: mod.readReceipts(dataDir, 5), limit: 6, outputs }),
     readiness: mod.readiness(catalog, records, outputs),
     today: TODAY,
   }
@@ -61,11 +78,13 @@ try {
   const client = join(here, '..', 'lib', 'client.js')
   copyFileSync(client, join(out, 'client.js'))
   const template = readFileSync(join(here, 'index.html'), 'utf8')
-  const payload = JSON.stringify({ board, tracking }).replace(/</g, '\\u003c')
+  const payload = JSON.stringify({ board, tracking, journey, self: selfRows }).replace(/</g, '\\u003c')
   writeFileSync(join(out, 'index.html'), template.replace('/*__DATA__*/null', payload))
   writeFileSync(join(out, 'board.json'), `${JSON.stringify(board, null, 1)}\n`)
   writeFileSync(join(out, 'tracking.json'), `${JSON.stringify(tracking, null, 1)}\n`)
-  console.log(`preview written to ${out} (${tracking.items.length} items, phenotypic age at ${tracking.bioage.points.length} checkups)`)
+  writeFileSync(join(out, 'journey.json'), `${JSON.stringify(journey, null, 1)}\n`)
+  writeFileSync(join(out, 'self.json'), `${JSON.stringify(selfRows, null, 1)}\n`)
+  console.log(`preview written to ${out} (${tracking.items.length} items, phenotypic age at ${tracking.bioage.points.length} checkups, stage ${journey.stage})`)
 } finally {
   await server.close()
   rmSync(dataDir, { recursive: true, force: true })

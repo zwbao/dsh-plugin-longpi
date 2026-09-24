@@ -8,6 +8,7 @@
 import type { CheckIn, PlanItem, PlanVersion } from './interventions.ts'
 import { addDays, CATEGORY_ZH, daysBetween, TAG_ZH } from './interventions.ts'
 import type { CourseRow, DoseRow, SeriesPoint } from './records.ts'
+import { preferSelf } from './measurements.ts'
 import { effectsFor, markerFor, rcvBand, type Biovar, type BiovarMarker, type EffectRow } from './reference.ts'
 
 export type Verdict = '有效' | '波动内' | '反向' | '无法判断'
@@ -97,14 +98,16 @@ export interface Suggestion {
 
 export function resolveMarkers(
   names: readonly string[],
-  indicators: ReadonlyArray<{ name: string; loinc?: string; label?: string; unit?: string }>,
+  indicators: ReadonlyArray<{ name: string; loinc?: string; label?: string; unit?: string; source?: 'self' }>,
   biovar: Biovar,
 ): ResolvedMarker[] {
+  // A self measurement is in the list only when it is the newest of its kind, so it wins.
+  const rows = preferSelf(indicators)
   return names.map((asked) => {
     const direct = biovar.markers.find((row) => row.key === asked) ?? markerFor(biovar, { name: asked, label: asked })
-    const record = indicators.find((row) => row.name === asked)
-      ?? (direct ? indicators.find((row) => (row.loinc && direct.loinc.includes(row.loinc)) || (direct.device_codes ?? []).includes(row.name)) : undefined)
-      ?? indicators.find((row) => markerFor(biovar, row) === direct && direct != null)
+    const record = rows.find((row) => row.name === asked || (row.source === 'self' && row.label === asked))
+      ?? (direct ? rows.find((row) => (row.loinc && direct.loinc.includes(row.loinc)) || (direct.device_codes ?? []).includes(row.name)) : undefined)
+      ?? rows.find((row) => markerFor(biovar, row) === direct && direct != null)
     const row = direct ?? (record ? markerFor(biovar, record) : null)
     return {
       asked,

@@ -5,7 +5,7 @@ import type { Config } from './config.ts'
 import { matchSkills, domainSummary } from './match.ts'
 import type { MountState } from './mirobody.ts'
 import { clampMatches, resolveDataDir, resolveSkillsHome } from './paths.ts'
-import { normalizeProfile, readProfile, writeProfile, estimatedAge, RISK_FACTS } from './profile.ts'
+import { normalizeProfile, readProfile, writeProfile, estimatedAge, FOCUS, RISK_FACTS } from './profile.ts'
 import { loadRecords, type RecordSnapshot } from './records.ts'
 import { readReceipts, runSkill } from './runner.ts'
 import { PRODUCT_VERSION } from './version.ts'
@@ -15,6 +15,9 @@ import { mcpHost } from './mcp.ts'
 import { latestOutputs } from './history.ts'
 import { loadEvidenceLexicon, mentionedEntities } from './intents.ts'
 import { runnableFrom } from './measurements.ts'
+import { isoDay } from './interventions.ts'
+import { buildJourney, type Journey } from './journey.ts'
+import { invalidateTracking } from './tracking.ts'
 
 function jsonText(value: unknown): [{ type: 'text'; text: string }] {
   return [{ type: 'text', text: JSON.stringify(value, null, 2) }]
@@ -75,15 +78,28 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
     return { catalog, records, outputs: latestOutputs(dataDir), skillsHome, dataDir, current }
   }
 
+  // The journey runs the result skills on a cold memo; a failure there must not take a status or situation read down with it.
+  async function journeyOf(input: { catalog: Catalog; records: RecordSnapshot; skillsHome: string; dataDir: string; current: Config }): Promise<{ journey: Journey | null; error: string }> {
+    try {
+      const journey = await buildJourney({
+        config: input.current, dataDir: input.dataDir, skillsHome: input.skillsHome, catalog: input.catalog, records: input.records, today: isoDay(), mount,
+      })
+      return { journey, error: '' }
+    } catch (error) {
+      return { journey: null, error: error instanceof Error ? error.message.slice(0, 300) : 'journey failed' }
+    }
+  }
+
   ctx.tools.register(defineTool({
     name: 'read_personal_situation',
-    description: 'Read this person\'s saved profile, a summary of their Mirobody record (indicator names, latest values, units, medication plan), readouts earlier skill runs produced, and which methods their record can already run. Read-only. Use this before choosing a longevity skill. Absence means not on file. Do not invent a lab, a dose, or a genotype. Genetics are not listed here; name rsIDs with query_genetic_data. An estimated age from birth year is not the age to pass to a skill unless the saved age field is set.',
+    description: 'Read this person\'s saved profile, a summary of their Mirobody record (indicator names, latest values, units, medication plan), their own latest self measurements (waist, home blood pressure as a 7-day mean, weight), readouts earlier skill runs produced, which methods their record can already run, and onboarding: the stage they are at (consent, profile, records, first_result, plan, routine), the next step, unanswered profile questions, the first results (phenotypic age, China-PAR) or what blocks them, and the add-on tests that would unlock them. Read-only. Use this before choosing a longevity skill. Absence means not on file. Do not invent a lab, a dose, or a genotype. Genetics are not listed here; name rsIDs with query_genetic_data. An estimated age from birth year is not the age to pass to a skill unless the saved age field is set.',
     parameters: {},
     output: jsonOut,
-    timeoutMs: 60000,
+    timeoutMs: 180000,
     isConcurrencySafe: () => true,
     async execute() {
-      const { catalog, records, outputs, current } = await situation()
+      const input = await situation()
+      const { catalog, records, outputs, current } = input
       const profile = { age: records.profile.age, sex: records.profile.sex }
       const dispatch = matchSkills(catalog.cards, '', records.indicators, clampMatches(current.maxSkillMatches), {
         intents: catalog.intents, profile, outputs,
@@ -101,7 +117,8 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
         record_status: records.record_status,
         record_error: records.record_error,
         mcp: records.mcp,
-        note: 'Medication doses are what the record says. They are not an instruction to change a dose. A missing indicator was not on file. earlier_readouts are outputs of skills already run for this person; cite them with their date.',
+        ...onboardingOf(await journeyOf(input)),
+        note: 'Medication doses are what the record says. They are not an instruction to change a dose. A missing indicator was not on file. Indicators named ...（自测） are measurements the person entered themselves (source self), used only when newer than the record. earlier_readouts are outputs of skills already run for this person; cite them with their date. onboarding says where the person is, the first results or what blocks them, and what to add at the next checkup.',
       })
     },
   }))
@@ -362,6 +379,11 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
       birthYear: { type: 'integer', description: 'Four-digit birth year, if they gave one.' },
       age: { type: 'integer', description: 'Chronological age they stated, 0–130.' },
       sex: { type: 'string', enum: ['female', 'male', 'other', 'unknown'], description: 'Sex they stated.' },
+      focus: {
+        type: 'array',
+        items: { type: 'string', enum: [...FOCUS] },
+        description: 'What they care about most, in their order: bioage (身体年龄), cardio (心血管), glucose (血糖), weight (体重), sleep (睡眠), plan (whether their plan works). Replaces the saved list.',
+      },
       smoker: { type: 'boolean', description: 'They smoke cigarettes now (China-PAR).' },
       diabetes: { type: 'boolean', description: 'They have diabetes: a diagnosis, fasting glucose at or above 7.0 mmol/L, or diabetes medicine (as they state it).' },
       bp_treated: { type: 'boolean', description: 'They took blood-pressure medicine in the last two weeks.' },
@@ -373,6 +395,9 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
     timeoutMs: 10000,
     isConcurrencySafe: () => false,
     async execute(args) {
+      if ('consent' in (args as Record<string, unknown>)) {
+        return asJson({ ok: false, error: 'Consent is given by the person on the LongPi page, not in chat. Nothing was saved.' })
+      }
       const dataDir = resolveDataDir(config().dataDir)
       const current = readProfile(dataDir)
       const risk = { ...current.risk }
@@ -386,34 +411,40 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
         age: args.age ?? current.age,
         sex: args.sex ?? current.sex,
         risk,
+        focus: args.focus ?? current.focus,
+        consent: current.consent,
       }
       const normalized = normalizeProfile(next)
       if (!normalized.ok) return asJson({ ok: false, error: normalized.error })
       writeProfile(dataDir, normalized.profile)
+      invalidateTracking()
       return asJson({
         ok: true,
         profile: normalized.profile,
         estimated_age_from_birth_year: estimatedAge(normalized.profile.birthYear, new Date().getFullYear()),
-        note: 'Saved locally for this harness. Not written to Mirobody. Use profile.age for a skill, not the estimate, unless the person confirmed the estimate.',
+        note: 'Saved locally for this harness. Not written to Mirobody. Use profile.age for a skill, not the estimate, unless the person confirmed the estimate. A fact they did not answer stays unknown; never save it as false.',
       })
     },
   }))
 
   ctx.tools.register(defineTool({
     name: 'longpi_status',
-    description: 'Report whether the longevity-skills checkout and the Mirobody engine are available, which library version is loaded, and which skill runtimes are configured. Use this when a skill or a record tool failed. Does not return the chart or any token.',
+    description: 'Report whether the longevity-skills checkout and the Mirobody engine are available, which library version is loaded, which skill runtimes are configured, and the onboarding stage (consent, profile, records, first_result, plan, routine). Use this when a skill or a record tool failed. Does not return the chart or any token.',
     parameters: {},
     output: jsonOut,
-    timeoutMs: 60000,
+    timeoutMs: 180000,
     isConcurrencySafe: () => true,
     async execute() {
       const current = config()
       const { skillsHome, dataDir } = where()
       const catalog = loadCatalog(skillsHome)
       const python = discoverPython(current.pythonBin, mount.pluginHome)
+      const { journey, error: journeyError } = await journeyOf(await situation())
       const needed = [...new Set(catalog.cards.map((card) => card.entry?.runtime).filter((item): item is string => Boolean(item)))]
       return asJson({
         version: PRODUCT_VERSION,
+        stage: journey?.stage ?? null,
+        ...(journeyError ? { stage_error: journeyError } : {}),
         skills: {
           found: Boolean(skillsHome),
           revision: catalog.revision,
@@ -451,4 +482,21 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
       })
     },
   }))
+}
+
+function onboardingOf({ journey, error }: { journey: Journey | null; error: string }) {
+  if (!journey) return { onboarding: null, onboarding_error: error, self_measurements: [] }
+  return {
+    onboarding: {
+      stage: journey.stage,
+      next: journey.next,
+      questions_unanswered: journey.profile.questions.filter((row) => !row.answered).map((row) => row.label_zh),
+      addons: journey.addons,
+      // status and blocker_zh, plus the skill outputs behind them, so the first results can be given without another call.
+      results: journey.results,
+      consent_accepted: journey.consent.accepted,
+      how_to_read: 'results.* numbers are model estimates from the skill scripts: say 模型估计. band_years is how far phenotypic age moves with normal within-person variation; a change inside it is not a real change. When a result is blocked, say blocker_zh and offer addons as tests for the next checkup.',
+    },
+    self_measurements: journey.self.latest,
+  }
 }

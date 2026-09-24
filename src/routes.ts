@@ -6,7 +6,7 @@ import type { Config } from './config.ts'
 import { matchSkills } from './match.ts'
 import type { MountState } from './mirobody.ts'
 import { clampMatches, resolveDataDir, resolveSkillsHome } from './paths.ts'
-import { mergeProfile, normalizeProfile, readProfile, writeProfile } from './profile.ts'
+import { mergeProfile, normalizeProfile, readProfile, setConsent, writeProfile } from './profile.ts'
 import { loadRecords } from './records.ts'
 import { readReceipts } from './runner.ts'
 import { latestOutputs } from './history.ts'
@@ -17,6 +17,9 @@ import { addCheckIns, isoDay } from './interventions.ts'
 import { buildReport, readiness, runReady } from './overview.ts'
 import { invalidateRecords } from './records.ts'
 import { buildTracking, invalidateTracking } from './tracking.ts'
+import { buildJourney } from './journey.ts'
+import { buildCalendar } from './calendar.ts'
+import { addSelf, deleteSelf, readSelf } from './selfmeasure.ts'
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   if (res.writableEnded) return
@@ -45,8 +48,21 @@ function readBody(req: IncomingMessage, limit = 8000): Promise<string> {
 }
 
 function questionOf(url: string | undefined): string {
+  return paramOf(url, 'q')
+}
+
+function paramOf(url: string | undefined, name: string): string {
   if (!url) return ''
-  return new URL(url, 'http://127.0.0.1').searchParams.get('q')?.trim() ?? ''
+  return new URL(url, 'http://127.0.0.1').searchParams.get(name)?.trim() ?? ''
+}
+
+async function readJson(req: IncomingMessage, limit?: number): Promise<{ ok: true; value: unknown } | { ok: false }> {
+  const raw = await readBody(req, limit)
+  try {
+    return { ok: true, value: JSON.parse(raw) as unknown }
+  } catch {
+    return { ok: false }
+  }
 }
 
 export function registerRoutes(ctx: Context, config: () => Config, mount: MountState): void {
@@ -65,6 +81,117 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
       const records = await loadRecords(current, dataDir, mount.pluginHome)
       return { current, dataDir, skillsHome, catalog, records }
     }
+
+    const journeyContext = async () => {
+      const { current, dataDir, skillsHome, catalog, records } = await context()
+      return { config: current, dataDir, skillsHome, catalog, records, today: isoDay(), mount }
+    }
+
+    scoped.webServer.register({
+      kind: 'exact',
+      path: '/api/longpi/journey',
+      handler: (req, res) => {
+        if (req.method !== 'GET') {
+          sendJson(res, 405, { ok: false, error: 'GET only' })
+          return
+        }
+        void (async () => {
+          if (paramOf(req.url, 'refresh')) {
+            invalidateRecords()
+            invalidateTracking()
+          }
+          sendJson(res, 200, await buildJourney(await journeyContext()))
+        })().catch(() => sendJson(res, 500, { ok: false, error: 'journey failed' }))
+      },
+    })
+
+    scoped.webServer.register({
+      kind: 'exact',
+      path: '/api/longpi/consent',
+      handler: (req, res) => {
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { ok: false, error: 'POST only' })
+          return
+        }
+        void (async () => {
+          const body = await readJson(req)
+          const accept = body.ok && body.value && typeof body.value === 'object' ? (body.value as Record<string, unknown>).accept : undefined
+          if (typeof accept !== 'boolean') {
+            sendJson(res, 400, { ok: false, error: 'body must be {"accept": true|false}' })
+            return
+          }
+          const consent = setConsent(resolveDataDir(config().dataDir), accept, new Date())
+          invalidateTracking()
+          sendJson(res, 200, { ok: true, consent })
+        })().catch(() => sendJson(res, 400, { ok: false, error: 'consent failed' }))
+      },
+    })
+
+    scoped.webServer.register({
+      kind: 'exact',
+      path: '/api/longpi/self',
+      handler: (req, res) => {
+        const dataDir = resolveDataDir(config().dataDir)
+        if (req.method === 'GET') {
+          sendJson(res, 200, { rows: readSelf(dataDir).reverse().slice(0, 200) })
+          return
+        }
+        if (req.method === 'DELETE') {
+          const removed = deleteSelf(dataDir, paramOf(req.url, 'id'))
+          if (removed) {
+            invalidateRecords()
+            invalidateTracking()
+          }
+          sendJson(res, removed ? 200 : 404, { ok: removed, ...(removed ? {} : { error: 'no such measurement' }) })
+          return
+        }
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { ok: false, error: 'GET, POST or DELETE' })
+          return
+        }
+        void (async () => {
+          const body = await readJson(req, 32_000)
+          if (!body.ok) {
+            sendJson(res, 400, { ok: false, error: 'measurements must be JSON' })
+            return
+          }
+          const value = body.value as Record<string, unknown> | unknown[] | null
+          const entries = Array.isArray(value) ? value
+            : value && typeof value === 'object' && Array.isArray((value as Record<string, unknown>).entries) ? (value as { entries: unknown[] }).entries
+              : [value]
+          const result = addSelf(dataDir, entries, { today: isoDay() })
+          if (result.saved.length > 0) {
+            invalidateRecords()
+            invalidateTracking()
+          }
+          sendJson(res, result.saved.length > 0 ? 200 : 400, { ok: result.saved.length > 0, saved: result.saved, problems: result.problems })
+        })().catch((error: unknown) => {
+          const message = error instanceof Error && error.message === 'body too large' ? error.message : 'measurement failed'
+          sendJson(res, 400, { ok: false, error: message })
+        })
+      },
+    })
+
+    scoped.webServer.register({
+      kind: 'exact',
+      path: '/api/longpi/calendar.ics',
+      handler: (req, res) => {
+        if (req.method !== 'GET') {
+          sendJson(res, 405, { ok: false, error: 'GET only' })
+          return
+        }
+        void (async () => {
+          const journeyIn = await journeyContext()
+          const tracking = await buildTracking(journeyIn)
+          const text = buildCalendar(await buildJourney(journeyIn), tracking, { now: new Date() })
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'text/calendar; charset=utf-8')
+          res.setHeader('Content-Disposition', 'attachment; filename="longpi.ics"')
+          res.setHeader('Cache-Control', 'no-store')
+          res.end(text)
+        })().catch(() => sendJson(res, 500, { ok: false, error: 'calendar failed' }))
+      },
+    })
 
     scoped.webServer.register({
       kind: 'exact',
@@ -255,6 +382,7 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
           }
           const dataDir = resolveDataDir(config().dataDir)
           const update = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as Record<string, unknown> : null
+          // mergeProfile keeps the saved consent and ignores one in the body: consent has its own route.
           const normalized = update ? normalizeProfile(mergeProfile(readProfile(dataDir), update)) : normalizeProfile(parsed)
           if (!normalized.ok) {
             sendJson(res, 400, { ok: false, error: normalized.error })

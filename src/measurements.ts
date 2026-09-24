@@ -35,6 +35,7 @@ export interface RecordIndicator {
   loinc?: string
   label?: string
   date?: string
+  source?: 'self'
 }
 
 function fmt(value: number): string {
@@ -233,10 +234,16 @@ function matchIndicator(spec: InputSpec, indicators: readonly RecordIndicator[],
     if (row && parseNumber(row.value) != null) return row
   }
   const names = new Set([spec.key, spec.label_zh, ...(spec.aliases ?? [])].map((name) => foldName(name)).filter(Boolean))
-  for (const row of indicators) {
+  // A self row is in the list only when it is newer than the record's own row, so it is tried first.
+  for (const row of preferSelf(indicators)) {
     if (parseNumber(row.value) == null) continue
     if (nameVariants(row.name).some((variant) => names.has(variant))) return row
     if (row.label && nameVariants(row.label).some((variant) => names.has(variant))) return row
   }
   return null
+}
+
+/** Self measurements first: records.ts merges one only when it is the newest reading of its kind. */
+export function preferSelf<T extends { source?: string }>(rows: readonly T[]): T[] {
+  return [...rows.filter((row) => row.source === 'self'), ...rows.filter((row) => row.source !== 'self')]
 }

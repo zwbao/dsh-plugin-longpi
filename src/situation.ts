@@ -13,6 +13,8 @@ export interface IndicatorRow {
   count?: number
   first_date?: string
   last_date?: string
+  /** A measurement the person took and entered themselves (selfmeasure.ts), not a Mirobody row. */
+  source?: 'self'
 }
 
 export interface MedicationRow {

@@ -5,6 +5,7 @@ import { readProfile, estimatedAge, type Profile } from './profile.ts'
 import { rememberMedications } from './guardrails.ts'
 import { summarizeIndicators, summarizeMedications, type IndicatorRow, type MedicationRow } from './situation.ts'
 import { cellNumber, tableOf } from './compact.ts'
+import { readSelf, selfIndicators, SELF_DEVICE_NAMES, SELF_KEYS, SELF_SPEC, SELF_SUFFIX } from './selfmeasure.ts'
 
 const MAX_INDICATORS = 400
 const LATEST_CHUNK = 50
@@ -65,9 +66,27 @@ export async function loadRecords(config: Config, dataDir: string, pluginHome: s
     profile,
     estimated_age: estimatedAge(profile.birthYear, new Date().getFullYear()),
     ...remote,
-    indicators: remote.indicators.map((row) => ({ ...row })),
+    indicators: mergeSelf(remote.indicators.map((row) => ({ ...row })), selfIndicators(readSelf(dataDir))),
     medications: remote.medications.map((row) => ({ ...row })),
   }
+}
+
+/**
+ * Add the person's own measurements to the record rows. A self row joins only
+ * when it is newer than every record row measuring the same thing (same LOINC,
+ * or the wearable's blood-pressure and weight rows), so a newer checkup always
+ * wins. It goes last: indicatorFor keeps the last row per LOINC code.
+ */
+export function mergeSelf(remote: IndicatorRow[], self: readonly IndicatorRow[]): IndicatorRow[] {
+  const out = [...remote]
+  for (const row of self) {
+    const key = SELF_KEYS.find((item) => SELF_SPEC[item].loinc === row.loinc)
+    const devices = key ? SELF_DEVICE_NAMES[key] ?? [] : []
+    const same = remote.filter((other) => other.value && ((row.loinc && other.loinc === row.loinc) || devices.includes(other.name)))
+    const newer = same.every((other) => (row.date ?? '') > (other.date || other.last_date || ''))
+    if (newer) out.push(row)
+  }
+  return out
 }
 
 async function loadRemote(config: Config, pluginHome: string): Promise<Remote> {
@@ -179,7 +198,8 @@ export async function loadSeries(
   names: readonly string[],
   options: { start: string; end: string; resolution: 'raw' | 'day' },
 ): Promise<SeriesResult> {
-  const wanted = [...new Set(names.map((name) => name.trim()).filter(Boolean))]
+  // Self measurements live in dataDir; their names mean nothing to Mirobody.
+  const wanted = [...new Set(names.map((name) => name.trim()).filter((name) => name && !name.endsWith(SELF_SUFFIX)))]
   if (wanted.length === 0 || !config.mcpUrl.trim()) return { series: {}, truncated: false, ...(config.mcpUrl.trim() ? {} : { error: 'mcpUrl is not set' }) }
   const key = cacheKey(config, 'series', JSON.stringify([wanted, options]))
   return cached(key, async () => {

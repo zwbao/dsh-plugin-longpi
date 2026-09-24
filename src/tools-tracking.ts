@@ -11,7 +11,8 @@ import { addCheckIns, currentPlan, isoDay, normalizePlan, readCheckIns, readPlan
 import { asJson } from './json.ts'
 import type { MountState } from './mirobody.ts'
 import { resolveDataDir, resolveSkillsHome } from './paths.ts'
-import { loadRecords } from './records.ts'
+import { invalidateRecords, loadRecords } from './records.ts'
+import { addSelf, SELF_KEYS, SELF_SPEC } from './selfmeasure.ts'
 import { buildTracking, describeItem, invalidateTracking, modelGoals } from './tracking.ts'
 
 function jsonText(value: unknown): [{ type: 'text'; text: string }] {
@@ -173,6 +174,44 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
       const result = addCheckIns(dataDir, Array.isArray(args.entries) ? args.entries : [], { today: isoDay(), source: 'chat' })
       if (result.saved.length > 0) invalidateTracking()
       return asJson({ ok: result.saved.length > 0, saved: result.saved.length, entries: result.saved, problems: result.problems })
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'save_self_measurement',
+    description: 'Save measurements the person took themselves and just stated: waist (腰围), home blood pressure (收缩压 sbp, 舒张压 dbp), weight (体重). Pass each value with the unit as they said it (斤, 公斤, 尺/寸, inch, lb are converted; mmHg for pressure) and the date if they gave one (default today, never in the future). Never infer, estimate or copy a value from elsewhere, and never save a reading they did not state. Home blood pressure is judged as the mean of the last 7 days of readings, so several readings over a week count more than one. Self measurements stay on this computer; they are used for a result only when newer than the Mirobody record (a waist or home blood pressure can unlock China-PAR before the next checkup). Returns what was saved (converted) and problems to read back.',
+    parameters: {
+      entries: {
+        type: 'array',
+        required: true,
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            key: { type: 'string', enum: [...SELF_KEYS], required: true, description: 'waist, sbp (systolic), dbp (diastolic), or weight.' },
+            value: { type: 'number', required: true, description: 'The number they said.' },
+            unit: { type: 'string', description: 'The unit they said: cm, 厘米, 尺, 寸, inch for waist; mmHg for pressure; kg, 公斤, 斤, lb for weight. Omit to use cm, mmHg or kg.' },
+            date: { type: 'string', description: 'YYYY-MM-DD when they measured; default today.' },
+          },
+        },
+      },
+    },
+    output: jsonOut,
+    timeoutMs: 20000,
+    isConcurrencySafe: () => false,
+    async execute(args) {
+      const { dataDir } = where()
+      const result = addSelf(dataDir, Array.isArray(args.entries) ? args.entries : [], { today: isoDay() })
+      if (result.saved.length > 0) {
+        invalidateRecords()
+        invalidateTracking()
+      }
+      return asJson({
+        ok: result.saved.length > 0,
+        saved: result.saved.map((row) => ({ ...row, label_zh: SELF_SPEC[row.key].label_zh })),
+        problems: result.problems,
+        note: 'Saved locally (self_measurements.jsonl), not written to Mirobody. Read back each saved value with its unit and date. Home blood pressure counts as the mean of the last 7 days of readings.',
+      })
     },
   }))
 

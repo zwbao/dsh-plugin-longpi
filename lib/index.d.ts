@@ -81,8 +81,8 @@ declare function preGuard(text: string): GuardHit | null;
 declare function wrapGuardMessage(text: string, hit: GuardHit): string;
 //#endregion
 //#region src/version.d.ts
-declare const PRODUCT_VERSION = "4.2.0";
-declare const TOOL_NAMES: readonly ["read_personal_situation", "list_longevity_intents", "match_longevity_skills", "read_longevity_skill", "run_longevity_skill", "query_longevity_evidence", "list_longevity_domains", "save_personal_profile", "longpi_status", "save_intervention_plan", "log_intervention_checkin", "read_intervention_plan", "review_interventions", "model_intervention_goals"];
+declare const PRODUCT_VERSION = "5.0.0";
+declare const TOOL_NAMES: readonly ["read_personal_situation", "list_longevity_intents", "match_longevity_skills", "read_longevity_skill", "run_longevity_skill", "query_longevity_evidence", "list_longevity_domains", "save_personal_profile", "longpi_status", "save_intervention_plan", "log_intervention_checkin", "save_self_measurement", "read_intervention_plan", "review_interventions", "model_intervention_goals"];
 declare const HARNESS_SKILLS: readonly ["longpi-dispatch", "longpi-board", "longpi-boundary", "longpi-interventions"];
 //#endregion
 //#region src/catalog.d.ts
@@ -227,6 +227,7 @@ interface RecordIndicator {
   loinc?: string;
   label?: string;
   date?: string;
+  source?: 'self';
 }
 declare function unitFactor(spec: InputSpec, unit: string): number | null;
 /** Validate and convert measurements; build the CSV in the input's own units. */
@@ -391,12 +392,24 @@ type Sex = (typeof SEXES)[number];
 declare const RISK_FACTS: readonly ["smoker", "diabetes", "bp_treated", "north", "urban", "family_history"];
 type RiskFact = (typeof RISK_FACTS)[number];
 declare const RISK_FACT_ZH: Record<RiskFact, string>;
+/** Bump when the first-run notice changes, so the person reads the new one before it counts as accepted. */
+declare const CONSENT_VERSION = "2026-09-24";
+/** What the person cares about most, in their order: used to order results and suggestions. */
+declare const FOCUS: readonly ["bioage", "cardio", "glucose", "weight", "sleep", "plan"];
+type Focus = (typeof FOCUS)[number];
+declare const FOCUS_ZH: Record<Focus, string>;
+interface Consent {
+  version: string;
+  accepted_at: string;
+}
 interface Profile {
   displayName: string;
   birthYear: number | null;
   age: number | null;
   sex: Sex;
   risk: Partial<Record<RiskFact, boolean>>;
+  focus: Focus[];
+  consent: Consent | null;
 }
 declare const EMPTY_PROFILE: Profile;
 type Failure = {
@@ -407,11 +420,16 @@ declare function normalizeProfile(input: unknown): {
   ok: true;
   profile: Profile;
 } | Failure;
-/** Apply a partial update: fields that are absent keep their saved value; a risk fact set to null is cleared. */
+/**
+ * Apply a partial update: fields that are absent keep their saved value; a risk fact set to null is cleared.
+ * consent in the update is ignored: only the person accepts the notice, through setConsent.
+ */
 declare function mergeProfile(current: Profile, update: Record<string, unknown>): Record<string, unknown>;
 declare function estimatedAge(birthYear: number | null, nowYear: number): number | null;
 declare function readProfile(dataDir: string): Profile;
 declare function writeProfile(dataDir: string, profile: Profile): void;
+/** Record that the person accepted (or withdrew from) the current first-run notice. Never called on the model's word. */
+declare function setConsent(dataDir: string, accept: boolean, now?: Date): Consent | null;
 //#endregion
 //#region src/compact.d.ts
 interface CompactMeta {
@@ -456,6 +474,8 @@ interface IndicatorRow {
   count?: number;
   first_date?: string;
   last_date?: string;
+  /** A measurement the person took and entered themselves (selfmeasure.ts), not a Mirobody row. */
+  source?: 'self';
 }
 interface MedicationRow {
   name: string;
@@ -498,6 +518,13 @@ interface RecordSnapshot {
 /** Forget cached record reads, after a change the next read must see. */
 declare function invalidateRecords(): void;
 declare function loadRecords(config: Config, dataDir: string, pluginHome: string): Promise<RecordSnapshot>;
+/**
+ * Add the person's own measurements to the record rows. A self row joins only
+ * when it is newer than every record row measuring the same thing (same LOINC,
+ * or the wearable's blood-pressure and weight rows), so a newer checkup always
+ * wins. It goes last: indicatorFor keeps the last row per LOINC code.
+ */
+declare function mergeSelf(remote: IndicatorRow[], self: readonly IndicatorRow[]): IndicatorRow[];
 interface SeriesPoint {
   date: string;
   time: string;
@@ -550,6 +577,51 @@ declare function loadCourses(config: Config): Promise<{
   rows: CourseRow[];
   error?: string;
 }>;
+//#endregion
+//#region src/selfmeasure.d.ts
+declare const SELF_KEYS: readonly ["waist", "sbp", "dbp", "weight"];
+type SelfKey = (typeof SELF_KEYS)[number];
+declare const SELF_SPEC: Record<SelfKey, {
+  label_zh: string;
+  unit: string;
+  loinc: string;
+  min: number;
+  max: number;
+  units: Record<string, number>;
+}>;
+interface SelfRow {
+  id: string;
+  key: SelfKey;
+  value: number;
+  unit: string;
+  date: string;
+  saved_at: string;
+  given?: {
+    value: number;
+    unit: string;
+  };
+}
+declare function readSelf(dataDir: string): SelfRow[];
+/** Check each entry the person stated, convert it to the canonical unit, and append the ones that pass. */
+declare function addSelf(dataDir: string, entries: unknown[], opts: {
+  today: string;
+  now?: Date;
+}): {
+  saved: SelfRow[];
+  problems: string[];
+};
+declare function deleteSelf(dataDir: string, id: string): boolean;
+type SelfLatest = Partial<Record<SelfKey, {
+  value: number;
+  unit: string;
+  date: string;
+  n: number;
+}>>;
+declare function latestSelf(rows: readonly SelfRow[]): SelfLatest;
+/** The latest self measurements as record rows, so the skills and markers can read them like any other. */
+declare function selfIndicators(rows: readonly SelfRow[]): IndicatorRow[];
+/** One point per date (the mean of that day's readings), oldest first, for charts and verdicts. */
+declare function selfSeries(rows: readonly SelfRow[], key: SelfKey): SeriesPoint[];
 //#endregion
 //#region src/runner.d.ts
 interface StagedFile {
@@ -996,6 +1068,7 @@ declare function resolveMarkers(names: readonly string[], indicators: ReadonlyAr
   loinc?: string;
   label?: string;
   unit?: string;
+  source?: 'self';
 }>, biovar: Biovar): ResolvedMarker[];
 /**
  * How well one item was followed over [start, end]. Missing data is unknown,
@@ -1081,8 +1154,12 @@ interface ModelCard {
     now: string;
     goal: string | null;
   };
-  /** Stated facts the model still needs, by their Chinese name. */
+  /** Everything the model still needs, by its Chinese name: missing_labs then missing_facts. */
   missing?: string[];
+  /** Measurements the record (or the person's own measurements) does not hold yet. */
+  missing_labs?: string[];
+  /** Stated facts the profile does not hold yet (age, sex, the yes/no facts); unknown is never no. */
+  missing_facts?: string[];
   levers: LeverHint[];
   sensitivity: Array<{
     label: string;
@@ -1193,9 +1270,151 @@ declare function buildReport(input: {
   tracking: Tracking | null;
 }): string;
 //#endregion
+//#region src/journey.d.ts
+type Stage = 'consent' | 'profile' | 'records' | 'first_result' | 'plan' | 'routine';
+interface Journey {
+  version: string;
+  today: string;
+  consent: {
+    accepted: boolean;
+    version: string;
+    accepted_at: string | null;
+    current: string;
+  };
+  profile: {
+    displayName: string;
+    birthYear: number | null;
+    age: number | null;
+    sex: 'female' | 'male' | 'other' | 'unknown';
+    risk: Partial<Record<RiskFact, boolean>>;
+    focus: Focus[];
+    complete: boolean;
+    questions: Array<{
+      key: 'age' | 'sex' | RiskFact;
+      label_zh: string;
+      unlocks_zh: string;
+      answered: boolean;
+      men_only?: boolean;
+    }>;
+  };
+  focus_options: Array<{
+    key: Focus;
+    label_zh: string;
+  }>;
+  records: {
+    status: 'unconfigured' | 'ok' | 'error';
+    error: string;
+    indicator_count: number;
+    full_checkups: number;
+    latest_checkup: string | null;
+    mirobody_mounted: boolean;
+  };
+  results: {
+    bioage: {
+      status: 'ok' | 'blocked';
+      phenoage: number | null;
+      advance: number | null;
+      date: string | null;
+      checkups: number;
+      band_years: number | null;
+      blocker_zh: string;
+      missing: string[];
+    };
+    risk: {
+      status: 'ok' | 'blocked';
+      risk_pct: number | null;
+      category_zh: string;
+      date: string | null;
+      blocker_zh: string;
+      missing_labs: string[];
+      missing_facts: string[];
+    };
+  };
+  addons: Array<{
+    item_zh: string;
+    unlocks_zh: string;
+    self_measurable: boolean;
+    self_key?: SelfKey;
+  }>;
+  self: {
+    latest: Array<{
+      key: SelfKey;
+      label_zh: string;
+      value: number;
+      unit: string;
+      date: string;
+      n: number;
+    }>;
+    keys: Array<{
+      key: SelfKey;
+      label_zh: string;
+      unit: string;
+      units: string[];
+    }>;
+  };
+  plan: {
+    exists: boolean;
+    title: string;
+    version: number | null;
+    items: number;
+    started: string | null;
+    days: number | null;
+    checkin_items: Array<{
+      id: string;
+      title: string;
+      done_today: boolean;
+    }>;
+    streak: number;
+    adherence_pct: number | null;
+  };
+  reminders: Array<{
+    kind: 'retest' | 'checkin';
+    text_zh: string;
+    date: string | null;
+    due: boolean;
+  }>;
+  stage: Stage;
+  next: {
+    stage: Stage;
+    title_zh: string;
+    detail_zh: string;
+    action: 'consent' | 'profile' | 'records' | 'addons' | 'plan' | 'checkin' | 'review' | 'open';
+  };
+  suggestions: Array<{
+    id: string;
+    text_zh: string;
+  }>;
+  boundary_zh: string;
+}
+declare function buildJourney(context: TrackingContext & {
+  mount: MountState;
+}): Promise<Journey>;
+/** Retest dates the plan's verdicts give, the earliest per marker. The only dates LongPi suggests a retest on. */
+declare function retestsOf(tracking: Tracking): Array<{
+  marker: string;
+  date: string;
+}>;
+/**
+ * Stage and next step without running anything, for the synchronous /longpi
+ * command: exact up to the records step, after that the journey last built in
+ * this process (by the page or a tool), or null when there is none yet.
+ */
+declare function stageNow(profile: Profile, mcpConfigured: boolean): {
+  stage: Stage | null;
+  title_zh: string;
+};
+//#endregion
+//#region src/calendar.d.ts
+declare function escapeText(value: string): string;
+/** Split a content line into 75-octet pieces without cutting a UTF-8 character; continuations start with a space. */
+declare function foldLine(line: string): string;
+declare function buildCalendar(journey: Journey, tracking: Tracking, opts: {
+  now: Date;
+}): string;
+//#endregion
 //#region src/index.d.ts
 declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { Config, EMPTY_PROFILE, HARNESS_SKILLS, PHENOAGE_SKILL, PRODUCT_VERSION, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, TOOL_NAMES, addCheckIns, addDays, adherenceFor, apply, buildBoard, buildReport, buildStats, buildTracking, cellNumber, commandExcerpt, currentPlan, daysBetween, detectIntents, domainSummary, effectsFor, estimatedAge, evaluateMarker, evaluatePlan, foldName, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, latestOutputs, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, matchSkills, mentionedEntities, mergeProfile, modelGoals, name, nameVariants, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, rcvBand, readCheckIns, readHistory, readPlans, readProfile, readReceipts, readResultFile, readiness, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, runReady, runSkill, runnableFrom, savePlan, seriesOf, stageMeasurements, suggestNext, summarizeIndicators, summarizeMedications, tableOf, unitFactor, versionCheck, wrapGuardMessage, writeProfile, writeStats };
+export { CONSENT_VERSION, Config, type Consent, EMPTY_PROFILE, FOCUS, FOCUS_ZH, type Focus, HARNESS_SKILLS, type Journey, PHENOAGE_SKILL, PRODUCT_VERSION, type Profile, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RiskFact, SELF_KEYS, SELF_SPEC, type SelfKey, type SelfRow, type Stage, TOOL_NAMES, addCheckIns, addDays, addSelf, adherenceFor, apply, buildBoard, buildCalendar, buildJourney, buildReport, buildStats, buildTracking, cellNumber, commandExcerpt, currentPlan, daysBetween, deleteSelf, detectIntents, domainSummary, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, foldLine, foldName, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, matchSkills, mentionedEntities, mergeProfile, mergeSelf, modelGoals, name, nameVariants, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, rcvBand, readCheckIns, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestsOf, runReady, runSkill, runnableFrom, savePlan, selfIndicators, selfSeries, seriesOf, setConsent, stageMeasurements, stageNow, suggestNext, summarizeIndicators, summarizeMedications, tableOf, unitFactor, versionCheck, wrapGuardMessage, writeProfile, writeStats };

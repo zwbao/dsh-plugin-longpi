@@ -11,13 +11,15 @@ const pkg = require('../package.json')
 const mod = await import('../lib/index.js')
 
 assert.equal(pkg.name, 'dsh-plugin-longpi')
-assert.equal(pkg.version, '4.2.0')
+assert.equal(pkg.version, '5.0.0')
 assert.equal(pkg.license, 'MIT')
 assert.equal(pkg.dsh.bundle.patch, './cordis.patch.yml')
 assert.ok(pkg.dsh.client.inject.includes('slots'))
 assert.equal(mod.name, 'dsh-plugin-longpi')
-assert.equal(mod.PRODUCT_VERSION, '4.2.0')
-assert.equal(mod.TOOL_NAMES.length, 14)
+assert.equal(mod.PRODUCT_VERSION, '5.0.0')
+assert.equal(mod.TOOL_NAMES.length, 15)
+assert.ok(mod.TOOL_NAMES.includes('save_self_measurement'))
+assert.equal(require('../package-lock.json').version, '5.0.0')
 assert.deepEqual(mod.HARNESS_SKILLS, ['longpi-dispatch', 'longpi-board', 'longpi-boundary', 'longpi-interventions'])
 
 assert.equal(mod.preGuard('我胸痛喘不上气').code, 'emergency')
@@ -166,5 +168,6 @@ if (liveHome) {
 }
 
 assert.match(readFileSync(join(root, '..', 'tsdown.config.ts'), 'utf8'), /id: "dsh-plugin-longpi"/)
-assert.match(readFileSync(join(root, '..', 'src', 'client', 'panel.ts'), 'utf8'), /健康看板/)
+// The client entry registers its seats through DSH slots (its modules change; the entry stays).
+assert.match(readFileSync(join(root, '..', 'src', 'client', 'index.ts'), 'utf8'), /slots/)
 console.log('smoke ok')

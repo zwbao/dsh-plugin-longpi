@@ -5,6 +5,7 @@
 // no clinical formula here: phenotypic age and its levers come from the
 // accelerated-biological-aging-risk skill, noise bands from data tables.
 
+import { createHash } from 'node:crypto'
 import type { Catalog, SkillCard } from './catalog.ts'
 import type { Config } from './config.ts'
 import { adherenceFor, evaluatePlan, resolveMarkers, suggestNext, type Adherence, type ItemSummary, type LeverHint, type ResolvedMarker, type Suggestion } from './evaluate.ts'
@@ -15,6 +16,7 @@ import { aliasIndex, indicatorFor, measurementInputs, resolveInput, stageMeasure
 import { loadCourses, loadDoseLog, loadSeries, type CourseRow, type RecordSnapshot, type SeriesPoint } from './records.ts'
 import { loadReference, markerFor, rcvBand, type Reference } from './reference.ts'
 import { runSkill, type Levers } from './runner.ts'
+import { readSelf, selfKeyOf, selfSeries } from './selfmeasure.ts'
 
 export const PHENOAGE_SKILL = 'accelerated-biological-aging-risk'
 export const RISK_SKILL = 'china-par-ascvd-risk'
@@ -61,8 +63,12 @@ export interface ModelCard {
   goal: Record<string, number | null> | null
   /** The skill's own risk category (低危, 中危, 高危), now and at the goals. */
   category_zh?: { now: string; goal: string | null }
-  /** Stated facts the model still needs, by their Chinese name. */
+  /** Everything the model still needs, by its Chinese name: missing_labs then missing_facts. */
   missing?: string[]
+  /** Measurements the record (or the person's own measurements) does not hold yet. */
+  missing_labs?: string[]
+  /** Stated facts the profile does not hold yet (age, sex, the yes/no facts); unknown is never no. */
+  missing_facts?: string[]
   levers: LeverHint[]
   sensitivity: Array<{ label: string; unit: string; years_per_step: number; step: string }>
   boundary_zh: string
@@ -114,11 +120,19 @@ function referenceStats(reference: Reference): Tracking['reference'] {
 export async function buildTracking(context: TrackingContext): Promise<Tracking> {
   const plan = currentPlan(context.dataDir)
   const checkins = readCheckIns(context.dataDir)
-  const key = [context.dataDir, context.skillsHome, context.today, plan?.version ?? 0, checkins.length, context.catalog.revision].join('\u0000')
+  const { profile, record_status: status, indicators } = context.records
+  // The record, the profile and self measurements change results too; a stale memo must not answer for them.
+  const key = [
+    context.dataDir, context.skillsHome, context.today, plan?.version ?? 0, checkins.length, context.catalog.revision, status,
+    JSON.stringify([profile.age, profile.sex, profile.risk]),
+    createHash('sha1').update(indicators.map((row) => `${row.name}=${row.value}@${row.date ?? ''}`).join('\n')).digest('hex'),
+  ].join('\u0000')
+  const now = Date.now()
   const hit = memo.get(key)
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value
+  if (hit && now - hit.at < CACHE_TTL_MS) return hit.value
+  for (const [name, entry] of memo) if (now - entry.at >= CACHE_TTL_MS) memo.delete(name)
   const value = compute(context, plan, checkins)
-  memo.set(key, { at: Date.now(), value })
+  memo.set(key, { at: now, value })
   value.catch(() => memo.delete(key))
   return value
 }
@@ -142,13 +156,20 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
   const resolvedList = resolveMarkers(names, context.records.indicators, reference.biovar)
   const markers: Record<string, ResolvedMarker> = Object.fromEntries(resolvedList.map((row) => [row.asked, row]))
   const earliest = plan.items.map((item) => item.start).sort()[0] ?? context.today
-  const indicatorNames = [...new Set(resolvedList.map((row) => row.indicator).filter((name): name is string => Boolean(name)))]
+  const resolvedNames = [...new Set(resolvedList.map((row) => row.indicator).filter((name): name is string => Boolean(name)))]
+  // Markers resolved to the person's own measurements are read from dataDir, never asked of Mirobody.
+  const indicatorNames = resolvedNames.filter((name) => !selfKeyOf(name))
   const seriesStart = addDays(earliest, -200)
   const labs = context.records.record_status === 'ok' && indicatorNames.length > 0
     ? await loadSeries(context.config, indicatorNames, { start: seriesStart, end: context.today, resolution: 'raw' })
     : { series: {}, truncated: false }
   if ('error' in labs && labs.error) errors.push(`读取检查结果：${labs.error}`)
   const series: Record<string, SeriesPoint[]> = Object.fromEntries(Object.entries(labs.series).map(([name, row]) => [name, row.points]))
+  const selfRows = readSelf(context.dataDir)
+  for (const name of resolvedNames) {
+    const selfKey = selfKeyOf(name)
+    if (selfKey) series[name] = selfSeries(selfRows, selfKey).filter((point) => point.date >= seriesStart && point.date <= context.today)
+  }
 
   const adherence: Record<string, Adherence> = {}
   const calendarStart = addDays(context.today, -83)
@@ -512,18 +533,18 @@ async function weeklyBloodPressure(context: TrackingContext, indicator: string):
 async function riskCard(context: TrackingContext, reference: Reference, card: SkillCard | undefined, goals: PlanVersion['goals']): Promise<ModelCard> {
   const base: ModelCard = {
     model: 'china-par', title_zh: '10 年动脉粥样硬化性心血管病风险（China-PAR）', status: 'unavailable', note_zh: '', measured_on: null,
-    now: {}, goal: null, levers: [], sensitivity: [],
+    now: {}, goal: null, missing: [], missing_labs: [], missing_facts: [], levers: [], sensitivity: [],
     boundary_zh: '模型估计：China-PAR 按中国成人队列建立，给出的是和你条件相同的人群平均风险，不是诊断，也不决定是否用药。',
   }
-  if (!card || !card.script || card.inputsStatus !== 'verified') {
+  if (!card || !card.script) {
+    base.note_zh = '方法库里没有 China-PAR 方法，请更新 longevity-skills。'
+    return base
+  }
+  if (card.inputsStatus !== 'verified') {
     base.note_zh = '风险模型还没有通过系数校验，暂不显示数值。'
     return base
   }
   const profile = context.records.profile
-  if (context.records.record_status !== 'ok') {
-    base.note_zh = '需要接上 Mirobody 记录。'
-    return base
-  }
   const missingFacts: string[] = []
   if (profile.age == null) missingFacts.push('实足年龄')
   if (profile.sex !== 'male' && profile.sex !== 'female') missingFacts.push('性别')
@@ -534,29 +555,39 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
     if (value == null) missingFacts.push(RISK_FACT_ZH[item.fact])
     else args.push(item.flag, value ? 'yes' : 'no')
   }
-  const measurements: MeasurementIn[] = []
+  // Labs are listed even without a record, so the person knows what a checkup (or a tape measure) must supply.
+  const found: Array<{ key: string; row: NonNullable<ReturnType<typeof indicatorFor>> }> = []
   const missingLabs: string[] = []
-  let measuredOn = ''
   for (const spec of measurementInputs(card)) {
     const row = indicatorFor(spec, context.records.indicators)
-    if (!row) {
-      if (spec.required) missingLabs.push(spec.label_zh)
-      continue
-    }
-    if (spec.key === 'sbp_mmhg' && !row.loinc) {
+    if (row) found.push({ key: spec.key, row })
+    else if (spec.required) missingLabs.push(spec.label_zh)
+  }
+  base.missing_labs = missingLabs
+  base.missing_facts = missingFacts
+  base.missing = [...missingLabs, ...missingFacts]
+  const factsHint = missingFacts.length > 0 ? `档案里还缺${missingFacts.join('、')}（在健康页填写，或在对话里告诉我）。` : ''
+  if (context.records.record_status !== 'ok') {
+    const labsHint = missingLabs.length > 0 ? `，计算还需要${missingLabs.join('、')}` : ''
+    base.note_zh = `还没有连接 Mirobody 体检记录${labsHint}。${factsHint}`
+    return base
+  }
+  if (missingLabs.length > 0 || missingFacts.length > 0) {
+    base.note_zh = `${missingLabs.length > 0 ? `记录里还缺${missingLabs.join('、')}。` : ''}${factsHint}`
+    return base
+  }
+  const measurements: MeasurementIn[] = []
+  let measuredOn = ''
+  for (const { key, row } of found) {
+    if (key === 'sbp_mmhg' && !row.loinc) {
       const week = await weeklyBloodPressure(context, row.name)
       if (week) {
-        measurements.push({ key: spec.key, value: week.value, unit: week.unit })
+        measurements.push({ key, value: week.value, unit: week.unit })
         continue
       }
     }
-    measurements.push({ key: spec.key, value: row.value, unit: row.unit })
+    measurements.push({ key, value: row.value, unit: row.unit })
     if (row.date && row.date > measuredOn) measuredOn = row.date
-  }
-  if (missingFacts.length > 0 || missingLabs.length > 0) {
-    base.missing = [...missingLabs, ...missingFacts]
-    base.note_zh = `还缺${[...missingLabs, ...missingFacts].join('、')}。${missingFacts.length > 0 ? '是否项在档案里填，或在对话里告诉我。' : ''}`
-    return base
   }
   const targets = goalTargets(card, goals, reference)
   const run = await runModel(context, card, measurements, profile.age as number, targets, context.today, args)

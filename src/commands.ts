@@ -7,6 +7,7 @@ import { clampMatches, resolveDataDir, resolveSkillsHome } from './paths.ts'
 import { readProfile } from './profile.ts'
 import { readReceipts } from './runner.ts'
 import { writeStats } from './stats.ts'
+import { stageNow } from './journey.ts'
 import { PRODUCT_NAME, PRODUCT_VERSION } from './version.ts'
 
 function argsOf(raw: string, name: string): string {
@@ -20,12 +21,13 @@ export function registerCommands(ctx: Context, config: () => Config, mount: Moun
   ctx.inject(['commands'], (scoped) => {
     scoped.commands.register({
       name: 'longpi',
-      description: '打印个人看板摘要：技能库版本、档案、Mirobody 是否接上。不含检验数值。',
+      description: '打印 LongPi 摘要：技能库版本、档案、Mirobody 是否接上、现在走到哪一步。不含检验数值。',
       handler: () => {
         const current = config()
         const home = resolveSkillsHome(current.skillsHome)
         const catalog = loadCatalog(home)
         const profile = readProfile(resolveDataDir(current.dataDir))
+        const stage = stageNow(profile, Boolean(current.mcpUrl.trim()))
         const lines = [
           `${PRODUCT_NAME} ${PRODUCT_VERSION}`,
           catalog.error
@@ -36,6 +38,7 @@ export function registerCommands(ctx: Context, config: () => Config, mount: Moun
             ? `mirobody mounted${mount.peer ? ' (already loaded beside this plugin)' : ''}`
             : `mirobody not mounted: ${mount.error || 'checkout missing'}`,
           current.mcpUrl.trim() ? 'record server configured' : 'record server not configured',
+          `stage ${stage.stage ?? 'unknown'} · next ${stage.title_zh}`,
         ]
         const last = readReceipts(resolveDataDir(current.dataDir), 1)[0]
         if (last) lines.push(`last skill ${last.skill}  ok ${last.ok}`)
