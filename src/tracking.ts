@@ -149,7 +149,8 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
   const adherence: Record<string, Adherence> = {}
   const calendarStart = addDays(context.today, -83)
   for (const item of plan.items) {
-    const window = { start: item.start, end: context.today }
+    // Adherence is read over the last 12 weeks: the stretch the calendar shows and the one a retest reflects.
+    const window = { start: calendarStart, end: context.today }
     let daily: SeriesPoint[] | undefined
     let doses
     if (item.target && context.records.record_status === 'ok') {
@@ -182,7 +183,9 @@ function chartsFor(plan: PlanVersion, markers: ResolvedMarker[], series: Record<
   for (const marker of markers) {
     if (!marker.indicator || seen.has(marker.indicator)) continue
     seen.add(marker.indicator)
-    const points = (series[marker.indicator] ?? []).map((point) => ({ date: point.date, value: point.value }))
+    const raw = (series[marker.indicator] ?? []).map((point) => ({ date: point.date, value: point.value }))
+    // Markers judged on weekly means (home blood pressure) are drawn as weekly means too.
+    const points = marker.biovar?.average_days ? weeklyMeans(raw) : raw
     if (points.length === 0) continue
     const items = plan.items.filter((item) => item.markers.includes(marker.asked)).map((item) => item.id)
     const firstStart = plan.items.filter((item) => items.includes(item.id)).map((item) => item.start).sort()[0]
@@ -206,6 +209,18 @@ function chartsFor(plan: PlanVersion, markers: ResolvedMarker[], series: Record<
     })
   }
   return out
+}
+
+function weeklyMeans(points: Array<{ date: string; value: number }>): Array<{ date: string; value: number }> {
+  const weeks = new Map<string, number[]>()
+  for (const point of points) {
+    const at = new Date(`${point.date}T00:00:00Z`)
+    at.setUTCDate(at.getUTCDate() - ((at.getUTCDay() + 6) % 7))
+    const key = at.toISOString().slice(0, 10)
+    weeks.set(key, [...(weeks.get(key) ?? []), point.value])
+  }
+  return [...weeks.entries()].sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, values]) => ({ date, value: Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 10) / 10 }))
 }
 
 // --- phenotypic age at every checkup ------------------------------------------
@@ -397,7 +412,14 @@ async function modelCards(context: TrackingContext, reference: Reference, goals:
       if (date) {
         const targets = goalTargets(pheno, goals, reference)
         const age = ageOn(date, context.today, context.records.profile.age)
-        const levers = await leversAt(context, pheno, latestMeasurements(pairs, byDate, date), age, targets, date)
+        const current = latestMeasurements(pairs, byDate, date)
+        const levers = await leversAt(context, pheno, current, age, targets, date)
+        // Show each lever in the units of the person's own report and goal, not the method's.
+        const inTheirUnits = (key: string, fallback: { from: string; to: string }) => {
+          const now = current.find((row) => row.key === key)
+          const goal = targets.find((row) => row.key === key)
+          return now && goal ? { from: `${fmt(Number(now.value))} ${now.unit}`.trim(), to: `${fmt(Number(goal.value))} ${goal.unit}`.trim() } : fallback
+        }
         if (levers) {
           const target = levers.targets as { phenoage?: number; phenoage_delta?: number; mortality_10y_pct?: number } | undefined
           const sensitivity = levers.sensitivity.map((row) => {
@@ -417,7 +439,11 @@ async function modelCards(context: TrackingContext, reference: Reference, goals:
             measured_on: date,
             now: { phenoage: levers.current.phenoage ?? null, mortality_10y_pct: levers.current.mortality_10y_pct ?? null, age },
             goal: target ? { phenoage: target.phenoage ?? null, mortality_10y_pct: target.mortality_10y_pct ?? null, phenoage_delta: target.phenoage_delta ?? null } : null,
-            levers: levers.levers.map((row) => ({ label: row.label_zh, from: `${fmt(row.from)} ${row.unit}`, to: `${fmt(row.to)} ${row.unit}`, years: row.phenoage_delta ?? 0 })),
+            levers: levers.levers.map((row) => ({
+              label: row.label_zh,
+              ...inTheirUnits(row.key, { from: `${fmt(row.from)} ${row.unit}`, to: `${fmt(row.to)} ${row.unit}` }),
+              years: row.phenoage_delta ?? 0,
+            })),
             sensitivity,
             boundary_zh: boundary,
           })

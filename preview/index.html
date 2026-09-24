@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LongPi 看板预览</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<style>html, body, #root { height: 100%; margin: 0; }</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+  // Demo data rendered by preview/build.mjs; the board's API is answered locally.
+  const DATA = /*__DATA__*/null
+  const theme = new URLSearchParams(location.search).get('theme')
+  if (theme) document.documentElement.setAttribute('data-theme', theme)
+  window.fetch = async (url, init) => {
+    const path = String(url).split('?')[0]
+    const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
+    if (init && init.method === 'POST') {
+      if (path.endsWith('/run-ready')) return json({ ok: true, results: [{ skill: 'accelerated-biological-aging-risk', ok: true, excerpt: '表型年龄已按最近一次血检算出。' }] })
+      return json({ ok: true, saved: [{}], problems: [] })
+    }
+    if (path.endsWith('/board')) return json(DATA.board)
+    if (path.endsWith('/tracking')) return json(DATA.tracking)
+    return json({ ok: false }, 404)
+  }
+  const registry = {}
+  window.__ModuleLoader__ = { load({ id, factory }) { registry[id] = factory((name) => (name === 'react' ? window.React : undefined)) } }
+</script>
+<script src="client.js"></script>
+<script>
+  let Panel = null
+  registry['dsh-plugin-longpi'].apply({ slots: { inject: (name, make) => make(), register: (options, component) => { if (options.name === 'conversation.view') Panel = component } } })
+  ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(Panel))
+</script>
+</body>
+</html>

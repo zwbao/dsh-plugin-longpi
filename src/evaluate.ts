@@ -341,10 +341,16 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
       base.combined_with.push(other.title)
     }
   }
+  const combinedMeds = new Set(input.plan.items.filter((other) => other.mirobody && base.combined_with.includes(other.title)).map((other) => other.mirobody?.medication))
   for (const course of input.courses) {
     if (item.mirobody && course.medication === item.mirobody.medication) continue
-    if (within(course.start)) base.confounders.push(`${course.start} 开始用${course.medication}（Mirobody 用药记录）`)
-    if (within(course.end)) base.confounders.push(`${course.end} 停用${course.medication}（Mirobody 用药记录）`)
+    // Already named as a plan item acting on the same marker.
+    if (combinedMeds.has(course.medication)) continue
+    // A course matters when it is still running at the retest, or stopped shortly before it.
+    const runningAtRetest = within(course.start) && (!course.end || course.end >= addDays(windowTo, -14))
+    const stoppedJustBefore = within(course.end) && daysBetween(course.end, windowTo) <= 30
+    if (runningAtRetest) base.confounders.push(`${course.start} 开始用${course.medication}（Mirobody 用药记录）`)
+    else if (stoppedJustBefore) base.confounders.push(`${course.end} 停用${course.medication}，距复测不到一个月（Mirobody 用药记录）`)
   }
   for (const row of input.checkins) {
     if (!within(row.date) || row.tags.length === 0) continue
@@ -451,7 +457,7 @@ export function suggestNext(summaries: readonly ItemSummary[], context: { today:
   const out: Suggestion[] = []
   const seenRetest = new Set<string>()
   for (const item of summaries) {
-    if (item.adherence.level === 'low' || item.adherence.level === 'partial') {
+    if ((item.adherence.level === 'low' || item.adherence.level === 'partial') && item.days >= 14) {
       out.push({
         kind: 'adherence', priority: item.adherence.level === 'low' ? 1 : 3, item: item.id,
         text_zh: `「${item.title}」执行率 ${Math.round((item.adherence.rate ?? 0) * 100)}%。先把执行稳定在八成以上，再判断它有没有用。`,

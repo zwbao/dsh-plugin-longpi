@@ -1126,9 +1126,57 @@ declare function modelGoals(context: TrackingContext, goals: PlanVersion['goals'
   how_to_read: string;
 }>;
 //#endregion
+//#region src/overview.d.ts
+interface Readiness {
+  ready: Array<{
+    name: string;
+    blurb: string;
+    domain: string;
+  }>;
+  near: Array<{
+    name: string;
+    blurb: string;
+    missing: string[];
+  }>;
+  /** A missing measurement, and the methods it alone would complete. */
+  unlock: Array<{
+    item: string;
+    skills: string[];
+  }>;
+  declared: number;
+}
+declare function readiness(catalog: Catalog, records: RecordSnapshot, outputs: Record<string, unknown>): Readiness;
+interface ReadyRun {
+  skill: string;
+  ok: boolean;
+  excerpt: string;
+  outputs: Record<string, {
+    value: number | string | null;
+    unit: string;
+    label_zh: string;
+  }>;
+  error?: string;
+}
+/** Run every method the record already supplies (at most `limit`), with values exactly as recorded. */
+declare function runReady(context: {
+  config: Config;
+  dataDir: string;
+  skillsHome: string;
+  catalog: Catalog;
+  records: RecordSnapshot;
+  outputs: Record<string, unknown>;
+}, limit?: number): Promise<ReadyRun[]>;
+/** A plain Markdown summary for a doctor or coach: data, not advice. */
+declare function buildReport(input: {
+  name: string;
+  today: string;
+  records: RecordSnapshot;
+  tracking: Tracking | null;
+}): string;
+//#endregion
 //#region src/index.d.ts
 declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { Config, EMPTY_PROFILE, HARNESS_SKILLS, PHENOAGE_SKILL, PRODUCT_VERSION, RISK_SKILL, TOOL_NAMES, addCheckIns, addDays, adherenceFor, apply, buildBoard, buildStats, buildTracking, cellNumber, commandExcerpt, currentPlan, daysBetween, detectIntents, domainSummary, effectsFor, estimatedAge, evaluateMarker, evaluatePlan, foldName, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, latestOutputs, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, matchSkills, mentionedEntities, modelGoals, name, nameVariants, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, rcvBand, readCheckIns, readHistory, readPlans, readProfile, readReceipts, readResultFile, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, runSkill, runnableFrom, savePlan, seriesOf, stageMeasurements, suggestNext, summarizeIndicators, summarizeMedications, tableOf, unitFactor, versionCheck, wrapGuardMessage, writeProfile, writeStats };
+export { Config, EMPTY_PROFILE, HARNESS_SKILLS, PHENOAGE_SKILL, PRODUCT_VERSION, RISK_SKILL, TOOL_NAMES, addCheckIns, addDays, adherenceFor, apply, buildBoard, buildReport, buildStats, buildTracking, cellNumber, commandExcerpt, currentPlan, daysBetween, detectIntents, domainSummary, effectsFor, estimatedAge, evaluateMarker, evaluatePlan, foldName, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, latestOutputs, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, matchSkills, mentionedEntities, modelGoals, name, nameVariants, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, rcvBand, readCheckIns, readHistory, readPlans, readProfile, readReceipts, readResultFile, readiness, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, runReady, runSkill, runnableFrom, savePlan, seriesOf, stageMeasurements, suggestNext, summarizeIndicators, summarizeMedications, tableOf, unitFactor, versionCheck, wrapGuardMessage, writeProfile, writeStats };
