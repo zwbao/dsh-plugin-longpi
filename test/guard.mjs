@@ -203,6 +203,19 @@ try {
     const calm = await guard.preStep({ agent: fakeAgent(), messages: [userMessage('父亲有中风史')], signal: new AbortController().signal }, async () => ({ kind: 'enter', messages: [] }))
     assert.equal(calm.messages.length, 0, `${name}: family history is not an emergency`)
   }
+  // The mounted Mirobody plugin's rule notice: dropped when the host model labelled the message, kept when it failed.
+  const mirobodyNotice = { ...pluginMessage('Mirobody 规则提示'), source: { kind: 'plugin', plugin: 'dsh-plugin-mirobody', form: 'notice', summary: 'x' } }
+  const labelling = (labels) => mod.createGuard({ get: (service) => (service === 'llm' ? fakeLlm(() => JSON.stringify({ ...labelsOf({ labels }), reason: 'test' })) : undefined) }, { dataDir: () => tempDir('mirobody-notice'), timeoutMs: 2000 })
+  const calmModel = await labelling([]).preStep({ agent: fakeAgent(), messages: [userMessage('父亲有中风史')], signal: new AbortController().signal }, async () => ({ kind: 'enter', messages: [mirobodyNotice] }))
+  assert.equal(calmModel.messages.length, 0, 'the model says calm: the Mirobody rule notice goes')
+  const alarmModel = await labelling(['acute_emergency']).preStep({ agent: fakeAgent(), messages: [userMessage('我现在胸口剧痛出冷汗')], signal: new AbortController().signal }, async () => ({ kind: 'enter', messages: [mirobodyNotice] }))
+  assert.equal(alarmModel.messages.length, 1, 'one note, LongPi\'s')
+  assert.notEqual(alarmModel.messages[0].source.plugin, 'dsh-plugin-mirobody')
+  const downModel = mod.createGuard({ get: (service) => (service === 'llm' ? fakeLlm(() => { throw new Error('down') }) : undefined) }, { dataDir: () => tempDir('mirobody-down'), timeoutMs: 50 })
+  const fallback = await downModel.preStep({ agent: fakeAgent(), messages: [userMessage('我现在胸口剧痛出冷汗')], signal: new AbortController().signal }, async () => ({ kind: 'enter', messages: [mirobodyNotice] }))
+  assert.equal(fallback.messages[0], mirobodyNotice, 'the model failed: the Mirobody rule notice stays')
+  assert.equal(fallback.messages.length, 2, 'and LongPi\'s rule note is added')
+
   // A failed model lookup is not cached: the next call asks again and turns reasoning off.
   let lookups = 0
   const flaky = fakeLlm(() => JSON.stringify({ ...labelsOf({ labels: [] }), reason: '' }))

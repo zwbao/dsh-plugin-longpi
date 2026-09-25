@@ -221,7 +221,11 @@ async function loadRemote(config: Config, pluginHome: string): Promise<Remote> {
     if (filled.size > 0) {
       snapshot.indicators = snapshot.indicators.map((item) => {
         const hit = filled.get(item.name.toLowerCase())
-        return hit ? { ...item, ...hit, loinc: hit.loinc ?? item.loinc } : item
+        if (!hit) return item
+        // A wearable series has no LOINC code: leave the key out rather than setting it to undefined.
+        const merged = { ...item, ...hit, loinc: hit.loinc ?? item.loinc }
+        if (!merged.loinc) delete merged.loinc
+        return merged
       })
     }
     snapshot.missing_reads = [...new Set(unread)]

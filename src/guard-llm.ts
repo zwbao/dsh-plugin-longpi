@@ -438,6 +438,12 @@ export interface TurnStoppingPayload {
 }
 
 /** What the person typed in this step: user-sourced messages only, never plugin notes or tool contexts. */
+/** A guidance note appended by the mounted dsh-plugin-mirobody's own pre-step guard (1.0.1 and later). */
+export function isMirobodyNotice(message: { source?: { kind?: string; plugin?: string; form?: string } }): boolean {
+  const source = message.source
+  return source?.kind === 'plugin' && source.plugin === 'dsh-plugin-mirobody' && source.form === 'notice'
+}
+
 export function personText(messages: readonly { source?: { kind?: string }; content?: unknown }[]): string {
   return messages
     .filter((message) => !message.source || message.source.kind === 'user')
@@ -543,8 +549,11 @@ export function createGuard(ctx: Context, options: GuardOptions): Guard {
           flag_research: labels.research_question ? 1 : 0,
           note_appended: note ? 1 : 0,
         })
-        if (!note || payload.signal?.aborted) return decision
-        return { ...decision, messages: [...decision.messages, noteMessage(note)] }
+        // When the host model labelled the message, its judgement stands: the mounted Mirobody plugin's note comes
+        // from rules alone on the same words, so it is dropped. When the model call failed, both rule notes stay.
+        const kept = result.llm === 'ok' ? decision.messages.filter((message) => !isMirobodyNotice(message)) : decision.messages
+        if (!note || payload.signal?.aborted) return kept.length === decision.messages.length ? decision : { ...decision, messages: kept }
+        return { ...decision, messages: [...kept, noteMessage(note)] }
       } catch {
         return decision
       }

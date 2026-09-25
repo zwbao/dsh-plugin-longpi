@@ -201,7 +201,9 @@ const RESEARCH = /论文|研究|试验|文献|收录|证据|临床|荟萃|综述
 function medChangeIn(sentence: string): boolean {
   const lower = sentence.toLowerCase()
   if (CJK.test(lower)) {
-    return ASK_CHANGE.test(lower) || CHANGE_ASKED.test(lower) || INTENT_CHANGE.test(lower) || IMPERATIVE.test(lower) || (PRESCRIBE.test(lower) && !PRESCRIBE_RECORD.test(lower))
+    // 「医生给我开了二甲双胍」 is a record, not 「给我开…」: cut the record phrase out before the change patterns run.
+    const asked = lower.replace(new RegExp(PRESCRIBE_RECORD.source, 'g'), '，')
+    return ASK_CHANGE.test(asked) || CHANGE_ASKED.test(asked) || INTENT_CHANGE.test(asked) || IMPERATIVE.test(asked) || (PRESCRIBE.test(asked) && !PRESCRIBE_RECORD.test(lower))
   }
   // 「how much should I take」 asks for a dose, not for a change.
   const howMuch = /\bhow (?:much|many|often)\b/.test(lower)
@@ -215,7 +217,8 @@ function medChangeIn(sentence: string): boolean {
  * not a record of what the person already did.
  */
 export function ruleLabels(input: string): GuardLabels {
-  const text = String(input ?? '').normalize('NFKC').slice(0, 4000)
+  // NFKC, and typographic apostrophes (phone keyboards) folded so 「can’t breathe」 reads as 「can't breathe」.
+  const text = String(input ?? '').normalize('NFKC').replace(/[‘’ʼ′]/g, "'").slice(0, 4000)
   const labels = noLabels()
   if (!text.trim()) return labels
   const parts = clauses(text)

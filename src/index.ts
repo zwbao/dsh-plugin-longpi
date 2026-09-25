@@ -23,6 +23,7 @@ import { effectiveConfig } from './connection.ts'
 
 export const name = 'dsh-plugin-longpi'
 export const inject = ['tools']
+export { asJson } from './json.ts'
 export { Config }
 export { preGuard, wrapGuardMessage, rememberMedications, rememberedMedications, ruleLabels, replyRuleCheck, guidanceNote, correctionNote, mentionsMedicine, LABEL_KEYS, SELF_HARM_LINE_ZH, EMERGENCY_LINE_ZH } from './guardrails.ts'
 export type { GuardHit, GuardLabels, ReplyVerdict } from './guardrails.ts'
@@ -151,9 +152,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   // One guidance note after the person's words for what the guard flagged; their message is never replaced.
   // Outermost, so it runs on every step even when a listener registered earlier ends the waterfall.
-  // Known residual: the mounted dsh-plugin-mirobody 1.0.0 registers its own substring guard first, which
-  // still rewrites the message (胸痛, 中风, stroke, 停药…) and skips the rest of the chain; LongPi's note is
-  // then added to that rewritten step. The fix belongs in dsh-plugin-mirobody or in mountMirobody.
+  // The mounted dsh-plugin-mirobody (1.0.1 and later) has its own rule guard that appends a notice and never
+  // rewrites the message. LongPi's listener runs outermost: when the host model labelled the message, it drops
+  // that notice and adds its own; when the model call failed, both rule notes stay.
   ctx.on('agent/pre-step', (payload, next) => guard.preStep(payload, next), { prepend: true })
 
   // Before a turn closes: one correction when the reply gave a dose or advised a medicine change.

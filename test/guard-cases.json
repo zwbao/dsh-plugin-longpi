@@ -2657,6 +2657,40 @@
     "research"
    ],
    "source": "new"
+  },
+  {
+   "text": "I can’t breathe",
+   "lang": "en",
+   "labels": [
+    "acute_emergency"
+   ],
+   "rules": true,
+   "tags": [
+    "acute"
+   ],
+   "source": "mirobody-1.0.1"
+  },
+  {
+   "text": "医生给我开了二甲双胍，每天一片",
+   "lang": "zh",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "record"
+   ],
+   "source": "mirobody-1.0.1"
+  },
+  {
+   "text": "医生给我开了二甲双胍，我想停掉",
+   "lang": "zh",
+   "labels": [
+    "med_change_request"
+   ],
+   "rules": true,
+   "tags": [
+    "medicine"
+   ],
+   "source": "mirobody-1.0.1"
   }
  ]
 }
