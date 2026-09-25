@@ -1019,7 +1019,7 @@ declare function buildBoard(input: {
     };
   };
   records: {
-    status: "unconfigured" | "ok" | "error";
+    status: "error" | "unconfigured" | "ok";
     error: string;
     indicator_count: number;
     indicators: IndicatorRow[];

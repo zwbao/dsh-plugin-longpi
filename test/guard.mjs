@@ -203,6 +203,20 @@ try {
     const calm = await guard.preStep({ agent: fakeAgent(), messages: [userMessage('父亲有中风史')], signal: new AbortController().signal }, async () => ({ kind: 'enter', messages: [] }))
     assert.equal(calm.messages.length, 0, `${name}: family history is not an emergency`)
   }
+  // A failed model lookup is not cached: the next call asks again and turns reasoning off.
+  let lookups = 0
+  const flaky = fakeLlm(() => JSON.stringify({ ...labelsOf({ labels: [] }), reason: '' }))
+  flaky.resolveModelInfo = async () => {
+    lookups += 1
+    if (lookups === 1) throw new Error('adapter busy')
+    return { reasoning: { efforts: [{ id: 'off' }, { id: 'high' }] } }
+  }
+  const flakyCall = mod.runtimeCall(flaky, { provider: 'p', model: 'm' })
+  await flakyCall({ system: 's', user: 'u', signal: new AbortController().signal })
+  await flakyCall({ system: 's', user: 'u', signal: new AbortController().signal })
+  await flakyCall({ system: 's', user: 'u', signal: new AbortController().signal })
+  assert.deepEqual(flaky.calls.map((call) => call.reasoningEffort), [undefined, 'off', 'off'])
+  assert.equal(lookups, 2, 'cached once known')
   const bare = mod.createGuard({}, { dataDir: () => tempDir('bare') })
   const noLlm = await bare.preStep({ agent: fakeAgent(), messages: [userMessage('帮我停阿司匹林')] }, async () => ({ kind: 'enter', messages: [] }))
   assert.match(noLlm.messages[0].content[0].text, /doctor/, 'no LLM service: the rules decide')
@@ -239,6 +253,14 @@ try {
     await turnStopping({ agent: run.agent, turn: 3, signal })
     assert.equal(run.steered.length, 0, safe)
   }
+  // An emergency turn whose reply is corrected: still no skill in the correction step, then the flag ends.
+  run = turnAgent(6, '你可以每天吃 2 粒鱼油。')
+  await preStep({ agent: run.agent, messages: [userMessage('我现在胸口剧痛出冷汗')], turn: 6, step: 1, signal }, async () => ({ kind: 'enter', messages: [] }))
+  await turnStopping({ agent: run.agent, turn: 6, signal })
+  assert.equal(run.steered.length, 1)
+  assert.equal((await preExecute({ name: 'run_longevity_skill', arguments: {}, agent: run.agent }, allow)).kind, 'deny', 'the correction step runs no skill')
+  await turnStopping({ agent: run.agent, turn: 6, signal })
+  assert.deepEqual(await preExecute({ name: 'run_longevity_skill', arguments: {}, agent: run.agent }, allow), { kind: 'allow' })
   const judgeCalls = llm.calls.filter((call) => call.system === mod.JUDGE_SYSTEM).length
   run = turnAgent(4, '今天的步数不错，继续保持。')
   await turnStopping({ agent: run.agent, turn: 4, signal })
@@ -297,7 +319,7 @@ try {
   assert.equal((await host.listeners['tools/pre-execute'][0]({ name: 'set_followup', arguments: { enabled: true } }, allow)).kind, 'ask')
 
   host.dispose()
-  console.log(`guard ok (${cases.length} cases, ${claimed} decided by the rules; ${notes} notes appended, never replacing; output check, fallback and plan approval)`)
+  console.log(`guard ok (${cases.length} cases, ${claimed} decided by the rules; ${notes} LongPi notes appended, never replacing; output check, fallback and plan approval)`)
 } finally {
   for (const dir of temp) rmSync(dir, { recursive: true, force: true })
 }

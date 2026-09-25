@@ -299,17 +299,20 @@ export function noteMessage(note: GuidanceNote): UserMessage {
 export function runtimeCall(llm: LlmLike, route: Route, efforts: Map<string, string | null> = new Map()): GuardCall {
   return async ({ system, user, signal }) => {
     const key = `${route.provider}\u0000${route.model}`
-    if (!efforts.has(key)) {
-      let off: string | null = null
-      try {
-        const info = await llm.resolveModelInfo?.(route.provider, route.model, signal)
-        off = info?.reasoning?.efforts?.find((effort) => /^(?:off|none|disabled)$/i.test(String(effort.id)))?.id ?? null
-      } catch {
-        off = null
+    // Cached per route once known; a failed lookup is not cached, so the next call asks again.
+    let effort = efforts.get(key)
+    if (effort === undefined) {
+      if (typeof llm.resolveModelInfo !== 'function') efforts.set(key, effort = null)
+      else {
+        try {
+          const info = await llm.resolveModelInfo(route.provider, route.model, signal)
+          effort = info?.reasoning?.efforts?.find((option) => /^(?:off|none|disabled)$/i.test(String(option.id)))?.id ?? null
+          efforts.set(key, effort)
+        } catch {
+          effort = null
+        }
       }
-      efforts.set(key, off)
     }
-    const effort = efforts.get(key)
     const message = deepFreeze({ id: randomUUID(), role: 'user', content: [{ type: 'text', text: user }], source: { kind: 'plugin', plugin: PLUGIN_SOURCE } })
     // Frozen like DSH's own one-shot calls, except the live signal.
     const options = Object.freeze({
@@ -550,7 +553,8 @@ export function createGuard(ctx: Context, options: GuardOptions): Guard {
     // Before the turn closes: at most one correction when the reply gave a dose or advised a medicine change.
     async turnStopping(payload) {
       const agent = payload.agent
-      if (agent && typeof agent === 'object') flagged.delete(agent)
+      // The emergency flag lasts the turn: it is cleared here unless a correction step still follows.
+      let keepFlag = false
       try {
         const session = agent?.session
         if (!agent || !session || payload.signal?.aborted || typeof agent.steer !== 'function') return
@@ -571,8 +575,11 @@ export function createGuard(ctx: Context, options: GuardOptions): Guard {
         if (!check.steer || payload.signal?.aborted) return
         remember(steered, turnKey)
         agent.steer(noteMessage(correctionNote(check.verdict)))
+        keepFlag = true
       } catch {
         // the check never breaks a turn
+      } finally {
+        if (!keepFlag && agent && typeof agent === 'object') flagged.delete(agent)
       }
     },
 
