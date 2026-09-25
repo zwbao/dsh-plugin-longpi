@@ -56,7 +56,8 @@ function sourceText(connection: Connection): string {
   return ''
 }
 
-export function ConnectionStatus(props: { connection: Connection }): React.ReactElement {
+/** brief: without the summary line, where the found counts are already on screen (onboarding step 3). */
+export function ConnectionStatus(props: { connection: Connection; brief?: boolean }): React.ReactElement {
   const { connection } = props
   const ok = connection.status === 'ok'
   const bad = connection.status === 'error'
@@ -68,7 +69,7 @@ export function ConnectionStatus(props: { connection: Connection }): React.React
       ? h('div', { className: 'lp-caption lp-conn-url' }, h('code', null, connection.url_masked),
         sourceText(connection) ? ` · ${sourceText(connection)}` : '', connection.token_set ? ' · 令牌已设置' : '')
       : null,
-    ok && connection.summary ? h('div', { className: 'lp-caption' }, `找到：${summaryParts(connection.summary).join(' · ')}`) : null)
+    ok && connection.summary && !props.brief ? h('div', { className: 'lp-caption' }, `找到：${summaryParts(connection.summary).join(' · ')}`) : null)
 }
 
 function TestOutcome(props: { result: ConnectionResult }): React.ReactElement {
@@ -176,10 +177,10 @@ export function ConnectionPanel(props: { idPrefix: string; collapsed?: boolean; 
   const connected = data.status === 'ok'
   const showForm = !props.collapsed || !connected || open
   return h('div', { className: 'lp-conn' },
-    h(ConnectionStatus, { connection: data }),
+    h(ConnectionStatus, { connection: data, brief: props.collapsed }),
     showForm
       ? h(ConnectionForm, { connection: data, idPrefix: props.idPrefix, onSaved: (connection) => { setOpen(false); props.onSaved?.(connection) } })
-      : h('button', { type: 'button', className: 'lp-row-link', onClick: () => setOpen(true) }, '换一个 Mirobody 地址 →'))
+      : h('button', { type: 'button', className: 'lp-row-link lp-conn-change', onClick: () => setOpen(true) }, '换一个 Mirobody 地址 →'))
 }
 
 /** One line for places that only point at the connection (档案, the page header). */

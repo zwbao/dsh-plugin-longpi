@@ -81,6 +81,7 @@ const SHOTS = [
   ['chat-save', 'view=chat&card=save', 1280, 800],
   ['chat-skill', 'view=chat&card=skill', 1280, 900],
   ['chat-situation', 'view=chat&card=situation', 1280, 700],
+  ['home-routine-popover', 'view=home&stage=routine&tap=task', 1280, 760],
   ['page-consent', 'view=page&stage=consent', 1280, 2300],
   ['page-stage-profile', 'view=page&stage=profile', 1280, 1400],
   ['page-records', 'view=page&stage=records', 1280, 2500],

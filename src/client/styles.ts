@@ -757,6 +757,8 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
 .lp-conn-form { display: grid; gap: 12px; }
 .lp-conn-form .lp-form-actions { margin-top: 0; }
 .lp-conn-form .lp-fine { margin-top: 0; }
+.lp-conn-change { justify-self: start; font-size: 13px; }
+.lp-section > .lp-loaderror { margin-bottom: 16px; }
 .lp-conn-ok { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--lp-good-ink); font-size: 13px; line-height: 20px; }
 
 /* --- 5.1: onboarding steps 1, 3, 4 ------------------------------------------------------------ */
@@ -779,6 +781,7 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
 .lp-now-text .lp-inline-self { margin-top: 6px; }
 
 /* --- 5.1: plan draft, confirm, reminders -------------------------------------------------------- */
+.lp-draft > .lp-draft-block { margin-top: 12px; }
 .lp-draft-more { margin-top: 14px; }
 .lp-draft-more .lp-priorities, .lp-draft-more .lp-rows { margin-top: 8px; }
 .lp-evidence-more > summary { font-size: 12px; color: var(--lp-ink-3); }
@@ -835,6 +838,9 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
 .lp-tool-raw-btn { margin-left: auto; display: inline-flex; align-items: center; gap: 2px; height: 22px; padding: 0 6px; border: 0; border-radius: 6px; background: transparent; color: var(--lp-ink-3); font-size: 12px; cursor: pointer; }
 .lp-tool-raw-btn:hover { background: var(--lp-hover); color: var(--lp-ink); }
 .lp-rot { transform: rotate(90deg); }
+.lp-tool-undo { height: 22px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--lp-accent); font-size: 12px; cursor: pointer; }
+.lp-tool-undo:hover:not(:disabled) { background: var(--lp-hover); }
+.lp-tool-undo:disabled { color: var(--lp-ink-3); cursor: progress; }
 .lp-tool-body { display: grid; gap: 8px; margin-top: 8px; }
 .lp-tool-quiet .lp-tool-body { margin: 2px 0 0 22px; }
 .lp-tool-raw {

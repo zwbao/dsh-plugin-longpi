@@ -97,7 +97,7 @@ function prettyRaw(text: string): string {
 }
 
 /** The frame every card shares: a head row, the body, and the raw result behind 原始结果. */
-function Shell(props: { call: ParsedCall; icon: string; title: string; summary?: React.ReactNode; tone?: 'warn' | 'bad'; quiet?: boolean; children?: React.ReactNode }): React.ReactElement {
+function Shell(props: { call: ParsedCall; icon: string; title: string; summary?: React.ReactNode; tone?: 'warn' | 'bad'; quiet?: boolean; action?: React.ReactNode; children?: React.ReactNode }): React.ReactElement {
   const [raw, setRaw] = React.useState(false)
   const { call } = props
   const running = call.state === 'running'
@@ -107,6 +107,7 @@ function Shell(props: { call: ParsedCall; icon: string; title: string; summary?:
       h('span', { className: `lp-tool-icon ${running ? 'lp-tool-running' : ''}`, 'aria-hidden': true }, h(Icon, { name: running ? 'refresh' : call.state === 'error' ? 'warn' : props.icon, size: 14, className: running ? 'lp-spin' : '' })),
       h('span', { className: 'lp-tool-title' }, props.title),
       props.summary != null ? h('span', { className: `lp-tool-summary ${props.tone ? `lp-tool-${props.tone}` : ''}` }, props.summary) : null,
+      props.action ?? null,
       rawText ? h('button', { type: 'button', className: 'lp-tool-raw-btn', 'aria-expanded': raw, onClick: () => setRaw((current) => !current) },
         '原始结果', h(Icon, { name: 'chevron', size: 12, className: raw ? 'lp-rot' : '' })) : null),
     props.children ? h('div', { className: 'lp-tool-body' }, props.children) : null,
@@ -220,9 +221,11 @@ export function SaveToolView(props: ToolViewProps): React.ReactElement {
   if (result.saved === true) {
     const version = typeof result.version === 'number' ? result.version : null
     const openPlan = props.openPage ? () => { requestView({ tab: 'plan', id: 'lp-plan' }); props.openPage?.() } : null
-    return h(Shell, { call, icon: 'check', title: '保存方案', quiet: true,
-      summary: h('span', { className: 'lp-chip-saved' }, h(Icon, { name: 'check', size: 12, strokeWidth: 2 }), version != null ? `已保存为方案第 ${version} 版` : '已保存') },
-    openPlan ? h('button', { type: 'button', className: 'lp-row-link', onClick: openPlan }, '在健康页查看 →') : null)
+    return h(Shell, {
+      call, icon: 'check', title: '保存方案', quiet: true,
+      summary: h('span', { className: 'lp-chip-saved' }, h(Icon, { name: 'check', size: 12, strokeWidth: 2 }), version != null ? `已保存为方案第 ${version} 版` : '已保存'),
+      action: openPlan ? h('button', { type: 'button', className: 'lp-tool-undo', onClick: openPlan }, '在健康页查看 →') : null,
+    })
   }
   return h(Shell, { call, icon: 'check', title: '方案复述', summary: errors.length > 0 ? '还缺信息，没有保存' : '还没有保存，确认后才保存', tone: errors.length > 0 ? 'warn' : undefined },
     readBack.length > 0 ? h('ul', { className: 'lp-readback' },
@@ -288,9 +291,11 @@ export function CheckinToolView(props: ToolViewProps): React.ReactElement {
     call, icon: 'check', title: '打卡', quiet: true,
     summary: h('span', { className: `lp-chip-saved ${undone ? 'lp-chip-undone' : ''}` },
       h(Icon, { name: undone ? 'close' : 'check', size: 12, strokeWidth: 2 }), undone ? `已撤销：${names.join('、')}` : `已记录：${names.join('、')}`),
+    action: !undone && undoable.length > 0
+      ? h('button', { type: 'button', className: 'lp-tool-undo', disabled: undoing, onClick: () => { void undo() }, 'aria-label': `撤销今天的打卡：${names.join('、')}` }, undoing ? '撤销中' : '撤销')
+      : null,
   },
-  !undone && undoable.length > 0 ? h('button', { type: 'button', className: 'lp-linkbtn', disabled: undoing, onClick: () => { void undo() } }, undoing ? '撤销中' : '撤销') : null,
-  error ? h('span', { className: 'lp-form-error' }, error) : null,
+  error ? h('p', { className: 'lp-form-error' }, error) : null,
   ...problems.map((text) => h('p', { key: text, className: 'lp-caption' }, text)))
 }
 

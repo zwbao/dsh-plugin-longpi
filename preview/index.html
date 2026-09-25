@@ -582,6 +582,10 @@
   if (params.get('tap') === 'changes') {
     setTimeout(() => { const link = document.querySelector('.lp-hero-changes .lp-hero-link'); if (link) link.click() }, 1500)
   }
+  // ?tap=task opens the first check-in pill's popover (完成 / 没做到 / 撤销).
+  if (params.get('tap') === 'task') {
+    setTimeout(() => { const pill = document.querySelector('.lp-task'); if (pill) pill.click() }, 1500)
+  }
   if (params.get('tap') === 'suggest') {
     setTimeout(() => {
       const pill = document.querySelector('.lp-suggest')
