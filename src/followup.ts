@@ -93,8 +93,8 @@ const SETTINGS_FILE = 'followup.json'
 const LOG_FILE = 'followup_log.jsonl'
 const TICK_MS = 60_000
 const SEND_TIMEOUT_MS = 10_000
-/** The scheduler reuses one journey read this long, so a minute tick does not re-read the record. */
-const STATE_REUSE_MS = 15 * 60_000
+/** The scheduler reuses one journey read this long while nothing changed, so a minute tick does not re-read the record. */
+const STATE_REUSE_MS = 60 * 60_000
 const NUDGE_AFTER_DAYS = 3
 const NUDGE_EVERY_DAYS = 7
 const NUDGE_STAGES = ['profile', 'records', 'first_result']
@@ -662,26 +662,30 @@ export async function followupTick(input: { dataDir: string; now: Date; getState
 export interface FollowupContext {
   dataDir: string
   getState: () => Promise<FollowupState>
+  /** Changes whenever something the state is built from changed (trackingGeneration); a change forces a fresh read. */
+  generation?: () => number
 }
 
 /**
  * Tick every 60 s in the host's local time zone, as a Cordis effect: the interval is cleared when the
  * plugin is disposed, is unref'd so it never keeps the process alive, and never overlaps itself. One
- * journey read is reused for 15 minutes.
+ * journey read is reused the same day for up to an hour, and never after a check-in, a plan or profile
+ * save or a self measurement (the generation changes), so a reminder never counts items already ticked.
  */
 export function startFollowup(ctx: Context, getContext: () => FollowupContext, options: { tickMs?: number; now?: () => Date } = {}): void {
   ctx.effect(() => {
     let running = false
-    let cache: { at: number; day: string; state: FollowupState } | null = null
+    let cache: { at: number; day: string; generation: number; state: FollowupState } | null = null
     const timer = setInterval(() => {
       if (running) return
       running = true
       const now = options.now?.() ?? new Date()
       const context = getContext()
       const getState = async () => {
-        if (cache && cache.day === isoDay(now) && now.getTime() - cache.at < STATE_REUSE_MS) return cache.state
+        const generation = context.generation?.() ?? 0
+        if (cache && cache.day === isoDay(now) && cache.generation === generation && now.getTime() - cache.at < STATE_REUSE_MS) return cache.state
         const state = await context.getState()
-        cache = { at: now.getTime(), day: isoDay(now), state }
+        cache = { at: now.getTime(), day: isoDay(now), generation, state }
         return state
       }
       void followupTick({ dataDir: context.dataDir, now, getState })

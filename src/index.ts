@@ -14,6 +14,7 @@ import { startFollowup, type FollowupState } from './followup.ts'
 import { buildJourneyFull, followupStateOf, within } from './journey.ts'
 import { loadCatalog } from './catalog.ts'
 import { loadRecords } from './records.ts'
+import { trackingGeneration } from './tracking.ts'
 import { isoDay } from './interventions.ts'
 import { resolveDataDir, resolveMirobodyPlugin, resolveSkillsHome } from './paths.ts'
 
@@ -44,7 +45,7 @@ export { readiness, runReady, buildReport } from './overview.ts'
 export { normalizePlan, savePlan, currentPlan, readPlans, addCheckIns, readCheckIns, isoDay, addDays, daysBetween } from './interventions.ts'
 export { adherenceFor, evaluateMarker, evaluatePlan, resolveMarkers, suggestNext } from './evaluate.ts'
 export { loadReference, markerFor, rcvBand, effectsFor } from './reference.ts'
-export { buildTracking, invalidateTracking, modelGoals, homeBloodPressure, readFailed, PHENOAGE_SKILL, RISK_SKILL } from './tracking.ts'
+export { buildTracking, invalidateTracking, trackingGeneration, modelGoals, homeBloodPressure, readFailed, PHENOAGE_SKILL, RISK_SKILL } from './tracking.ts'
 export { buildJourney, buildJourneyFull, followupStateOf, retestsOf, stageNow, profileComplete, unansweredOf, within } from './journey.ts'
 export type { Journey, Stage } from './journey.ts'
 export { buildCalendar, escapeText, foldLine, retestDay } from './calendar.ts'
@@ -80,7 +81,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   registerTools(ctx, source, mount)
   registerTrackingTools(ctx, source, mount)
   registerFollowupTools(ctx, source, () => followupState(20_000).catch(() => null))
-  startFollowup(ctx, () => ({ dataDir: resolveDataDir(config.dataDir), getState: () => followupState(60_000) }))
+  startFollowup(ctx, () => ({ dataDir: resolveDataDir(config.dataDir), getState: () => followupState(60_000), generation: trackingGeneration }))
   registerHarnessSkills(ctx)
   registerPrompt(ctx, source, mount)
   registerRoutes(ctx, source, mount)

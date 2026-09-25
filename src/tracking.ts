@@ -107,9 +107,16 @@ export interface Tracking {
 }
 
 const memo = new Map<string, { at: number; value: Promise<Tracking> }>()
+let generation = 0
 
 export function invalidateTracking(): void {
   memo.clear()
+  generation += 1
+}
+
+/** Bumped by every invalidateTracking (a check-in, a self measurement, a plan or profile save): readers keeping their own copy refresh on a change. */
+export function trackingGeneration(): number {
+  return generation
 }
 
 function referenceStats(reference: Reference): Tracking['reference'] {

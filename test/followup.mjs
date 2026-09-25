@@ -347,6 +347,7 @@ try {
   assert.deepEqual(mod.followupSummary(routeDir, state(), at('2026-09-24', '10:00')), { enabled: true, channels: ['desktop', 'webhook'], next_at: '2026-09-24T20:30:00' })
 
   // the scheduler: an effect that ticks, reads the journey only when due, and stops on dispose
+  const wait = (ms) => new Promise((resolveWait) => setTimeout(resolveWait, ms))
   const scheduleDir = tempDir('schedule')
   mod.writeFollowup(scheduleDir, { enabled: true })
   let ticks = 0
@@ -357,14 +358,22 @@ try {
       ticks += 1
       return state()
     },
+    generation: mod.trackingGeneration,
   }), { tickMs: 10, now: () => at('2026-09-24', '21:05') })
-  for (let i = 0; i < 50 && mod.readFollowupLog(scheduleDir).length < 2; i += 1) await new Promise((resolveWait) => setTimeout(resolveWait, 10))
+  for (let i = 0; i < 50 && mod.readFollowupLog(scheduleDir).length < 2; i += 1) await wait(10)
+  await wait(40)
+  assert.equal(mod.readFollowupLog(scheduleDir).length, 2, 'the check-in and the retest went out once each')
+  assert.equal(ticks, 1, 'one journey read, reused while nothing changed')
+  // a check-in (or any save) invalidates tracking: the next tick reads the journey again
+  mod.invalidateTracking()
+  for (let i = 0; i < 50 && ticks < 2; i += 1) await wait(10)
+  assert.equal(ticks, 2, 'a change forces a fresh read, so a reminder never counts items already ticked')
   effects.forEach((dispose) => dispose())
   const settled = mod.readFollowupLog(scheduleDir).length
-  assert.equal(settled, 2, 'the check-in and the retest went out once each')
-  assert.equal(ticks, 1, 'one journey read, reused')
-  await new Promise((resolveWait) => setTimeout(resolveWait, 50))
+  assert.equal(settled, 2)
+  await wait(50)
   assert.equal(mod.readFollowupLog(scheduleDir).length, settled, 'nothing after dispose')
+  assert.equal(ticks, 2)
 
   host.dispose()
   console.log(`followup ok (${mod.readFollowupLog(routeDir).length} sends logged in the route test; no osascript, no network)`)
