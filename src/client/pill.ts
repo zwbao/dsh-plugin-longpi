@@ -1,12 +1,13 @@
 // DSH has no push notifications, so due reminders show as a small pill in the
 // shell's click-through overlay layer, bottom-right. It hides while the LongPi
-// page is open, and × hides it until tomorrow.
+// page or the home greeting (whose row lists the same things) is on screen,
+// and × hides it until tomorrow.
 
 import React from 'react'
 import { PANEL_ID } from './constants.ts'
 import { localToday } from './format.ts'
 import { Icon, Mark } from './icons.ts'
-import { useJourney, usePageShowing } from './store.ts'
+import { useHeroShowing, useJourney, usePageShowing } from './store.ts'
 import type { Face } from './types.ts'
 
 const h = React.createElement
@@ -40,13 +41,17 @@ function Pill(props: PillProps & { pageShowing: boolean }): React.ReactElement |
   const today = journey?.today ?? localToday()
   const [dismissed, setDismissed] = React.useState(() => hiddenOn() === today)
   React.useEffect(() => { setDismissed(hiddenOn() === today) }, [today])
+  const heroShowing = useHeroShowing()
   const due = (journey?.reminders ?? []).filter((row) => row.due)
-  if (!journey || due.length === 0 || dismissed || props.pageShowing) return null
+  // Count things to do, not reminder rows: one check-in reminder can stand for several unticked items.
+  const open = journey ? journey.plan.checkin_items.filter((item) => !item.done_today).length : 0
+  const count = (due.some((row) => row.kind === 'checkin') ? open : 0) + due.filter((row) => row.kind === 'retest').length
+  if (!journey || count === 0 || dismissed || props.pageShowing || heroShowing) return null
   const summary = due.map((row) => row.text_zh).join('；')
   return h('div', { className: 'lp lp-pill-wrap', role: 'status' },
-    h('button', { type: 'button', className: 'lp-pill-main', onClick: () => props.openPage?.(), title: summary, 'aria-label': `LongPi 今天 ${due.length} 项待办：${summary}。打开健康页` },
+    h('button', { type: 'button', className: 'lp-pill-main', onClick: () => props.openPage?.(), title: summary, 'aria-label': `LongPi 今天 ${count} 项待办：${summary}。打开健康页` },
       h('span', { className: 'lp-pill-mark' }, h(Mark, { size: 14 })),
-      h('span', null, 'LongPi · 今天 ', h('span', { className: 'lp-pill-count' }, due.length), ' 项待办')),
+      h('span', null, 'LongPi · 今天 ', h('span', { className: 'lp-pill-count' }, count), ' 项待办')),
     h('button', {
       type: 'button', className: 'lp-pill-x', 'aria-label': '今天不再提醒',
       onClick: () => { hideFor(today); setDismissed(true) },

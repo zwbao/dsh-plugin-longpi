@@ -11,6 +11,8 @@ LongPi is a personal longevity assistant for [DeepSeek Harness](https://github.c
 - **Effect review**: reference change values separate real change from noise, next to the average effect seen in trials.
 - **Evidence lookup**: what the collected papers say about drugs, supplements, diets and genes, grouped by human, animal and cell studies.
 
+<p align="center"><img src="docs/images/home.png" alt="LongPi home: greeting, phenotypic age and cardiovascular risk, today's check-ins under the input box" width="760"></p>
+
 ## Installation
 
 In a macOS or Linux terminal, run:
@@ -45,6 +47,8 @@ After onboarding:
 - **Plans**: say 帮我制定一份改善方案 in the chat, or edit the draft on the health page item by item and adopt it; a plan from a doctor or longevity coach can be saved too. LongPi reads the plan back and saves it only after confirmation.
 - **Tracking and review**: wearable data counts toward adherence automatically; other items are checked in from the home, the health page or the chat. Once a retest reaches Mirobody, the health page gives a verdict (working, within noise, the wrong way, or cannot tell) with its reasons.
 - **Follow-up**: turn it on under 随访提醒 on the health page and set the check-in, retest and weekly-summary times, quiet hours and channels. Reminders are sent only while DeepSeek Harness is running; the brief mode carries no health values.
+
+<p align="center"><img src="docs/images/health-page.png" alt="LongPi health page: record changes, phenotypic age, cardiovascular risk and the plan" width="760"><br><sub>Screenshots use demo data.</sub></p>
 
 Example questions:
 

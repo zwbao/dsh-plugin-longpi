@@ -50,6 +50,7 @@ let version = 0
 let timersOn = false
 let pageUsers = 0
 let bridges = 0
+let heroUsers = 0
 let pending: { text: string; at: number; origin: PromptOrigin } | null = null
 let promptNote: { text: string; id: number } | null = null
 let scrollTarget: string | null = null
@@ -220,6 +221,23 @@ export function usePageShown(ref: React.RefObject<HTMLElement>): void {
       set(false)
     }
   }, [ref])
+}
+
+/** The home greeting counts itself while mounted: its row already lists today's check-ins, so the pill stays away. */
+export function useHeroShown(): void {
+  React.useEffect(() => {
+    heroUsers += 1
+    emit()
+    return () => {
+      heroUsers -= 1
+      emit()
+    }
+  }, [])
+}
+
+export function useHeroShowing(): boolean {
+  React.useSyncExternalStore(subscribe, () => version, () => version)
+  return heroUsers > 0
 }
 
 export function usePageShowing(): boolean {

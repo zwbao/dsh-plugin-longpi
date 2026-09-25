@@ -11,6 +11,8 @@ LongPi 是运行在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-h
 - **效果判定**：以参考变化值区分真实变化与正常波动，并与临床试验的平均效应对照。
 - **证据检索**：查询收录论文中关于药物、补剂、饮食与基因的结论，按人群、动物、细胞研究分组。
 
+<p align="center"><img src="docs/images/home.png" alt="LongPi 首页：问候语、身体年龄与心血管风险，输入框下方是今天的打卡" width="760"></p>
+
 ## 安装
 
 在 macOS 或 Linux 终端中运行：
@@ -45,6 +47,8 @@ curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/instal
 - **制定方案**：在对话中说「帮我制定一份改善方案」，或在健康页的方案草稿中逐项删改后采用；也可以保存医生或长寿师提供的方案。LongPi 复述要点，经确认后才保存。
 - **追踪与复盘**：手环数据自动计入执行率，其余项目可在首页、健康页或对话中打卡。复测结果进入 Mirobody 后，健康页给出「有效」「波动内」「反向」或「无法判断」的判定及依据。
 - **随访提醒**：在健康页的「随访提醒」中开启，设置打卡、复测和每周小结的时间、免打扰时段和发送渠道。提醒只在 DeepSeek Harness 运行时发送；「简要」模式不含任何健康数值。
+
+<p align="center"><img src="docs/images/health-page.png" alt="LongPi 健康页：记录里的明显变化、身体年龄、心血管风险与方案" width="760"><br><sub>截图使用演示数据。</sub></p>
 
 常用提问示例：
 

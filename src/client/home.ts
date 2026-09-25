@@ -16,7 +16,7 @@ import { fmt } from './charts.ts'
 import { greeting, riskText, versusAge } from './format.ts'
 import { HomeRow } from './home-actions.ts'
 import { Icon } from './icons.ts'
-import { requestScroll, useJourney } from './store.ts'
+import { requestScroll, useHeroShown, useJourney } from './store.ts'
 import type { Face, Journey } from './types.ts'
 
 const h = React.createElement
@@ -219,6 +219,7 @@ function ChangesLine(props: { journey: Journey; openAt: (id: string) => void }):
 
 function Hero(props: { journey: Journey; open: () => void; openAt: (id: string) => void }): React.ReactElement {
   const ref = React.useRef<HTMLDivElement>(null)
+  useHeroShown()
   useOwnRow(ref)
   const { host, inline } = useRowHost(ref)
   const row = h(HomeRow, { journey: props.journey, openPage: props.open })
