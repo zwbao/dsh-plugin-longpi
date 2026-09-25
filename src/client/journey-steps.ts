@@ -134,14 +134,14 @@ export function FirstResult(props: { journey: Journey; onNotice: Notify; idPrefi
           ? h('div', null,
             h('div', { className: 'lp-first-figure' }, fmt(bioage.phenoage), h('span', { className: 'lp-bignum-unit' }, '岁')),
             h('div', { className: 'lp-caption' }, [versusAge(bioage.advance), bioage.band_years != null ? `正常波动 ±${fmt(bioage.band_years)} 岁` : ''].filter(Boolean).join(' · ')))
-          : h('p', { className: 'lp-blocker' }, bioage.blocker_zh)),
+          : h('div', null, h('div', { className: 'lp-first-wait' }, '还不能计算'), h('p', { className: 'lp-blocker' }, bioage.blocker_zh))),
       h('div', { className: 'lp-first-cell' },
         h('div', { className: 'lp-caption' }, '10 年心血管病风险 · 模型估计'),
         risk.status === 'ok'
           ? h('div', null,
             h('div', { className: 'lp-first-figure' }, riskText(risk.risk_pct), h('span', { className: 'lp-bignum-unit' }, '%')),
             h('div', { className: 'lp-caption' }, [risk.category_zh, 'China-PAR'].filter(Boolean).join(' · ')))
-          : h('p', { className: 'lp-blocker' }, risk.blocker_zh))),
+          : h('div', null, h('div', { className: 'lp-first-wait' }, '还不能计算'), h('p', { className: 'lp-blocker' }, risk.blocker_zh)))),
     blocked > 0 ? h('div', { className: 'lp-first-addons' },
       h('div', { className: 'lp-subhead' }, `还差 ${blocked} 项检查`, h('span', { className: 'lp-optional' }, '下次体检加测，或现在自己量')),
       h(AddonList, { journey: props.journey, onNotice: props.onNotice, idPrefix: props.idPrefix })) : null)

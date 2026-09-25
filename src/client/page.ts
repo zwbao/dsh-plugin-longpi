@@ -14,7 +14,7 @@ import { ProfileEditor } from './profile-editor.ts'
 import { ResultsRow, type ResultTarget } from './results.ts'
 import { SelfLatestList, SelfMeasureForm, SelfRecent } from './self-measure.ts'
 import { JourneyStepper, openStepOf, stepOf, type StepKey } from './stepper.ts'
-import { setPendingPrompt, useBoard, useJourney, usePageMounted, useTracking } from './store.ts'
+import { setPendingPrompt, useBoard, useJourney, usePageShown, useTracking } from './store.ts'
 import type { Face, Journey } from './types.ts'
 import { Btn, copyText, LinkButton, Section, Skeleton, useNotice } from './ui.ts'
 
@@ -22,7 +22,7 @@ const h = React.createElement
 
 type Notify = (text: string, tone?: 'info' | 'good' | 'bad') => void
 
-function Header(props: { journey: Journey | null; refreshing: boolean; onRefresh: () => void }): React.ReactElement {
+function Header(props: { journey: Journey | null; failed: boolean; refreshing: boolean; onRefresh: () => void }): React.ReactElement {
   const journey = props.journey
   const today = journey?.today ?? localToday()
   const name = journey?.profile.displayName.trim() ?? ''
@@ -34,7 +34,7 @@ function Header(props: { journey: Journey | null; refreshing: boolean; onRefresh
       h('p', { className: 'lp-lead' },
         `${chineseDate(today)} ${weekday(today)}`,
         late && journey ? ` · ${journey.next.detail_zh}` : ''),
-      journey ? h(RecordsStatusLine, { journey }) : h(Skeleton, { height: 18, width: 240 })),
+      journey ? h(RecordsStatusLine, { journey }) : props.failed ? null : h(Skeleton, { height: 18, width: 240 })),
     h('div', { className: 'lp-actions' },
       h('button', { type: 'button', className: 'lp-linkbtn', onClick: props.onRefresh, disabled: props.refreshing, 'aria-busy': props.refreshing },
         h(Icon, { name: 'refresh', size: 14, className: props.refreshing ? 'lp-spin' : '' }), props.refreshing ? '刷新中' : '刷新'),
@@ -75,7 +75,8 @@ function ProfileAndSelf(props: { journey: Journey; profileInStepper: boolean; on
 }
 
 export function LongPiPage(props: Partial<Face>): React.ReactElement {
-  usePageMounted()
+  const root = React.useRef<HTMLDivElement>(null)
+  usePageShown(root)
   const { journey, loading, error, refresh } = useJourney()
   const board = useBoard()
   const tracking = useTracking()
@@ -134,9 +135,9 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
       h(MethodsSection, { board: board.data, loading: board.loading, error: board.error, onNotice: notify }))
   }
 
-  return h('div', { className: 'lp lp-page-root' },
+  return h('div', { className: 'lp lp-page-root', ref: root },
     h('div', { className: 'lp-page' },
-      h(Header, { journey, refreshing, onRefresh: () => { void doRefresh() } }),
+      h(Header, { journey, failed: !journey && !loading, refreshing, onRefresh: () => { void doRefresh() } }),
       notice ? h('div', { className: 'lp-notice-slot' }, notice) : null,
       body,
       h('footer', { className: 'lp-footer' },

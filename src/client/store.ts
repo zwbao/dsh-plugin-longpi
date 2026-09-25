@@ -161,16 +161,31 @@ export function useSelfRows(): Resource<{ rows: SelfRow[] }> {
   return useResource<{ rows: SelfRow[] }>('self')
 }
 
-/** The reminder pill hides while the LongPi page is on screen. */
-export function usePageMounted(): void {
+/**
+ * The reminder pill hides while the LongPi page is on screen. On screen, not
+ * mounted: a host that keeps a hidden panel mounted must not silence the pill.
+ */
+export function usePageShown(ref: React.RefObject<HTMLElement>): void {
   React.useEffect(() => {
-    pageUsers += 1
-    emit()
-    return () => {
-      pageUsers -= 1
+    const node = ref.current
+    let shown = false
+    const set = (next: boolean) => {
+      if (next === shown) return
+      shown = next
+      pageUsers += next ? 1 : -1
       emit()
     }
-  }, [])
+    if (!node || typeof IntersectionObserver === 'undefined') {
+      set(true)
+      return () => set(false)
+    }
+    const observer = new IntersectionObserver((seen) => set(seen.some((entry) => entry.isIntersecting)))
+    observer.observe(node)
+    return () => {
+      observer.disconnect()
+      set(false)
+    }
+  }, [ref])
 }
 
 export function usePageShowing(): boolean {

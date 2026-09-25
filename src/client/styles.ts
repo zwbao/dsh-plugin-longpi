@@ -298,7 +298,8 @@ p.lp-muted { margin: 0; }
 .lp-can-ok { background: var(--lp-good-wash); color: var(--lp-good-ink); }
 .lp-first { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .lp-first-cell { padding: 14px 16px; border-radius: 12px; background: var(--lp-well); min-width: 0; }
-.lp-first-cell .lp-blocker { margin-top: 6px; font-size: 13px; line-height: 20px; }
+.lp-first-cell .lp-blocker { margin-top: 2px; font-size: 13px; line-height: 20px; }
+.lp-first-wait { margin-top: 6px; font-size: 18px; line-height: 26px; font-weight: 500; }
 .lp-first-figure { font-size: 32px; line-height: 40px; font-weight: 500; margin-top: 2px; font-variant-numeric: tabular-nums; }
 .lp-first-figure .lp-bignum-unit { margin-left: 4px; font-size: 14px; }
 .lp-first-addons .lp-subhead { margin-top: 18px; }
@@ -461,8 +462,9 @@ p.lp-muted { margin: 0; }
 .lp-dock-note { font-size: 12px; color: var(--lp-ink-3); }
 
 /* --- reminder pill (shell overlay: click-through layer) ---------------------------------------- */
+/* Bottom-right, but lifted clear of a chat's composer so it never covers the send button. */
 .lp-pill-wrap {
-  position: absolute; right: 24px; bottom: 24px; z-index: 1; pointer-events: auto;
+  position: absolute; right: 20px; bottom: 136px; z-index: 1; pointer-events: auto;
   display: inline-flex; align-items: center; gap: 2px; padding: 4px; border-radius: 20px;
   background: var(--lp-layer-2); box-shadow: var(--lp-lift); animation: lp-rise .4s ease both;
 }

@@ -85,6 +85,8 @@ const SHOTS = [
   ['onboarding-4', 'view=onboarding&stage=plan&step=4', 1280, 900],
   ['onboarding-4-blocked', 'view=onboarding&stage=first_result&step=4', 1280, 900],
   ['onboarding-2-dark', 'view=onboarding&stage=profile&step=2&theme=dark', 1280, 1100],
+  ['onboarding-done', 'view=onboarding&stage=routine', 1280, 700],
+  ['onboarding-fail', 'view=onboarding&fail=1', 1280, 700],
   ['dock', 'view=dock&stage=routine', 1280, 800],
   ['dock-first_result', 'view=dock&stage=first_result', 1280, 800],
   ['pill', 'view=pill&stage=routine', 1280, 800],
