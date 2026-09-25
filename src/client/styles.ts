@@ -530,10 +530,6 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
   font: inherit; cursor: pointer; white-space: nowrap; border-radius: 4px;
 }
 .lp-hero-link:hover, .lp-row-link:hover { text-decoration: underline; text-underline-offset: 3px; }
-.lp-hero-est {
-  display: inline-block; margin-left: 8px; padding: 0 6px; border-radius: 9px; border: .5px solid var(--lp-line-3);
-  font-size: 11px; line-height: 16px; color: var(--lp-ink-3); vertical-align: 2px; white-space: nowrap;
-}
 
 /* --- the row under the composer (conversation.composer.dock, only with the greeting) ------------- */
 .lp-home-row {

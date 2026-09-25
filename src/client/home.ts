@@ -15,6 +15,11 @@ const h = React.createElement
 
 /** Items named in the first-result sentence; the rest are counted, not listed. */
 const ADDONS_NAMED = 3
+/**
+ * The approved home line (spec D.1) carries no visible 模型估计 tag; the figures
+ * say it on hover, and the page and onboarding label them in full.
+ */
+const ESTIMATE = '模型估计：由你的记录计算，不是诊断'
 
 /**
  * The seat sits inside the hero's headline, a wrapping flex row meant for a
@@ -71,10 +76,10 @@ function joinUnlocks(journey: Journey): string {
 function figures(journey: Journey): React.ReactNode[][] {
   const { bioage, risk } = journey.results
   const body: React.ReactNode[] | null = bioage.status === 'ok' && bioage.phenoage != null
-    ? ['身体年龄 ', h('b', { key: 'b' }, `${fmt(bioage.phenoage)} 岁`), versusAge(bioage.advance) ? `，${versusAge(bioage.advance)}` : '']
+    ? ['身体年龄 ', h('b', { key: 'b', title: ESTIMATE }, `${fmt(bioage.phenoage)} 岁`), versusAge(bioage.advance) ? `，${versusAge(bioage.advance)}` : '']
     : null
   const heart: React.ReactNode[] | null = risk.status === 'ok' && risk.risk_pct != null
-    ? ['心血管 10 年风险 ', h('b', { key: 'b' }, `${riskText(risk.risk_pct)}%`), risk.category_zh ? `（${risk.category_zh}）` : '']
+    ? ['心血管 10 年风险 ', h('b', { key: 'b', title: ESTIMATE }, `${riskText(risk.risk_pct)}%`), risk.category_zh ? `（${risk.category_zh}）` : '']
     : null
   const focus = journey.profile.focus
   const riskAt = focus.findIndex((key) => key === 'cardio' || key === 'weight')
@@ -93,7 +98,6 @@ function titleOf(journey: Journey): string {
 function Status(props: { journey: Journey; open: () => void }): React.ReactElement {
   const { journey, open } = props
   const parts: React.ReactNode[] = []
-  let estimate = false
   if (journey.stage === 'consent' || journey.stage === 'profile') {
     parts.push('花 2 分钟建档，算出你的身体年龄和心血管风险', h(Sep, { key: 's' }), h(Go, { key: 'go', label: '开始建档', onClick: open }))
   } else if (journey.stage === 'records') {
@@ -107,7 +111,6 @@ function Status(props: { journey: Journey; open: () => void }): React.ReactEleme
   } else {
     const rows = journey.stage === 'first_result' ? [] : figures(journey)
     if (rows.length > 0) {
-      estimate = true
       rows.forEach((row, index) => {
         if (index > 0) parts.push(h(Sep, { key: `s${index}` }))
         parts.push(h(React.Fragment, { key: `f${index}` }, ...row))
@@ -118,8 +121,7 @@ function Status(props: { journey: Journey; open: () => void }): React.ReactEleme
       parts.push(detail, h(Sep, { key: 's' }), h(Go, { key: 'go', label: journey.next.action === 'profile' ? '去填写' : '健康页', onClick: open }))
     }
   }
-  return h('p', { className: 'lp-hero-status' }, ...parts,
-    estimate ? h('span', { className: 'lp-hero-est', title: '模型根据你的记录计算的估计值，不是诊断' }, '模型估计') : null)
+  return h('p', { className: 'lp-hero-status' }, ...parts)
 }
 
 function Hero(props: { journey: Journey; open: () => void }): React.ReactElement {
