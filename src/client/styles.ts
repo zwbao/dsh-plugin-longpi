@@ -263,26 +263,26 @@ p.lp-muted { margin: 0; }
 
 /* --- record changes beyond normal fluctuation ------------------------------------------------ */
 .lp-changes { margin-bottom: 16px; scroll-margin-top: 24px; }
-.lp-change-list { list-style: none; margin: 0; padding: 0; }
-.lp-change { display: grid; grid-template-columns: minmax(0, 1fr) 208px; gap: 8px 28px; align-items: center; padding: 16px 0; border-top: .5px solid var(--lp-line-2); }
-.lp-change:first-child { border-top: 0; padding-top: 2px; }
-.lp-change:last-child { padding-bottom: 4px; }
+.lp-change-group + .lp-change-group { margin-top: 18px; }
+.lp-change-list { list-style: none; margin: 6px 0 0; padding: 0; }
+.lp-change { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 6px 28px; align-items: center; padding: 12px 0; border-top: .5px solid var(--lp-line-2); }
+.lp-change:first-child { border-top: 0; }
 @container lp-root (max-width: 640px) { .lp-change { grid-template-columns: minmax(0, 1fr); } }
 .lp-change-main { min-width: 0; }
-.lp-change-text { margin: 4px 0 0; color: var(--lp-ink); font-variant-numeric: tabular-nums; }
-.lp-change-advice { display: flex; gap: 6px; align-items: flex-start; width: fit-content; max-width: 100%; margin: 8px 0 0; padding: 5px 10px; border-radius: 10px; font-size: 13px; line-height: 20px; color: var(--lp-ink); }
-.lp-change-advice .lp-icon { margin-top: 3px; }
+.lp-change-text { margin: 2px 0 0; color: var(--lp-ink-2); font-variant-numeric: tabular-nums; }
+.lp-change-advice { display: flex; gap: 6px; align-items: flex-start; width: fit-content; max-width: 100%; margin: 10px 0 0; padding: 6px 12px; border-radius: 10px; font-size: 13px; line-height: 20px; color: var(--lp-ink); }
+.lp-change-advice .lp-icon { margin-top: 3px; flex: none; }
 .lp-change-warn { background: var(--lp-warn-wash); }
 .lp-change-warn .lp-icon { color: var(--lp-warn-ink); }
 .lp-change-good { background: var(--lp-good-wash); }
 .lp-change-good .lp-icon { color: var(--lp-good-ink); }
 .lp-change-neutral { background: var(--lp-well); }
 .lp-change-neutral .lp-icon { color: var(--lp-ink-3); }
-.lp-change-caveat, .lp-change-source { margin: 6px 0 0; }
+.lp-change-notes { margin-top: 12px; padding-top: 12px; border-top: .5px solid var(--lp-line-2); display: grid; gap: 4px; }
+.lp-change-notes p { margin: 0; }
 .lp-change-source a { color: var(--lp-accent); text-decoration: none; overflow-wrap: anywhere; }
 .lp-change-source a:hover { text-decoration: underline; }
 .lp-change-spark { min-width: 0; }
-.lp-change-spark .lp-caption { margin-top: 4px; }
 
 /* --- journey stepper and first-run steps -------------------------------------------------- */
 .lp-stepper { padding: 24px 24px 6px; margin-bottom: 16px; }
