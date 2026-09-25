@@ -27,7 +27,7 @@ import { copyText } from './ui.ts'
 const h = React.createElement
 
 /** Shown while a prompt waits for a session to exist. */
-export const WAIT_FOR_WORKSPACE = '先在下方选择一个工作区，选好后会自动放进输入框'
+export const WAIT_FOR_WORKSPACE = '先在输入框上方选择一个工作区，选好后会自动放进输入框'
 
 /** The composer's action face. Older DSH builds only offer setDraft, so every method is optional. */
 interface InputActions {

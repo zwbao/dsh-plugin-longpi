@@ -276,6 +276,8 @@ p.lp-muted { margin: 0; }
 .lp-change-warn .lp-icon { color: var(--lp-warn-ink); }
 .lp-change-good { background: var(--lp-good-wash); }
 .lp-change-good .lp-icon { color: var(--lp-good-ink); }
+.lp-change-neutral { background: var(--lp-well); }
+.lp-change-neutral .lp-icon { color: var(--lp-ink-3); }
 .lp-change-caveat, .lp-change-source { margin: 6px 0 0; }
 .lp-change-source a { color: var(--lp-accent); text-decoration: none; overflow-wrap: anywhere; }
 .lp-change-source a:hover { text-decoration: underline; }

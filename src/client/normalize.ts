@@ -138,7 +138,7 @@ function changeOf(row: Raw): RecordChange | null {
     band_pct: { up, down },
     direction: oneOf(row.direction, ['up', 'down'] as const, pct < 0 ? 'down' : 'up'),
     verdict,
-    ask_doctor: row.ask_doctor === true || verdict !== 'better',
+    ask_doctor: row.ask_doctor === true || verdict === 'worse',
     text_zh: text,
     advice_zh: str(row.advice_zh),
     ...(str(row.caveat_zh) ? { caveat_zh: str(row.caveat_zh) } : {}),

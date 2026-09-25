@@ -34,13 +34,13 @@ function withoutLabel(row: RecordChange): string {
 
 function ChangeRow(props: { row: RecordChange }): React.ReactElement {
   const { row } = props
-  const tone = row.ask_doctor ? 'warn' : 'good'
+  const tone = row.ask_doctor ? 'warn' : row.verdict === 'better' ? 'good' : 'neutral'
   return h('li', { className: 'lp-change' },
     h('div', { className: 'lp-change-main' },
       h('div', { className: 'lp-strong' }, row.label_zh),
       h('p', { className: 'lp-change-text' }, withoutLabel(row)),
       row.advice_zh ? h('p', { className: `lp-change-advice lp-change-${tone}` },
-        h(Icon, { name: row.ask_doctor ? 'warn' : 'check', size: 14 }), h('span', null, row.advice_zh)) : null,
+        h(Icon, { name: tone === 'warn' ? 'warn' : tone === 'good' ? 'check' : 'info', size: 14 }), h('span', null, row.advice_zh)) : null,
       row.caveat_zh ? h('p', { className: 'lp-caption lp-change-caveat' }, row.caveat_zh) : null,
       row.source.title ? h('p', { className: 'lp-caption lp-change-source' },
         '波动数据来源：',

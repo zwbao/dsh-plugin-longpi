@@ -32,6 +32,8 @@ const MOUNT = { mounted: true, peer: false, error: '', pluginHome: '' }
 const NOTE = '判断依据：两次结果之差超过同一个人正常波动与检测误差合成的参考变化值（RCV，z=1.96）才算真实变化；变异数据来自 longevity-skills 的 data/biological_variation.json，每一行注明期刊出处。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。'
 const ASK = '建议带着这几次体检报告咨询医生，看看是否需要进一步检查。'
 const GOOD = '变化超出了正常波动，方向是好的。'
+const RANGE = '变化超出了正常波动；是否需要处理要结合参考范围判断，建议带着这几次体检报告咨询医生。'
+const NEUTRAL = '变化超出了正常波动。'
 const KEYS = ['advice_zh', 'ask_doctor', 'band_pct', 'compare', 'direction', 'key', 'label_zh', 'points', 'source', 'text_zh', 'unit', 'verdict', 'verified']
 const catalog = mod.loadCatalog(home)
 const { biovar } = mod.loadReference(home)
@@ -152,7 +154,7 @@ try {
   assert.equal(mcv.ask_doctor, true)
   assert.equal(mcv.unit, 'fL')
   assert.equal(mcv.text_zh, `平均红细胞体积 91 → 84 fL（${D1} → ${D3}），下降 ${Math.abs(pctOf(91, 84)).toFixed(1)}%，超出正常波动（±${mcv.band_pct.up.toFixed(1)}%）`)
-  assert.equal(mcv.advice_zh, ASK)
+  assert.equal(mcv.advice_zh, RANGE, 'a range marker: the reference range decides')
   assert.equal(mcv.caveat_zh, markerOf('mcv').caveat_zh)
   assert.deepEqual(mcv.source, { title: markerOf('mcv').cvi_source.title, url: markerOf('mcv').cvi_source.url, doi: markerOf('mcv').cvi_source.doi })
   assert.equal(mcv.verified, markerOf('mcv').verified)
@@ -168,6 +170,7 @@ try {
   assert.ok(glucose.compare.pct > bandOf('glucose').up * 100)
   assert.equal(glucose.verdict, 'worse', 'lower is better, and it rose')
   assert.equal(glucose.ask_doctor, true)
+  assert.equal(glucose.advice_zh, ASK)
 
   const hba1c = built.changes[2]
   assert.equal(hba1c.verdict, 'better')
@@ -178,6 +181,15 @@ try {
 
   for (const key of ['albumin', 'crp', 'wbc', 'weight', 'sbp']) assert.ok(!built.changes.some((row) => row.key === key), `${key} is not listed`)
   assert.ok(Math.abs(pctOf(44, 45)) < bandOf('albumin').up * 100, 'albumin moved, within its band')
+
+  // weight has no better direction: a real change, but not one for the doctor
+  const weightRecord = [lab('Body Weight-WT', '体重', markerOf('weight').loinc[0], 'kg', D1, 70), lab('Body Weight-WT', '体重', markerOf('weight').loinc[0], 'kg', D3, 80)]
+  const weightServer = await serve({ tz: 'Asia/Shanghai', today: TODAY, observations: weightRecord, medications: { plans: [], log: [], history: [] } })
+  const weight = (await mod.buildChanges(await contextOf(configFor(synthDir, weightServer.url)))).changes[0]
+  assert.equal(weight.key, 'weight')
+  assert.equal(weight.verdict, 'unclear')
+  assert.equal(weight.ask_doctor, false)
+  assert.equal(weight.advice_zh, NEUTRAL)
 
   // log-normal rows show both sides of their band
   const tgBand = bandOf('tg')
@@ -252,7 +264,7 @@ try {
 
   const report = mod.buildReport({ name: '', today: TODAY, records: fallingContext.records, tracking: step.tracking })
   assert.match(report, /## 记录里的明显变化/)
-  assert.ok(report.includes(`- ${step.tracking.changes[0].text_zh}。${ASK}`))
+  assert.ok(report.includes(`- ${step.tracking.changes[0].text_zh}。${step.tracking.changes[0].advice_zh}`))
   assert.ok(report.includes(`  - ${markerOf('mcv').caveat_zh}`))
   assert.ok(report.includes(NOTE))
   assert.ok(report.indexOf('## 记录里的明显变化') < report.indexOf('## 表型年龄'), 'before the results')

@@ -43,8 +43,12 @@ export interface ChangesContext {
 }
 
 export const CHANGES_NOTE_ZH = '判断依据：两次结果之差超过同一个人正常波动与检测误差合成的参考变化值（RCV，z=1.96）才算真实变化；变异数据来自 longevity-skills 的 data/biological_variation.json，每一行注明期刊出处。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。'
-const ASK_DOCTOR_ZH = '建议带着这几次体检报告咨询医生，看看是否需要进一步检查。'
+const WORSE_ZH = '建议带着这几次体检报告咨询医生，看看是否需要进一步检查。'
+// A 'range' marker (haemoglobin, MCV, white cells) can be fine or not either way; only the lab's reference range tells.
+const RANGE_ZH = '变化超出了正常波动；是否需要处理要结合参考范围判断，建议带着这几次体检报告咨询医生。'
 const BETTER_ZH = '变化超出了正常波动，方向是好的。'
+// Weight and other rows without a better direction: a real change, nothing more to say.
+const NEUTRAL_ZH = '变化超出了正常波动。'
 /** Checkup days kept per marker, the most recent. */
 const KEEP_POINTS = 6
 const MAX_CHANGES = 6
@@ -123,7 +127,7 @@ function changeOf(marker: BiovarMarker, points: Point[], z: number): (RecordChan
   if (!pick) return null
   const direction = pick.pct > 0 ? 'up' : 'down'
   const verdict = verdictOf(marker.better, direction)
-  const askDoctor = verdict !== 'better'
+  const askDoctor = verdict === 'worse' || (verdict === 'unclear' && marker.better === 'range')
   const up = round1(band.up * 100)
   const down = marker.log_normal ? round1(band.down * 100) : -up
   // Log-normal rows (CRP, triglycerides) have an asymmetric band: both sides are shown.
@@ -139,7 +143,7 @@ function changeOf(marker: BiovarMarker, points: Point[], z: number): (RecordChan
     verdict,
     ask_doctor: askDoctor,
     text_zh: `${marker.label_zh} ${marker.unit === '%' ? `${shown(pick.from.value)}%` : shown(pick.from.value)} → ${withUnit(pick.to.value, marker.unit)}（${pick.from.date} → ${pick.to.date}），${direction === 'down' ? '下降' : '上升'} ${Math.abs(pick.pct).toFixed(1)}%，超出正常波动（${bandText}）`,
-    advice_zh: askDoctor ? ASK_DOCTOR_ZH : BETTER_ZH,
+    advice_zh: verdict === 'worse' ? WORSE_ZH : verdict === 'better' ? BETTER_ZH : askDoctor ? RANGE_ZH : NEUTRAL_ZH,
     ...(marker.caveat_zh ? { caveat_zh: marker.caveat_zh } : {}),
     source: { title: marker.cvi_source.title, url: marker.cvi_source.url, ...(marker.cvi_source.doi ? { doi: marker.cvi_source.doi } : {}) },
     verified: marker.verified,
