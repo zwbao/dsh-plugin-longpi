@@ -178,7 +178,7 @@ print("技能库  ", s["count"], "个，版本", s["version"], s["error"] or "")
 print("Mirobody", "已挂载" if m["mounted"] else "未挂载：" + m["error"])
 e = m["engine"]; print("术语引擎", ("正常 " + str(e.get("version"))) if e.get("ok") else ("异常：" + str(e.get("error"))))
 print("病历    ", r["status"], r["indicator_count"], "项指标", r["error"] or "")'
-curl -s -b "$JAR" "http://127.0.0.1:3080/api/mirobody/resolve?q=%E8%A1%80%E7%BA%A2%E8%9B%8B%E7%99%BD&token=$TOKEN" \
+curl -s -b "$JAR" "http://127.0.0.1:3080/api/mirobody/resolve?q=%E8%A1%80%E7%BA%A2%E8%9B%8B%E7%99%BD" \
   | python3 -c 'import json, sys; x = json.load(sys.stdin)["results"][0]; print(x["term"], "→", x["loinc"])'
 ```
 

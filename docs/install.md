@@ -178,7 +178,7 @@ print("skills  ", s["count"], "version", s["version"], s["error"] or "")
 print("mirobody", "mounted" if m["mounted"] else "not mounted: " + m["error"])
 e = m["engine"]; print("engine  ", ("ok " + str(e.get("version"))) if e.get("ok") else ("failed: " + str(e.get("error"))))
 print("record  ", r["status"], r["indicator_count"], "indicators", r["error"] or "")'
-curl -s -b "$JAR" "http://127.0.0.1:3080/api/mirobody/resolve?q=%E8%A1%80%E7%BA%A2%E8%9B%8B%E7%99%BD&token=$TOKEN" \
+curl -s -b "$JAR" "http://127.0.0.1:3080/api/mirobody/resolve?q=%E8%A1%80%E7%BA%A2%E8%9B%8B%E7%99%BD" \
   | python3 -c 'import json, sys; x = json.load(sys.stdin)["results"][0]; print(x["term"], "→", x["loinc"])'
 ```
 
