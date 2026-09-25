@@ -184,13 +184,23 @@ export function ConfirmModal(props: {
         h(Btn, { 'data-modal-autofocus': true, onClick: () => props.onConfirm(offer != null && remind), disabled: props.busy }, props.busy ? '保存中…' : '确认采用'))))
 }
 
+/** The focus and markers a chat draft was made for, so the server rebuilds the same brief. */
+export interface DraftSource {
+  focus?: string[]
+  markers?: string[]
+}
+
 /**
  * Save the kept items (and the goals that still have their item), then turn
  * the reminder on when the person left the box ticked. Unticked sends nothing.
  */
-export async function acceptDraft(draft: PlanDraft, kept: DraftItem[], remind: boolean): Promise<{ ok: true; version: number; items: number; reminder: string | null } | { ok: false; error: string }> {
+export async function acceptDraft(draft: PlanDraft, kept: DraftItem[], remind: boolean, source: DraftSource = {}): Promise<{ ok: true; version: number; items: number; reminder: string | null } | { ok: false; error: string }> {
   const goals = keptGoals(draft, kept)
-  const result = await postJson<AcceptResponse>('/api/longpi/plan-draft/accept', { draft: { ...draft, items: kept, goals } })
+  const result = await postJson<AcceptResponse>('/api/longpi/plan-draft/accept', {
+    draft: { ...draft, items: kept, goals },
+    ...(source.focus?.length ? { focus: source.focus } : {}),
+    ...(source.markers?.length ? { markers: source.markers } : {}),
+  })
   if (!result.ok) return { ok: false, error: (result.problems ?? []).join(' ') || result.error || '请稍后再试' }
   let reminder: string | null = null
   if (remind) {

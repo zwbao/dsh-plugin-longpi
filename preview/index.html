@@ -544,15 +544,19 @@
     return {
       draft: [['user', '帮我制定一份改善方案'], ['draft_intervention_plan', settled('draft_intervention_plan', {}, { brief: state.planDraft.brief, draft: state.planDraft.draft, how_to_use: '…' })],
         ['text', '按你最关心的身体年龄和心血管，从收录的试验证据里挑了几项，都不涉及处方药。每项注明试验里的平均效果，个人结果会不同。']],
-      checkin: [['user', '今天地中海饮食做到了'], ['log_intervention_checkin', settled('log_intervention_checkin', { entries: [{ item: item.title, done: true }] }, { ok: true, saved: 1, entries: [{ at: '2026-09-24T12:00:00.000Z', date: j.today, item: item.id, done: true, amount: null, unit: '', note: '', tags: [], source: 'chat' }], problems: [] })],
-        ['text', '记下了。今天的方案都完成了。']],
+      checkin: [['user', '今天地中海饮食做到了'], ['log_intervention_checkin', settled('log_intervention_checkin', { entries: [{ item: item.title, done: true }] }, { ok: true, saved: 1, entries: [{ at: '2026-09-24T12:00:00.000Z', date: j.today, item: item.id, title: item.title, done: true, amount: null, unit: '', note: '', tags: [], source: 'chat' }], problems: [] })],
+        ['text', '记下了。今天的方案都完成了。'],
+        ['user', '刚才记错了，撤销；另外今天有点感冒'],
+        ['log_intervention_checkin', settled('log_intervention_checkin', { entries: [{ item: item.title, done: null }, { item: item.title, tags: ['illness'] }] }, { ok: true, saved: 2, entries: [
+          { at: '2026-09-24T12:05:00.000Z', date: j.today, item: item.id, title: item.title, done: null, amount: null, unit: '', note: '', tags: [], source: 'chat', undo: true },
+          { at: '2026-09-24T12:05:00.000Z', date: j.today, item: item.id, title: item.title, done: null, amount: null, unit: '', note: '', tags: ['illness'], source: 'chat' }], problems: [] })]],
       save: [['save_intervention_plan', settled('save_intervention_plan', { confirm: false }, { ok: true, saved: false, read_back: readBack, goals: [], warnings: ['「车前子壳纤维」是补充剂类饮食纤维，需先与医生确认，不含剂量。'] })],
         ['save_intervention_plan', settled('save_intervention_plan', { confirm: true }, { ok: true, saved: true, version: 2, read_back: readBack, warnings: [] })]],
       skill: [['run_longevity_skill', settled('run_longevity_skill', { name: 'accelerated-biological-aging-risk' }, { ok: true, skill: 'accelerated-biological-aging-risk', exit_code: 0, measured_at: '2026-08-26', outputs: { phenoage: { value: 44.76, unit: 'a', label_zh: '表型年龄' }, phenoage_advance: { value: -8.14, unit: 'a', label_zh: '表型年龄减实足年龄' } }, report_excerpt: '表型年龄 44.8 岁……边界：模型估计，不是诊断。' })],
         ['run_longevity_skill', settled('run_longevity_skill', { name: 'china-par-ascvd-risk' }, { ok: true, skill: 'china-par-ascvd-risk', exit_code: 0, measured_at: '2026-08-26', outputs: { risk_10y_pct: { value: 4.0, unit: '%', label_zh: '10 年动脉粥样硬化性心血管病风险（China-PAR 模型估计）' }, risk_category: { value: '低危', unit: '', label_zh: '风险分层' } }, report_excerpt: '' })],
         ['run_longevity_skill', settled('run_longevity_skill', { name: 'wearable-aging-clock' }, { ok: true, skill: 'wearable-aging-clock', exit_code: 0, outputs: { wearable_age: { value: 47.2, unit: 'a', label_zh: '可穿戴衰老时钟年龄' } }, report_excerpt: '可穿戴衰老时钟：47.2 岁（模型估计）。' })],
         ['run_longevity_skill', settled('run_longevity_skill', { name: 'proteomic-aging-clock' }, { ok: false, skill: 'proteomic-aging-clock', error_kind: 'missing_input', error: '记录里没有蛋白组学数据', exit_code: 3, report_excerpt: '' })]],
-      situation: [['read_personal_situation', settled('read_personal_situation', {}, { indicator_count: j.records.indicator_count, record_status: 'ok', record_changes: (j.changes || []).map(({ points, ...row }) => row), onboarding: { stage: j.stage } })],
+      situation: [['read_personal_situation', settled('read_personal_situation', {}, { indicator_count: j.records.indicator_count, records_summary: j.records.summary, record_status: 'ok', record_changes: (j.changes || []).map(({ points, ...row }) => row), onboarding: { stage: j.stage } })],
         ['draft_intervention_plan', running('draft_intervention_plan', {})],
         ['log_intervention_checkin', settled('log_intervention_checkin', {}, 'log_intervention_checkin: tool timed out after 20000 ms', true)]],
     }

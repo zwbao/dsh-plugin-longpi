@@ -562,6 +562,7 @@ try {
   assert.equal(selfTool.saved[0].label_zh, '体重')
 
   const situation = await host.tools.get('read_personal_situation').execute({})
+  assert.equal(situation.records_summary, null, 'no record, no checkups to count')
   assert.equal(situation.onboarding.stage, 'records')
   assert.equal(situation.onboarding.consent_accepted, true)
   assert.ok(situation.onboarding.questions_unanswered.includes(mod.RISK_FACT_ZH.smoker))

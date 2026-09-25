@@ -14,8 +14,8 @@ import { resolveDataDir, resolveSkillsHome } from './paths.ts'
 import { invalidateRecords, loadRecords } from './records.ts'
 import { addSelf, SELF_KEYS, SELF_SPEC } from './selfmeasure.ts'
 import { buildTracking, describeItem, describePlan, goalProblems, invalidateTracking, modelGoals } from './tracking.ts'
-import { buildPlanBrief, draftPlan } from './planner.ts'
-import { FOCUS, type Focus } from './profile.ts'
+import { briefOptionsOf, buildPlanBrief, draftPlan } from './planner.ts'
+import { FOCUS } from './profile.ts'
 
 function jsonText(value: unknown): [{ type: 'text'; text: string }] {
   return [{ type: 'text', text: JSON.stringify(value, null, 2) }]
@@ -177,11 +177,7 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
       const catalog = loadCatalog(skillsHome)
       const records = await loadRecords(current, dataDir, mount.pluginHome)
       const today = isoDay()
-      const focus = (Array.isArray(args.focus) ? args.focus : []).filter((item): item is Focus => (FOCUS as readonly string[]).includes(String(item)))
-      const markers = (Array.isArray(args.markers) ? args.markers : []).map((item) => String(item).trim()).filter((item) => item && item.length <= 40).slice(0, 8)
-      const brief = await buildPlanBrief({ config: current, dataDir, skillsHome, catalog, records, today, mount }, {
-        ...(focus.length > 0 ? { focus } : {}), markers,
-      })
+      const brief = await buildPlanBrief({ config: current, dataDir, skillsHome, catalog, records, today, mount }, briefOptionsOf(args.focus, args.markers))
       const constraints = typeof args.constraints === 'string' ? args.constraints.trim().slice(0, 500) : ''
       return asJson({
         brief,
@@ -224,7 +220,10 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
       const { dataDir } = where()
       const result = addCheckIns(dataDir, Array.isArray(args.entries) ? args.entries : [], { today: isoDay(), source: 'chat' })
       if (result.saved.length > 0) invalidateTracking()
-      return asJson({ ok: result.saved.length > 0, saved: result.saved.length, entries: result.saved, problems: result.problems })
+      // Each entry with its item's title, so the chat card never shows an id.
+      const items = currentPlan(dataDir)?.items ?? []
+      const entries = result.saved.map((row) => ({ ...row, title: items.find((item) => item.id === row.item)?.title ?? row.item }))
+      return asJson({ ok: result.saved.length > 0, saved: result.saved.length, entries, problems: result.problems })
     },
   }))
 

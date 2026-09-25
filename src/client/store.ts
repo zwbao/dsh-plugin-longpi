@@ -104,6 +104,9 @@ function load(key: Key, mode: Mode = 'reuse'): Promise<void> {
       if (seq !== entry.seq) return
       entry.data = SHAPE[key] ? (SHAPE[key] as (raw: unknown) => unknown)(raw) : raw
       entry.error = null
+      // Only an answer counts as fetched: a failed read keeps the old time, so an answer given since
+      // (a check-in mark) still shows, and the next focus reads again.
+      entry.at = Date.now()
     })
     .catch((error: unknown) => {
       if (seq !== entry.seq) return
@@ -111,7 +114,6 @@ function load(key: Key, mode: Mode = 'reuse'): Promise<void> {
     })
     .finally(() => {
       if (seq !== entry.seq) return
-      entry.at = Date.now()
       entry.loading = false
       entry.inflight = null
       emit()

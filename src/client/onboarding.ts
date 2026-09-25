@@ -170,8 +170,8 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
   useAutofocus(content, step ?? -1, step != null && !!journey && !done)
   if (done) return null
   if (!journey) {
-    // Still loading within the grace period: show and block nothing.
-    if (!timedOut && !(loadError && !loading)) return null
+    // Still loading within the grace period: show and block nothing. A retry keeps the screen, busy.
+    if (!timedOut && !retrying && !(loadError && !loading)) return null
     return h(NotRead, { error: loadError, onRetry: retry, onLater: finish, busy: retrying || loading })
   }
   if (step == null) return null

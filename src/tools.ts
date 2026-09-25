@@ -128,6 +128,8 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
         read_errors: records.read_errors,
         missing_reads: records.missing_reads,
         mcp: records.mcp,
+        // What the record holds (checkup days, first and last date); null while it is not read.
+        records_summary: read.journey?.records.summary ?? null,
         ...onboardingOf(read, records.profile, input.dataDir),
         ...recordChangesOf(read),
         note: 'Medication doses are what the record says. They are not an instruction to change a dose. A missing indicator was not on file, unless record_status is partial: then read_errors says which reads failed, and an indicator in missing_reads (or any indicator, when the catalogue was cut) is unknown because it was not read. Never say such an indicator was not measured; say the read failed and suggest trying again later. Indicators named ...（自测） are measurements the person entered themselves (source self), used only when newer than the record. earlier_readouts are outputs of skills already run for this person; cite them with their date. onboarding says where the person is, the first results or what blocks them, and what to add at the next checkup.',

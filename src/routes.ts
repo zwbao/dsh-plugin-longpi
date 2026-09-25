@@ -14,7 +14,7 @@ import { loadEvidenceLexicon } from './intents.ts'
 import { buildStats } from './stats.ts'
 import { PRODUCT_NAME, PRODUCT_VERSION } from './version.ts'
 import { addCheckIns, currentPlan, isoDay, normalizePlan, savePlan } from './interventions.ts'
-import { acceptedPlan, buildPlanBrief, draftPlan } from './planner.ts'
+import { acceptedPlan, briefOptionsOf, buildPlanBrief, draftPlan } from './planner.ts'
 import { buildReport, readiness, runReady } from './overview.ts'
 import { invalidateRecords } from './records.ts'
 import { buildTracking, invalidateTracking } from './tracking.ts'
@@ -379,14 +379,16 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
         }
         void (async () => {
           const body = await readJson(req, 64_000)
-          const posted = body.ok && body.value && typeof body.value === 'object' ? (body.value as Record<string, unknown>).draft : undefined
+          const value = body.ok && body.value && typeof body.value === 'object' ? body.value as Record<string, unknown> : {}
+          const posted = value.draft
           if (!posted || typeof posted !== 'object') {
             sendJson(res, 400, { ok: false, error: 'body must be {"draft": {...}}' })
             return
           }
           const input = await journeyContext()
-          // The items are rebuilt from the evidence by id, then saved exactly like a confirmed plan.
-          const accepted = acceptedPlan(await buildPlanBrief(input), posted, input.today)
+          // The items are rebuilt from the evidence by id, from the same brief the draft came from (a chat
+          // draft may have its own focus and markers), then saved exactly like a confirmed plan.
+          const accepted = acceptedPlan(await buildPlanBrief(input, briefOptionsOf(value.focus, value.markers)), posted, input.today)
           if (!accepted.ok) {
             sendJson(res, 400, { ok: false, error: accepted.error, problems: accepted.problems })
             return
