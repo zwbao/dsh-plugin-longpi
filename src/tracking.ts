@@ -192,6 +192,7 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
     }
   }
 
+  if (context.records.record_status === 'error') errors.push(readFailed(context.records))
   const names = [...new Set([...plan.items.flatMap((item) => item.markers), ...goals.map((goal) => goal.marker)])]
   const resolvedList = resolveMarkers(names, context.records.indicators, reference.biovar)
   const markers: Record<string, ResolvedMarker> = Object.fromEntries(resolvedList.map((row) => [row.asked, row]))
@@ -247,6 +248,7 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
     plan, goals, today: context.today, markers, series, adherence, courses, checkins, biovar: reference.biovar, effects: reference.effects,
     // A marker whose readings failed to read is not judged from what is left: it says the read failed.
     unread: [...labs.failed, ...labs.cut],
+    record_unread: context.records.record_status === 'error' ? 'failed' : context.records.catalog_truncated ? 'cut' : undefined,
   })
   const suggestions = suggestNext(items, { today: context.today, levers })
   const charts = chartsFor(plan, resolvedList, series, reference, goals)

@@ -79,6 +79,8 @@ export interface MarkerVerdict {
   next_retest: string | null
   /** The first date a retest means anything (start + the marker's minimum interval), when a retest is suggested. Stable while next_retest moves with today. */
   first_due: string | null
+  /** Not found because the record was not read whole (never a sign the test is missing). */
+  unread?: boolean
 }
 
 export interface ItemSummary {
@@ -315,6 +317,8 @@ export interface EvaluateInput {
   effects: EffectRow[]
   /** Indicator names whose readings failed to read or came back cut: judged from nothing, never from what is left. */
   unread?: readonly string[]
+  /** The record failed to read, or its catalogue came back cut: a marker not found may be in the part not read. */
+  record_unread?: 'failed' | 'cut'
 }
 
 export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: EvaluateInput): MarkerVerdict {
@@ -326,6 +330,13 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
     confounders: [], combined_with: [], expected: [], next_retest: null, first_due: null,
   }
   const retestDays = biovar?.min_retest_days ?? DEFAULT_RETEST_DAYS
+  if (!marker.indicator && input.record_unread) {
+    base.unread = true
+    base.reason_zh = input.record_unread === 'failed'
+      ? `记录读取失败，没有读到${marker.label}的结果，这次无法判断。`
+      : `指标目录没有读全，${marker.label}可能在没有读到的部分，这次无法判断。`
+    return base
+  }
   if (!marker.indicator) {
     base.reason_zh = `记录里还没有${marker.label}。下次检查时加测，才能看这项干预对它的影响。`
     return base
@@ -563,7 +574,8 @@ export function suggestNext(summaries: readonly ItemSummary[], context: { today:
     }
     for (const row of item.verdicts) {
       if (!row.indicator) {
-        out.push({ kind: 'missing_marker', priority: 3, item: item.id, marker: row.marker, text_zh: `「${item.title}」针对${row.marker}，但记录里没有这一项。下次检查加测。` })
+        // A marker the record was not read whole for may well be on file: never ask for a test it may have.
+        if (!row.unread) out.push({ kind: 'missing_marker', priority: 3, item: item.id, marker: row.marker, text_zh: `「${item.title}」针对${row.marker}，但记录里没有这一项。下次检查加测。` })
       } else if (row.next_retest && !seenRetest.has(`${row.marker}:${row.next_retest}`)) {
         seenRetest.add(`${row.marker}:${row.next_retest}`)
         out.push({

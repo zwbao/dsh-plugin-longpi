@@ -1479,6 +1479,8 @@ interface MarkerVerdict {
   next_retest: string | null;
   /** The first date a retest means anything (start + the marker's minimum interval), when a retest is suggested. Stable while next_retest moves with today. */
   first_due: string | null;
+  /** Not found because the record was not read whole (never a sign the test is missing). */
+  unread?: boolean;
 }
 interface ItemSummary {
   id: string;
@@ -1534,6 +1536,8 @@ interface EvaluateInput {
   effects: EffectRow[];
   /** Indicator names whose readings failed to read or came back cut: judged from nothing, never from what is left. */
   unread?: readonly string[];
+  /** The record failed to read, or its catalogue came back cut: a marker not found may be in the part not read. */
+  record_unread?: 'failed' | 'cut';
 }
 declare function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: EvaluateInput): MarkerVerdict;
 declare function evaluatePlan(input: EvaluateInput): ItemSummary[];

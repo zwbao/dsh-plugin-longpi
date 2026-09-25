@@ -294,6 +294,22 @@ try {
   assert.equal(steps[0].text_zh, `空腹血糖：${together}下次调整一次只改一项。`)
   for (const row of mod.suggestNext(summaries, { today: TODAY })) assert.doesNotMatch(row.text_zh, /来自|组合/)
 
+  // A marker not found in a record that failed to read, or whose catalogue was cut, is never "add the test"
+  const notFound = { asked: '超敏C反应蛋白', label: '超敏C反应蛋白', indicator: null, unit: '', biovar: null }
+  const crpOnly = { items: [itemOf('c1', '地中海饮食', ['超敏C反应蛋白'])] }
+  const unreadInput = (recordUnread) => ({
+    plan: crpOnly, goals: [], today: TODAY, markers: { 超敏C反应蛋白: notFound }, series: {},
+    adherence: { c1: followed }, courses: [], checkins: [], biovar: bv, effects: [], record_unread: recordUnread,
+  })
+  for (const [recordUnread, reason] of [['failed', /^记录读取失败，没有读到超敏C反应蛋白的结果，这次无法判断。$/], ['cut', /^指标目录没有读全，超敏C反应蛋白可能在没有读到的部分，这次无法判断。$/]]) {
+    const rows = mod.evaluatePlan(unreadInput(recordUnread))
+    assert.match(rows[0].verdicts[0].reason_zh, reason)
+    assert.equal(mod.suggestNext(rows, { today: TODAY }).some((row) => row.kind === 'missing_marker'), false, recordUnread)
+  }
+  const readWhole = mod.evaluatePlan(unreadInput(undefined))
+  assert.match(readWhole[0].verdicts[0].reason_zh, /^记录里还没有超敏C反应蛋白。下次检查时加测/)
+  assert.equal(mod.suggestNext(readWhole, { today: TODAY }).filter((row) => row.kind === 'missing_marker').length, 1)
+
   // 7d: a goal the skill cannot read is named, and no "at the goal" value is shown for it
   const badUnit = await mod.modelGoals({ config, dataDir, skillsHome: home, catalog, records, today: TODAY }, [{ marker: '空腹血糖', value: 5.0, unit: 'mmol/mol' }])
   const badCard = badUnit.models.find((row) => row.model === 'phenoage')
