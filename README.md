@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/instal
 
 The installer adds the DeepSeek Harness CLI if it is missing, downloads the skill library, creates a Python environment with the Mirobody terminology engine under `~/longpi`, and installs and configures the plugin in DeepSeek Harness. It needs Node.js 22.19+, Python 3.12+ and git, and running it again updates everything.
 
-Health records come from [Mirobody](https://github.com/thetahealth/mirobody). With an existing Mirobody, add `--mcp-url` and its personal MCP address. Without one, add `--with-mirobody` to deploy a local instance with demo data through Docker:
+Health records come from [Mirobody](https://github.com/thetahealth/mirobody). With an existing Mirobody, add `--mcp-url` and its personal MCP address, or paste the address later in the LongPi page of the DeepSeek Harness settings and test the connection there. Without one, add `--with-mirobody` to deploy a local instance with demo data through Docker:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/install.sh | bash -s -- --with-mirobody
@@ -33,7 +33,7 @@ See `install.sh --help` for other options and [docs/install.md](docs/install.md)
 
 ## Usage
 
-Start DeepSeek Harness with `dsh web`. On first launch, enter a DeepSeek API key when asked; if there is no workspace yet, LongPi creates one named 健康. LongPi's onboarding then takes four steps:
+Start DeepSeek Harness with `dsh web`. On first launch, enter a DeepSeek API key when asked; if there is no workspace yet, LongPi creates one named 健康对话. LongPi's onboarding then takes four steps:
 
 1. **About and consent**: what LongPi does and where the data is kept.
 2. **Profile**: age, sex, and the six facts the cardiovascular model needs (smoking, diabetes, blood-pressure medicine in the last two weeks, northern or southern China, urban or rural, early cardiovascular disease in the family). Every question can be skipped; a skipped answer means unknown, never no.
@@ -43,10 +43,11 @@ Start DeepSeek Harness with `dsh web`. On first launch, enter a DeepSeek API key
 After onboarding:
 
 - **Home**: a new chat opens with a greeting in place of the default title and one sentence on where things stand, with a second line when the record has changes beyond normal fluctuation. Under the input box sit only the next things to do: today's check-ins and the nearest retest while a plan runs, otherwise two suggested questions that go into the input box when tapped.
-- **Health page**: 健康 in the sidebar opens the full page: progress, record changes, phenotypic age and cardiovascular risk, the plan and check-ins, profile and self-measurements, follow-up reminders, and the method library.
-- **Plans**: say 帮我制定一份改善方案 in the chat, or edit the draft on the health page item by item and adopt it; a plan from a doctor or longevity coach can be saved too. LongPi reads the plan back and saves it only after confirmation.
+- **Health page**: 健康 in the sidebar opens the full page in four tabs. 概览 has today's check-ins, phenotypic age, cardiovascular risk, the next step and notable changes; 指标 lists every checkup and wearable value by group with its trend and whether it moved beyond normal fluctuation; 方案 has the plan, adherence, timeline and verdicts; 档案 has the profile, self-measurements, the data connection and export.
+- **Settings**: the LongPi page in DeepSeek Harness settings holds follow-up reminders, the Mirobody connection (paste an address, test, save), privacy notes and the method library.
+- **Plans**: say 帮我制定一份改善方案 in the chat, or edit the draft card on the health page or in the chat item by item and adopt it; a plan from a doctor or longevity coach can be saved too. LongPi reads the plan back first, and the person approves the save in DeepSeek Harness.
 - **Tracking and review**: wearable data counts toward adherence automatically; other items are checked in from the home, the health page or the chat. Once a retest reaches Mirobody, the health page gives a verdict (working, within noise, the wrong way, or cannot tell) with its reasons.
-- **Follow-up**: turn it on under 随访提醒 on the health page and set the check-in, retest and weekly-summary times, quiet hours and channels. Reminders are sent only while DeepSeek Harness is running; the brief mode carries no health values.
+- **Follow-up**: turn it on in the LongPi page of the settings and set the check-in, retest and weekly-summary times, quiet hours and channels. Reminders are sent only while DeepSeek Harness is running; the brief mode carries no health values.
 
 <p align="center"><img src="docs/images/health-page.png" alt="LongPi health page: record changes, phenotypic age, cardiovascular risk and the plan" width="760"><br><sub>Screenshots use demo data.</sub></p>
 
@@ -65,7 +66,7 @@ Example questions:
 | Model a goal | If fasting glucose drops to 5.0, how would my phenotypic age change? |
 | Look up evidence | What do the collected papers say about NMN and metformin? |
 
-Type `/longpi` in the chat to see the status: skill library version, Mirobody connection, onboarding stage and follow-up settings.
+The health page, the settings page and the API all need the DeepSeek Harness login: the API accepts only the cookie a logged-in browser holds, so other programs and web pages cannot read or write it. Type `/longpi` in the chat to see the status: skill library version, Mirobody connection, onboarding stage and follow-up settings.
 
 ## How it works
 
@@ -92,6 +93,7 @@ Key mechanisms:
 - **Effect review**: a change counts as real only when it exceeds the reference change value (RCV = √2 × 1.96 × √(CVA² + CVI²)), with within-person variation (CVI) taken from journal articles. Adherence, the retest interval and other changes over the same period are weighed as well.
 - **Record changes**: for every checkup marker with a sourced row in the biological-variation table, the latest result is compared with the previous one and with the first; only a difference beyond the reference change value is listed. A change in the wrong direction, or on a marker whose meaning depends on the lab's reference range, comes with the advice to take the reports to a doctor; no cause is suggested and nothing is diagnosed.
 - **Plan drafting**: priorities come from the sensitivities of the phenotypic-age and China-PAR models and from what the person cares about most; candidate items come only from the collected table of trial effects. Prescription drugs are always excluded, and supplements appear only as options to confirm with a doctor, never with a dose. On adoption the server rebuilds every item from its evidence id instead of saving the text the page sent.
+- **Safety judgement**: for every message the person sends, the configured model judges whether it is an emergency happening now, a risk of self-harm, a request to start, stop or dose a medicine, or a question about research, and LongPi adds one note for the reply; the person's words are never replaced. When the model call fails, rules that recognise negation, family history and risk questions take over. Before a turn ends, a reply that gave a dose or advised a prescription change is sent back for a correction.
 - **Proactive follow-up**: while DeepSeek Harness runs, the plugin checks every minute whether a check-in, retest or weekly summary is due, and respects quiet hours and a daily cap. When the model turns follow-up on, switches to full detail or sets a webhook from the chat, the person approves it in DeepSeek Harness.
 - **Model estimates**: biological age, risk and goal estimates are computed by the method scripts and labelled as model estimates; LongPi does not predict an individual's lifespan.
 
