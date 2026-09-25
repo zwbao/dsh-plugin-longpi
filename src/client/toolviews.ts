@@ -118,17 +118,24 @@ function Shell(props: { call: ParsedCall; icon: string; title: string; summary?:
 
 const ADOPTED_KEY = 'dsh-plugin-longpi.adopted.'
 
-function DraftCard(props: { callId: string; data: PlanDraftResponse; draft: PlanDraft; source: DraftSource; openPage?: () => void }): React.ReactElement {
+interface Adopted {
+  version: number
+  reminder: string | null
+}
+
+/** The plan version this call's draft was adopted as, remembered per call so the card says so after a reload. */
+function adoptedOf(callId: string): Adopted | null {
+  const version = Number(readPref(`${ADOPTED_KEY}${callId}`))
+  return Number.isFinite(version) && version > 0 ? { version, reminder: null } : null
+}
+
+function DraftCard(props: { callId: string; data: PlanDraftResponse; draft: PlanDraft; source: DraftSource; saved: Adopted | null; onSaved: (saved: Adopted) => void; openPage?: () => void }): React.ReactElement {
   const { journey } = useJourney()
-  const { draft } = props
+  const { draft, saved } = props
   const [removed, setRemoved] = React.useState<Set<string>>(new Set())
   const [confirming, setConfirming] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
-  const [saved, setSaved] = React.useState<{ version: number; reminder: string | null } | null>(() => {
-    const version = Number(readPref(`${ADOPTED_KEY}${props.callId}`))
-    return Number.isFinite(version) && version > 0 ? { version, reminder: null } : null
-  })
   const kept = draft.items.filter((item) => !removed.has(item.id))
   const goals = keptGoals(draft, kept)
   const toggle = (id: string) => setRemoved((current) => {
@@ -148,7 +155,7 @@ function DraftCard(props: { callId: string; data: PlanDraftResponse; draft: Plan
         return
       }
       writePref(`${ADOPTED_KEY}${props.callId}`, String(result.version))
-      setSaved({ version: result.version, reminder: result.reminder })
+      props.onSaved({ version: result.version, reminder: result.reminder })
       setConfirming(false)
     } catch (err) {
       setError(`没有保存：${errorText(err, '请稍后再试')}`)
@@ -183,6 +190,8 @@ function draftSource(args: Raw, data: PlanDraftResponse): DraftSource {
 
 export function DraftToolView(props: ToolViewProps): React.ReactElement {
   const call = parseCall(props.block)
+  // Held here, not in the card: the head says whether the draft was adopted.
+  const [saved, setSaved] = React.useState<Adopted | null>(() => adoptedOf(props.callId))
   if (call.state === 'running') return h(Shell, { call, icon: 'spark', title: '起草方案', summary: '正在按你的结果和试验证据起草…' })
   if (call.state === 'error') return h(Shell, { call, icon: 'spark', title: '起草方案', summary: `没有完成：${call.error}`, tone: 'bad' })
   let data: PlanDraftResponse | null = null
@@ -196,8 +205,8 @@ export function DraftToolView(props: ToolViewProps): React.ReactElement {
     return h(Shell, { call, icon: 'spark', title: '方案草稿', summary: '现在还起草不了' },
       h('p', { className: 'lp-muted' }, data.brief.notes_zh[0] || '记录里还没有能对上研究证据的指标。'))
   }
-  return h(Shell, { call, icon: 'spark', title: '方案草稿', summary: `${data.draft.items.length} 项 · 按证据起草 · 还没有保存` },
-    h(DraftCard, { callId: props.callId, data, draft: data.draft, source: draftSource(call.args, data), openPage: props.openPage }))
+  return h(Shell, { call, icon: 'spark', title: '方案草稿', summary: saved ? `${data.draft.items.length} 项 · 已采用` : `${data.draft.items.length} 项 · 按证据起草 · 还没有保存` },
+    h(DraftCard, { callId: props.callId, data, draft: data.draft, source: draftSource(call.args, data), saved, onSaved: setSaved, openPage: props.openPage }))
 }
 
 // --- save_intervention_plan -------------------------------------------------------------

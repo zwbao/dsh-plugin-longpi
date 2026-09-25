@@ -16,7 +16,7 @@ import { RISK_FACT_ZH, type RiskFact } from './profile.ts'
 import type { InputSpec } from './catalog.ts'
 import { aliasIndex, candidatesFor, indicatorFor, measurementInputs, notRead, resolveInput, stageMeasurements, type MeasurementIn } from './measurements.ts'
 import { loadCourses, loadDoseLog, loadSeries, recordReadable, sameMeasure, type CourseRow, type RecordSnapshot, type SeriesPoint } from './records.ts'
-import { loadReference, markerFor, rcvBand, type Reference } from './reference.ts'
+import { expandMarkerNames, loadReference, markerFor, rcvBand, type Reference } from './reference.ts'
 import { runSkill, type Levers } from './runner.ts'
 import { readSelf, selfKeyOf, selfSeries, SELF_DEVICE_NAMES, SELF_SPEC } from './selfmeasure.ts'
 import { normalizeUnit } from './units.ts'
@@ -193,7 +193,9 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
   }
 
   if (context.records.record_status === 'error') errors.push(readFailed(context.records))
-  const names = [...new Set([...plan.items.flatMap((item) => item.markers), ...goals.map((goal) => goal.marker)])]
+  // An item aimed at a word for several markers (血压) is judged on each of them; the plan keeps the person's words.
+  const judged: PlanVersion = { ...plan, items: plan.items.map((item) => ({ ...item, markers: expandMarkerNames(reference.biovar, item.markers) })) }
+  const names = [...new Set([...judged.items.flatMap((item) => item.markers), ...goals.map((goal) => goal.marker)])]
   const resolvedList = resolveMarkers(names, context.records.indicators, reference.biovar)
   const markers: Record<string, ResolvedMarker> = Object.fromEntries(resolvedList.map((row) => [row.asked, row]))
   const earliest = plan.items.map((item) => item.start).sort()[0] ?? context.today
@@ -245,13 +247,13 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
   const courses = courseRead.rows
 
   const items = evaluatePlan({
-    plan, goals, today: context.today, markers, series, adherence, courses, checkins, biovar: reference.biovar, effects: reference.effects,
+    plan: judged, goals, today: context.today, markers, series, adherence, courses, checkins, biovar: reference.biovar, effects: reference.effects,
     // A marker whose readings failed to read is not judged from what is left: it says the read failed.
     unread: [...labs.failed, ...labs.cut],
     record_unread: context.records.record_status === 'error' ? 'failed' : context.records.catalog_truncated ? 'cut' : undefined,
   })
   const suggestions = suggestNext(items, { today: context.today, levers })
-  const charts = chartsFor(plan, resolvedList, series, reference, goals)
+  const charts = chartsFor(judged, resolvedList, series, reference, goals)
   return {
     status: 'ok', today: context.today, plan, versions, items, suggestions, charts, bioage, models,
     checkins: checkins.slice(-30).reverse(), reference: referenceStats(reference), errors, changes, changes_note_zh: changesNote, changes_unjudged: unjudged,

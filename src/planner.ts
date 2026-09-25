@@ -14,7 +14,7 @@ import type { MountState } from './mirobody.ts'
 import { preferSelf } from './measurements.ts'
 import { FOCUS, FOCUS_ZH, type Focus } from './profile.ts'
 import { sameMeasure } from './records.ts'
-import { checkupMarkerFor, loadReference, markerFor, type Biovar, type BiovarMarker, type EffectRow } from './reference.ts'
+import { checkupMarkerFor, loadReference, markerFor, markerGroupKeys, type Biovar, type BiovarMarker, type EffectRow } from './reference.ts'
 import { SELF_SPEC } from './selfmeasure.ts'
 import { currentMedications, GLUCOSE_LOWERING, type IndicatorRow, type MedicationRow } from './situation.ts'
 import { foldName, parseNumber } from './units.ts'
@@ -213,9 +213,11 @@ function prioritiesOf(input: {
   const pheno = topKeys('phenoage')
   const par = topKeys('china-par')
   for (const name of input.asked) {
+    // A word for several markers (血压) asks for each of them.
     const key = keyOf(name, input.biovar)
-    if (key) add(key, 'focus', '你指定要改善的指标')
-    else input.notes.push(`「${name}」没有对应的研究证据指标，这份草稿没有针对它。`)
+    const keys = key ? [key] : markerGroupKeys(input.biovar, name)
+    for (const one of keys) add(one, 'focus', '你指定要改善的指标')
+    if (keys.length === 0) input.notes.push(`「${name}」没有对应的研究证据指标，这份草稿没有针对它。`)
   }
   for (const item of input.focus) {
     const cares = `你最关心${FOCUS_ZH[item]}`

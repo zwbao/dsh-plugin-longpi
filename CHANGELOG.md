@@ -29,6 +29,7 @@ Fixes from an external review of 0.5.0, checked claim by claim against the code,
 - **Phenotypic-age history.** Stored points are recomputed when their inputs change.
 - **Plan verdicts.**
   - Values are converted to one unit before comparing.
+  - An item aimed at 血压 is judged on systolic and diastolic pressure; before, it had no verdict at all. A draft asked for 血压 aims at both.
   - A zero baseline, a single home reading, or no adherence data at all gives 无法判断.
   - The wording no longer credits a change to a plan item.
 - **Doses.** Removed from plan items of every category, including amounts written in Chinese numerals.
@@ -45,6 +46,8 @@ Fixes from an external review of 0.5.0, checked claim by claim against the code,
   - Step 4 offers what can be done now.
   - The reminder question moves to plan adoption.
 - **Chat cards.** The chat shows cards for a plan draft (adopt or remove items), a plan read-back, a check-in (with 撤销) and a result.
+  - A draft item shows what to do once: its category, title and evidence are no longer repeated in the text (no more 证据：，DOI).
+  - An adopted draft's card says 已采用 in its head.
 - **Workspace name.** A new workspace is named 健康对话.
 
 **Versions** stay below 1.0 until declared stable:

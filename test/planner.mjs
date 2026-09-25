@@ -237,6 +237,22 @@ try {
   assert.deepEqual([asked.priorities[0].marker_key, asked.priorities[0].source, asked.priorities[0].why_zh], ['ldl', 'focus', '你指定要改善的指标'])
   assert.ok(asked.notes_zh.some((line) => line.includes('谷丙转氨酶')))
   assert.ok(asked.notes_zh.some((line) => line.startsWith('睡眠：')))
+  // a word for several markers asks for each of them: 血压 is 收缩压 and 舒张压, never "no evidence marker"
+  const bp = await mod.buildPlanBrief(await contextOf(configFor(cardioDir, noMeds.url)), { markers: ['血压'], focus: ['cardio'] })
+  assert.deepEqual(bp.priorities.slice(0, 2).map((row) => [row.marker_key, row.why_zh]), [['sbp', '你指定要改善的指标'], ['dbp', '你指定要改善的指标']])
+  assert.equal(bp.notes_zh.some((line) => line.includes('「血压」')), false, bp.notes_zh.join(' / '))
+  const bpDraft = mod.draftPlan(bp, { today: TODAY })
+  assert.ok(bpDraft.items[0].markers.some((label) => label === '收缩压' || label === '舒张压'), 'the first item aims at blood pressure')
+  assert.deepEqual(mod.expandMarkerNames(reference.biovar, ['血压', '收缩压', 'LDL-C', 'Blood Pressure']), ['收缩压', '舒张压', 'LDL-C'])
+  assert.deepEqual(mod.markerGroupKeys(reference.biovar, '高压'), [], 'one marker is not a group')
+  // the card shows what to do, not the category, title and evidence it shows elsewhere (no 证据：，DOI)
+  const { behaviorOf } = await import('../src/client/format.ts')
+  for (const item of bpDraft.items) {
+    const text = behaviorOf(item)
+    assert.doesNotMatch(text, /证据[:：]|DOI|个人效果因人而异/, text)
+    assert.equal(text.startsWith(`${item.category_zh}：`), false, text)
+  }
+  assert.equal(behaviorOf({ detail: '选一种能坚持的有氧运动。证据：试验中平均使收缩压下降 3.5 mmHg', title: '有氧运动', category_zh: '运动', evidence: { expected_zh: '试验中平均使收缩压下降 3.5 mmHg' } }), '选一种能坚持的有氧运动。', 'an older detail')
 
   // nothing to propose: no record and no focus
   const emptyDir = tempDir('empty')
@@ -343,6 +359,12 @@ try {
   const focusedSaved = mod.currentPlan(routeDir)
   assert.deepEqual(focusedSaved.items.map((item) => item.title), focused.draft.items.map((item) => item.title))
   assert.deepEqual(focusedSaved.goals.map((goal) => goal.marker), focused.draft.goals.map((goal) => goal.marker), 'every goal shown is saved, the asked markers\' ones too')
+  // a chat draft asked for 血压 is accepted the same way (both pressures are in the brief the route rebuilds)
+  const bpChat = await host.tools.get('draft_intervention_plan').execute({ focus: ['cardio'], markers: ['血压'] })
+  assert.equal(bpChat.brief.notes_zh.some((line) => line.includes('「血压」')), false)
+  res = await call(host, 'POST', '/api/longpi/plan-draft/accept', { draft: bpChat.draft, focus: bpChat.brief.focus, markers: ['血压'] })
+  assert.equal(res.status, 200, res.text)
+  assert.deepEqual(mod.currentPlan(routeDir).items.map((item) => item.title), bpChat.draft.items.map((item) => item.title))
   assert.deepEqual(mod.briefOptionsOf(['glucose', 'x'], [' 尿酸 ', '', 'a'.repeat(41), 1]), { focus: ['glucose'], markers: ['尿酸', '1'] })
   assert.deepEqual(mod.briefOptionsOf('glucose', null), { markers: [] }, 'nothing usable: the saved focus')
   const twice = mod.acceptedPlan(tool.brief, { items: [got.draft.items[0], { ...got.draft.items[0] }] }, TODAY)

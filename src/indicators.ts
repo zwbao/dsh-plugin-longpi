@@ -18,7 +18,7 @@ import { resolveMarkers } from './evaluate.ts'
 import { GROUP_KEYS, GROUP_ZH, groupOf, type GroupKey } from './groups.ts'
 import { addDays, currentPlan } from './interventions.ts'
 import { loadSeries, type RecordSnapshot, type SeriesPoint, type SeriesResult } from './records.ts'
-import { checkupMarkerFor, loadReference, markerFor, rcvBand, type BiovarMarker } from './reference.ts'
+import { checkupMarkerFor, expandMarkerNames, loadReference, markerFor, rcvBand, type BiovarMarker } from './reference.ts'
 import { readSelf, selfSeries, SELF_DEVICE_NAMES, SELF_KEYS, SELF_SPEC, SELF_SUFFIX, type SelfKey, type SelfRow } from './selfmeasure.ts'
 import type { IndicatorRow } from './situation.ts'
 import { trackingGeneration } from './tracking.ts'
@@ -312,8 +312,9 @@ function changeOf(change: RecordChange): IndicatorChange {
 function planMatcher(context: IndicatorsContext, markers: readonly BiovarMarker[]): (spec: Spec) => boolean {
   const plan = currentPlan(context.dataDir)
   if (!plan) return () => false
-  const names = [...new Set([...plan.items.flatMap((item) => item.markers), ...plan.goals.map((goal) => goal.marker)])]
-  const resolved = resolveMarkers(names, context.records.indicators, { z: 1.96, default_cva_rule_zh: '', markers: [...markers] })
+  const biovar = { z: 1.96, default_cva_rule_zh: '', markers: [...markers] }
+  const names = expandMarkerNames(biovar, [...plan.items.flatMap((item) => item.markers), ...plan.goals.map((goal) => goal.marker)])
+  const resolved = resolveMarkers(names, context.records.indicators, biovar)
   const metrics = new Set(plan.items.map((item) => item.target?.metric).filter((name): name is string => Boolean(name)))
   return (spec) => resolved.some((row) => {
     if (row.indicator && spec.names.includes(row.indicator)) return true

@@ -11,7 +11,7 @@ import React from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { errorText, postJson } from './api.ts'
 import { fmt } from './charts.ts'
-import { chineseDate } from './format.ts'
+import { behaviorOf, chineseDate } from './format.ts'
 import { Icon } from './icons.ts'
 import { notifyChanged, putFollowup, useFollowup, usePlanDraft } from './store.ts'
 import type { AcceptResponse, DraftGoal, DraftItem, FollowupResponse, FollowupUpdate, Journey, PlanDraft, PlanDraftResponse } from './types.ts'
@@ -29,13 +29,6 @@ const UNIT_ZH: Record<string, string> = { count: '步', hours: '小时' }
 /** Values as the server stated them (up to two decimals): what is shown is what gets saved. */
 const num = (value: number) => fmt(value, 2)
 
-/** The server ends each detail with the evidence sentence; the card shows evidence on its own line, so drop the repeat. */
-function behaviorOf(item: DraftItem): string {
-  const evidence = item.evidence.expected_zh
-  let text = item.detail
-  if (evidence && text.includes(evidence)) text = text.replace(evidence, '')
-  return text.replace(/\s*(证据|依据)[:：]\s*$/, '').replace(/[\s，,；;]+$/, '').trim()
-}
 
 function targetText(target: NonNullable<DraftItem['target']>): string {
   return `手环自动记录：${METRIC_ZH[target.metric] ?? target.metric} ${target.op === '>=' ? '≥' : '≤'} ${num(target.value)} ${UNIT_ZH[target.unit] ?? target.unit}`

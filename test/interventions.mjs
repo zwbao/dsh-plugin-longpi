@@ -567,6 +567,16 @@ try {
       assert.doesNotMatch(verdict.reason_zh, /没有读全/)
       assert.ok(verdict.baseline && verdict.followup && verdict.change, verdict.reason_zh)
       assert.match(verdict.reason_zh, /变化 -13%/)
+      // An item aimed at 血压 (the word save_intervention_plan's description offers) is judged on both pressures.
+      const bpPlan = mod.normalizePlan({ title: '减盐', items: [{ category: 'diet', title: '减盐', start: '2026-03-01', markers: ['血压'] }] }, { today: TODAY, medications: [], previous: mod.currentPlan(denseDir) })
+      assert.deepEqual(bpPlan.plan.items[0].markers, ['血压'], 'the plan keeps the person\'s word')
+      mod.savePlan(denseDir, bpPlan.plan)
+      mod.invalidateTracking()
+      const bpTracking = await mod.buildTracking({ config: denseConfig, dataDir: denseDir, skillsHome: home, catalog, records: recs, today: TODAY })
+      assert.deepEqual(bpTracking.items[0].verdicts.map((row) => row.indicator), ['systolicPressures', 'diastolicPressures'])
+      assert.match(bpTracking.items[0].verdicts[0].reason_zh, /变化 -13%/)
+      assert.deepEqual(bpTracking.plan.items[0].markers, ['血压'])
+      assert.ok(bpTracking.charts.some((chart) => chart.key === 'sbp') && bpTracking.charts.some((chart) => chart.key === 'dbp'), 'a chart for each pressure')
     } finally {
       await dense.close()
       rmSync(denseDir, { recursive: true, force: true })

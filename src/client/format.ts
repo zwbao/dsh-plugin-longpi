@@ -1,4 +1,5 @@
 import { fmt } from './charts.ts'
+import type { DraftItem } from './types.ts'
 
 const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
 
@@ -65,4 +66,20 @@ export function goTo(id: string): void {
   node.scrollIntoView({ behavior: 'smooth', block: 'start' })
   const field = node.querySelector<HTMLElement>('input:not([type=hidden]), select, textarea, button')
   window.setTimeout(() => field?.focus({ preventScroll: true }), 350)
+}
+
+/**
+ * What to do, without what the card already shows: the server starts a detail with the category and title
+ * (饮食：减盐。) and ends it with the evidence (证据：<trial average>，DOI ….个人效果因人而异。), which the card
+ * shows on its own line, under 证据 and in its caption.
+ */
+export function behaviorOf(item: Pick<DraftItem, 'detail' | 'title' | 'category_zh' | 'evidence'>): string {
+  const evidence = item.evidence.expected_zh
+  let text = item.detail
+  const tail = evidence ? text.lastIndexOf(`证据：${evidence}`) : -1
+  if (tail >= 0) text = text.slice(0, tail)
+  else if (evidence && text.includes(evidence)) text = text.replace(evidence, '')
+  const head = item.category_zh ? `${item.category_zh}：${item.title}` : ''
+  if (head && text.startsWith(head)) text = text.slice(head.length).replace(/^[，,。；;\s]+/, '')
+  return text.replace(/\s*(证据|依据)[:：]\s*$/, '').replace(/[\s，,；;]+$/, '').trim()
 }
