@@ -36,7 +36,8 @@ function RunReady(props: { board: Board; onNotice: Notify }): React.ReactElement
     ready.length === 0
       ? h('p', { className: 'lp-muted' }, '还没有能直接计算的方法。')
       : h('ul', { className: 'lp-rows' }, ...ready.slice(0, 8).map((row) => h('li', { key: row.name, className: 'lp-row lp-row-stack' },
-        h('span', { className: 'lp-strong' }, row.domain || row.name), h('span', { className: 'lp-caption' }, row.blurb ?? '')))),
+        // Several methods share a domain, so the blurb (what it computes) is the title and the domain the caption.
+        h('span', { className: 'lp-strong' }, row.blurb || row.name), h('span', { className: 'lp-caption' }, row.domain || row.name)))),
     ready.length > 8 ? h('p', { className: 'lp-caption' }, `另有 ${ready.length - 8} 项`) : null,
     ready.length > 0 ? h('div', { className: 'lp-form-actions' },
       h(Btn, { size: 'sm', disabled: running, onClick: () => { void run() } }, h(Icon, { name: 'play', size: 13 }), running ? '正在计算…' : `一键计算 ${ready.length} 项`)) : null,

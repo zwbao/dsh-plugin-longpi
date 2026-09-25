@@ -4,7 +4,7 @@
 // takes headless Chrome screenshots of every view and stage.
 //
 //   npm run build && node preview/dev.mjs --serve 4173
-//   npm run build && node preview/dev.mjs --shots /tmp/longpi-shots
+//   npm run build && node preview/dev.mjs --shots /tmp/longpi-shots --only page-plan,home-routine
 //
 // preview/build.mjs (real plugin code against the fake Mirobody) writes the
 // same folder with real DATA; index.html falls back to these fixtures for any
@@ -64,6 +64,8 @@ const SHOTS = [
   ['page-profile', 'view=page&stage=profile', 1280, 2900],
   ['page-records', 'view=page&stage=records', 1280, 2500],
   ['page-first_result', 'view=page&stage=first_result', 1280, 2700],
+  ['page-first_result-noaddons', 'view=page&stage=first_result&variant=noaddons', 1280, 2700],
+  ['page-records-error', 'view=page&stage=records&variant=recerror', 1280, 1400],
   ['page-plan', 'view=page&stage=plan', 1280, 3200],
   ['page-routine', 'view=page&stage=routine', 1280, 5600],
   ['page-routine-dark', 'view=page&stage=routine&theme=dark', 1280, 5600],
@@ -72,6 +74,8 @@ const SHOTS = [
   ['page-error', 'view=page&fail=1', 1280, 900],
   ['home-consent', 'view=home&stage=consent', 1280, 860],
   ['home-first_result', 'view=home&stage=first_result', 1280, 860],
+  ['home-first_result-noaddons', 'view=home&stage=first_result&variant=noaddons', 1280, 860],
+  ['home-records-error', 'view=home&stage=records&variant=recerror', 1280, 860],
   ['home-routine', 'view=home&stage=routine', 1280, 860],
   ['home-routine-dark', 'view=home&stage=routine&theme=dark', 1280, 860],
   ['home-routine-narrow', 'view=home&stage=routine', 900, 860],
@@ -92,10 +96,15 @@ async function shots(dir) {
   mkdirSync(dir, { recursive: true })
   const page = pathToFileURL(join(out, 'index.html')).href
   const profile = mkdtempSync(join(tmpdir(), 'longpi-chrome-'))
-  const only = arg('--only')
+  // Exact names, comma-separated: one shot takes ~45 s, so run a couple at a time.
+  const only = arg('--only')?.split(',').map((name) => name.trim()).filter(Boolean)
+  if (only) {
+    const unknown = only.filter((name) => !SHOTS.some(([shot]) => shot === name))
+    if (unknown.length > 0) throw new Error(`unknown shot: ${unknown.join(', ')} (known: ${SHOTS.map(([shot]) => shot).join(', ')})`)
+  }
   try {
     for (const [name, query, width, height] of SHOTS) {
-      if (only && !name.includes(only)) continue
+      if (only && !only.includes(name)) continue
       const file = join(dir, `${name}.png`)
       rmSync(file, { force: true })
       const result = spawnSync(CHROME, [

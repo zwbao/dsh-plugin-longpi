@@ -39,8 +39,44 @@ function metrics(journey: Journey): Metric[] {
   return [...ordered, third]
 }
 
+/**
+ * The seat sits inside the hero's headline, a wrapping flex row meant for a
+ * logo and the title. Make the row item that holds the card span the whole row,
+ * so the card gets the composer's width and the title wraps below it; put the
+ * host's styles back when the card goes away.
+ */
+function useOwnRow(ref: React.RefObject<HTMLDivElement>): void {
+  React.useLayoutEffect(() => {
+    const card = ref.current
+    if (!card) return undefined
+    let item: HTMLElement = card
+    let row = card.parentElement
+    for (let depth = 0; row && depth < 4; depth += 1) {
+      const style = window.getComputedStyle(row)
+      if (style.display.includes('flex') && style.flexWrap === 'wrap' && !style.flexDirection.startsWith('column')) break
+      item = row
+      row = row.parentElement
+    }
+    if (!row) return undefined
+    const saved = item.getAttribute('style')
+    item.style.flex = '0 0 100%'
+    item.style.maxWidth = '100%'
+    item.style.minWidth = '0'
+    if (item !== card) {
+      item.style.display = 'flex'
+      item.style.justifyContent = 'center'
+    }
+    return () => {
+      if (saved == null) item.removeAttribute('style')
+      else item.setAttribute('style', saved)
+    }
+  }, [ref])
+}
+
 function Shell(props: { children?: React.ReactNode; className?: string; label: string }): React.ReactElement {
-  return h('div', { className: `lp lp-home ${props.className ?? ''}`.trim(), role: 'region', 'aria-label': props.label }, props.children)
+  const ref = React.useRef<HTMLDivElement>(null)
+  useOwnRow(ref)
+  return h('div', { ref, className: `lp lp-home ${props.className ?? ''}`.trim(), role: 'region', 'aria-label': props.label }, props.children)
 }
 
 function Prompt(props: { title: string; detail: string; action: string; onAction: () => void; extra?: React.ReactNode }): React.ReactElement {
@@ -75,6 +111,14 @@ export function HomeCard(props: Partial<Face>): React.ReactElement | null {
       title: '连接体检记录',
       detail: journey.records.status === 'error' ? `记录读取失败：${journey.records.error || '没有返回原因'}` : '在 Mirobody 上传体检报告或连接手环，LongPi 就能算出第一个结果',
       action: '查看', onAction: open,
+    })
+  }
+  if (stage === 'first_result' && journey.addons.length === 0) {
+    // Nothing to add at a checkup: the server says what is missing instead (usually profile answers).
+    return h(Prompt, {
+      title: journey.next.title_zh || '还算不出第一个结果',
+      detail: journey.next.detail_zh || journey.results.risk.blocker_zh || journey.results.bioage.blocker_zh || '打开健康页查看还缺什么',
+      action: journey.next.action === 'profile' ? '去填写' : '查看', onAction: open,
     })
   }
   if (stage === 'first_result') {

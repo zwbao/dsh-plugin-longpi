@@ -73,19 +73,36 @@ function AdherenceTile(props: { journey: Journey; tracking: Tracking | null }): 
       : h('div', { className: 'lp-caption lp-streak-empty' }, '连续完成两天以上会在这里显示'))
 }
 
+/** Retest dates as the reminders see them: the earliest date each verdict gives per marker. */
+function retestDates(tracking: Tracking | null): Array<{ marker: string; date: string }> {
+  const earliest = new Map<string, string>()
+  for (const item of tracking?.items ?? []) {
+    for (const row of item.verdicts ?? []) {
+      if (!row.next_retest) continue
+      const seen = earliest.get(row.marker)
+      if (!seen || row.next_retest < seen) earliest.set(row.marker, row.next_retest)
+    }
+  }
+  // Older servers put the dates only in the suggestions.
+  if (earliest.size === 0) {
+    for (const row of tracking?.suggestions ?? []) if (row.kind === 'retest' && row.date && row.marker && !earliest.has(row.marker)) earliest.set(row.marker, row.date)
+  }
+  return [...earliest.entries()].map(([marker, date]) => ({ marker, date })).sort((a, b) => a.date.localeCompare(b.date))
+}
+
 function RetestTile(props: { tracking: Tracking | null; today: string }): React.ReactElement {
-  const retests = (props.tracking?.suggestions ?? []).filter((row) => row.kind === 'retest' && row.date)
-  const upcoming = retests.filter((row) => (row.date as string) > props.today).sort((a, b) => (a.date as string).localeCompare(b.date as string))
-  const now = retests.filter((row) => (row.date as string) <= props.today)
+  const retests = retestDates(props.tracking)
+  const upcoming = retests.filter((row) => row.date > props.today)
+  const now = retests.filter((row) => row.date <= props.today)
   const first = upcoming[0]
   return h('div', { className: 'lp-card lp-tile' },
     h('div', { className: 'lp-label' }, '下次复测'),
     now.length > 0
-      ? h('div', null, h('div', { className: 'lp-tile-figure' }, '现在'), h('div', { className: 'lp-caption' }, `可以复测${now.map((row) => row.marker).filter(Boolean).slice(0, 2).join('、')}`))
+      ? h('div', null, h('div', { className: 'lp-tile-figure' }, '现在'), h('div', { className: 'lp-caption' }, `可以复测${now.map((row) => row.marker).slice(0, 3).join('、')}`))
       : first
         ? h('div', null,
-          h('div', { className: 'lp-tile-figure' }, `${daysBetween(props.today, first.date as string)} 天后`),
-          h('div', { className: 'lp-caption' }, `${chineseDate(first.date as string)}之后 · ${first.marker ?? ''}`))
+          h('div', { className: 'lp-tile-figure' }, `${daysBetween(props.today, first.date)} 天后`),
+          h('div', { className: 'lp-caption' }, `${chineseDate(first.date)}之后 · ${first.marker}`))
         : h('div', null, h('div', { className: 'lp-tile-figure lp-muted-ink' }, '—'), h('div', { className: 'lp-caption' }, '保存方案后按指标排复测日')),
     h('p', { className: 'lp-fine' }, h(Icon, { name: 'calendar', size: 13 }), ' 复测太早，变化多半只是波动。'))
 }
@@ -112,10 +129,18 @@ export function Wins(props: { tracking: Tracking | null }): React.ReactElement |
           (row.combined_with ?? []).length > 0 ? `（与${(row.combined_with ?? []).join('、')}共同作用）` : '')))))
 }
 
-function ItemCard(props: { item: Item; raw?: PlanItemRaw; onCheckIn: (id: string, title: string) => void; busy: boolean; done: boolean }): React.ReactElement {
+/** Check-in items not running today (not started, or ended) get no button, as the server leaves them out of today's list. */
+function checkinFoot(item: Item, today: string): string | null {
+  if (item.start > today) return `${chineseDate(item.start)}开始，到时再打卡`
+  if (item.end && item.end < today) return '已结束，不用再打卡'
+  return null
+}
+
+function ItemCard(props: { item: Item; raw?: PlanItemRaw; today: string; onCheckIn: (id: string, title: string) => void; busy: boolean; done: boolean }): React.ReactElement {
   const item = props.item
   const adherence = item.adherence ?? {}
   const source = props.raw?.mirobody ? 'mirobody' : props.raw?.target ? 'wearable' : 'checkin'
+  const idle = source === 'checkin' ? checkinFoot(item, props.today) : null
   const rate = adherence.rate
   return h('article', { className: 'lp-card lp-item' },
     h('div', { className: 'lp-item-head' },
@@ -143,7 +168,8 @@ function ItemCard(props: { item: Item; raw?: PlanItemRaw; onCheckIn: (id: string
           line.comparison && line.comparison !== 'not_comparable' ? `你的变化${({ consistent: '与试验平均一致', smaller: '小于试验平均', larger: '大于试验平均', opposite: '方向与试验相反' } as Record<string, string>)[line.comparison] ?? ''}。` : '',
           ` doi:${line.doi}`))) : null)),
     h('div', { className: 'lp-item-foot' },
-      source === 'checkin'
+      idle ? h('span', { className: 'lp-caption' }, idle)
+      : source === 'checkin'
         ? props.done
           ? h('span', { className: 'lp-done-label lp-pop' }, h(Icon, { name: 'check', size: 14 }), '今天已完成')
           : h(Btn, { size: 'sm', variant: 'outline', disabled: props.busy, onClick: () => props.onCheckIn(item.id, item.title) }, h(Icon, { name: 'check', size: 14 }), '今天完成了')
@@ -206,7 +232,7 @@ export function PlanSection(props: {
     })) : null,
   items.length > 0 ? h('div', { className: 'lp-grid-items' },
     ...items.map((item) => h(ItemCard, {
-      key: item.id, item, raw: plan?.items.find((raw) => raw.id === item.id), onCheckIn: checkIn, busy: busy === item.id, done: doneIds.has(item.id),
+      key: item.id, item, raw: plan?.items.find((raw) => raw.id === item.id), today, onCheckIn: checkIn, busy: busy === item.id, done: doneIds.has(item.id),
     }))) : null)
 }
 

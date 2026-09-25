@@ -153,6 +153,7 @@
       board.records = { status: 'unconfigured', error: '', indicator_count: 0, indicators: [], medications: [] }
       board.readiness = { ready: [], near: [], unlock: [], declared: board.readiness?.declared ?? 0 }
       board.readouts = []
+      board.dispatch = { matches: [], note: '' }
     }
     if (at < 4) {
       const noRecord = at < 3
@@ -182,7 +183,31 @@
     }
     return { journey, board, tracking }
   }
-  const state = stageData(STAGE)
+  // ?variant=: the real server's edge cases. noaddons = a first result held up
+  // only by profile answers (next.action 'profile', no add-ons); recerror = a
+  // record that fails with a long message (next.detail_zh past 40 characters).
+  function variantData(data, variant) {
+    const j = data.journey
+    if (variant === 'noaddons') {
+      const facts = ['住在城市', '父母或兄弟姐妹有心梗或脑卒中']
+      delete j.profile.risk.urban
+      delete j.profile.risk.family_history
+      j.profile.questions.forEach((row) => { if (row.key === 'urban' || row.key === 'family_history') row.answered = false })
+      j.addons = []
+      j.results.bioage = { status: 'blocked', phenoage: null, advance: null, date: null, checkups: 0, band_years: null, blocker_zh: '九项血检还没有在同一天测齐。', missing: [] }
+      j.results.risk = { status: 'blocked', risk_pct: null, category_zh: '', date: null, blocker_zh: `档案里还缺：${facts.join('、')}。`, missing_labs: [], missing_facts: facts }
+      j.next = { stage: 'first_result', title_zh: '补充档案', detail_zh: `回答档案里的 ${facts.length} 个问题即可计算心血管风险。`, action: 'profile' }
+      j.suggestions = [{ id: 'next-checkup', text_zh: '下次体检需要加测哪些项目？' }, { id: 'what-now', text_zh: '用我现有的记录能算出什么？' }]
+    }
+    if (variant === 'recerror') {
+      const error = 'Mirobody MCP 返回 401：个人访问令牌已过期或被撤销，请在 Mirobody 网页的“设置 → MCP”中重新生成地址后再运行安装命令'
+      j.records = { ...j.records, status: 'error', error }
+      j.next = { stage: 'records', title_zh: '连接体检记录', detail_zh: `记录读取失败：${error}`, action: 'records' }
+      data.board.records = { ...data.board.records, status: 'error', error }
+    }
+    return data
+  }
+  const state = variantData(stageData(STAGE), params.get('variant'))
   state.self = clone(base.self)
   if (STAGE && ['consent', 'profile', 'records'].includes(STAGE)) state.self.rows = []
 

@@ -174,5 +174,5 @@ export function ProfileEditor(props: {
       onboarding ? h(Btn, { variant: 'outline', type: 'button', onClick: props.onSkip, disabled: busy }, '跳过') : null,
       h(Btn, { type: 'submit', disabled: busy || (!onboarding && !dirty) },
         busy ? '保存中…' : onboarding ? '保存并继续' : '保存档案'),
-      !onboarding && !dirty ? h('span', { className: 'lp-caption' }, '已是最新') : null))
+      !onboarding && !dirty && props.journey?.profile.complete ? h('span', { className: 'lp-caption' }, '已是最新') : null))
 }

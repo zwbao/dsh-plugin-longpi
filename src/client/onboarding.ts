@@ -2,6 +2,8 @@
 // modal. 告知 records informed consent (or is postponed), 建档 asks only what
 // unlocks a result, 连接记录 checks Mirobody, 第一个结果 shows what the server
 // computed. Nothing to do (consent given, profile complete) → complete() at once.
+// complete() is called exactly once, and also when the journey cannot be read:
+// LongPi's step must never hold up DSH's own first run.
 
 import React from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
@@ -16,6 +18,8 @@ const h = React.createElement
 
 const TITLES = ['欢迎使用 LongPi', '建立档案', '连接体检记录', '第一个结果'] as const
 const NOOP = () => {}
+/** A journey that has not arrived by then counts as failed; the page and home card still offer the notice. */
+const GIVE_UP_MS = 25_000
 
 export interface OnboardingProps extends Partial<Face> {
   stepId?: string
@@ -53,8 +57,23 @@ function useAutofocus(ref: React.RefObject<HTMLDivElement>, step: number, ready:
   }, [step, ready])
 }
 
+/** DSH's complete(), guarded so it runs once however many buttons and effects reach it. */
+function useCompleteOnce(complete: () => void): { done: boolean; finish: () => void } {
+  const latest = React.useRef(complete)
+  latest.current = complete
+  const [done, setDone] = React.useState(false)
+  const called = React.useRef(false)
+  const finish = React.useCallback(() => {
+    if (called.current) return
+    called.current = true
+    setDone(true)
+    latest.current()
+  }, [])
+  return { done, finish }
+}
+
 export function Onboarding(props: OnboardingProps): React.ReactElement | null {
-  const { journey, refresh } = useJourney()
+  const { journey, error: loadError, refresh } = useJourney()
   const [step, setStep] = React.useState<number | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -62,10 +81,18 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
   const [notice, notify] = useNotice()
   const decided = React.useRef(false)
   const content = React.useRef<HTMLDivElement>(null)
-  const { complete } = props
+  const { done, finish } = useCompleteOnce(props.complete)
 
   React.useEffect(() => {
-    if (decided.current || !journey) return
+    if (decided.current) return
+    if (!journey) {
+      // The journey could not be read: nothing to show, so let DSH go on.
+      if (loadError) {
+        decided.current = true
+        finish()
+      }
+      return
+    }
     decided.current = true
     if (props.initialStep != null) {
       setStep(Math.max(0, Math.min(3, props.initialStep)))
@@ -76,11 +103,20 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
       return
     }
     if (journey.consent.accepted && journey.profile.complete) {
-      complete()
+      finish()
       return
     }
     setStep(journey.consent.accepted ? 1 : 0)
-  }, [journey, complete])
+  }, [journey, loadError, finish])
+
+  React.useEffect(() => {
+    const timer = window.setTimeout(() => {
+      if (decided.current) return
+      decided.current = true
+      finish()
+    }, GIVE_UP_MS)
+    return () => window.clearTimeout(timer)
+  }, [finish])
 
   const go = React.useCallback((next: number) => {
     setError(null)
@@ -91,8 +127,8 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
     }
   }, [refresh])
 
-  useAutofocus(content, step ?? -1, step != null && !!journey)
-  if (step == null || !journey) return null
+  useAutofocus(content, step ?? -1, step != null && !!journey && !done)
+  if (done || step == null || !journey) return null
   return h(OnboardingModal, { title: TITLES[step] ?? TITLES[0] },
     h('div', { className: 'lp lp-onb', ref: content },
       h(Dots, { step }),
@@ -101,7 +137,7 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
         h(ConsentText),
         error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
         h('div', { className: 'lp-modal-actions' },
-          h(Btn, { variant: 'outline', onClick: complete, disabled: busy }, '以后再说'),
+          h(Btn, { variant: 'outline', onClick: finish, disabled: busy }, '以后再说'),
           h(Btn, {
             'data-modal-autofocus': true, disabled: busy,
             onClick: () => {
@@ -128,10 +164,10 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
         notice,
         h('p', { className: 'lp-fine' }, journey.boundary_zh),
         h('div', { className: 'lp-modal-actions' },
-          h(Btn, { variant: 'outline', onClick: complete }, '完成'),
+          h(Btn, { variant: 'outline', onClick: finish }, '完成'),
           h(Btn, {
             'data-modal-autofocus': true,
-            onClick: () => { props.openPage?.(); complete() },
+            onClick: () => { props.openPage?.(); finish() },
           }, '打开健康页'))) : null))
 }
 

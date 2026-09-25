@@ -14,6 +14,8 @@ import { Btn, Skeleton } from './ui.ts'
 const h = React.createElement
 
 export type ResultTarget = 'profile' | 'records' | 'addons' | 'self'
+/** More than this and the chips crowd the card; the action below lists the rest. */
+const NEEDS_SHOWN = 6
 type Notify = (text: string, tone?: 'info' | 'good' | 'bad') => void
 
 function EstimateTag(): React.ReactElement {
@@ -68,7 +70,8 @@ function Blocked(props: {
     h('p', { className: 'lp-blocker' }, props.blocker || '还缺少计算需要的信息。'),
     props.needs.length > 0 ? h('div', { className: 'lp-needs' },
       h('span', { className: 'lp-caption' }, '还需要'),
-      ...props.needs.map((need) => h('span', { className: 'lp-need', key: need }, need))) : null,
+      ...props.needs.slice(0, NEEDS_SHOWN).map((need) => h('span', { className: 'lp-need', key: need }, need)),
+      props.needs.length > NEEDS_SHOWN ? h('span', { className: 'lp-caption' }, `等 ${props.needs.length} 项`) : null) : null,
     props.selfAddon && props.selfAddon.self_key && props.action?.target !== 'profile' && props.action?.target !== 'records'
       ? h('div', { className: 'lp-result-self' },
         h('div', { className: 'lp-caption' }, `${props.selfAddon.item_zh}可以自己在家量，记下就能算：`),

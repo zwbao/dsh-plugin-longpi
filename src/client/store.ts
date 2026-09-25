@@ -6,6 +6,7 @@
 
 import React from 'react'
 import { errorText, getJson } from './api.ts'
+import { normalizeJourney } from './normalize.ts'
 import type { Board, Journey, SelfRow, Tracking } from './types.ts'
 
 type Key = 'journey' | 'board' | 'tracking' | 'self'
@@ -16,6 +17,8 @@ const PATHS: Record<Key, string> = {
   tracking: '/api/longpi/tracking',
   self: '/api/longpi/self',
 }
+/** The journey is read through one normalizer, so every surface can rely on its shape. */
+const SHAPE: Partial<Record<Key, (raw: unknown) => unknown>> = { journey: normalizeJourney }
 /** Routes that accept ?refresh=1 (drop the server's record and tracking caches first). */
 const REFRESHABLE: Key[] = ['journey', 'board']
 const STALE_MS = 60_000
@@ -60,9 +63,9 @@ function load(key: Key, force = false): Promise<void> {
   entry.loading = true
   const path = force && REFRESHABLE.includes(key) ? `${PATHS[key]}?refresh=1` : PATHS[key]
   const run = getJson<unknown>(path)
-    .then((data) => {
+    .then((raw) => {
       if (seq !== entry.seq) return
-      entry.data = data
+      entry.data = SHAPE[key] ? (SHAPE[key] as (raw: unknown) => unknown)(raw) : raw
       entry.error = null
     })
     .catch((error: unknown) => {

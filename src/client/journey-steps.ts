@@ -126,7 +126,7 @@ export function FirstResult(props: { journey: Journey; onNotice: Notify; idPrefi
   const { bioage, risk } = props.journey.results
   const blocked = props.journey.addons.length
   return h('div', { className: 'lp-step-body' },
-    !props.showResults && blocked === 0 ? h('p', { className: 'lp-muted' }, '结果和还缺什么都写在下方的两张卡片里。') : null,
+    !props.showResults && blocked === 0 ? h(CanCompute, { journey: props.journey }) : null,
     !props.showResults ? null : h('div', { className: 'lp-first' },
       h('div', { className: 'lp-first-cell' },
         h('div', { className: 'lp-caption' }, '身体年龄 · 模型估计'),

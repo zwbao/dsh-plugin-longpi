@@ -26,6 +26,13 @@ export function stepOf(stage: Stage): number {
   return 3
 }
 
+/** The step shown open: the one the person picked, else the current one (建档 when only profile answers hold up the first result). */
+export function openStepOf(journey: Journey, picked: StepKey | null): StepKey {
+  if (picked) return picked
+  const needsProfile = journey.stage === 'first_result' && journey.addons.length === 0 && journey.next.action === 'profile'
+  return needsProfile ? 'profile' : STEPS[Math.min(stepOf(journey.stage), 2)]?.key ?? 'profile'
+}
+
 export function JourneyStepper(props: {
   journey: Journey
   open: StepKey | null
@@ -34,7 +41,8 @@ export function JourneyStepper(props: {
   onNotice: Notify
 }): React.ReactElement {
   const current = stepOf(props.journey.stage)
-  const openKey = props.open ?? STEPS[Math.min(current, 2)]?.key ?? 'profile'
+  const openFacts = props.journey.results.risk.missing_facts.length
+  const openKey = openStepOf(props.journey, props.open)
   const body = (key: StepKey) => {
     if (key === 'profile') {
       return props.journey.consent.accepted
@@ -64,7 +72,8 @@ export function JourneyStepper(props: {
           h('span', { className: 'lp-stepbar-num', 'aria-hidden': true }, state === 'done' ? h(Icon, { name: 'check', size: 14, strokeWidth: 2 }) : String(index + 1)),
           h('span', { className: 'lp-stepbar-text' },
             h('span', { className: 'lp-stepbar-title' }, step.title),
-            h('span', { className: 'lp-stepbar-hint' }, state === 'done' ? '已完成' : step.hint))))
+            h('span', { className: 'lp-stepbar-hint' }, state !== 'done' ? step.hint
+              : step.key === 'profile' && openFacts > 0 ? `还有 ${openFacts} 个问题可答` : '已完成'))))
       })),
     h('div', { className: 'lp-step-panel', id: `lp-step-${openKey}`, role: 'region', 'aria-label': STEPS.find((step) => step.key === openKey)?.title }, body(openKey)))
 }

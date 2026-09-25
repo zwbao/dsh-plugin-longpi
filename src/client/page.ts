@@ -13,7 +13,7 @@ import { Markers, PlanSection } from './plan.ts'
 import { ProfileEditor } from './profile-editor.ts'
 import { ResultsRow, type ResultTarget } from './results.ts'
 import { SelfLatestList, SelfMeasureForm, SelfRecent } from './self-measure.ts'
-import { JourneyStepper, stepOf, type StepKey } from './stepper.ts'
+import { JourneyStepper, openStepOf, stepOf, type StepKey } from './stepper.ts'
 import { setPendingPrompt, useBoard, useJourney, usePageMounted, useTracking } from './store.ts'
 import type { Face, Journey } from './types.ts'
 import { Btn, copyText, LinkButton, Section, Skeleton, useNotice } from './ui.ts'
@@ -55,15 +55,15 @@ function Failed(props: { error: string; onRetry: () => void }): React.ReactEleme
     h(Btn, { variant: 'outline', size: 'sm', onClick: props.onRetry }, h(Icon, { name: 'refresh', size: 14 }), '重试'))
 }
 
-function ProfileAndSelf(props: { journey: Journey; early: boolean; onNotice: Notify; onOpenProfileStep: () => void }): React.ReactElement {
-  const profileInStepper = props.early && (props.journey.stage === 'consent' || props.journey.stage === 'profile')
+function ProfileAndSelf(props: { journey: Journey; profileInStepper: boolean; onNotice: Notify; onOpenProfileStep: () => void }): React.ReactElement {
+  // One profile form on screen at a time: while the stepper shows 建档, this card points there.
   return h(Section, { id: 'lp-profile-section', title: '档案与自测', kicker: '只保存在这台电脑上' },
     h('div', { className: 'lp-grid-2 lp-grid-top' },
       h('div', { className: 'lp-card', id: 'lp-profile-card' },
         h('div', { className: 'lp-label' }, '档案'),
-        profileInStepper
+        props.profileInStepper
           ? h('div', { className: 'lp-pointer' },
-            h('p', { className: 'lp-muted' }, props.journey.consent.accepted ? '档案在上方“建档”这一步填写，填好年龄和性别就能算身体年龄。' : '先在上方读一下说明并点“开始”，然后在同一处填写档案。'),
+            h('p', { className: 'lp-muted' }, props.journey.consent.accepted ? '档案正在上方“建档”这一步填写，填好年龄和性别就能算身体年龄。' : '先在上方读一下说明并点“开始”，然后在同一处填写档案。'),
             h(Btn, { size: 'sm', variant: 'outline', onClick: props.onOpenProfileStep }, '去填写', h(Icon, { name: 'arrow', size: 14 })))
           : h(ProfileEditor, { journey: props.journey, variant: 'page', idPrefix: 'lp-profile', onNotice: props.onNotice })),
       h('div', { className: 'lp-card', id: 'lp-self-card' },
@@ -130,7 +130,7 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
       showPlan ? h(Markers, { tracking: trackingData }) : null,
       showPlan ? h(Goals, { tracking: trackingData }) : null,
       showPlan ? h(NextSteps, { tracking: trackingData }) : null,
-      h(ProfileAndSelf, { journey, early, onNotice: notify, onOpenProfileStep: () => { setOpenStep('profile'); goTo('lp-stepper') } }),
+      h(ProfileAndSelf, { journey, profileInStepper: early && openStepOf(journey, openStep) === 'profile', onNotice: notify, onOpenProfileStep: () => { setOpenStep('profile'); goTo('lp-stepper') } }),
       h(MethodsSection, { board: board.data, loading: board.loading, error: board.error, onNotice: notify }))
   }
 

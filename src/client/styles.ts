@@ -248,6 +248,8 @@ p.lp-muted { margin: 0; }
 .lp-needs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 14px; }
 .lp-need { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 10px; border-radius: 12px; border: 1px dashed var(--lp-line-3); color: var(--lp-ink-2); font-size: 12px; line-height: 18px; white-space: nowrap; }
 .lp-result-action { margin-top: auto; padding-top: 18px; }
+/* The closing fine print sits on the card's floor, so side-by-side cards end on one line. */
+.lp-result > .lp-fine:last-child { margin-top: auto; padding-top: 14px; }
 .lp-result-self { margin-top: auto; padding-top: 16px; display: grid; gap: 8px; }
 .lp-result-blocked .lp-result-self { border-top: .5px solid var(--lp-line-2); margin-top: 16px; }
 .lp-addons { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
@@ -276,7 +278,7 @@ p.lp-muted { margin: 0; }
 .lp-stepbar-hint { font-size: 12px; line-height: 18px; color: var(--lp-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 @container lp-root (max-width: 620px) { .lp-stepbar-hint { display: none; } }
 .lp-step-panel { margin: 14px -24px 0; padding: 22px 24px 20px; border-top: .5px solid var(--lp-line-2); }
-.lp-step-body { display: grid; gap: 14px; }
+.lp-step-body { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .lp-step-body > .lp-form-actions { margin-top: 0; }
 .lp-consent { display: grid; gap: 12px; }
 .lp-consent-row { display: flex; gap: 12px; align-items: flex-start; }
@@ -287,7 +289,7 @@ p.lp-muted { margin: 0; }
 .lp-howto { margin: 0; padding-left: 20px; display: grid; gap: 6px; }
 .lp-howto li::marker { color: var(--lp-ink-3); }
 .lp-howto code { padding: 1px 6px; border-radius: 6px; background: var(--lp-hover); font-size: 12px; }
-.lp-code { display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 12px; border-radius: 10px; background: var(--lp-well); box-shadow: inset 0 0 0 .5px var(--lp-line-2); }
+.lp-code { min-width: 0; display: flex; align-items: center; gap: 8px; padding: 6px 6px 6px 12px; border-radius: 10px; background: var(--lp-well); box-shadow: inset 0 0 0 .5px var(--lp-line-2); }
 .lp-code code { flex: 1; min-width: 0; overflow-x: auto; white-space: nowrap; color: var(--lp-ink-2); font-size: 12px; line-height: 20px; scrollbar-width: none; }
 .lp-code code, .lp-howto code { font-family: var(--ds-font-family-code, ui-monospace, SFMono-Regular, Menlo, Consolas, monospace); }
 .lp-cans { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
@@ -374,6 +376,7 @@ p.lp-muted { margin: 0; }
 .lp-step-worse .lp-step-icon { background: var(--lp-warn-wash); color: var(--lp-warn-ink); }
 .lp-step-retest .lp-step-icon { background: var(--lp-accent-wash); color: var(--lp-accent); }
 .lp-search { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+.lp-search > button { flex: none; white-space: nowrap; }
 .lp-run { margin-top: 12px; }
 
 /* --- charts ---------------------------------------------------------------------------------- */
@@ -427,14 +430,12 @@ p.lp-muted { margin: 0; }
   font-size: 14px; font-weight: 400; line-height: 22px; letter-spacing: 0; text-align: left; white-space: normal;
   animation: lp-rise .45s cubic-bezier(.2, .7, .2, 1) both;
 }
-:has(> [data-slot="conversation.hero.brand.mark"] > .lp-home) { flex: 0 0 100%; display: flex; justify-content: center; }
-:has(> [data-slot="conversation.hero.brand.mark"] > .lp-home) .lp-home { width: 100%; }
 .lp-home-row { display: flex; align-items: center; gap: 14px; }
 .lp-home-mark { width: 40px; height: 40px; flex: none; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: var(--lp-hover); color: var(--lp-ink); }
 .lp-skeleton-mark { background: var(--lp-skeleton); }
 .lp-home-text { flex: 1; min-width: 0; }
-.lp-home-title { font-size: 15px; line-height: 22px; font-weight: 500; }
-.lp-home-detail { font-size: 13px; line-height: 20px; color: var(--lp-ink-2); }
+.lp-home-title { font-size: 15px; line-height: 22px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lp-home-detail { font-size: 13px; line-height: 20px; color: var(--lp-ink-2); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .lp-home-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .lp-home-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
 .lp-home-brand { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; }
@@ -473,7 +474,8 @@ p.lp-muted { margin: 0; }
 .lp-pill-x:hover { background: var(--lp-hover); color: var(--lp-ink); }
 
 /* --- onboarding (inside DSH's Modal card) ------------------------------------------------------ */
-.lp-onb-dialog.lp-onb-dialog { width: min(600px, 100%); padding: 0; gap: 0; }
+/* The Modal card is sized by className, and by what it directly holds in case the host ignores className. */
+.lp-onb-dialog.lp-onb-dialog, div:has(> .lp-onb.lp-onb) { width: min(600px, calc(100vw - 32px)); max-width: none; padding: 0; gap: 0; }
 .lp-onb { display: flex; flex-direction: column; max-height: calc(100vh - 48px); overflow-y: auto; padding: 24px 28px 28px; }
 @media (max-width: 560px) { .lp-onb { padding: 20px; } }
 .lp-onb-progress { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
