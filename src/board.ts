@@ -47,7 +47,8 @@ export function buildBoard(input: {
     records: {
       status: input.records.record_status,
       error: input.records.record_error,
-      indicator_count: input.records.indicators.length,
+      // Self measurements merged into the list are not Mirobody indicators.
+      indicator_count: input.records.indicators.filter((row) => row.source !== 'self').length,
       indicators: input.records.indicators.slice(0, 20),
       medications: input.records.medications.slice(0, 20),
     },

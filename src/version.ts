@@ -1,4 +1,4 @@
-export const PRODUCT_VERSION = '4.2.0'
+export const PRODUCT_VERSION = '5.0.0'
 export const PRODUCT_NAME = 'dsh-plugin-longpi'
 
 export const TOOL_NAMES = [
@@ -12,10 +12,14 @@ export const TOOL_NAMES = [
   'save_personal_profile',
   'longpi_status',
   'save_intervention_plan',
+  'draft_intervention_plan',
   'log_intervention_checkin',
+  'save_self_measurement',
   'read_intervention_plan',
   'review_interventions',
   'model_intervention_goals',
+  'set_followup',
+  'send_followup_message',
 ] as const
 
 export type ToolName = (typeof TOOL_NAMES)[number]

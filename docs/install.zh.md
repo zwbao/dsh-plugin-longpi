@@ -139,6 +139,7 @@ cat > "$P" <<EOF
     skillRuntimes: {}
     dataDir: ''
     maxSkillMatches: 8
+    bootstrapWorkspace: true
 EOF
 chmod 600 "$P"
 

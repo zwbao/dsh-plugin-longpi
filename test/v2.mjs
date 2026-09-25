@@ -15,9 +15,10 @@ const fixture = join(root, 'fixtures', 'skills-home-v2')
 const { cpSync } = await import('node:fs')
 cpSync(fixture, home, { recursive: true })
 const intents = JSON.parse(readFileSync(join(home, 'intents.json'), 'utf8')).intents
+// LOINC codes make them inputs a checkup records: only those make a method ready (or near) from the record.
 const phenoInputs = [
-  { key: 'crp_mg_dl', label_zh: 'C反应蛋白', aliases: ['crp'], unit: 'mg/dL', accept: { 'mg/L': 0.1 }, range: [0.001, 50], unit_required: true, required: true, from: 'measurements' },
-  { key: 'albumin_gL', label_zh: '白蛋白', unit: 'g/L', accept: { 'g/dL': 10 }, range: [15, 65], required: true, from: 'measurements' },
+  { key: 'crp_mg_dl', label_zh: 'C反应蛋白', aliases: ['crp'], loinc: ['1988-5', '30522-7'], unit: 'mg/dL', accept: { 'mg/L': 0.1 }, range: [0.001, 50], unit_required: true, required: true, from: 'measurements' },
+  { key: 'albumin_gL', label_zh: '白蛋白', loinc: ['1751-7'], unit: 'g/L', accept: { 'g/dL': 10 }, range: [15, 65], required: true, from: 'measurements' },
   { key: 'age', label_zh: '实足年龄', unit: 'a', range: [18, 110], required: true, from: 'profile', flag: '--age' },
   { key: 'sex', label_zh: '性别', required: false, from: 'profile', flag: '--sex' },
 ]

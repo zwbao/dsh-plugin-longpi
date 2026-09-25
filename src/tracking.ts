@@ -5,22 +5,28 @@
 // no clinical formula here: phenotypic age and its levers come from the
 // accelerated-biological-aging-risk skill, noise bands from data tables.
 
+import { createHash } from 'node:crypto'
 import type { Catalog, SkillCard } from './catalog.ts'
+import { buildChanges, CHANGES_NOTE_ZH, type RecordChange } from './changes.ts'
 import type { Config } from './config.ts'
 import { adherenceFor, evaluatePlan, resolveMarkers, suggestNext, type Adherence, type ItemSummary, type LeverHint, type ResolvedMarker, type Suggestion } from './evaluate.ts'
 import { readHistory, seriesOf } from './history.ts'
 import { addDays, CATEGORY_ZH, currentPlan, daysBetween, readCheckIns, readPlans, type CheckIn, type PlanItem, type PlanVersion } from './interventions.ts'
 import { RISK_FACT_ZH, type RiskFact } from './profile.ts'
 import { aliasIndex, indicatorFor, measurementInputs, resolveInput, stageMeasurements, type MeasurementIn } from './measurements.ts'
-import { loadCourses, loadDoseLog, loadSeries, type CourseRow, type RecordSnapshot, type SeriesPoint } from './records.ts'
+import { loadCourses, loadDoseLog, loadSeries, sameMeasure, type CourseRow, type RecordSnapshot, type SeriesPoint } from './records.ts'
 import { loadReference, markerFor, rcvBand, type Reference } from './reference.ts'
 import { runSkill, type Levers } from './runner.ts'
+import { readSelf, selfKeyOf, selfSeries, SELF_DEVICE_NAMES, SELF_SPEC } from './selfmeasure.ts'
+import { normalizeUnit } from './units.ts'
 
 export const PHENOAGE_SKILL = 'accelerated-biological-aging-risk'
 export const RISK_SKILL = 'china-par-ascvd-risk'
 const BIOAGE_CHECKUPS = 6
 const LOOKBACK_DAYS = 3 * 365
 const CACHE_TTL_MS = 60_000
+/** A compute still running after this long (every skill run has its own timeout, at most 3 minutes) is started again. */
+const PENDING_MAX_MS = 10 * 60_000
 
 export interface TrackingContext {
   config: Config
@@ -61,10 +67,18 @@ export interface ModelCard {
   goal: Record<string, number | null> | null
   /** The skill's own risk category (低危, 中危, 高危), now and at the goals. */
   category_zh?: { now: string; goal: string | null }
-  /** Stated facts the model still needs, by their Chinese name. */
+  /** Everything the model still needs, by its Chinese name: missing_labs then missing_facts. */
   missing?: string[]
+  /** Measurements the record (or the person's own measurements) does not hold yet. */
+  missing_labs?: string[]
+  /** Stated facts the profile does not hold yet (age, sex, the yes/no facts); unknown is never no. */
+  missing_facts?: string[]
   levers: LeverHint[]
-  sensitivity: Array<{ label: string; unit: string; years_per_step: number; step: string }>
+  /**
+   * How far one within-person step of each input moves the model, largest first: years of phenotypic age,
+   * or for china-par percentage points of 10-year risk. key is the biological-variation key (or waist).
+   */
+  sensitivity: Array<{ label: string; unit: string; years_per_step: number; step: string; key?: string }>
   boundary_zh: string
 }
 
@@ -93,12 +107,23 @@ export interface Tracking {
   checkins: CheckIn[]
   reference: { biovar_markers: number; biovar_verified: number; effects: number; effects_verified: number; error?: string }
   errors: string[]
+  /** Changes between checkups larger than normal fluctuation (changes.ts), ask_doctor first. */
+  changes: RecordChange[]
+  changes_note_zh: string
 }
 
-const memo = new Map<string, { at: number; value: Promise<Tracking> }>()
+/** settled: when the compute finished (null while it runs). The TTL runs from then, so a slow compute is never started twice. */
+const memo = new Map<string, { started: number; settled: number | null; value: Promise<Tracking> }>()
+let generation = 0
 
 export function invalidateTracking(): void {
   memo.clear()
+  generation += 1
+}
+
+/** Bumped by every invalidateTracking (a check-in, a self measurement, a plan or profile save): readers keeping their own copy refresh on a change. */
+export function trackingGeneration(): number {
+  return generation
 }
 
 function referenceStats(reference: Reference): Tracking['reference'] {
@@ -114,12 +139,27 @@ function referenceStats(reference: Reference): Tracking['reference'] {
 export async function buildTracking(context: TrackingContext): Promise<Tracking> {
   const plan = currentPlan(context.dataDir)
   const checkins = readCheckIns(context.dataDir)
-  const key = [context.dataDir, context.skillsHome, context.today, plan?.version ?? 0, checkins.length, context.catalog.revision].join('\u0000')
+  const { profile, record_status: status, indicators } = context.records
+  // The record, the profile and self measurements change results too; a stale memo must not answer for them.
+  const key = [
+    context.dataDir, context.skillsHome, context.today, plan?.version ?? 0, checkins.length, context.catalog.revision, status,
+    JSON.stringify([profile.age, profile.sex, profile.risk]),
+    createHash('sha1').update(indicators.map((row) => `${row.name}=${row.value}@${row.date ?? ''}`).join('\n')).digest('hex'),
+  ].join('\u0000')
+  const now = Date.now()
+  const fresh = (entry: { started: number; settled: number | null }) => entry.settled == null ? now - entry.started < PENDING_MAX_MS : now - entry.settled < CACHE_TTL_MS
   const hit = memo.get(key)
-  if (hit && Date.now() - hit.at < CACHE_TTL_MS) return hit.value
+  if (hit && fresh(hit)) return hit.value
+  for (const [name, entry] of memo) if (!fresh(entry)) memo.delete(name)
   const value = compute(context, plan, checkins)
-  memo.set(key, { at: Date.now(), value })
-  value.catch(() => memo.delete(key))
+  const entry = { started: now, settled: null as number | null, value }
+  memo.set(key, entry)
+  value.then(() => {
+    entry.settled = Date.now()
+  }, () => {
+    // A failed compute is not kept; a newer entry under the same key is not this one's to remove.
+    if (memo.get(key) === entry) memo.delete(key)
+  })
   return value
 }
 
@@ -127,14 +167,17 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
   const reference = loadReference(context.skillsHome)
   const errors: string[] = []
   const versions = readPlans(context.dataDir).map((row) => ({ version: row.version, saved_at: row.saved_at, title: row.title, items: row.items.length }))
+  // Read alongside the skill runs; a failed read shows no changes rather than taking the rest down.
+  const changesRead = buildChanges(context).catch(() => ({ changes: [], note_zh: CHANGES_NOTE_ZH }))
   const bioage = await ensureBioAge(context, reference)
   const goals = plan?.goals ?? []
   const models = await modelCards(context, reference, goals)
   const levers = models.find((card) => card.model === 'phenoage')?.levers ?? []
+  const { changes, note_zh: changesNote } = await changesRead
   if (!plan) {
     return {
       status: 'no_plan', today: context.today, plan: null, versions, items: [], suggestions: [], charts: [], bioage, models,
-      checkins: [], reference: referenceStats(reference), errors,
+      checkins: [], reference: referenceStats(reference), errors, changes, changes_note_zh: changesNote,
     }
   }
 
@@ -142,13 +185,30 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
   const resolvedList = resolveMarkers(names, context.records.indicators, reference.biovar)
   const markers: Record<string, ResolvedMarker> = Object.fromEntries(resolvedList.map((row) => [row.asked, row]))
   const earliest = plan.items.map((item) => item.start).sort()[0] ?? context.today
-  const indicatorNames = [...new Set(resolvedList.map((row) => row.indicator).filter((name): name is string => Boolean(name)))]
+  const resolvedNames = [...new Set(resolvedList.map((row) => row.indicator).filter((name): name is string => Boolean(name)))]
+  // A marker resolved to the person's own measurement still has its record history (a wearable cuff, a
+  // checkup waist): keep that row's name so it is read from Mirobody, and add the self points to it below.
+  const displaced = recordCounterparts(resolvedList, context.records.indicators, reference)
+  // Self names are read from dataDir, never asked of Mirobody.
+  const indicatorNames = [...new Set([...resolvedNames.filter((name) => !selfKeyOf(name)), ...displaced.values()])]
   const seriesStart = addDays(earliest, -200)
   const labs = context.records.record_status === 'ok' && indicatorNames.length > 0
     ? await loadSeries(context.config, indicatorNames, { start: seriesStart, end: context.today, resolution: 'raw' })
     : { series: {}, truncated: false }
   if ('error' in labs && labs.error) errors.push(`读取检查结果：${labs.error}`)
   const series: Record<string, SeriesPoint[]> = Object.fromEntries(Object.entries(labs.series).map(([name, row]) => [name, row.points]))
+  const selfRows = readSelf(context.dataDir)
+  for (const name of resolvedNames) {
+    const selfKey = selfKeyOf(name)
+    if (!selfKey) continue
+    const own = selfSeries(selfRows, selfKey).filter((point) => point.date >= seriesStart && point.date <= context.today)
+    const counterpart = displaced.get(name)
+    const unit = normalizeUnit(SELF_SPEC[selfKey].unit)
+    // Only record points in the self unit join; a series in another unit is left out, never converted here.
+    const record = counterpart ? (series[counterpart] ?? []).filter((point) => !normalizeUnit(point.unit) || normalizeUnit(point.unit) === unit) : []
+    // Sorted by date, then time: on the same date the self daily mean (dated without a time) comes first.
+    series[name] = [...record, ...own].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
+  }
 
   const adherence: Record<string, Adherence> = {}
   const calendarStart = addDays(context.today, -83)
@@ -177,8 +237,27 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
   const charts = chartsFor(plan, resolvedList, series, reference, goals)
   return {
     status: 'ok', today: context.today, plan, versions, items, suggestions, charts, bioage, models,
-    checkins: checkins.slice(-30).reverse(), reference: referenceStats(reference), errors,
+    checkins: checkins.slice(-30).reverse(), reference: referenceStats(reference), errors, changes, changes_note_zh: changesNote,
   }
+}
+
+/**
+ * For each marker resolved to a self row, the record row it displaced: what
+ * resolveMarkers picks from the record alone, or else any record row measuring
+ * the same thing (same LOINC, the wearable's device row, the same report name).
+ */
+function recordCounterparts(resolved: readonly ResolvedMarker[], indicators: RecordSnapshot['indicators'], reference: Reference): Map<string, string> {
+  const out = new Map<string, string>()
+  const recordRows = indicators.filter((row) => row.source !== 'self' && row.value)
+  for (const marker of resolved) {
+    const selfKey = marker.indicator ? selfKeyOf(marker.indicator) : null
+    if (!marker.indicator || !selfKey) continue
+    const alone = resolveMarkers([marker.asked], recordRows, reference.biovar)[0]?.indicator
+    const name = alone && recordRows.some((row) => row.name === alone && sameMeasure(selfKey, row)) ? alone
+      : recordRows.find((row) => sameMeasure(selfKey, row))?.name
+    if (name) out.set(marker.indicator, name)
+  }
+  return out
 }
 
 function chartsFor(plan: PlanVersion, markers: ResolvedMarker[], series: Record<string, SeriesPoint[]>, reference: Reference, goals: PlanVersion['goals']): MarkerChart[] {
@@ -243,6 +322,8 @@ async function ensureBioAge(context: TrackingContext, reference: Reference): Pro
   })
   const card = context.catalog.cards.find((item) => item.name === PHENOAGE_SKILL)
   if (!card || !card.script) return empty('no_skill', '技能库里没有表型年龄方法。')
+  // A record that is configured but failed to read is not 'not connected': name the failure.
+  if (context.records.record_status === 'error') return empty('error', readFailed(context.records))
   if (context.records.record_status !== 'ok') return empty('no_record', '还没有接上 Mirobody 记录，无法回算历次体检的表型年龄。')
   const pairs = pairsFor(card, context.records)
   const missing = pairs.filter((pair) => !pair.indicator).map((pair) => pair.spec.label_zh)
@@ -273,12 +354,16 @@ async function ensureBioAge(context: TrackingContext, reference: Reference): Pro
       const point = day.get(pair.spec.key) as SeriesPoint
       return { key: pair.spec.key, value: point.value, unit: point.unit }
     })
-    await runSkill({
+    const age = ageOn(date, context.today, ageNow)
+    const failedKey = JSON.stringify([context.dataDir, context.catalog.revision, date, measurements, age, context.records.profile.sex])
+    if (recentlyFailed(failedKey)) continue
+    const result = await runSkill({
       home: context.skillsHome, dataDir: context.dataDir, name: PHENOAGE_SKILL, args: [], files: [], measurements,
-      profile: { age: ageOn(date, context.today, ageNow), sex: context.records.profile.sex }, useProfile: true,
+      profile: { age, sex: context.records.profile.sex }, useProfile: true,
       python: context.config.skillPython, runtimes: context.config.skillRuntimes, timeoutMs: context.config.skillTimeoutMs,
       revision: context.catalog.revision, measuredAt: date,
     })
+    if (!result.ok) failedRuns.set(failedKey, Date.now())
     runs += 1
   }
   const points = pointsFromHistory(context.dataDir)
@@ -288,6 +373,12 @@ async function ensureBioAge(context: TrackingContext, reference: Reference): Pro
     note_zh: points.length > 0 ? `按 ${points.length} 次同时测齐九项血检的检查回算。` : '表型年龄没有算出来，请查看技能的报告。',
     missing: [], points, band_years: band?.years ?? null, band_verified: band?.verified ?? false, band_missing: band?.missing ?? [], runs,
   }
+}
+
+/** The blocker when Mirobody is configured but the read failed. */
+export function readFailed(records: Pick<RecordSnapshot, 'record_error'>): string {
+  const reason = records.record_error.trim().replace(/[。.]$/, '')
+  return `记录读取失败：${reason || '原因未知'}。`
 }
 
 function pointsFromHistory(dataDir: string): BioAgePoint[] {
@@ -320,7 +411,17 @@ interface ModelRun {
   error: string
 }
 
-const runMemo = new Map<string, ModelRun>()
+const runMemo = new Map<string, ModelRun & { at: number }>()
+// Failed runs are remembered for the memo TTL, so a broken runtime is not retried on every request.
+const failedRuns = new Map<string, number>()
+
+function recentlyFailed(key: string): boolean {
+  const at = failedRuns.get(key)
+  if (at == null) return false
+  if (Date.now() - at < CACHE_TTL_MS) return true
+  failedRuns.delete(key)
+  return false
+}
 
 async function runModel(
   context: TrackingContext,
@@ -333,7 +434,8 @@ async function runModel(
 ): Promise<ModelRun> {
   const key = JSON.stringify([card.name, context.catalog.revision, date, measurements, age, targets, extraArgs, context.records.profile.sex])
   const hit = runMemo.get(key)
-  if (hit) return hit
+  // A successful run is kept (same inputs, same output); a failed one only for the memo TTL.
+  if (hit && (!hit.error || Date.now() - hit.at < CACHE_TTL_MS)) return hit
   const files: Array<{ name: string; text: string }> = []
   const args: string[] = [...extraArgs]
   const flag = card.entry?.targets_flag
@@ -348,13 +450,16 @@ async function runModel(
     python: context.config.skillPython, runtimes: context.config.skillRuntimes, timeoutMs: context.config.skillTimeoutMs,
     revision: context.catalog.revision, measuredAt: date,
   })
-  const run: ModelRun = {
+  const run = {
     levers: result.ok ? result.levers ?? null : null,
     outputs: result.outputs ?? {},
-    error: result.ok ? '' : (result.error || result.error_kind || '').slice(0, 300),
+    error: result.ok ? '' : (result.error || result.error_kind || 'skill run failed').slice(0, 300),
+    at: Date.now(),
   }
-  if (result.ok) runMemo.set(key, run)
+  runMemo.delete(key)
+  runMemo.set(key, run)
   if (runMemo.size > 50) runMemo.delete(runMemo.keys().next().value as string)
+  if (failedRuns.size > 200) failedRuns.delete(failedRuns.keys().next().value as string)
   return run
 }
 
@@ -461,7 +566,7 @@ async function modelCards(context: TrackingContext, reference: Reference, goals:
             const marker = pair?.indicator ? markerFor(reference.biovar, pair.indicator) : null
             const relative = marker ? marker.cvi_pct / 100 : 0.1
             const stepValue = row.value * relative
-            return { label: row.label_zh, unit: row.unit, years_per_step: (row.years_per_unit ?? 0) * stepValue, step: `${fmt(stepValue)} ${row.unit}` }
+            return { label: row.label_zh, unit: row.unit, years_per_step: (row.years_per_unit ?? 0) * stepValue, step: `${fmt(stepValue)} ${row.unit}`, ...(marker ? { key: marker.key } : {}) }
           }).filter((row) => Number.isFinite(row.years_per_step)).sort((a, b) => Math.abs(b.years_per_step) - Math.abs(a.years_per_step)).slice(0, 5)
           cards.push({
             model: 'phenoage',
@@ -499,34 +604,51 @@ const RISK_FLAGS: Array<{ fact: RiskFact; flag: string; men_only?: boolean }> = 
   { fact: 'family_history', flag: '--family-history', men_only: true },
 ]
 
-/** The home-cuff reading a risk equation should see: the mean of the last week of readings, not one reading. */
-async function weeklyBloodPressure(context: TrackingContext, indicator: string): Promise<{ value: number; unit: string } | null> {
-  const read = await loadSeries(context.config, [indicator], { start: addDays(context.today, -30), end: context.today, resolution: 'raw' })
-  const points = read.series[indicator]?.points ?? []
-  const last = points.at(-1)
+/**
+ * The home blood pressure a risk equation should see: the mean of every home
+ * reading, the wearable cuff's and the ones the person typed, in the 7 days
+ * ending at the latest of them (days −6 to 0, the same window latestSelf uses).
+ * A typed reading joins the cuff's week; it never displaces it.
+ */
+export async function homeBloodPressure(context: TrackingContext): Promise<{ value: number; unit: string; date: string; n: number } | null> {
+  const unit = SELF_SPEC.sbp.unit
+  const readings = readSelf(context.dataDir).filter((row) => row.key === 'sbp').map((row) => ({ date: row.date, value: row.value }))
+  const devices = context.records.indicators.filter((row) => row.source !== 'self' && (SELF_DEVICE_NAMES.sbp ?? []).includes(row.name))
+  const latestOf = (dates: string[]) => dates.filter(Boolean).sort().at(-1) ?? ''
+  const guess = latestOf([...readings.map((row) => row.date), ...devices.map((row) => row.date || row.last_date || '')])
+  if (devices.length > 0 && guess && context.records.record_status === 'ok') {
+    const read = await loadSeries(context.config, devices.map((row) => row.name), { start: addDays(guess, -6), end: guess, resolution: 'raw' })
+    for (const row of devices) {
+      for (const point of read.series[row.name]?.points ?? []) {
+        if (!normalizeUnit(point.unit) || normalizeUnit(point.unit) === normalizeUnit(unit)) readings.push({ date: point.date, value: point.value })
+      }
+    }
+  }
+  const last = latestOf(readings.map((row) => row.date))
   if (!last) return null
-  const week = points.filter((point) => point.date >= addDays(last.date, -6))
-  return { value: Math.round((week.reduce((sum, point) => sum + point.value, 0) / week.length) * 10) / 10, unit: last.unit }
+  const week = readings.filter((row) => row.date >= addDays(last, -6) && row.date <= last)
+  return { value: Math.round((week.reduce((sum, row) => sum + row.value, 0) / week.length) * 10) / 10, unit, date: last, n: week.length }
 }
 
 async function riskCard(context: TrackingContext, reference: Reference, card: SkillCard | undefined, goals: PlanVersion['goals']): Promise<ModelCard> {
   const base: ModelCard = {
     model: 'china-par', title_zh: '10 年动脉粥样硬化性心血管病风险（China-PAR）', status: 'unavailable', note_zh: '', measured_on: null,
-    now: {}, goal: null, levers: [], sensitivity: [],
+    now: {}, goal: null, missing: [], missing_labs: [], missing_facts: [], levers: [], sensitivity: [],
     boundary_zh: '模型估计：China-PAR 按中国成人队列建立，给出的是和你条件相同的人群平均风险，不是诊断，也不决定是否用药。',
   }
-  if (!card || !card.script || card.inputsStatus !== 'verified') {
+  if (!card || !card.script) {
+    base.note_zh = '方法库里没有 China-PAR 方法，请更新 longevity-skills。'
+    return base
+  }
+  if (card.inputsStatus !== 'verified') {
     base.note_zh = '风险模型还没有通过系数校验，暂不显示数值。'
     return base
   }
   const profile = context.records.profile
-  if (context.records.record_status !== 'ok') {
-    base.note_zh = '需要接上 Mirobody 记录。'
-    return base
-  }
   const missingFacts: string[] = []
   if (profile.age == null) missingFacts.push('实足年龄')
-  if (profile.sex !== 'male' && profile.sex !== 'female') missingFacts.push('性别')
+  // China-PAR has one equation for men and one for women; 'other' or unknown cannot pick one.
+  if (profile.sex !== 'male' && profile.sex !== 'female') missingFacts.push('性别（男或女）')
   const args: string[] = []
   for (const item of RISK_FLAGS) {
     if (item.men_only && profile.sex !== 'male') continue
@@ -534,29 +656,48 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
     if (value == null) missingFacts.push(RISK_FACT_ZH[item.fact])
     else args.push(item.flag, value ? 'yes' : 'no')
   }
-  const measurements: MeasurementIn[] = []
+  // Labs are listed even without a record, so the person knows what a checkup (or a tape measure) must supply.
+  const found: Array<{ key: string; row: NonNullable<ReturnType<typeof indicatorFor>> }> = []
   const missingLabs: string[] = []
-  let measuredOn = ''
   for (const spec of measurementInputs(card)) {
     const row = indicatorFor(spec, context.records.indicators)
-    if (!row) {
-      if (spec.required) missingLabs.push(spec.label_zh)
-      continue
-    }
-    if (spec.key === 'sbp_mmhg' && !row.loinc) {
-      const week = await weeklyBloodPressure(context, row.name)
+    if (row) found.push({ key: spec.key, row })
+    else if (spec.required) missingLabs.push(spec.label_zh)
+  }
+  base.missing_labs = missingLabs
+  base.missing_facts = missingFacts
+  base.missing = [...missingLabs, ...missingFacts]
+  const factsHint = missingFacts.length > 0 ? `档案里还缺${missingFacts.join('、')}（在健康页填写，或在对话里告诉我）。` : ''
+  if (context.records.record_status === 'error') {
+    // Which labs the record lacks is unknown while the read fails, so none are listed as add-ons.
+    base.missing_labs = []
+    base.missing = [...missingFacts]
+    base.note_zh = `${readFailed(context.records)}${factsHint}`
+    return base
+  }
+  if (context.records.record_status !== 'ok') {
+    const labsHint = missingLabs.length > 0 ? `，计算还需要${missingLabs.join('、')}` : ''
+    base.note_zh = `还没有连接 Mirobody 体检记录${labsHint}。${factsHint}`
+    return base
+  }
+  if (missingLabs.length > 0 || missingFacts.length > 0) {
+    base.note_zh = `${missingLabs.length > 0 ? `记录里还缺${missingLabs.join('、')}。` : ''}${factsHint}`
+    return base
+  }
+  const measurements: MeasurementIn[] = []
+  let measuredOn = ''
+  for (const { key, row } of found) {
+    // Home readings (typed or from the wearable cuff) are judged as their 7-day mean, pooled; a clinic
+    // reading from a checkup is used as it is.
+    if (key === 'sbp_mmhg' && (row.source === 'self' || (SELF_DEVICE_NAMES.sbp ?? []).includes(row.name))) {
+      const week = await homeBloodPressure(context)
       if (week) {
-        measurements.push({ key: spec.key, value: week.value, unit: week.unit })
+        measurements.push({ key, value: week.value, unit: week.unit })
         continue
       }
     }
-    measurements.push({ key: spec.key, value: row.value, unit: row.unit })
+    measurements.push({ key, value: row.value, unit: row.unit })
     if (row.date && row.date > measuredOn) measuredOn = row.date
-  }
-  if (missingFacts.length > 0 || missingLabs.length > 0) {
-    base.missing = [...missingLabs, ...missingFacts]
-    base.note_zh = `还缺${[...missingLabs, ...missingFacts].join('、')}。${missingFacts.length > 0 ? '是否项在档案里填，或在对话里告诉我。' : ''}`
-    return base
   }
   const targets = goalTargets(card, goals, reference)
   const run = await runModel(context, card, measurements, profile.age as number, targets, context.today, args)
@@ -572,8 +713,20 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
     const goal = targets.find((row) => row.key === key)
     return now && goal ? { from: `${fmt(Number(now.value))} ${now.unit}`.trim(), to: `${fmt(Number(goal.value))} ${goal.unit}`.trim() } : fallback
   }
+  // One within-person step of each modifiable input, in percentage points of risk (the skill's own slope).
+  const sensitivity = run.levers.sensitivity.map((row) => {
+    const spec = measurementInputs(card).find((item) => item.key === row.key)
+    const codes = spec?.loinc ?? []
+    const marker = reference.biovar.markers.find((item) => item.loinc.some((code) => codes.includes(code))) ?? null
+    const relative = marker ? marker.cvi_pct / 100 : 0.1
+    const stepValue = row.value * relative
+    // Waist has no biological-variation row (and China-PAR gives it no LOINC): it is keyed as the self measurement.
+    const key = marker?.key ?? (codes.includes(SELF_SPEC.waist.loinc) || spec?.label_zh === SELF_SPEC.waist.label_zh ? 'waist' : undefined)
+    return { label: row.label_zh, unit: row.unit, years_per_step: (row.per_unit ?? 0) * stepValue, step: `${fmt(stepValue)} ${row.unit}`, ...(key ? { key } : {}) }
+  }).filter((row) => Number.isFinite(row.years_per_step)).sort((a, b) => Math.abs(b.years_per_step) - Math.abs(a.years_per_step))
   return {
     ...base,
+    sensitivity,
     status: target ? 'ok' : 'no_goal',
     note_zh: target
       ? '达到方案目标时的 10 年风险按同一模型计算。'

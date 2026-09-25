@@ -1,0 +1,71 @@
+{
+  "brief": {
+    "today": "2026-09-24",
+    "focus": ["bioage", "cardio"],
+    "priorities": [
+      { "marker_key": "sbp", "label_zh": "收缩压", "value": 126.4, "unit": "mmHg", "date": "2026-09-23", "why_zh": "China-PAR 风险的主要来源（模型估计）", "source": "china_par_levers" },
+      { "marker_key": "crp", "label_zh": "超敏C反应蛋白", "value": 1.2, "unit": "mg/L", "date": "2026-08-26", "why_zh": "对你的表型年龄影响较大的指标之一（模型估计）", "source": "phenoage_levers" },
+      { "marker_key": "glucose", "label_zh": "空腹血糖", "value": 5.4, "unit": "mmol/L", "date": "2026-08-26", "why_zh": "对你的表型年龄影响最大的指标之一（模型估计）；方法库里还没有以空腹血糖为终点的试验", "source": "phenoage_levers" },
+      { "marker_key": "tg", "label_zh": "甘油三酯", "value": 1.2, "unit": "mmol/L", "date": "2026-08-26", "why_zh": "你最关心心血管", "source": "focus" }
+    ],
+    "candidates": [
+      { "id": "aerobic-sbp", "intervention_zh": "有氧耐力训练", "category": "exercise", "marker_key": "sbp", "label_zh": "收缩压", "effect": { "value": -3.5, "unit": "mmHg", "kind": "mean_difference" }, "duration_weeks": null, "population": "18 岁以上健康成人", "design": "meta-analysis", "doi": "10.1161/JAHA.112.004473", "verified": true, "expected_zh": "试验中平均使收缩压下降 3.5 mmHg（18 岁以上健康成人，荟萃分析）", "needs_doctor": false, "cautions_zh": [] },
+      { "id": "salt-reduction-sbp", "intervention_zh": "减盐", "category": "diet", "marker_key": "sbp", "label_zh": "收缩压", "effect": { "value": -4.18, "unit": "mmHg", "kind": "mean_difference" }, "duration_weeks": null, "population": "有或没有高血压的成人", "design": "meta-analysis", "doi": "10.1136/bmj.f1325", "verified": true, "expected_zh": "试验中平均使收缩压下降 4.18 mmHg（有或没有高血压的成人，荟萃分析）", "needs_doctor": false, "cautions_zh": ["你正在服药，开始前先与医生确认"] },
+      { "id": "mediterranean-hscrp", "intervention_zh": "地中海饮食", "category": "diet", "marker_key": "crp", "label_zh": "超敏C反应蛋白", "effect": { "value": -0.98, "unit": "mg/L", "kind": "mean_difference" }, "duration_weeks": null, "population": "19 岁以上成人", "design": "meta-analysis", "doi": "10.1016/j.numecd.2014.03.003", "verified": true, "expected_zh": "试验中平均使超敏C反应蛋白下降 0.98 mg/L（19 岁以上成人，荟萃分析）", "needs_doctor": false, "cautions_zh": ["你正在服药，开始前先与医生确认"] },
+      { "id": "omega3-2g-tg", "intervention_zh": "ω-3（鱼油）补充", "category": "supplement", "marker_key": "tg", "label_zh": "甘油三酯", "effect": { "value": -42.61, "unit": "mg/dL", "kind": "mean_difference" }, "duration_weeks": 13, "population": "成人（90 项试验中 52 项为高血脂人群）", "design": "meta-analysis", "doi": "10.1161/JAHA.123.029512", "verified": true, "expected_zh": "试验中平均使甘油三酯下降 42.61 mg/dL（约 0.48 mmol/L；成人，90 项试验中 52 项为高血脂人群，荟萃分析）", "needs_doctor": true, "cautions_zh": ["你正在服药，开始前先与医生确认"] }
+    ],
+    "safety": { "medications": ["鱼油(Omega-3)", "维生素D3"], "notes_zh": ["安全筛查只看了记录里的用药和档案，不是完整的用药审核。"] },
+    "past_items": [],
+    "boundary_zh": "草稿只包含生活方式和需先与医生确认的补剂选项；不开始、停止或调整任何处方药，也不给药物或补剂剂量。效果是试验平均值，个人结果会不同。"
+  },
+  "draft": {
+    "title": "降低血压和炎症的生活方式方案",
+    "items": [
+      {
+        "id": "aerobic-sbp",
+        "category": "exercise",
+        "category_zh": "运动",
+        "title": "规律的有氧运动",
+        "detail": "选一种能坚持的有氧运动，比如快走、骑车或游泳，每周多数日子做。证据：试验中平均使收缩压下降 3.5 mmHg（18 岁以上健康成人，荟萃分析）",
+        "start": "2026-09-24",
+        "markers": ["收缩压"],
+        "target": null,
+        "evidence": { "effect_id": "aerobic-sbp", "expected_zh": "试验中平均使收缩压下降 3.5 mmHg（18 岁以上健康成人，荟萃分析）", "doi": "10.1161/JAHA.112.004473", "verified": true, "population": "18 岁以上健康成人" },
+        "needs_doctor": false,
+        "cautions_zh": []
+      },
+      {
+        "id": "mediterranean-hscrp",
+        "category": "diet",
+        "category_zh": "饮食",
+        "title": "地中海饮食",
+        "detail": "多吃蔬菜、豆类、全谷物、深海鱼和坚果，用橄榄油做菜，少吃红肉和加工肉。证据：试验中平均使超敏C反应蛋白下降 0.98 mg/L（19 岁以上成人，荟萃分析）",
+        "start": "2026-09-24",
+        "markers": ["超敏C反应蛋白"],
+        "target": null,
+        "evidence": { "effect_id": "mediterranean-hscrp", "expected_zh": "试验中平均使超敏C反应蛋白下降 0.98 mg/L（19 岁以上成人，荟萃分析）", "doi": "10.1016/j.numecd.2014.03.003", "verified": true, "population": "19 岁以上成人" },
+        "needs_doctor": false,
+        "cautions_zh": ["你正在服药，开始前先与医生确认"]
+      },
+      {
+        "id": "omega3-2g-tg",
+        "category": "supplement",
+        "category_zh": "补剂",
+        "title": "ω-3（鱼油）补充",
+        "detail": "可选：需先与医生确认；不给剂量。证据：试验中平均使甘油三酯下降 42.61 mg/dL（约 0.48 mmol/L；成人，90 项试验中 52 项为高血脂人群，荟萃分析）",
+        "start": "2026-09-24",
+        "markers": ["甘油三酯"],
+        "target": null,
+        "evidence": { "effect_id": "omega3-2g-tg", "expected_zh": "试验中平均使甘油三酯下降 42.61 mg/dL（约 0.48 mmol/L；成人，90 项试验中 52 项为高血脂人群，荟萃分析）", "doi": "10.1161/JAHA.123.029512", "verified": true, "population": "成人（90 项试验中 52 项为高血脂人群）" },
+        "needs_doctor": true,
+        "cautions_zh": ["你正在服药，开始前先与医生确认"]
+      }
+    ],
+    "goals": [
+      { "marker": "收缩压", "value": 122.9, "unit": "mmHg", "basis_zh": "按试验平均效应估算，不是个人预测" },
+      { "marker": "超敏C反应蛋白", "value": 0.22, "unit": "mg/L", "basis_zh": "按试验平均效应估算，不是个人预测" },
+      { "marker": "甘油三酯", "value": 0.72, "unit": "mmol/L", "basis_zh": "按试验平均效应估算，不是个人预测" }
+    ],
+    "notes_zh": ["空腹血糖是你的表型年龄最大的杠杆，但方法库里还没有以它为终点的试验，所以草稿里没有针对它的项目。"]
+  }
+}

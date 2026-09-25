@@ -69,7 +69,8 @@ export interface CheckIn {
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 // Amounts of a medicine or supplement. The plan keeps the name; the dose lives in Mirobody.
-const DOSE = /\d+(?:\.\d+)?\s*(?:mg|mcg|µg|μg|ug|iu|g|ml|毫克|微克|国际单位|单位|克|毫升|粒|片|颗|支|滴|袋|勺)|[一二两三四五六七八九十半]+\s*(?:粒|片|颗|支|滴|袋|勺)/gi
+// A concentration (42.6 mg/dL, 1 g/L) is a lab or trial value, not an amount taken, and stays.
+const DOSE = /\d+(?:\.\d+)?\s*(?:mg|mcg|µg|μg|ug|iu|g|ml|毫克|微克|国际单位|单位|克|毫升|粒|片|颗|支|滴|袋|勺)(?!\s*\/\s*(?:d?l|ml)\b)|[一二两三四五六七八九十半]+\s*(?:粒|片|颗|支|滴|袋|勺)/gi
 
 function dir(dataDir: string): string {
   return join(dataDir, 'interventions')

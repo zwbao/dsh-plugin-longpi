@@ -64,6 +64,8 @@ interface Config {
   maxSkillMatches: number;
   skillRuntimes: Record<string, string>;
   skillsVersion: string;
+  /** On a DSH with no workspace, register <dataDir>/workspace as 「健康」 once, so a session can open. */
+  bootstrapWorkspace: boolean;
 }
 declare const Config: Schema<Config>;
 //#endregion
@@ -81,8 +83,8 @@ declare function preGuard(text: string): GuardHit | null;
 declare function wrapGuardMessage(text: string, hit: GuardHit): string;
 //#endregion
 //#region src/version.d.ts
-declare const PRODUCT_VERSION = "4.2.0";
-declare const TOOL_NAMES: readonly ["read_personal_situation", "list_longevity_intents", "match_longevity_skills", "read_longevity_skill", "run_longevity_skill", "query_longevity_evidence", "list_longevity_domains", "save_personal_profile", "longpi_status", "save_intervention_plan", "log_intervention_checkin", "read_intervention_plan", "review_interventions", "model_intervention_goals"];
+declare const PRODUCT_VERSION = "5.0.0";
+declare const TOOL_NAMES: readonly ["read_personal_situation", "list_longevity_intents", "match_longevity_skills", "read_longevity_skill", "run_longevity_skill", "query_longevity_evidence", "list_longevity_domains", "save_personal_profile", "longpi_status", "save_intervention_plan", "draft_intervention_plan", "log_intervention_checkin", "save_self_measurement", "read_intervention_plan", "review_interventions", "model_intervention_goals", "set_followup", "send_followup_message"];
 declare const HARNESS_SKILLS: readonly ["longpi-dispatch", "longpi-board", "longpi-boundary", "longpi-interventions"];
 //#endregion
 //#region src/catalog.d.ts
@@ -92,6 +94,8 @@ interface InputSpec {
   label_zh: string;
   aliases?: string[];
   loinc?: string[];
+  /** Mirobody device series that hold this input (a wearable metric), like BiovarMarker.device_codes. */
+  device_codes?: string[];
   unit?: string;
   accept?: Record<string, number>;
   range?: [number, number];
@@ -227,15 +231,25 @@ interface RecordIndicator {
   loinc?: string;
   label?: string;
   date?: string;
+  source?: 'self';
 }
 declare function unitFactor(spec: InputSpec, unit: string): number | null;
 /** Validate and convert measurements; build the CSV in the input's own units. */
 declare function stageMeasurements(card: SkillCard, items: readonly MeasurementIn[]): Staged;
 interface Runnable {
+  /** Whether the required inputs are all there (ready), one or two short (partial), or not; from any source. */
   status: 'ready' | 'partial' | 'none' | 'unknown';
   have: string[];
   missing: string[];
   from_record: MeasurementIn[];
+  /**
+   * The same question asked of the record alone. ready: every required input is there and at least one
+   * record-backed input (a LOINC or device code) came from the record. near: only record-backed inputs are
+   * missing, one or two of them. A method with no record-backed input is never ready or near from the record.
+   */
+  record: 'ready' | 'near' | 'none';
+  /** Missing required inputs a checkup or a device could supply. */
+  missing_from_record: string[];
 }
 /** Which of this skill's required inputs the record, the profile and past outputs already supply. */
 declare function runnableFrom(card: SkillCard, indicators: readonly RecordIndicator[], profile: {
@@ -252,9 +266,11 @@ interface MatchHit {
   why: string[];
   has_script: boolean;
   tier: string;
+  /** record is runnableFrom's answer for the record alone: ready, near (one or two tests short) or none. */
   runnable: {
     status: Runnable['status'];
     missing: string[];
+    record: Runnable['record'];
   };
 }
 interface DomainRow {
@@ -391,12 +407,24 @@ type Sex = (typeof SEXES)[number];
 declare const RISK_FACTS: readonly ["smoker", "diabetes", "bp_treated", "north", "urban", "family_history"];
 type RiskFact = (typeof RISK_FACTS)[number];
 declare const RISK_FACT_ZH: Record<RiskFact, string>;
+/** Bump when the first-run notice changes, so the person reads the new one before it counts as accepted. */
+declare const CONSENT_VERSION = "2026-09-24";
+/** What the person cares about most, in their order: used to order results and suggestions. */
+declare const FOCUS: readonly ["bioage", "cardio", "glucose", "weight", "sleep", "plan"];
+type Focus = (typeof FOCUS)[number];
+declare const FOCUS_ZH: Record<Focus, string>;
+interface Consent {
+  version: string;
+  accepted_at: string;
+}
 interface Profile {
   displayName: string;
   birthYear: number | null;
   age: number | null;
   sex: Sex;
   risk: Partial<Record<RiskFact, boolean>>;
+  focus: Focus[];
+  consent: Consent | null;
 }
 declare const EMPTY_PROFILE: Profile;
 type Failure = {
@@ -407,11 +435,16 @@ declare function normalizeProfile(input: unknown): {
   ok: true;
   profile: Profile;
 } | Failure;
-/** Apply a partial update: fields that are absent keep their saved value; a risk fact set to null is cleared. */
+/**
+ * Apply a partial update: fields that are absent keep their saved value; a risk fact set to null is cleared.
+ * consent in the update is ignored: only the person accepts the notice, through setConsent.
+ */
 declare function mergeProfile(current: Profile, update: Record<string, unknown>): Record<string, unknown>;
 declare function estimatedAge(birthYear: number | null, nowYear: number): number | null;
 declare function readProfile(dataDir: string): Profile;
 declare function writeProfile(dataDir: string, profile: Profile): void;
+/** Record that the person accepted (or withdrew from) the current first-run notice. Never called on the model's word. */
+declare function setConsent(dataDir: string, accept: boolean, now?: Date): Consent | null;
 //#endregion
 //#region src/compact.d.ts
 interface CompactMeta {
@@ -456,6 +489,8 @@ interface IndicatorRow {
   count?: number;
   first_date?: string;
   last_date?: string;
+  /** A measurement the person took and entered themselves (selfmeasure.ts), not a Mirobody row. */
+  source?: 'self';
 }
 interface MedicationRow {
   name: string;
@@ -480,6 +515,60 @@ interface BridgeStatus {
   error?: string;
 }
 //#endregion
+//#region src/selfmeasure.d.ts
+declare const SELF_KEYS: readonly ["waist", "sbp", "dbp", "weight"];
+type SelfKey = (typeof SELF_KEYS)[number];
+declare const SELF_SPEC: Record<SelfKey, {
+  label_zh: string;
+  unit: string;
+  loinc: string;
+  min: number;
+  max: number;
+  units: Record<string, number>;
+}>;
+/**
+ * Other ways a record names the same measure: a checkup row with no LOINC code
+ * (腰围), a different LOINC code for it (3141-9 is a measured body weight), or
+ * an English report name. mergeSelf counts all of them as the same thing.
+ */
+declare const SELF_ALIASES: Record<SelfKey, {
+  names: string[];
+  loinc: string[];
+}>;
+interface SelfRow {
+  id: string;
+  key: SelfKey;
+  value: number;
+  unit: string;
+  date: string;
+  saved_at: string;
+  given?: {
+    value: number;
+    unit: string;
+  };
+}
+declare function readSelf(dataDir: string): SelfRow[];
+/** Check each entry the person stated, convert it to the canonical unit, and append the ones that pass. */
+declare function addSelf(dataDir: string, entries: unknown[], opts: {
+  today: string;
+  now?: Date;
+}): {
+  saved: SelfRow[];
+  problems: string[];
+};
+declare function deleteSelf(dataDir: string, id: string): boolean;
+type SelfLatest = Partial<Record<SelfKey, {
+  value: number;
+  unit: string;
+  date: string;
+  n: number;
+}>>;
+declare function latestSelf(rows: readonly SelfRow[]): SelfLatest;
+/** The latest self measurements as record rows, so the skills and markers can read them like any other. */
+declare function selfIndicators(rows: readonly SelfRow[]): IndicatorRow[];
+/** One point per date (the mean of that day's readings), oldest first, for charts and verdicts. */
+declare function selfSeries(rows: readonly SelfRow[], key: SelfKey): SeriesPoint[];
+//#endregion
 //#region src/records.d.ts
 interface RecordSnapshot {
   profile: Profile;
@@ -498,6 +587,16 @@ interface RecordSnapshot {
 /** Forget cached record reads, after a change the next read must see. */
 declare function invalidateRecords(): void;
 declare function loadRecords(config: Config, dataDir: string, pluginHome: string): Promise<RecordSnapshot>;
+/**
+ * Add the person's own measurements to the record rows. A self row joins only
+ * when it is newer than every record row measuring the same thing (same LOINC,
+ * the wearable's blood-pressure and weight rows, or a row named or labelled
+ * like it: 腰围, waist, 体重…), so a newer checkup always wins. It goes last:
+ * indicatorFor keeps the last row per LOINC code.
+ */
+declare function mergeSelf(remote: IndicatorRow[], self: readonly IndicatorRow[]): IndicatorRow[];
+/** Whether a record row measures the same thing as a self key, by LOINC, device name, or report name. */
+declare function sameMeasure(key: SelfKey, row: Pick<IndicatorRow, 'name' | 'label' | 'loinc'>): boolean;
 interface SeriesPoint {
   date: string;
   time: string;
@@ -717,6 +816,63 @@ declare function buildBoard(input: {
   boundary: string;
 };
 //#endregion
+//#region src/changes.d.ts
+interface RecordChange {
+  /** Biological-variation key, e.g. 'mcv'. */
+  key: string;
+  label_zh: string;
+  /** The biological-variation row's unit; every point is converted to it. */
+  unit: string;
+  points: Array<{
+    date: string;
+    value: number;
+  }>;
+  /** pct is rounded to 1 decimal. */
+  compare: {
+    from_date: string;
+    from: number;
+    to_date: string;
+    to: number;
+    pct: number;
+  };
+  /** The reference change value in percent, 1 decimal, e.g. { up: 8.4, down: -8.4 }. */
+  band_pct: {
+    up: number;
+    down: number;
+  };
+  direction: 'up' | 'down';
+  verdict: 'better' | 'worse' | 'unclear';
+  ask_doctor: boolean;
+  text_zh: string;
+  advice_zh: string;
+  /** The row's own caveat, when it has one. */
+  caveat_zh?: string;
+  /** Where the within-person variation comes from (the row's cvi_source). */
+  source: {
+    title: string;
+    url: string;
+    doi?: string;
+  };
+  verified: boolean;
+}
+interface ChangesContext {
+  config: Config;
+  skillsHome: string;
+  records: RecordSnapshot;
+  today: string;
+}
+declare const CHANGES_NOTE_ZH = "判断依据：两次结果之差超过同一个人正常波动与检测误差合成的参考变化值（RCV，z=1.96）才算真实变化；变异数据来自 longevity-skills 的 data/biological_variation.json，每一行注明期刊出处。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。";
+/**
+ * Changes between checkups larger than the reference change value, ask_doctor
+ * first, then the furthest past its band; at most six. Checkup rows only
+ * (Mirobody rows with a LOINC code): wearable series and the person's own
+ * measurements are left out. An unread record gives no changes.
+ */
+declare function buildChanges(context: ChangesContext): Promise<{
+  changes: RecordChange[];
+  note_zh: string;
+}>;
+//#endregion
 //#region src/interventions.d.ts
 declare const CATEGORIES: readonly ["diet", "exercise", "sleep", "supplement", "drug", "behavior", "weight", "other"];
 type Category = typeof CATEGORIES[number];
@@ -838,6 +994,8 @@ interface BiovarMarker {
   /** Compare means over this many days, because the CVI was measured on such means (home blood pressure). */
   average_days?: number;
   population?: string;
+  /** What the reader should know about this row's band (a very small CVI, results excluded from the study). */
+  caveat_zh?: string;
   verified: boolean;
 }
 interface Biovar {
@@ -882,6 +1040,16 @@ interface Reference {
 declare function loadReference(skillsHome: string): Reference;
 /** The biological-variation row for one indicator, by LOINC code, device code, or name. */
 declare function markerFor(biovar: Biovar, indicator: {
+  name?: string;
+  loinc?: string;
+  label?: string;
+}): BiovarMarker | null;
+/**
+ * markerFor for a row that carries a LOINC code. A code the matched row does not list is a different
+ * measurement, often another specimen (urine creatinine is 2161-8, serum 2160-0; a report may print it as
+ * 肌酐(尿) or 尿肌酐(Cr)), so the name match only stands for a row with no codes of its own.
+ */
+declare function checkupMarkerFor(biovar: Biovar, indicator: {
   name?: string;
   loinc?: string;
   label?: string;
@@ -970,6 +1138,8 @@ interface MarkerVerdict {
   combined_with: string[];
   expected: Expectation[];
   next_retest: string | null;
+  /** The first date a retest means anything (start + the marker's minimum interval), when a retest is suggested. Stable while next_retest moves with today. */
+  first_due: string | null;
 }
 interface ItemSummary {
   id: string;
@@ -996,6 +1166,7 @@ declare function resolveMarkers(names: readonly string[], indicators: ReadonlyAr
   loinc?: string;
   label?: string;
   unit?: string;
+  source?: 'self';
 }>, biovar: Biovar): ResolvedMarker[];
 /**
  * How well one item was followed over [start, end]. Missing data is unknown,
@@ -1081,14 +1252,23 @@ interface ModelCard {
     now: string;
     goal: string | null;
   };
-  /** Stated facts the model still needs, by their Chinese name. */
+  /** Everything the model still needs, by its Chinese name: missing_labs then missing_facts. */
   missing?: string[];
+  /** Measurements the record (or the person's own measurements) does not hold yet. */
+  missing_labs?: string[];
+  /** Stated facts the profile does not hold yet (age, sex, the yes/no facts); unknown is never no. */
+  missing_facts?: string[];
   levers: LeverHint[];
+  /**
+   * How far one within-person step of each input moves the model, largest first: years of phenotypic age,
+   * or for china-par percentage points of 10-year risk. key is the biological-variation key (or waist).
+   */
   sensitivity: Array<{
     label: string;
     unit: string;
     years_per_step: number;
     step: string;
+    key?: string;
   }>;
   boundary_zh: string;
 }
@@ -1136,9 +1316,28 @@ interface Tracking {
     error?: string;
   };
   errors: string[];
+  /** Changes between checkups larger than normal fluctuation (changes.ts), ask_doctor first. */
+  changes: RecordChange[];
+  changes_note_zh: string;
 }
 declare function invalidateTracking(): void;
+/** Bumped by every invalidateTracking (a check-in, a self measurement, a plan or profile save): readers keeping their own copy refresh on a change. */
+declare function trackingGeneration(): number;
 declare function buildTracking(context: TrackingContext): Promise<Tracking>;
+/** The blocker when Mirobody is configured but the read failed. */
+declare function readFailed(records: Pick<RecordSnapshot, 'record_error'>): string;
+/**
+ * The home blood pressure a risk equation should see: the mean of every home
+ * reading, the wearable cuff's and the ones the person typed, in the 7 days
+ * ending at the latest of them (days −6 to 0, the same window latestSelf uses).
+ * A typed reading joins the cuff's week; it never displaces it.
+ */
+declare function homeBloodPressure(context: TrackingContext): Promise<{
+  value: number;
+  unit: string;
+  date: string;
+  n: number;
+} | null>;
 /** Model cards for goal values named in conversation, without saving them to the plan. */
 declare function modelGoals(context: TrackingContext, goals: PlanVersion['goals']): Promise<{
   models: ModelCard[];
@@ -1146,6 +1345,10 @@ declare function modelGoals(context: TrackingContext, goals: PlanVersion['goals'
 }>;
 //#endregion
 //#region src/overview.d.ts
+/**
+ * Methods the record itself can run (runnableFrom's record field): ready needs at least one input a checkup or
+ * a device records; near and unlock name only such inputs, never a question, an argument or another method's output.
+ */
 interface Readiness {
   ready: Array<{
     name: string;
@@ -1193,9 +1396,623 @@ declare function buildReport(input: {
   tracking: Tracking | null;
 }): string;
 //#endregion
+//#region src/followup.d.ts
+declare const WEBHOOK_KINDS: readonly ["feishu", "wecom", "dingtalk", "bark", "generic"];
+type WebhookKind = (typeof WEBHOOK_KINDS)[number];
+type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+interface FollowupSettings {
+  enabled: boolean;
+  checkin_time: string;
+  retest_time: string;
+  weekly: {
+    day: Weekday;
+    time: string;
+  } | null;
+  desktop: boolean;
+  webhook: {
+    kind: WebhookKind;
+    url: string;
+    secret: string;
+  } | null;
+  detail: 'minimal' | 'full';
+  quiet: {
+    start: string;
+    end: string;
+  } | null;
+}
+interface PublicFollowup extends Omit<FollowupSettings, 'webhook'> {
+  webhook: {
+    kind: WebhookKind;
+    url_masked: string;
+    secret_set: boolean;
+  } | null;
+}
+type FollowupKind = 'checkin' | 'retest' | 'weekly' | 'nudge' | 'custom' | 'test';
+interface FollowupLogRow {
+  at: string;
+  kind: FollowupKind;
+  key: string;
+  channels: {
+    desktop?: boolean;
+    webhook?: boolean;
+  };
+  ok: boolean;
+  error?: string;
+}
+interface ChannelResult {
+  ok: boolean;
+  error?: string;
+}
+interface SendResult {
+  ok: boolean;
+  channels: {
+    desktop?: ChannelResult;
+    webhook?: ChannelResult;
+  };
+}
+/** What the decisions need from the journey and tracking (journey.ts builds it). */
+interface FollowupState {
+  stage: string;
+  /** When the person accepted the notice (ISO), or null. */
+  consent_at: string | null;
+  next_title_zh: string;
+  next_detail_zh: string;
+  plan_exists: boolean;
+  /** How many plan items are ticked by hand (check-in items), done or not. */
+  checkin_items: number;
+  /** Titles of check-in items not done today. */
+  checkin_open: string[];
+  /** Retest dates from the plan's verdicts: date moves with today once due, first_due does not. */
+  retests: Array<{
+    marker: string;
+    date: string;
+    first_due: string;
+  }>;
+  week: {
+    pct: number | null;
+    streak: number;
+    next_retest: {
+      marker: string;
+      date: string;
+    } | null;
+  };
+}
+interface FollowupDeps {
+  platform: string;
+  /** Run a command without a shell; resolves, never rejects. */
+  run: (command: string, args: string[], timeoutMs: number) => Promise<ChannelResult>;
+  fetch: (url: string, init: {
+    method: 'POST';
+    headers: Record<string, string>;
+    body: string;
+    signal: AbortSignal;
+    redirect: 'manual';
+  }) => Promise<{
+    ok: boolean;
+    status: number;
+    text: () => Promise<string>;
+  }>;
+}
+declare const DEFAULT_FOLLOWUP: FollowupSettings;
+/** At most this many sends per local day, across kinds, model-written and test ones included. */
+declare const FOLLOWUP_MAX_PER_DAY = 6;
+declare const FOLLOWUP_TEST_TEXT = "这是一条 LongPi 测试提醒。";
+/** https for every kind; the generic kind may also be http to this machine or the local network. */
+declare function webhookUrlProblem(kind: WebhookKind, url: string): string;
+/** The saved settings, with defaults for anything missing or unreadable. */
+declare function readFollowup(dataDir: string): FollowupSettings;
+/** Check and save a partial update from the page or a tool. The file is private to the person (0600). */
+declare function writeFollowup(dataDir: string, update: unknown): {
+  ok: true;
+  settings: FollowupSettings;
+} | {
+  ok: false;
+  error: string;
+};
+/** scheme://host/… only: the rest of a webhook URL is its secret token. */
+declare function maskUrl(url: string): string;
+/** Settings as the page and the model see them: never the full webhook URL or the secret. */
+declare function publicFollowup(settings: FollowupSettings): PublicFollowup;
+declare function readFollowupLog(dataDir: string): FollowupLogRow[];
+declare function appendFollowupLog(dataDir: string, row: FollowupLogRow): void;
+/** Sends attempted on the local day of `now` (every kind counts, failed ones too). */
+declare function sentToday(log: readonly FollowupLogRow[], now: Date): number;
+/** ISO weekday of a local time: Monday = 1 … Sunday = 7. */
+declare function isoWeekday(now: Date): Weekday;
+/** ISO week of a local date, as 2026-W39. */
+declare function isoWeek(now: Date): string;
+/** Inside quiet hours; a window whose start is after its end wraps midnight (22:30–08:00). */
+declare function inQuiet(quiet: FollowupSettings['quiet'], now: Date): boolean;
+/**
+ * When a send planned at `time` goes out: inside quiet hours it waits for them to end, the same day. A
+ * time in the part of a window that runs to midnight (23:00 in 22:30–08:00) never goes out: null.
+ */
+declare function heldUntil(time: string, quiet: FollowupSettings['quiet']): string | null;
+interface FollowupSend {
+  kind: FollowupKind;
+  key: string;
+  text: string;
+}
+/**
+ * What is due at `now`. Keys: checkin:<date>, retest:<marker>:<first due date> (so an overdue retest is
+ * reminded once, not every day), weekly:<ISO week>, nudge:<stage>:<date>. A kind is due at or after its
+ * time on its day and only while not in the log, so a send missed while the host was off goes out at the
+ * next tick of the same day and never for a past day. The nudge shares the check-in time. Quiet hours
+ * hold everything; a time inside them is not sent that day.
+ */
+declare function decideFollowup(input: {
+  now: Date;
+  settings: FollowupSettings;
+  state: FollowupState;
+  log: readonly FollowupLogRow[];
+}): FollowupSend[];
+/** Whether anything could be due now, from the clock, the settings and the log alone: the journey is read only then. */
+declare function followupArmed(settings: FollowupSettings, log: readonly FollowupLogRow[], now: Date): boolean;
+/**
+ * The next time each kind is planned (local ISO, no zone), or null: none while follow-up is off. A time
+ * inside quiet hours is shown when they end, and a time that can never go out is not shown at all.
+ */
+declare function nextTimes(settings: FollowupSettings, state: FollowupState | null, now: Date, log: readonly FollowupLogRow[]): {
+  checkin: string | null;
+  retest: string | null;
+  weekly: string | null;
+};
+/** The notification command for this platform, run without a shell; null where there is none. */
+declare function desktopCommand(platform: string, text: string): {
+  command: string;
+  args: string[];
+} | null;
+declare function desktopSupported(platform: string): boolean;
+/** The request a webhook channel sends: URL (DingTalk signs in the query) and JSON body (Feishu signs in the body). */
+declare function webhookRequest(webhook: NonNullable<FollowupSettings['webhook']>, text: string, kind: FollowupKind, now: Date): {
+  url: string;
+  body: Record<string, unknown>;
+};
+/** Whether a webhook answer means delivered: HTTP 2xx, and the service's own code when it sends one. */
+declare function webhookAnswer(kind: WebhookKind, status: number, text: string): ChannelResult;
+/** Swap the platform, the command runner or fetch (tests); returns a function that restores the previous ones. */
+declare function setFollowupDeps(partial: Partial<FollowupDeps>): () => void;
+/** Send one message through every configured channel. Each has a 10 s limit; errors are recorded, never thrown. */
+declare function sendFollowup(settings: FollowupSettings, message: string, options?: {
+  kind?: FollowupKind;
+  now?: Date;
+  deps?: FollowupDeps;
+}): Promise<SendResult>;
+/**
+ * Send a message outside the schedule (the model's own follow-up, or the page's test): never
+ * deduplicated against the scheduled kinds (key custom:<time> or test:<time>), but counted in the
+ * daily limit and logged.
+ */
+declare function sendNow(dataDir: string, text: string, kind: FollowupKind, now?: Date): Promise<SendResult & {
+  error?: string;
+}>;
+/** One tick: read the settings and the log, and only if something may be due, the journey; then send and log. */
+declare function followupTick(input: {
+  dataDir: string;
+  now: Date;
+  getState: () => Promise<FollowupState>;
+  deps?: FollowupDeps;
+}): Promise<FollowupLogRow[]>;
+interface FollowupContext {
+  dataDir: string;
+  getState: () => Promise<FollowupState>;
+  /** Changes whenever something the state is built from changed (trackingGeneration); a change forces a fresh read. */
+  generation?: () => number;
+}
+/**
+ * Tick every 60 s in the host's local time zone, as a Cordis effect: the interval is cleared when the
+ * plugin is disposed, is unref'd so it never keeps the process alive, and never overlaps itself. One
+ * journey read is reused the same day for up to an hour, and never after a check-in, a plan or profile
+ * save or a self measurement (the generation changes), so a reminder never counts items already ticked.
+ */
+declare function startFollowup(ctx: Context, getContext: () => FollowupContext, options?: {
+  tickMs?: number;
+  now?: () => Date;
+}): void;
+/** The GET /api/longpi/followup answer (also the POST one, after ok: true). */
+declare function followupResponse(dataDir: string, state: FollowupState | null, now?: Date): {
+  settings: PublicFollowup;
+  next: {
+    checkin: string | null;
+    retest: string | null;
+    weekly: string | null;
+  };
+  log: {
+    error?: string | undefined;
+    at: string;
+    kind: FollowupKind;
+    key: string;
+    ok: boolean;
+    channels: {
+      desktop?: boolean;
+      webhook?: boolean;
+    };
+  }[];
+  platform_desktop: boolean;
+};
+/** journey.followup: whether it is on, the channels it uses, and the next planned send. */
+declare function followupSummary(dataDir: string, state: FollowupState | null, now?: Date): {
+  enabled: boolean;
+  channels: Array<'desktop' | 'webhook'>;
+  next_at: string | null;
+};
+//#endregion
+//#region src/journey.d.ts
+type Stage = 'consent' | 'profile' | 'records' | 'first_result' | 'plan' | 'routine';
+interface Journey {
+  version: string;
+  today: string;
+  consent: {
+    accepted: boolean;
+    version: string;
+    accepted_at: string | null;
+    current: string;
+  };
+  profile: {
+    displayName: string;
+    birthYear: number | null;
+    age: number | null;
+    sex: 'female' | 'male' | 'other' | 'unknown';
+    risk: Partial<Record<RiskFact, boolean>>;
+    focus: Focus[];
+    complete: boolean;
+    questions: Array<{
+      key: 'age' | 'sex' | RiskFact;
+      label_zh: string;
+      unlocks_zh: string;
+      answered: boolean;
+      men_only?: boolean;
+    }>;
+  };
+  focus_options: Array<{
+    key: Focus;
+    label_zh: string;
+  }>;
+  records: {
+    status: 'unconfigured' | 'ok' | 'error';
+    error: string;
+    indicator_count: number;
+    full_checkups: number;
+    latest_checkup: string | null;
+    mirobody_mounted: boolean;
+  };
+  results: {
+    /**
+     * band_verified and band_missing are additions for the model: with band_missing the band is a lower bound.
+     * caveat_zh is set when a PhenoAge input changed beyond normal fluctuation in a direction to show a doctor.
+     */
+    bioage: {
+      status: 'ok' | 'blocked';
+      phenoage: number | null;
+      advance: number | null;
+      date: string | null;
+      checkups: number;
+      band_years: number | null;
+      band_verified: boolean;
+      band_missing: string[];
+      blocker_zh: string;
+      missing: string[];
+      caveat_zh?: string;
+    };
+    risk: {
+      status: 'ok' | 'blocked';
+      risk_pct: number | null;
+      category_zh: string;
+      date: string | null;
+      blocker_zh: string;
+      missing_labs: string[];
+      missing_facts: string[];
+    };
+  };
+  addons: Array<{
+    item_zh: string;
+    unlocks_zh: string;
+    self_measurable: boolean;
+    self_key?: SelfKey;
+  }>;
+  /** Changes between checkups larger than normal fluctuation, ask_doctor first; empty when the record cannot be read. */
+  changes: RecordChange[];
+  changes_note_zh: string;
+  self: {
+    latest: Array<{
+      key: SelfKey;
+      label_zh: string;
+      value: number;
+      unit: string;
+      date: string;
+      n: number;
+    }>;
+    keys: Array<{
+      key: SelfKey;
+      label_zh: string;
+      unit: string;
+      units: string[];
+    }>;
+  };
+  plan: {
+    exists: boolean;
+    title: string;
+    version: number | null;
+    items: number;
+    started: string | null;
+    days: number | null;
+    checkin_items: Array<{
+      id: string;
+      title: string;
+      done_today: boolean;
+    }>;
+    streak: number;
+    adherence_pct: number | null;
+  };
+  reminders: Array<{
+    kind: 'retest' | 'checkin';
+    text_zh: string;
+    date: string | null;
+    due: boolean;
+  }>;
+  stage: Stage;
+  next: {
+    stage: Stage;
+    title_zh: string;
+    detail_zh: string;
+    action: 'consent' | 'profile' | 'records' | 'addons' | 'plan' | 'checkin' | 'review' | 'open';
+  };
+  suggestions: Array<{
+    id: string;
+    text_zh: string;
+  }>;
+  boundary_zh: string;
+  /** Follow-up reminders: on or off, the channels in use, and the next planned send (local ISO). */
+  followup: {
+    enabled: boolean;
+    channels: Array<'desktop' | 'webhook'>;
+    next_at: string | null;
+  };
+}
+/** What a journey is built from; now (default the clock) only times the next follow-up. */
+type JourneyContext = TrackingContext & {
+  mount: MountState;
+  now?: Date;
+};
+declare function buildJourney(context: JourneyContext): Promise<Journey>;
+/** The journey and the tracking it was built from (retest dates, bands, adherence calendars). */
+declare function buildJourneyFull(context: JourneyContext): Promise<{
+  journey: Journey;
+  tracking: Tracking;
+}>;
+/**
+ * The value of a promise, or null when it has not settled within ms. The work
+ * goes on: buildTracking memoizes the promise, so the next call picks it up.
+ */
+declare function within<T>(promise: Promise<T>, ms: number): Promise<{
+  value: T;
+} | {
+  timeout: true;
+}>;
+/** Age is set and sex is answered (female, male or other). China-PAR's own need for male or female shows in its missing_facts. */
+declare function profileComplete(profile: Pick<Profile, 'age' | 'sex'>): boolean;
+/**
+ * Retest dates the plan's verdicts give, the earliest per marker. The only dates LongPi suggests a retest on.
+ * date moves with today once the retest is due; first_due is the day it first became due and does not move.
+ */
+declare function retestsOf(tracking: Tracking): Array<{
+  marker: string;
+  date: string;
+  first_due: string;
+}>;
+/** Labels of the profile questions not answered yet (unknown is not an answer). */
+declare function unansweredOf(profile: Profile): string[];
+/** What the follow-up scheduler decides from: the stage, open check-ins, retest dates, this ISO week's adherence. */
+declare function followupStateOf(journey: Journey, tracking: Tracking): FollowupState;
+/**
+ * Stage and next step without running anything, for the synchronous /longpi
+ * command: exact up to the records step, after that the journey last built in
+ * this process (by the page or a tool), or null when there is none yet.
+ */
+declare function stageNow(profile: Profile, mcpConfigured: boolean): {
+  stage: Stage | null;
+  title_zh: string;
+};
+//#endregion
+//#region src/calendar.d.ts
+declare function escapeText(value: string): string;
+/** Split a content line into 75-octet pieces without cutting a UTF-8 character; continuations start with a space. */
+declare function foldLine(line: string): string;
+/**
+ * The day a retest event sits on: its date while that is still ahead or due
+ * today for the first time; once it is overdue, tomorrow, so the 09:00 alarm
+ * can still fire. The UID stays the same, so a re-import moves the one event.
+ */
+declare function retestDay(retest: {
+  date: string;
+  first_due: string;
+}, today: string): {
+  date: string;
+  sequence: number;
+};
+declare function buildCalendar(journey: Journey, tracking: Tracking, opts: {
+  now: Date;
+}): string;
+//#endregion
+//#region src/tools-followup.d.ts
+/**
+ * The model's text is refused, with the reason, when it names a dose or, with minimal detail, a health
+ * value, a number that is not a date, a time or a count, or one of `names` (the plan's item titles and
+ * markers). Full-width digits and letters are read as their plain forms.
+ */
+declare function followupTextProblem(text: string, detail: 'minimal' | 'full', names?: readonly string[]): string;
+/**
+ * Why a set_followup call needs the person's own approval, or '' when it does not: turning reminders on,
+ * sending item names and adherence (detail full), or any webhook address. The tool's text says "only on
+ * their word"; this makes DSH ask them, so text the model read cannot switch it on alone.
+ */
+declare function followupApprovalReason(args: unknown): string;
+//#endregion
+//#region src/planner.d.ts
+declare const DRAFT_CATEGORIES: readonly ["diet", "exercise", "sleep", "weight", "behavior", "supplement"];
+type DraftCategory = (typeof DRAFT_CATEGORIES)[number];
+interface PlanBrief {
+  today: string;
+  focus: Focus[];
+  /** What is worth improving, most important first. */
+  priorities: Array<{
+    marker_key: string;
+    label_zh: string;
+    value: number | null;
+    unit: string;
+    date: string | null;
+    why_zh: string;
+    source: 'phenoage_levers' | 'china_par_levers' | 'focus';
+  }>;
+  /** Evidence-backed options for those priorities, from data/effects.jsonl; never a drug. */
+  candidates: Array<{
+    id: string;
+    intervention_zh: string;
+    category: string;
+    marker_key: string;
+    label_zh: string;
+    effect: {
+      value: number;
+      unit: string;
+      kind?: string;
+    };
+    duration_weeks: number | null;
+    population: string;
+    design: string;
+    doi: string;
+    verified: boolean;
+    expected_zh: string;
+    needs_doctor: boolean;
+    cautions_zh: string[];
+    /** The trial average in the unit of this person's latest value, when it converts exactly; else null. Used for goals. */
+    effect_in_record_unit: number | null;
+    /** The evidence row's own note (left out for supplements, whose notes name study doses). */
+    note_zh?: string;
+    /** Forms the evidence row lists (快走、骑车…), for exercise items. */
+    examples_zh: string[];
+  }>;
+  safety: {
+    medications: string[];
+    notes_zh: string[];
+  };
+  past_items: Array<{
+    title: string;
+    category: string;
+    verdicts: string[];
+    adherence_pct: number | null;
+  }>;
+  /** Daily wearable metrics on record (dailySteps, dailyTotalSleepTime): a target is only offered for these. */
+  metrics: string[];
+  /** Why a focus or a priority got no item (no evidence rows yet, no value on record). */
+  notes_zh: string[];
+  boundary_zh: string;
+}
+interface DraftItem {
+  /** The evidence row the item came from. */
+  id: string;
+  category: DraftCategory;
+  category_zh: string;
+  title: string;
+  detail: string;
+  start: string;
+  markers: string[];
+  target: {
+    metric: string;
+    op: '>=' | '<=';
+    value: number;
+    unit: string;
+  } | null;
+  evidence: {
+    effect_id: string;
+    expected_zh: string;
+    doi: string;
+    verified: boolean;
+    population: string;
+  };
+  needs_doctor: boolean;
+  cautions_zh: string[];
+}
+interface PlanDraft {
+  title: string;
+  items: DraftItem[];
+  /** basis_item_id: the draft item whose evidence gives the goal; the goal goes when that item is removed. */
+  goals: Array<{
+    marker: string;
+    value: number;
+    unit: string;
+    basis_zh: string;
+    basis_item_id: string;
+  }>;
+  notes_zh: string[];
+}
+interface BriefOptions {
+  /** Focus for this draft only (the saved profile is not changed). */
+  focus?: readonly Focus[];
+  /** Markers the person asked to improve, by name or key; they come first. */
+  markers?: readonly string[];
+}
+declare function buildPlanBrief(context: TrackingContext & {
+  mount?: MountState;
+}, options?: BriefOptions): Promise<PlanBrief>;
+declare function expectedText(row: EffectRow): string;
+/**
+ * Up to maxItems (default 3) items that cover the most important priorities with the largest verified
+ * effects: one item per intervention, at most one supplement, different categories first. Deterministic;
+ * saves nothing. Null when there is nothing evidence-backed to propose.
+ */
+declare function draftPlan(brief: PlanBrief, opts: {
+  today: string;
+  maxItems?: number;
+}): PlanDraft | null;
+/**
+ * The plan to save when the person accepts a draft on the page. Each item is rebuilt from the evidence
+ * by its id (so nothing but what the evidence says is saved, and never a drug), goals are recomputed for
+ * the items kept and filtered to the ones they kept. The caller normalizes and saves it like any plan.
+ */
+declare function acceptedPlan(brief: PlanBrief, posted: unknown, today: string): {
+  ok: true;
+  plan: Record<string, unknown>;
+} | {
+  ok: false;
+  error: string;
+  problems: string[];
+};
+//#endregion
+//#region src/workspace.d.ts
+/** The part of DSH's workspaceRegistry service (@deepseek-ai/dsh-workspace) this uses. */
+interface WorkspaceRegistryLike {
+  list(): ReadonlyArray<{
+    id: string;
+    path: string;
+  }>;
+  create(path: string, title?: string): Promise<{
+    id: string;
+    path: string;
+  }>;
+}
+declare const WORKSPACE_MARKER = "workspace-bootstrap.json";
+declare const WORKSPACE_DIR = "workspace";
+declare const WORKSPACE_TITLE = "健康";
+type BootstrapResult = {
+  status: 'created';
+  path: string;
+  workspace_id: string;
+} | {
+  status: 'disabled' | 'done_before' | 'not_empty' | 'no_registry';
+} | {
+  status: 'error';
+  error: string;
+};
+/** Create the 健康 workspace when the registry is empty and it was never created before. Never throws. */
+declare function bootstrapWorkspace(registry: WorkspaceRegistryLike | null | undefined, options: {
+  dataDir: string;
+  enabled: boolean;
+  now?: Date;
+}): Promise<BootstrapResult>;
+//#endregion
 //#region src/index.d.ts
 declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { Config, EMPTY_PROFILE, HARNESS_SKILLS, PHENOAGE_SKILL, PRODUCT_VERSION, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, TOOL_NAMES, addCheckIns, addDays, adherenceFor, apply, buildBoard, buildReport, buildStats, buildTracking, cellNumber, commandExcerpt, currentPlan, daysBetween, detectIntents, domainSummary, effectsFor, estimatedAge, evaluateMarker, evaluatePlan, foldName, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, latestOutputs, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, matchSkills, mentionedEntities, mergeProfile, modelGoals, name, nameVariants, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, rcvBand, readCheckIns, readHistory, readPlans, readProfile, readReceipts, readResultFile, readiness, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, runReady, runSkill, runnableFrom, savePlan, seriesOf, stageMeasurements, suggestNext, summarizeIndicators, summarizeMedications, tableOf, unitFactor, versionCheck, wrapGuardMessage, writeProfile, writeStats };
+export { type BootstrapResult, CHANGES_NOTE_ZH, CONSENT_VERSION, Config, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMPTY_PROFILE, FOCUS, FOCUS_ZH, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, HARNESS_SKILLS, type Journey, PHENOAGE_SKILL, PRODUCT_VERSION, type PlanBrief, type PlanDraft, type Profile, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RecordChange, type RiskFact, SELF_ALIASES, SELF_KEYS, SELF_SPEC, type SelfKey, type SelfRow, type SendResult, type Stage, TOOL_NAMES, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, bootstrapWorkspace, buildBoard, buildCalendar, buildChanges, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, cellNumber, checkupMarkerFor, commandExcerpt, currentPlan, daysBetween, decideFollowup, deleteSelf, desktopCommand, desktopSupported, detectIntents, domainSummary, draftPlan, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expectedText, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, heldUntil, homeBloodPressure, inQuiet, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, maskUrl, matchSkills, mentionedEntities, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, profileComplete, publicFollowup, rcvBand, readCheckIns, readFailed, readFollowup, readFollowupLog, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, runReady, runSkill, runnableFrom, sameMeasure, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, stageMeasurements, stageNow, startFollowup, suggestNext, summarizeIndicators, summarizeMedications, tableOf, trackingGeneration, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };

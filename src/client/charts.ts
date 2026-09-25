@@ -226,7 +226,7 @@ export function Timeline(props: { items: TimelineItem[]; checkups: string[]; tod
     if (iso.endsWith('-01')) months.push(iso)
   }
   const step = Math.max(1, Math.ceil(months.length / Math.max(2, Math.floor((width - labelWidth) / 64))))
-  return h('div', { ref, className: 'lp-chart', style: { height } },
+  return h('div', { className: 'lp-timeline' }, h('div', { ref, className: 'lp-chart', style: { height } },
     h('svg', { width, height, role: 'img', 'aria-label': `方案时间线：${props.items.map((item) => `${item.title} ${item.start} 起`).join('，')}` },
       ...months.filter((_, index) => index % step === 0).map((iso) => h('g', { key: iso },
         h('line', { x1: x(dayNumber(iso)), x2: x(dayNumber(iso)), y1: top - 6, y2: height - 6, className: 'lp-grid' }),
@@ -250,9 +250,10 @@ export function Timeline(props: { items: TimelineItem[]; checkups: string[]; tod
         h('rect', { x: labelWidth, y: y0 - 12, width: width - labelWidth, height: 24, className: 'lp-hit' }),
         h('rect', { x: x0, y: y0 - 5, width: Math.max(6, x1 - x0), height: 10, rx: 5, className: done ? 'lp-bar-muted' : 'lp-bar' }))
       })),
-    h('div', { className: 'lp-legend-inline' },
-      h('span', { className: 'lp-key-bar' }), '执行中', h('span', { className: 'lp-key-dot' }), '体检日'),
-    h(Tooltip, { tip, width }))
+    h(Tooltip, { tip, width })),
+  // Outside the fixed-height chart box, so the legend never spills over the card's edge.
+  h('div', { className: 'lp-legend-inline' },
+    h('span', { className: 'lp-key-bar' }), '执行中', h('span', { className: 'lp-key-dot' }), '体检日'))
 }
 
 // --- 12-week adherence strip --------------------------------------------------------
@@ -281,23 +282,23 @@ export function AdherenceStrip(props: { calendar: Array<{ date: string; status: 
 
 // --- levers: what moving one marker does in the model --------------------------------
 
+/** One row per lever: the label and its from → to on one line, the bar and its value under it (fits a narrow card). */
 export function LeverBars(props: { rows: Array<{ label: string; detail: string; value: number; unit: string }> }): React.ReactElement {
   const [ref, width] = useWidth(420)
   const max = Math.max(...props.rows.map((row) => Math.abs(row.value)), 0.1)
-  const labelWidth = Math.min(210, width * 0.46)
-  const barMax = width - labelWidth - 70
-  const row = 36
+  const barMax = Math.max(40, width - 104)
+  const row = 46
   const height = props.rows.length * row
   return h('div', { ref, className: 'lp-chart', style: { height } },
     h('svg', { width, height, role: 'img', 'aria-label': props.rows.map((row) => `${row.label} ${row.detail}：${fmt(row.value)}${row.unit}`).join('，') },
       ...props.rows.map((item, index) => {
-        const y0 = index * row + row / 2
+        const y0 = index * row
         const length = Math.max(3, (Math.abs(item.value) / max) * barMax)
         return h('g', { key: item.label },
-          h('text', { x: 0, y: y0 - 2, className: 'lp-row-label' }, item.label),
-          h('text', { x: 0, y: y0 + 12, className: 'lp-axis' }, item.detail),
-          h('path', { d: roundedBar(labelWidth, y0 - 6, length, 12), className: item.value <= 0 ? 'lp-bar' : 'lp-bar-muted' }),
-          h('text', { x: labelWidth + length + 8, y: y0 + 4, className: 'lp-end' }, `${item.value > 0 ? '+' : ''}${fmt(item.value)} ${item.unit}`))
+          h('text', { x: 0, y: y0 + 14, className: 'lp-row-label' }, item.label,
+            item.detail ? h('tspan', { dx: 8, className: 'lp-axis' }, item.detail) : null),
+          h('path', { d: roundedBar(0, y0 + 22, length, 10), className: item.value <= 0 ? 'lp-bar' : 'lp-bar-muted' }),
+          h('text', { x: length + 8, y: y0 + 31, className: 'lp-end' }, `${item.value > 0 ? '+' : ''}${fmt(item.value)} ${item.unit}`))
       })))
 }
 

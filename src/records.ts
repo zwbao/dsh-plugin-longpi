@@ -5,6 +5,8 @@ import { readProfile, estimatedAge, type Profile } from './profile.ts'
 import { rememberMedications } from './guardrails.ts'
 import { summarizeIndicators, summarizeMedications, type IndicatorRow, type MedicationRow } from './situation.ts'
 import { cellNumber, tableOf } from './compact.ts'
+import { readSelf, selfIndicators, selfKeyOf, SELF_ALIASES, SELF_DEVICE_NAMES, SELF_KEYS, SELF_SPEC, SELF_SUFFIX, type SelfKey } from './selfmeasure.ts'
+import { foldName, nameVariants } from './units.ts'
 
 const MAX_INDICATORS = 400
 const LATEST_CHUNK = 50
@@ -65,9 +67,35 @@ export async function loadRecords(config: Config, dataDir: string, pluginHome: s
     profile,
     estimated_age: estimatedAge(profile.birthYear, new Date().getFullYear()),
     ...remote,
-    indicators: remote.indicators.map((row) => ({ ...row })),
+    indicators: mergeSelf(remote.indicators.map((row) => ({ ...row })), selfIndicators(readSelf(dataDir))),
     medications: remote.medications.map((row) => ({ ...row })),
   }
+}
+
+/**
+ * Add the person's own measurements to the record rows. A self row joins only
+ * when it is newer than every record row measuring the same thing (same LOINC,
+ * the wearable's blood-pressure and weight rows, or a row named or labelled
+ * like it: 腰围, waist, 体重…), so a newer checkup always wins. It goes last:
+ * indicatorFor keeps the last row per LOINC code.
+ */
+export function mergeSelf(remote: IndicatorRow[], self: readonly IndicatorRow[]): IndicatorRow[] {
+  const out = [...remote]
+  for (const row of self) {
+    const key = selfKeyOf(row.name) ?? SELF_KEYS.find((item) => SELF_SPEC[item].loinc === row.loinc)
+    const same = remote.filter((other) => other.value && other.source !== 'self' && ((row.loinc && other.loinc === row.loinc) || (key ? sameMeasure(key, other) : false)))
+    const newer = same.every((other) => (row.date ?? '') > (other.date || other.last_date || ''))
+    if (newer) out.push(row)
+  }
+  return out
+}
+
+/** Whether a record row measures the same thing as a self key, by LOINC, device name, or report name. */
+export function sameMeasure(key: SelfKey, row: Pick<IndicatorRow, 'name' | 'label' | 'loinc'>): boolean {
+  if (row.loinc && SELF_ALIASES[key].loinc.includes(row.loinc)) return true
+  if ((SELF_DEVICE_NAMES[key] ?? []).includes(row.name)) return true
+  const names = new Set(SELF_ALIASES[key].names.map((name) => foldName(name)))
+  return [row.name, row.label ?? ''].filter(Boolean).some((text) => nameVariants(text).some((variant) => names.has(variant)))
 }
 
 async function loadRemote(config: Config, pluginHome: string): Promise<Remote> {
@@ -179,7 +207,8 @@ export async function loadSeries(
   names: readonly string[],
   options: { start: string; end: string; resolution: 'raw' | 'day' },
 ): Promise<SeriesResult> {
-  const wanted = [...new Set(names.map((name) => name.trim()).filter(Boolean))]
+  // Self measurements live in dataDir; their names mean nothing to Mirobody.
+  const wanted = [...new Set(names.map((name) => name.trim()).filter((name) => name && !name.endsWith(SELF_SUFFIX)))]
   if (wanted.length === 0 || !config.mcpUrl.trim()) return { series: {}, truncated: false, ...(config.mcpUrl.trim() ? {} : { error: 'mcpUrl is not set' }) }
   const key = cacheKey(config, 'series', JSON.stringify([wanted, options]))
   return cached(key, async () => {

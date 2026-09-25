@@ -29,6 +29,8 @@ export interface BiovarMarker {
   /** Compare means over this many days, because the CVI was measured on such means (home blood pressure). */
   average_days?: number
   population?: string
+  /** What the reader should know about this row's band (a very small CVI, results excluded from the study). */
+  caveat_zh?: string
   verified: boolean
 }
 
@@ -130,6 +132,18 @@ export function markerFor(biovar: Biovar, indicator: { name?: string; loinc?: st
     if (names.some((name) => wanted.has(name))) return row
   }
   return null
+}
+
+/**
+ * markerFor for a row that carries a LOINC code. A code the matched row does not list is a different
+ * measurement, often another specimen (urine creatinine is 2161-8, serum 2160-0; a report may print it as
+ * 肌酐(尿) or 尿肌酐(Cr)), so the name match only stands for a row with no codes of its own.
+ */
+export function checkupMarkerFor(biovar: Biovar, indicator: { name?: string; loinc?: string; label?: string }): BiovarMarker | null {
+  const marker = markerFor(biovar, indicator)
+  if (!marker || !indicator.loinc || marker.loinc.includes(indicator.loinc)) return marker
+  if (indicator.name && (marker.device_codes ?? []).includes(indicator.name)) return marker
+  return marker.loinc.length === 0 ? marker : null
 }
 
 /**

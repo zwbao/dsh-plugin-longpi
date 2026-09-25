@@ -69,6 +69,9 @@ const run = mod.runnableFrom(card, [
 ], { age: 50, sex: 'female' })
 assert.equal(run.status, 'ready')
 assert.deepEqual(run.missing, [])
+assert.equal(run.record, 'none', 'no input carries a LOINC or device code, so it is not ready from the record')
+const coded = { ...card, inputs: card.inputs.map((spec) => (spec.key === 'albumin_gL' ? { ...spec, loinc: ['1751-7'] } : spec)) }
+assert.equal(mod.runnableFrom(coded, [{ name: '白蛋白', value: '45', unit: 'g/L' }, { name: 'CRP', value: '1.2', unit: 'mg/L' }], { age: 50, sex: 'female' }).record, 'ready')
 const partial = mod.runnableFrom(card, [{ name: '白蛋白', value: '45', unit: 'g/L' }], { age: null, sex: 'unknown' })
 assert.equal(partial.status, 'partial')
 assert.deepEqual(partial.missing, ['C反应蛋白', '实足年龄'])
