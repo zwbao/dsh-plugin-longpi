@@ -7,6 +7,7 @@
 // is the latest value plus a trial average, labelled as such. Nothing here is
 // saved: the person tailors the draft in chat or accepts it on the page.
 
+import { hasDose, stripDoses } from './dose.ts'
 import { buildTracking, type ModelCard, type TrackingContext } from './tracking.ts'
 import { CATEGORY_ZH, currentPlan, type Category } from './interventions.ts'
 import type { MountState } from './mirobody.ts'
@@ -439,13 +440,23 @@ function targetFor(row: Candidate, brief: PlanBrief): DraftItem['target'] {
   return null
 }
 
+/**
+ * A research note without the parts that name an amount (6 g 盐, 2 粒): a saved plan keeps no amount in any
+ * item (interventions.ts), so the draft shows none either, and what is saved is what was shown.
+ */
+function noteWithoutAmounts(note: string): string {
+  const kept = note.replace(/[。.]\s*$/, '').split(/[；;]/).map((part) => part.trim()).filter((part) => part && !hasDose(part))
+  return kept.length > 0 ? `${kept.join('；')}。` : ''
+}
+
 function detailFor(group: Group, primary: Candidate): string {
   const evidence = `证据：${primary.expected_zh}，DOI ${primary.doi}。个人效果因人而异。`
   if (group.category === 'supplement') return clipText(`${SUPPLEMENT_DETAIL}${evidence}`, DETAIL_MAX)
   const examples = primary.examples_zh.length > 0 ? `，形式可选${primary.examples_zh.join('、')}` : ''
   const behavior = `${CATEGORY_ZH[group.category as Category]}：${primary.intervention_zh}${examples}。`
   const room = DETAIL_MAX - [...behavior].length - [...evidence].length
-  const note = primary.note_zh && room > 12 ? clipText(`研究备注：${primary.note_zh}`, room) : ''
+  const research = noteWithoutAmounts(primary.note_zh ?? '')
+  const note = research && room > 12 ? clipText(`研究备注：${research}`, room) : ''
   return clipText(`${behavior}${note}${evidence}`, DETAIL_MAX)
 }
 
@@ -578,7 +589,8 @@ export function acceptedPlan(brief: PlanBrief, posted: unknown, today: string): 
   if (problems.length > 0) return { ok: false, error: problems[0] as string, problems }
   const wanted = new Set((Array.isArray(draft.goals) ? draft.goals : []).map((goal) => (goal && typeof goal === 'object' ? String((goal as Record<string, unknown>).marker ?? '') : '')))
   const goals = goalsFor(brief, kept).filter((goal) => wanted.has(goal.marker))
-  const title = typeof draft.title === 'string' && draft.title.trim() ? draft.title.trim().slice(0, 60) : `改善方案（${today}）`
+  // The posted title goes through the same dose stripping as any plan; nothing left, the server's own title.
+  const title = stripDoses(typeof draft.title === 'string' ? draft.title.trim().slice(0, 60) : '').text || `改善方案（${today}）`
   return {
     ok: true,
     plan: {

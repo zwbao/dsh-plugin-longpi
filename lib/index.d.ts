@@ -231,6 +231,7 @@ interface RecordIndicator {
   loinc?: string;
   label?: string;
   date?: string;
+  last_date?: string;
   source?: 'self';
 }
 declare function unitFactor(spec: InputSpec, unit: string): number | null;
@@ -250,12 +251,36 @@ interface Runnable {
   record: 'ready' | 'near' | 'none';
   /** Missing required inputs a checkup or a device could supply. */
   missing_from_record: string[];
+  /** Required inputs on file whose value was not read (a failed read, or a catalogue cut short): in missing, never in missing_from_record. */
+  unread: string[];
 }
 /** Which of this skill's required inputs the record, the profile and past outputs already supply. */
 declare function runnableFrom(card: SkillCard, indicators: readonly RecordIndicator[], profile: {
   age: number | null;
   sex: string;
-}, outputs?: Record<string, unknown>): Runnable;
+}, outputs?: Record<string, unknown>, reads?: {
+  failed?: readonly string[];
+  catalog_truncated?: boolean;
+}): Runnable;
+/** A record row that could hold one declared input, and its place: the order of the input's codes in skill.json. */
+interface Candidate {
+  row: RecordIndicator;
+  /** 0… for its LOINC codes in skill.json order, then its device codes; name matches come after every code. */
+  rank: number;
+  by: 'code' | 'name';
+}
+/**
+ * Every record row that could hold one input, numeric or not: rows carrying one of its LOINC or device codes,
+ * best code first; or, only when no row carries a code, rows named like it (its key, label or aliases, a self
+ * measurement first).
+ */
+declare function candidatesFor(spec: InputSpec, indicators: readonly RecordIndicator[]): Candidate[];
+/**
+ * The record indicator that holds one declared input: of the rows with a number, the newest across all of the
+ * input's codes; on the same date the earlier code in skill.json order. Rows matched only by name are the
+ * fallback when no row carries a code.
+ */
+declare function indicatorFor(spec: InputSpec, indicators: readonly RecordIndicator[]): RecordIndicator | null;
 //#endregion
 //#region src/match.d.ts
 interface MatchHit {
@@ -287,6 +312,11 @@ interface MatchOptions {
   };
   outputs?: Record<string, unknown>;
   lexicon?: EvidenceLexicon;
+  /** Reads that failed (records.missing_reads) or a cut catalogue: such inputs are not read, never "missing". */
+  reads?: {
+    failed?: readonly string[];
+    catalog_truncated?: boolean;
+  };
 }
 interface MatchResult {
   matches: MatchHit[];
@@ -318,6 +348,8 @@ interface HistoryRow {
   outputs: Record<string, OutputValue>;
   /** Local date of the measurements the run read, when it read an earlier checkup. */
   measured_at?: string;
+  /** A hash of what the run read (the inputs, the age, the skill version): a row whose hash is not today's is stale. */
+  inputs_key?: string;
 }
 interface LatestOutput extends OutputValue {
   at: string;
@@ -514,6 +546,12 @@ interface BridgeStatus {
   python?: string;
   error?: string;
 }
+/**
+ * What the Mirobody terminology bridge gets: the same short list as a skill script (path, language) plus what it
+ * needs to import mirobody: the real home (a --user install lives there), the Python path if one is set, and
+ * MIROBODY_HOME. Never the rest of the harness's environment (API keys, tokens). Not a sandbox either.
+ */
+declare function bridgeEnv(mirobodyHome: string): Record<string, string>;
 //#endregion
 //#region src/selfmeasure.d.ts
 declare const SELF_KEYS: readonly ["waist", "sbp", "dbp", "weight"];
@@ -581,9 +619,23 @@ interface RecordSnapshot {
   };
   indicators: IndicatorRow[];
   medications: MedicationRow[];
-  record_status: 'unconfigured' | 'ok' | 'error';
+  /** partial: the record was read, but some reads failed or came back cut (read_errors says which). */
+  record_status: 'unconfigured' | 'ok' | 'partial' | 'error';
   record_error: string;
+  /** Each read that failed or was cut, in Chinese; empty when every read succeeded. */
+  read_errors: string[];
+  /** Catalogue names whose latest value was not read because the read failed: unknown, never "not measured". */
+  missing_reads: string[];
+  /** The catalogue itself was cut, so an indicator missing from it may simply not have been read. */
+  catalog_truncated: boolean;
 }
+/** Whether the record was read, whole or in part: the reads that worked are used, the failed ones named. */
+declare function recordReadable(records: Pick<RecordSnapshot, 'record_status'>): boolean;
+/**
+ * The account a read is for, without the token itself: another token on the same address is another account.
+ * TODO(merge): the same value as connection.ts connectionKey(config); use that once it is in.
+ */
+declare function tokenKey(config: Pick<Config, 'mcpToken'>): string;
 /** Forget cached record reads, after a change the next read must see. */
 declare function invalidateRecords(): void;
 declare function loadRecords(config: Config, dataDir: string, pluginHome: string): Promise<RecordSnapshot>;
@@ -613,13 +665,20 @@ interface Series {
 }
 interface SeriesResult {
   series: Record<string, Series>;
+  /** The first failure, redacted; set whenever any name was not read. */
   error?: string;
   truncated: boolean;
+  /** Names whose read failed: their series is unknown, never empty. */
+  failed: string[];
+  /** Names whose readings came back cut (a series that filled the row limit, or a table Mirobody marked cut). */
+  cut: string[];
 }
 /**
  * Dated values of named indicators, oldest first. resolution raw returns every
  * reading (labs); day returns one daily mean per indicator (wearables). Values
- * that are not numbers ("Positive", "<0.5") are left out, never guessed.
+ * that are not numbers ("Positive", "<0.5") are left out, never guessed. A
+ * batch that fails does not stop the others (unless Mirobody is down or refuses
+ * the account); its names are listed in failed.
  */
 declare function loadSeries(config: Config, names: readonly string[], options: {
   start: string;
@@ -674,6 +733,8 @@ interface RunRequest {
   reportLimit?: number;
   /** Local date the measurements were taken, when the run reads an earlier checkup. */
   measuredAt?: string;
+  /** Kept with the outputs in history.jsonl, so a caller can tell a result for today's inputs from a stale one. */
+  inputsKey?: string;
 }
 interface Conversion {
   key: string;
@@ -730,19 +791,31 @@ interface Levers {
   targets?: Record<string, unknown>;
   note_zh?: string;
 }
+/**
+ * What each run leaves in receipts.jsonl: which skill ran on which revision, how it ended, and which inputs it
+ * used or missed. No report text: the report stays in the run directory, the outputs in history.jsonl.
+ */
 interface Receipt {
   at: string;
   skill: string;
   revision: string;
   exit_code: number | null;
   ok: boolean;
-  excerpt: string;
+  /** Written by versions before 5.1 only; never shown. */
+  excerpt?: string;
   error_kind?: string;
   input_keys?: string[];
   problem_kinds?: string[];
   missing?: string[];
 }
 declare function reportExcerpt(text: string): string;
+/**
+ * The environment a skill script gets: a path, a language, and a home and temp directory inside its own run
+ * directory; no user site-packages and nothing else of the harness's environment (no keys, no tokens). This keeps
+ * the script's writes and caches in the run directory. It is not a sandbox: the script runs as the same user and
+ * can read whatever that user can.
+ */
+declare function skillEnv(runDir: string): Record<string, string>;
 declare function readReceipts(dataDir: string, limit?: number): Receipt[];
 declare function runSkill(request: RunRequest): Promise<RunResult>;
 //#endregion
@@ -792,8 +865,10 @@ declare function buildBoard(input: {
     };
   };
   records: {
-    status: "unconfigured" | "ok" | "error";
+    status: "unconfigured" | "ok" | "partial" | "error";
     error: string;
+    read_errors: string[];
+    missing_reads: string[];
     indicator_count: number;
     indicators: IndicatorRow[];
     medications: MedicationRow[];
@@ -812,156 +887,15 @@ declare function buildBoard(input: {
     label_zh: string;
     key: string;
   }[];
-  receipts: Receipt[];
+  receipts: {
+    at: string;
+    skill: string;
+    ok: boolean;
+    exit_code: number | null;
+    error_kind: string | null;
+  }[];
   boundary: string;
 };
-//#endregion
-//#region src/changes.d.ts
-interface RecordChange {
-  /** Biological-variation key, e.g. 'mcv'. */
-  key: string;
-  label_zh: string;
-  /** The biological-variation row's unit; every point is converted to it. */
-  unit: string;
-  points: Array<{
-    date: string;
-    value: number;
-  }>;
-  /** pct is rounded to 1 decimal. */
-  compare: {
-    from_date: string;
-    from: number;
-    to_date: string;
-    to: number;
-    pct: number;
-  };
-  /** The reference change value in percent, 1 decimal, e.g. { up: 8.4, down: -8.4 }. */
-  band_pct: {
-    up: number;
-    down: number;
-  };
-  direction: 'up' | 'down';
-  verdict: 'better' | 'worse' | 'unclear';
-  ask_doctor: boolean;
-  text_zh: string;
-  advice_zh: string;
-  /** The row's own caveat, when it has one. */
-  caveat_zh?: string;
-  /** Where the within-person variation comes from (the row's cvi_source). */
-  source: {
-    title: string;
-    url: string;
-    doi?: string;
-  };
-  verified: boolean;
-}
-interface ChangesContext {
-  config: Config;
-  skillsHome: string;
-  records: RecordSnapshot;
-  today: string;
-}
-declare const CHANGES_NOTE_ZH = "判断依据：两次结果之差超过同一个人正常波动与检测误差合成的参考变化值（RCV，z=1.96）才算真实变化；变异数据来自 longevity-skills 的 data/biological_variation.json，每一行注明期刊出处。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。";
-/**
- * Changes between checkups larger than the reference change value, ask_doctor
- * first, then the furthest past its band; at most six. Checkup rows only
- * (Mirobody rows with a LOINC code): wearable series and the person's own
- * measurements are left out. An unread record gives no changes.
- */
-declare function buildChanges(context: ChangesContext): Promise<{
-  changes: RecordChange[];
-  note_zh: string;
-}>;
-//#endregion
-//#region src/interventions.d.ts
-declare const CATEGORIES: readonly ["diet", "exercise", "sleep", "supplement", "drug", "behavior", "weight", "other"];
-type Category = typeof CATEGORIES[number];
-interface Target {
-  /** A Mirobody indicator measured daily, such as dailySteps or dailyTotalSleepTime. */
-  metric: string;
-  op: '>=' | '<=';
-  value: number;
-  unit: string;
-}
-interface PlanItem {
-  id: string;
-  category: Category;
-  title: string;
-  detail: string;
-  start: string;
-  end: string | null;
-  frequency: {
-    times: number;
-    per: 'day' | 'week';
-  } | null;
-  target: Target | null;
-  markers: string[];
-  mirobody: {
-    medication: string;
-    plan_id?: string;
-  } | null;
-}
-interface PlanGoal {
-  marker: string;
-  value: number;
-  unit: string;
-}
-interface PlanVersion {
-  schema: 'longpi-plan/1';
-  version: number;
-  saved_at: string;
-  title: string;
-  source: 'chat' | 'file' | 'board';
-  note: string;
-  items: PlanItem[];
-  goals: PlanGoal[];
-}
-interface CheckIn {
-  at: string;
-  date: string;
-  item: string;
-  done: boolean | null;
-  amount: number | null;
-  unit: string;
-  note: string;
-  tags: string[];
-  source: 'chat' | 'board';
-}
-declare function readPlans(dataDir: string): PlanVersion[];
-declare function currentPlan(dataDir: string): PlanVersion | null;
-declare function readCheckIns(dataDir: string): CheckIn[];
-declare function isoDay(at?: Date): string;
-declare function addDays(iso: string, days: number): string;
-declare function daysBetween(from: string, to: string): number;
-interface NormalizeContext {
-  today: string;
-  /** Names on the person's Mirobody medication plan, with plan ids. */
-  medications: Array<{
-    name: string;
-    plan_id?: string;
-  }>;
-  previous: PlanVersion | null;
-}
-interface Normalized {
-  plan: Omit<PlanVersion, 'version' | 'saved_at'>;
-  warnings: string[];
-  errors: string[];
-}
-/**
- * Check a plan the person described or uploaded and put it in the stored shape.
- * Returns errors that stop saving and warnings to read back before confirming.
- */
-declare function normalizePlan(raw: unknown, context: NormalizeContext): Normalized;
-declare function savePlan(dataDir: string, plan: Normalized['plan']): PlanVersion;
-interface CheckInResult {
-  saved: CheckIn[];
-  problems: string[];
-}
-/** Record check-ins against items of the current plan. `item` may be an id or a title. */
-declare function addCheckIns(dataDir: string, entries: unknown[], context: {
-  today: string;
-  source: 'chat' | 'board';
-}): CheckInResult;
 //#endregion
 //#region src/reference.d.ts
 interface BiovarMarker {
@@ -1073,6 +1007,172 @@ declare function effectsFor(effects: readonly EffectRow[], item: {
   detail?: string;
 }, marker: BiovarMarker | null, loinc?: string): EffectRow[];
 //#endregion
+//#region src/changes.d.ts
+interface RecordChange {
+  /** Biological-variation key, e.g. 'mcv'. */
+  key: string;
+  label_zh: string;
+  /** The biological-variation row's unit; every point is converted to it. */
+  unit: string;
+  points: Array<{
+    date: string;
+    value: number;
+  }>;
+  /** pct is rounded to 1 decimal. */
+  compare: {
+    from_date: string;
+    from: number;
+    to_date: string;
+    to: number;
+    pct: number;
+  };
+  /** The reference change value in percent, 1 decimal, e.g. { up: 8.4, down: -8.4 }. */
+  band_pct: {
+    up: number;
+    down: number;
+  };
+  direction: 'up' | 'down';
+  verdict: 'better' | 'worse' | 'unclear';
+  ask_doctor: boolean;
+  text_zh: string;
+  advice_zh: string;
+  /** The row's own caveat, when it has one. */
+  caveat_zh?: string;
+  /** Where the within-person variation comes from (the row's cvi_source). */
+  source: {
+    title: string;
+    url: string;
+    doi?: string;
+  };
+  verified: boolean;
+}
+/** A marker the changes could not judge: its readings did not come back whole. Unknown, never "no change". */
+interface UnjudgedChange {
+  label_zh: string;
+  reason_zh: string;
+}
+interface ChangesContext {
+  config: Config;
+  skillsHome: string;
+  records: RecordSnapshot;
+  today: string;
+}
+declare const CHANGES_NOTE_ZH = "判断依据：两次结果之差超过同一个人正常波动与检测误差合成的参考变化值（RCV，z=1.96）才算真实变化；变异数据来自 longevity-skills 的 data/biological_variation.json，每一行注明期刊出处。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。";
+/** The factor that brings a point's unit to the row's unit, from the row's own convert table; null when it cannot. The plan verdicts (evaluate.ts) use it too. */
+declare function factorFor(marker: BiovarMarker, unit: string): number | null;
+/**
+ * Changes between checkups larger than the reference change value, ask_doctor
+ * first, then the furthest past its band; at most six. Checkup rows only
+ * (Mirobody rows with a LOINC code): wearable series and the person's own
+ * measurements are left out. An unread record gives no changes. A marker whose
+ * readings failed to read, or came back cut, is not judged at all: it is listed
+ * in unjudged with the reason, so a failed read never reads as "no change".
+ */
+declare function buildChanges(context: ChangesContext): Promise<{
+  changes: RecordChange[];
+  note_zh: string;
+  unjudged: UnjudgedChange[];
+}>;
+//#endregion
+//#region src/interventions.d.ts
+declare const CATEGORIES: readonly ["diet", "exercise", "sleep", "supplement", "drug", "behavior", "weight", "other"];
+type Category = typeof CATEGORIES[number];
+interface Target {
+  /** A Mirobody indicator measured daily, such as dailySteps or dailyTotalSleepTime. */
+  metric: string;
+  op: '>=' | '<=';
+  value: number;
+  unit: string;
+}
+interface PlanItem {
+  id: string;
+  category: Category;
+  title: string;
+  detail: string;
+  start: string;
+  end: string | null;
+  frequency: {
+    times: number;
+    per: 'day' | 'week';
+  } | null;
+  target: Target | null;
+  markers: string[];
+  mirobody: {
+    medication: string;
+    plan_id?: string;
+  } | null;
+}
+interface PlanGoal {
+  marker: string;
+  value: number;
+  unit: string;
+}
+interface PlanVersion {
+  schema: 'longpi-plan/1';
+  version: number;
+  saved_at: string;
+  title: string;
+  source: 'chat' | 'file' | 'board';
+  note: string;
+  items: PlanItem[];
+  goals: PlanGoal[];
+}
+interface CheckIn {
+  at: string;
+  date: string;
+  item: string;
+  /** true done, false an explicit miss (没做到), null a note or tag alone, or an undo. */
+  done: boolean | null;
+  amount: number | null;
+  unit: string;
+  note: string;
+  tags: string[];
+  source: 'chat' | 'board';
+  /** Set on the row that takes back that day's check-in: the day is unknown again. */
+  undo?: true;
+}
+declare function readPlans(dataDir: string): PlanVersion[];
+declare function currentPlan(dataDir: string): PlanVersion | null;
+declare function readCheckIns(dataDir: string): CheckIn[];
+/**
+ * Whether each item was done on each day: the latest check-in that says done (true), not done (false) or
+ * takes the day back (undo) wins, in the order they were recorded. A day with no such row, or whose latest
+ * is an undo, is absent: unknown, never a miss. A note or tag alone says nothing about it.
+ */
+declare function checkinStatus(rows: readonly CheckIn[]): Map<string, Map<string, boolean>>;
+declare function isoDay(at?: Date): string;
+declare function addDays(iso: string, days: number): string;
+declare function daysBetween(from: string, to: string): number;
+interface NormalizeContext {
+  today: string;
+  /** Names on the person's Mirobody medication plan, with plan ids. */
+  medications: Array<{
+    name: string;
+    plan_id?: string;
+  }>;
+  previous: PlanVersion | null;
+}
+interface Normalized {
+  plan: Omit<PlanVersion, 'version' | 'saved_at'>;
+  warnings: string[];
+  errors: string[];
+}
+/**
+ * Check a plan the person described or uploaded and put it in the stored shape.
+ * Returns errors that stop saving and warnings to read back before confirming.
+ */
+declare function normalizePlan(raw: unknown, context: NormalizeContext): Normalized;
+declare function savePlan(dataDir: string, plan: Normalized['plan']): PlanVersion;
+interface CheckInResult {
+  saved: CheckIn[];
+  problems: string[];
+}
+/** Record check-ins against items of the current plan. `item` may be an id or a title. */
+declare function addCheckIns(dataDir: string, entries: unknown[], context: {
+  today: string;
+  source: 'chat' | 'board';
+}): CheckInResult;
+//#endregion
 //#region src/evaluate.d.ts
 type Verdict = '有效' | '波动内' | '反向' | '无法判断';
 interface ResolvedMarker {
@@ -1180,6 +1280,8 @@ declare function adherenceFor(item: PlanItem, window: {
   doses?: DoseRow[];
   checkins: CheckIn[];
 }, calendarDays?: number): Adherence;
+/** One sentence for items on the same marker at the same time; the same words whichever item it is read from. */
+declare function togetherZh(titles: readonly string[]): string;
 interface EvaluateInput {
   goals?: PlanVersion['goals'];
   plan: PlanVersion;
@@ -1191,6 +1293,8 @@ interface EvaluateInput {
   checkins: CheckIn[];
   biovar: Biovar;
   effects: EffectRow[];
+  /** Indicator names whose readings failed to read or came back cut: judged from nothing, never from what is left. */
+  unread?: readonly string[];
 }
 declare function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: EvaluateInput): MarkerVerdict;
 declare function evaluatePlan(input: EvaluateInput): ItemSummary[];
@@ -1259,6 +1363,15 @@ interface ModelCard {
   /** Stated facts the profile does not hold yet (age, sex, the yes/no facts); unknown is never no. */
   missing_facts?: string[];
   levers: LeverHint[];
+  /** Goals the model could not use (a unit it does not accept, a value out of range), with why. Then no goal value is shown. */
+  goal_problems_zh?: string[];
+  /** The date each input was measured on, as used: a checkup, the home blood-pressure week, a self measurement. */
+  input_dates?: Array<{
+    key: string;
+    label_zh: string;
+    date: string | null;
+    source: 'checkup' | 'device' | 'self' | 'home';
+  }>;
   /**
    * How far one within-person step of each input moves the model, largest first: years of phenotypic age,
    * or for china-par percentage points of 10-year risk. key is the biological-variation key (or waist).
@@ -1319,6 +1432,8 @@ interface Tracking {
   /** Changes between checkups larger than normal fluctuation (changes.ts), ask_doctor first. */
   changes: RecordChange[];
   changes_note_zh: string;
+  /** Markers not judged because their readings did not come back whole: unknown, never "no change". */
+  changes_unjudged: UnjudgedChange[];
 }
 declare function invalidateTracking(): void;
 /** Bumped by every invalidateTracking (a check-in, a self measurement, a plan or profile save): readers keeping their own copy refresh on a change. */
@@ -1326,6 +1441,8 @@ declare function trackingGeneration(): number;
 declare function buildTracking(context: TrackingContext): Promise<Tracking>;
 /** The blocker when Mirobody is configured but the read failed. */
 declare function readFailed(records: Pick<RecordSnapshot, 'record_error'>): string;
+/** What is wrong with the plan's goals for the result models, in Chinese (empty when they can all be modelled). */
+declare function goalProblems(catalog: Catalog, goals: PlanVersion['goals'], skillsHome: string): string[];
 /**
  * The home blood pressure a risk equation should see: the mean of every home
  * reading, the wearable cuff's and the ones the person typed, in the 7 days
@@ -1343,6 +1460,10 @@ declare function modelGoals(context: TrackingContext, goals: PlanVersion['goals'
   models: ModelCard[];
   how_to_read: string;
 }>;
+/** One item as it is stored, to read back before saving: what it is, when, how often, what it aims at, and its details. */
+declare function describeItem(item: PlanItem): string;
+/** The plan's own title and note, as stored, read back with its items. */
+declare function describePlan(plan: Pick<PlanVersion, 'title' | 'note'>): string;
 //#endregion
 //#region src/overview.d.ts
 /**
@@ -1668,9 +1789,12 @@ interface Journey {
     key: Focus;
     label_zh: string;
   }>;
+  /** partial: read, but some reads failed or came back cut; read_errors says which, and missing_reads names indicators not read (unknown, never "not measured"). */
   records: {
-    status: 'unconfigured' | 'ok' | 'error';
+    status: 'unconfigured' | 'ok' | 'partial' | 'error';
     error: string;
+    read_errors: string[];
+    missing_reads: string[];
     indicator_count: number;
     full_checkups: number;
     latest_checkup: string | null;
@@ -1713,6 +1837,11 @@ interface Journey {
   /** Changes between checkups larger than normal fluctuation, ask_doctor first; empty when the record cannot be read. */
   changes: RecordChange[];
   changes_note_zh: string;
+  /** Markers not judged because their series read failed or came back cut: unknown, never "no change". */
+  changes_unjudged: Array<{
+    label_zh: string;
+    reason_zh: string;
+  }>;
   self: {
     latest: Array<{
       key: SelfKey;
@@ -1739,7 +1868,7 @@ interface Journey {
     checkin_items: Array<{
       id: string;
       title: string;
-      done_today: boolean;
+      done_today: boolean | null;
     }>;
     streak: number;
     adherence_pct: number | null;
@@ -2010,9 +2139,24 @@ declare function bootstrapWorkspace(registry: WorkspaceRegistryLike | null | und
   now?: Date;
 }): Promise<BootstrapResult>;
 //#endregion
+//#region src/dose.d.ts
+/** A fresh pattern: `g` for replacing, none for testing (a global pattern keeps lastIndex between tests). */
+declare function dosePattern(flags?: string): RegExp;
+/** Whether the text names an amount of a medicine or supplement. */
+declare function hasDose(text: string): boolean;
+/**
+ * The text without any amount of a medicine or supplement, and whether one was taken out. What is left is
+ * tidied (a separator or empty bracket the amount leaves behind goes too) but never restored: a text that was
+ * only a dose comes back empty.
+ */
+declare function stripDoses(value: string): {
+  text: string;
+  stripped: boolean;
+};
+//#endregion
 //#region src/index.d.ts
 declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { type BootstrapResult, CHANGES_NOTE_ZH, CONSENT_VERSION, Config, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMPTY_PROFILE, FOCUS, FOCUS_ZH, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, HARNESS_SKILLS, type Journey, PHENOAGE_SKILL, PRODUCT_VERSION, type PlanBrief, type PlanDraft, type Profile, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RecordChange, type RiskFact, SELF_ALIASES, SELF_KEYS, SELF_SPEC, type SelfKey, type SelfRow, type SendResult, type Stage, TOOL_NAMES, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, bootstrapWorkspace, buildBoard, buildCalendar, buildChanges, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, cellNumber, checkupMarkerFor, commandExcerpt, currentPlan, daysBetween, decideFollowup, deleteSelf, desktopCommand, desktopSupported, detectIntents, domainSummary, draftPlan, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expectedText, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, heldUntil, homeBloodPressure, inQuiet, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, maskUrl, matchSkills, mentionedEntities, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, profileComplete, publicFollowup, rcvBand, readCheckIns, readFailed, readFollowup, readFollowupLog, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, runReady, runSkill, runnableFrom, sameMeasure, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, stageMeasurements, stageNow, startFollowup, suggestNext, summarizeIndicators, summarizeMedications, tableOf, trackingGeneration, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };
+export { type BootstrapResult, CHANGES_NOTE_ZH, CONSENT_VERSION, Config, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMPTY_PROFILE, FOCUS, FOCUS_ZH, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, HARNESS_SKILLS, type Journey, PHENOAGE_SKILL, PRODUCT_VERSION, type PlanBrief, type PlanDraft, type Profile, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RecordChange, type RiskFact, SELF_ALIASES, SELF_KEYS, SELF_SPEC, type SelfKey, type SelfRow, type SendResult, type Stage, TOOL_NAMES, type UnjudgedChange, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, bootstrapWorkspace, bridgeEnv, buildBoard, buildCalendar, buildChanges, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, candidatesFor, cellNumber, checkinStatus, checkupMarkerFor, commandExcerpt, currentPlan, daysBetween, decideFollowup, deleteSelf, describeItem, describePlan, desktopCommand, desktopSupported, detectIntents, domainSummary, dosePattern, draftPlan, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expectedText, factorFor, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, goalProblems, hasDose, heldUntil, homeBloodPressure, inQuiet, indicatorFor, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, maskUrl, matchSkills, mentionedEntities, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, profileComplete, publicFollowup, rcvBand, readCheckIns, readFailed, readFollowup, readFollowupLog, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, recordReadable, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, runReady, runSkill, runnableFrom, sameMeasure, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, skillEnv, stageMeasurements, stageNow, startFollowup, stripDoses, suggestNext, summarizeIndicators, summarizeMedications, tableOf, togetherZh, tokenKey, trackingGeneration, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };

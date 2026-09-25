@@ -62,6 +62,17 @@ export { buildPlanBrief, draftPlan, acceptedPlan, expectedText, DRAFT_CATEGORIES
 export type { PlanBrief, PlanDraft, DraftItem } from './planner.ts'
 export { bootstrapWorkspace, WORKSPACE_MARKER, WORKSPACE_DIR, WORKSPACE_TITLE } from './workspace.ts'
 export type { WorkspaceRegistryLike, BootstrapResult } from './workspace.ts'
+// 5.1 reads, doses and verdicts (tests and other modules): one block, so it merges apart from the lines above.
+export { dosePattern, hasDose, stripDoses } from './dose.ts'
+export { checkinStatus } from './interventions.ts'
+export { recordReadable, tokenKey } from './records.ts'
+export { candidatesFor, indicatorFor } from './measurements.ts'
+export { skillEnv } from './runner.ts'
+export { bridgeEnv } from './bridge.ts'
+export { describeItem, describePlan, goalProblems } from './tracking.ts'
+export { togetherZh } from './evaluate.ts'
+export { factorFor } from './changes.ts'
+export type { UnjudgedChange } from './changes.ts'
 
 function logTo(ctx: Context, level: 'info' | 'warn', message: string): void {
   try {

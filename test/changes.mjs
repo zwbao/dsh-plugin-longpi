@@ -16,6 +16,7 @@ import { Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import * as mod from '../lib/index.js'
 import { loadRecord, startFakeMirobody } from './fake-mirobody.mjs'
+import { startFlakyMirobody } from './flaky-mirobody.mjs'
 
 const root = dirname(fileURLToPath(import.meta.url))
 const sibling = resolve(root, '..', '..', 'longevity-skills')
@@ -245,6 +246,25 @@ try {
   profileIn(brokenDir)
   assert.deepEqual((await mod.buildChanges(await contextOf(configFor(brokenDir, 'http://127.0.0.1:1/mcp')))).changes, [])
   assert.deepEqual((await mod.buildChanges(await contextOf(configFor(brokenDir)))).changes, [], 'nor does no record')
+  assert.deepEqual(built.unjudged, [], 'every series read whole: nothing left unjudged')
+
+  // 3c: a marker whose readings fail to read, or come back cut, is not judged, and says so (never "no change")
+  const syntheticRecord = { tz: 'Asia/Shanghai', today: TODAY, observations, medications: { plans: [], log: [], history: [] } }
+  const withMcv = (args) => args.aggregate === 'none' && (args.indicators ?? []).includes(MCV)
+  for (const [how, reason] of [['http500', /历次结果读取失败/], ['isError', /历次结果读取失败：query failed: database timeout/], [{ cut: true }, /读取时被截断/]]) {
+    const flaky = await startFlakyMirobody({ record: syntheticRecord, fail: (_name, args) => withMcv(args) ? how : null })
+    servers.push(flaky)
+    const read = await mod.buildChanges(await contextOf(configFor(synthDir, flaky.url)))
+    const unjudged = read.unjudged.find((row) => row.label_zh === markerOf('mcv').label_zh)
+    assert.ok(unjudged, `${JSON.stringify(how)}: MCV is listed as not judged`)
+    assert.match(unjudged.reason_zh, reason)
+    assert.equal(read.changes.some((row) => row.key === 'mcv'), false, 'and never judged from what was left')
+    assert.ok(read.changes.length + read.unjudged.length >= 3, 'the markers read whole are still judged')
+    if (how === 'http500') {
+      const flakyJourney = await mod.buildJourney({ ...(await contextOf(configFor(synthDir, flaky.url))), mount: MOUNT })
+      assert.ok(flakyJourney.changes_unjudged.some((row) => row.label_zh === markerOf('mcv').label_zh), 'journey.changes_unjudged carries it')
+    }
+  }
 
   // --- 2. the journey and phenotypic age --------------------------------------------
   const plain = await serve(loadRecord())

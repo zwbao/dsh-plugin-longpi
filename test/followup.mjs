@@ -391,6 +391,23 @@ try {
     assert.match(mod.followupTextProblem(text, 'full'), /剂量/, text)
   }
   assert.equal(mod.followupTextProblem('体重 72 千克，继续保持', 'full'), '', '千克 is a weight, not a dose')
+  // 5.1 (9a, 8c): every string from the review and its verification. Values in Chinese numerals next to a health word,
+  // and blood pressure as a/b in Chinese numerals, are values too.
+  for (const text of ['空腹血糖六点八', '血压一百五', '糖化血红蛋白六点五', '收缩压一百四十五', '低密度脂蛋白三点八', 'LDL三点八', '血压一百五十/九十',
+    'HbA1c 六点五', '收缩压一百四十', '空腹血糖六点八毫摩尔', '体重七十五公斤', '体重七十公斤', '血压一百五十毫米汞柱', '6.8', '空腹血糖6.8', '血压150', '血压150/90',
+    '一百四比九十', '心率七十二', '腰围九十', '尿酸四百二十', '肌酐八十五', '胆固醇五点二', '甘油三酯一点八']) {
+    assert.match(mod.followupTextProblem(text, 'minimal'), /简要/, text)
+  }
+  for (const text of ['今天也记得快走哦', '这周坚持了五天，打开健康页看看', '血压一直很稳定，继续保持', '记得十点前量血压', '体重一周后再称一次', '血压十点再测一次',
+    '连续一百天打卡', '三比二', '今天走了一万步，血糖记录也完成了']) {
+    assert.equal(mod.followupTextProblem(text, 'minimal'), '', text)
+  }
+  for (const text of ['五百毫克', '两克', '一千单位', '每天五百毫克', '一千五百国际单位', '二百五十微克', '三毫升', '五百 mg', '０．５ｇ', '每次两克', '五百mg', '五百片', '一千粒',
+    '1,000 IU', '2 x 500mg', '500mg/天', '每天 2 g，饭后', '二甲双胍 500mg 每日两次']) {
+    assert.match(mod.followupTextProblem(text, 'full'), /剂量/, text)
+    assert.equal(mod.hasDose(text), true, `the plan side reads it as a dose too: ${text}`)
+  }
+  for (const text of ['42.6 mg/dL', '5 毫克/分升', '体重 72 千克', '七十千克', '每天走 8000 步', '30 分钟', '每天一勺橄榄油', '一袋牛奶', '每天少抽一支烟']) assert.equal(mod.hasDose(text), false, text)
 
   // journey.followup and /longpi
   mod.setConsent(routeDir, true)

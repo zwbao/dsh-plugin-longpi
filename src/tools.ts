@@ -110,7 +110,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
       const { catalog, records, outputs, current } = input
       const profile = { age: records.profile.age, sex: records.profile.sex }
       const dispatch = matchSkills(catalog.cards, '', records.indicators, clampMatches(current.maxSkillMatches), {
-        intents: catalog.intents, profile, outputs,
+        intents: catalog.intents, profile, outputs, reads: { failed: records.missing_reads, catalog_truncated: records.catalog_truncated },
       })
       const read = await journeyOf(input)
       return asJson({
@@ -125,10 +125,12 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
         almost_runnable: dispatch.near.map((item) => ({ name: item.name, missing: item.runnable.missing })),
         record_status: records.record_status,
         record_error: records.record_error,
+        read_errors: records.read_errors,
+        missing_reads: records.missing_reads,
         mcp: records.mcp,
         ...onboardingOf(read, records.profile, input.dataDir),
         ...recordChangesOf(read),
-        note: 'Medication doses are what the record says. They are not an instruction to change a dose. A missing indicator was not on file. Indicators named ...（自测） are measurements the person entered themselves (source self), used only when newer than the record. earlier_readouts are outputs of skills already run for this person; cite them with their date. onboarding says where the person is, the first results or what blocks them, and what to add at the next checkup.',
+        note: 'Medication doses are what the record says. They are not an instruction to change a dose. A missing indicator was not on file, unless record_status is partial: then read_errors says which reads failed, and an indicator in missing_reads (or any indicator, when the catalogue was cut) is unknown because it was not read. Never say such an indicator was not measured; say the read failed and suggest trying again later. Indicators named ...（自测） are measurements the person entered themselves (source self), used only when newer than the record. earlier_readouts are outputs of skills already run for this person; cite them with their date. onboarding says where the person is, the first results or what blocks them, and what to add at the next checkup.',
       })
     },
   }))
@@ -189,6 +191,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
         profile: { age: records.profile.age, sex: records.profile.sex },
         outputs,
         lexicon,
+        reads: { failed: records.missing_reads, catalog_truncated: records.catalog_truncated },
       })
       return asJson({
         question,
@@ -526,6 +529,7 @@ const HOW_TO_READ_CHANGES = [
   'record_changes are changes between checkups larger than normal within-person variation plus analytical error (the reference change value, from the biological-variation table); anything smaller is not listed.',
   'When a row has ask_doctor true, say so early and plainly: name the marker and give its numbers and dates from text_zh, then advice_zh. Do not name a cause or a diagnosis, and never suggest a supplement (iron included), a drug or a dose for it.',
   'Rows with verdict better are changes beyond normal fluctuation in the good direction. Quote caveat_zh when present. Differences between labs or instruments are not included: say so when the dates may come from different places (record_changes_note_zh).',
+  'record_changes_unjudged lists markers whose readings failed to read or came back cut: they were not judged. Never say they did not change; give reason_zh.',
 ].join(' ')
 
 /** Changes between checkups for the model: the journey's rows without their points, and how to talk about them. */
@@ -535,6 +539,7 @@ function recordChangesOf(read: JourneyRead) {
   }
   return {
     record_changes: read.journey.changes.map(({ points, ...row }) => ({ ...row, n_points: points.length })),
+    record_changes_unjudged: read.journey.changes_unjudged,
     record_changes_note_zh: read.journey.changes_note_zh,
     record_changes_how_to_read: HOW_TO_READ_CHANGES,
   }

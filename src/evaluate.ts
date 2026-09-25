@@ -1,12 +1,16 @@
 // Did an intervention move a marker? Pure functions over data already read:
 // the plan, dated marker values, adherence, medication courses and check-ins.
 // A change counts only when it is larger than within-person biological plus
-// analytical noise (the reference change value), the retest came late enough,
-// the plan was actually followed, and nothing else changed at the same time.
+// analytical noise (the reference change value), both results are in the same
+// unit (converted with the variation table's own factors), the retest came late
+// enough, and the plan is known to have been followed. What else changed at the
+// same time is named beside it. A change is never credited to one item, nor to
+// a combination: the words say which way the marker moved, not why.
 // Trial effects are an average for a population, shown for comparison only.
 
+import { factorFor } from './changes.ts'
 import type { CheckIn, PlanItem, PlanVersion } from './interventions.ts'
-import { addDays, CATEGORY_ZH, daysBetween, TAG_ZH } from './interventions.ts'
+import { addDays, CATEGORY_ZH, checkinStatus, daysBetween, TAG_ZH } from './interventions.ts'
 import type { CourseRow, DoseRow, SeriesPoint } from './records.ts'
 import { preferSelf } from './measurements.ts'
 import { effectsFor, markerFor, rcvBand, type Biovar, type BiovarMarker, type EffectRow } from './reference.ts'
@@ -20,6 +24,9 @@ const ADHERENCE_GOOD = 0.8
 const ADHERENCE_LOW = 0.5
 const COVERAGE_MIN = 0.3
 const CRP_ACUTE_MG_L = 10
+/** Mirobody logs doses as taken or skipped; other sources may write it out. A negative is read first. */
+const DOSE_MISSED = /未服|没服|not[\s_-]*taken|untaken|missed|skip|漏/i
+const DOSE_TAKEN = /taken|done|已服|服用/i
 
 export interface ResolvedMarker {
   /** The marker as the plan named it. */
@@ -155,8 +162,9 @@ export function adherenceFor(
     for (const dose of data.doses) {
       if (dose.date < start || dose.date > endCap) continue
       const day = byDay.get(dose.date) ?? { taken: 0, skipped: 0 }
-      if (/taken|done|已服|服用/i.test(dose.status)) day.taken += 1
-      else if (/skip|missed|漏|未服/i.test(dose.status)) day.skipped += 1
+      // Negatives first: 未服用 contains 服用 and "not taken" contains taken.
+      if (DOSE_MISSED.test(dose.status)) day.skipped += 1
+      else if (DOSE_TAKEN.test(dose.status)) day.taken += 1
       byDay.set(dose.date, day)
     }
     for (const [date, day] of byDay) {
@@ -164,10 +172,10 @@ export function adherenceFor(
     }
   } else {
     source = 'check_in'
-    for (const row of data.checkins) {
-      if (row.item !== item.id || row.date < start || row.date > endCap || row.done == null) continue
-      if (row.done) status.set(row.date, 'done')
-      else if (!status.has(row.date)) status.set(row.date, 'missed')
+    // The latest check-in per day wins: a mistaken 完成 can be taken back or corrected to 没做到.
+    for (const [date, done] of checkinStatus(data.checkins).get(item.id) ?? []) {
+      if (date < start || date > endCap) continue
+      status.set(date, done ? 'done' : 'missed')
     }
     if (status.size === 0) source = data.checkins.some((row) => row.item === item.id) ? 'check_in' : 'none'
   }
@@ -216,8 +224,8 @@ export function adherenceFor(
 
 // --- effects ---------------------------------------------------------------
 
-function crpInMgL(value: number, unit: string): number {
-  return /mg\/dl/i.test(unit) ? value * 10 : value
+function crpInMgL(point: { value: number; unit: string }): number {
+  return /mg\/dl/i.test(point.unit) ? point.value * 10 : point.value
 }
 
 function isCrp(marker: ResolvedMarker): boolean {
@@ -273,14 +281,25 @@ function compare(row: EffectRow, change: { abs: number; pct: number } | null, un
   return Math.abs(observed) < Math.min(Math.abs(low), Math.abs(high)) ? 'smaller' : 'larger'
 }
 
-/** Mean of the readings in the last `days` days of a run of readings, dated at its last day. */
-function meanOver(points: readonly SeriesPoint[], days: number): SeriesPoint | undefined {
+/** Mean of the readings in the last `days` days of a run of readings, dated at its last day, and on how many days they fell. */
+function meanOver(points: readonly SeriesPoint[], days: number): { point: SeriesPoint; days: number } | undefined {
   const last = points.at(-1)
   if (!last) return undefined
   const from = addDays(last.date, -(days - 1))
   const used = points.filter((point) => point.date >= from && point.date <= last.date)
   const value = used.reduce((sum, point) => sum + point.value, 0) / used.length
-  return { ...last, value: Math.round(value * 100) / 100 }
+  return { point: { ...last, value: Math.round(value * 100) / 100 }, days: new Set(used.map((point) => point.date)).size }
+}
+
+/** Names as the next steps and reasons say them: 「甲」和「乙」, 「甲」、「乙」和「丙」. */
+function namesZh(names: readonly string[]): string {
+  const quoted = names.map((name) => `「${name}」`)
+  return quoted.length <= 1 ? quoted.join('') : `${quoted.slice(0, -1).join('、')}和${quoted.at(-1)}`
+}
+
+/** One sentence for items on the same marker at the same time; the same words whichever item it is read from. */
+export function togetherZh(titles: readonly string[]): string {
+  return `同期在执行${namesZh([...new Set(titles)].sort((a, b) => a.localeCompare(b)))}，无法区分各自的作用。`
 }
 
 export interface EvaluateInput {
@@ -294,27 +313,61 @@ export interface EvaluateInput {
   checkins: CheckIn[]
   biovar: Biovar
   effects: EffectRow[]
+  /** Indicator names whose readings failed to read or came back cut: judged from nothing, never from what is left. */
+  unread?: readonly string[]
 }
 
 export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: EvaluateInput): MarkerVerdict {
+  const biovar = marker.biovar
+  const unit = biovar?.unit || marker.unit
   const base: MarkerVerdict = {
-    item: item.id, item_title: item.title, marker: marker.label, indicator: marker.indicator, unit: marker.unit,
+    item: item.id, item_title: item.title, marker: marker.label, indicator: marker.indicator, unit,
     verdict: '无法判断', reason_zh: '', baseline: null, followup: null, change: null, band: null, direction: 'unknown',
     confounders: [], combined_with: [], expected: [], next_retest: null, first_due: null,
   }
-  const retestDays = marker.biovar?.min_retest_days ?? DEFAULT_RETEST_DAYS
+  const retestDays = biovar?.min_retest_days ?? DEFAULT_RETEST_DAYS
   if (!marker.indicator) {
     base.reason_zh = `记录里还没有${marker.label}。下次检查时加测，才能看这项干预对它的影响。`
     return base
   }
-  const points = (input.series[marker.indicator] ?? []).slice().sort((a, b) => a.date.localeCompare(b.date))
-  const before = points.filter((point) => point.date <= item.start && point.date >= addDays(item.start, -BASELINE_LOOKBACK_DAYS))
+  if (input.unread?.includes(marker.indicator)) {
+    base.reason_zh = `${marker.label}的历次结果没有读全（读取失败或被截断），这次无法判断。`
+    return base
+  }
+  // Every result in the variation row's unit, with the row's own factors (as changes.ts does); a result that
+  // cannot be put there is kept aside and named, never compared as it is.
+  const unconverted: SeriesPoint[] = []
+  const points = (input.series[marker.indicator] ?? []).slice().sort((a, b) => a.date.localeCompare(b.date)).flatMap((point) => {
+    if (!biovar) return [point]
+    const factor = factorFor(biovar, point.unit)
+    if (factor == null) {
+      unconverted.push(point)
+      return []
+    }
+    return [{ ...point, value: factor === 1 ? point.value : Number((point.value * factor).toPrecision(6)), unit: biovar.unit }]
+  })
+  const inBefore = (point: { date: string }) => point.date <= item.start && point.date >= addDays(item.start, -BASELINE_LOOKBACK_DAYS)
   const earliest = addDays(item.start, retestDays)
   const lastDay = item.end ? addDays(item.end, 30) : input.today
-  const after = points.filter((point) => point.date >= earliest && point.date <= lastDay)
-  const window = marker.biovar?.average_days ?? 0
-  const baseline = window > 0 ? meanOver(before, window) : before.at(-1)
-  const followup = window > 0 ? meanOver(after, window) : after.at(-1)
+  const inAfter = (point: { date: string }) => point.date >= earliest && point.date <= lastDay
+  const before = points.filter(inBefore)
+  const after = points.filter(inAfter)
+  const window = biovar?.average_days ?? 0
+  // A result in a unit the table cannot convert, newer than any usable one, would have been the one compared.
+  const blocked = (side: SeriesPoint[], inSide: (point: { date: string }) => boolean) =>
+    unconverted.filter(inSide).find((point) => !side.at(-1) || point.date > (side.at(-1) as SeriesPoint).date)
+  // Means over several days (home blood pressure) leave such a result out and count the days that remain.
+  const unitProblem = window > 0 ? undefined : blocked(before, inBefore) ?? blocked(after, inAfter)
+  if (unitProblem) {
+    base.reason_zh = `${unitProblem.date} 的${marker.label}单位是 ${unitProblem.unit || '（没有单位）'}，无法换算成 ${unit}，这次无法比较。`
+    base.next_retest = earliest > input.today ? earliest : null
+    base.first_due = base.next_retest ? earliest : null
+    return base
+  }
+  const baseMean = window > 0 ? meanOver(before, window) : undefined
+  const followMean = window > 0 ? meanOver(after, window) : undefined
+  const baseline = window > 0 ? baseMean?.point : before.at(-1)
+  const followup = window > 0 ? followMean?.point : after.at(-1)
   if (!baseline) {
     base.reason_zh = `开始前 ${BASELINE_LOOKBACK_DAYS} 天内没有${marker.label}的结果，没有基线可比。`
     base.next_retest = earliest > input.today ? earliest : null
@@ -322,17 +375,31 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
     return base
   }
   base.baseline = { date: baseline.date, value: baseline.value }
-  if (!followup) {
+  // A band measured on means of several days (home blood pressure) says nothing about fewer days.
+  const homeZh = biovar && ['sbp', 'dbp'].includes(biovar.key) ? '家庭血压' : `${marker.label}读数`
+  if (window > 0 && (baseMean?.days ?? 0) < window) {
+    base.reason_zh = `需要连续 ${window} 天的${homeZh}：开始前只有 ${baseMean?.days ?? 0} 天的读数，没有可比的基线。`
+    base.next_retest = earliest > input.today ? earliest : null
+    base.first_due = base.next_retest ? earliest : null
+    return base
+  }
+  if (!followup || (window > 0 && (followMean?.days ?? 0) < window)) {
     base.next_retest = earliest > input.today ? earliest : input.today
     base.first_due = earliest
     base.reason_zh = earliest > input.today
       ? `开始才 ${Math.max(0, daysBetween(item.start, input.today))} 天。${marker.label}至少要隔 ${retestDays} 天复测才有意义，${earliest} 之后复测。`
-      : `开始后还没有复测${marker.label}。现在可以复测了。`
+      : followup
+        ? `需要连续 ${window} 天的${homeZh}：复测只有 ${followMean?.days ?? 0} 天的读数，还不能比较。`
+        : `开始后还没有复测${marker.label}。现在可以复测了。`
     return base
   }
   base.followup = { date: followup.date, value: followup.value }
   const abs = followup.value - baseline.value
-  const pct = baseline.value !== 0 ? abs / baseline.value : 0
+  if (baseline.value === 0) {
+    base.reason_zh = '基线为 0，无法计算相对变化。'
+    return base
+  }
+  const pct = abs / baseline.value
   base.change = { abs, pct }
 
   // what else changed between the two results
@@ -370,44 +437,52 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
   // trial averages for this intervention and marker
   const years = Math.max(0, daysBetween(baseline.date, followup.date)) / 365.25
   // Only rows a person checked against the paper are set beside a change.
-  base.expected = effectsFor(input.effects, item, marker.biovar, marker.loinc).filter((row) => row.verified).slice(0, 4).map((row) => ({
+  base.expected = effectsFor(input.effects, item, biovar, marker.loinc).filter((row) => row.verified).slice(0, 4).map((row) => ({
     id: row.id, text_zh: expectationText(row), doi: row.doi, verified: row.verified,
-    comparison: compare(row, base.change, marker.unit, marker.biovar, years),
+    comparison: compare(row, base.change, unit, biovar, years),
   }))
 
   const adherence = input.adherence[item.id]
-  if (isCrp(marker) && (crpInMgL(baseline.value, marker.unit) > CRP_ACUTE_MG_L || crpInMgL(followup.value, marker.unit) > CRP_ACUTE_MG_L)) {
+  if (isCrp(marker) && (crpInMgL(baseline) > CRP_ACUTE_MG_L || crpInMgL(followup) > CRP_ACUTE_MG_L)) {
     base.reason_zh = 'CRP 高于 10 mg/L，多半是急性炎症（感冒、感染、受伤），这次比较不作数。建议恢复两周后复测。'
     return base
   }
-  if (!marker.biovar) {
+  if (!biovar) {
     base.reason_zh = `变化 ${(pct * 100).toFixed(0)}%。缺少${marker.label}的个体内变异数据，分不清是真实变化还是波动。`
     return base
   }
-  const band = rcvBand(marker.biovar, input.biovar.z)
-  base.band = { up_pct: band.up * 100, down_pct: band.down * 100, verified: marker.biovar.verified, cva_default: band.cva_default }
+  const band = rcvBand(biovar, input.biovar.z)
+  base.band = { up_pct: band.up * 100, down_pct: band.down * 100, verified: biovar.verified, cva_default: band.cva_default }
   const beyondUp = pct > band.up
   const beyondDown = pct < band.down
-  let better = marker.biovar.better
-  const goal = (input.goals ?? []).find((row) => row.marker === marker.asked || row.marker === marker.biovar?.key || row.marker === marker.label)
-  if ((better === 'none' || better === 'range') && goal && goal.value !== baseline.value) better = goal.value < baseline.value ? 'lower' : 'higher'
+  // With a goal, moving toward it decides, in the row's unit (a goal without a unit is in the record's unit).
+  const goalRow = (input.goals ?? []).find((row) => row.marker === marker.asked || row.marker === biovar.key || row.marker === marker.label)
+  const goalFactor = goalRow ? factorFor(biovar, goalRow.unit || marker.unit) : null
+  const goal = goalRow && goalFactor != null ? goalRow.value * goalFactor : null
+  const goalNote = goalRow && goalFactor == null ? `目标 ${goalRow.value} ${goalRow.unit} 无法换算成 ${unit}，没有按目标判断。` : ''
+  const neutral = biovar.better === 'range' || biovar.better === 'none'
+  const aim: 'lower' | 'higher' | null = goal != null && goal !== baseline.value ? (goal < baseline.value ? 'lower' : 'higher')
+    : biovar.better === 'lower' || biovar.better === 'higher' ? biovar.better : null
+  const byGoal = goal != null && goal !== baseline.value
+  const rangeNote = biovar.better === 'range' ? '是否合适要结合参考范围。' : ''
   if (!beyondUp && !beyondDown) {
     base.direction = 'within'
     base.verdict = '波动内'
     base.reason_zh = `变化 ${(pct * 100).toFixed(0)}%，在正常波动范围（${(band.down * 100).toFixed(0)}% 至 +${(band.up * 100).toFixed(0)}%）内，还不能算真实变化。`
-  } else if (better === 'lower' || better === 'higher') {
-    const improved = (better === 'lower' && beyondDown) || (better === 'higher' && beyondUp)
-    base.direction = improved ? 'improved' : 'worse'
-    base.verdict = improved ? '有效' : '反向'
-    base.reason_zh = improved
-      ? `变化 ${(pct * 100).toFixed(0)}%，超出正常波动，是真实的改善。`
-      : `变化 ${(pct * 100).toFixed(0)}%，超出正常波动，朝不好的方向走了。`
+  } else if (aim) {
+    const toward = (aim === 'lower' && beyondDown) || (aim === 'higher' && beyondUp)
+    base.direction = toward ? 'improved' : 'worse'
+    base.verdict = toward ? '有效' : '反向'
+    const words = byGoal ? (toward ? '朝目标变化' : '偏离目标') : (toward ? '指标朝目标方向变化' : '指标朝不利方向变化')
+    const passed = byGoal && neutral && goal != null && (aim === 'lower' ? followup.value < goal : followup.value > goal) ? '已越过目标值。' : ''
+    base.reason_zh = `变化 ${(pct * 100).toFixed(0)}%，${words}，超出正常波动。${passed}${rangeNote}`
   } else {
     base.direction = 'unknown'
     base.reason_zh = `变化 ${(pct * 100).toFixed(0)}%，超出正常波动；这一项没有“越低越好”或“越高越好”的方向，请结合参考范围看。`
   }
-  if (base.verdict === '有效' && base.combined_with.length > 0) {
-    base.reason_zh += `同期还有${base.combined_with.join('、')}，只能说明组合有效，分不出是哪一项。`
+  base.reason_zh += goalNote
+  if ((base.verdict === '有效' || base.verdict === '反向') && base.combined_with.length > 0) {
+    base.reason_zh += togetherZh([item.title, ...base.combined_with])
   }
   if ((base.verdict === '有效' || base.verdict === '反向') && base.confounders.length > 0) {
     base.reason_zh += `期间还有其他变化（${base.confounders.slice(0, 2).join('；')}），结论要打折扣。`
@@ -415,8 +490,14 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
   if (adherence?.level === 'low') {
     base.verdict = '无法判断'
     base.reason_zh = `执行率只有 ${Math.round((adherence.rate ?? 0) * 100)}%，${marker.label}的变化评价不了这项方案本身。${base.reason_zh}`
+  } else if (base.verdict === '有效' && adherence?.level !== 'good' && adherence?.level !== 'partial') {
+    // 有效 needs adherence that is known and at least half: a change with no record of the plan says nothing about it.
+    base.verdict = '无法判断'
+    base.reason_zh = !adherence || adherence.source === 'none'
+      ? `没有执行记录，${marker.label}的变化评价不了这项方案本身。${base.reason_zh}`
+      : `执行记录太少（覆盖 ${Math.round(adherence.coverage * 100)}% 的天数），${marker.label}的变化评价不了这项方案本身。${base.reason_zh}`
   }
-  if (!marker.biovar.verified) base.reason_zh += '（波动范围所用的变异数据尚未核对来源。）'
+  if (!biovar.verified) base.reason_zh += '（波动范围所用的变异数据尚未核对来源。）'
   return base
 }
 
@@ -496,8 +577,9 @@ export function suggestNext(summaries: readonly ItemSummary[], context: { today:
       if (row.reason_zh.startsWith('CRP 高于 10')) {
         out.push({ kind: 'acute', priority: 2, marker: row.marker, text_zh: 'CRP 超过 10 mg/L。身体恢复两周后再测一次 CRP，再做比较。' })
       }
-      if (row.verdict === '有效' && row.combined_with.length > 0) {
-        out.push({ kind: 'one_change', priority: 4, item: item.id, text_zh: `${row.marker}的改善来自「${item.title}」和${row.combined_with.join('、')}的组合。下次调整一次只改一项，才分得清谁起作用。` })
+      // Items on the same marker at the same time: once per marker and set of items, whichever item it is read from.
+      if (row.followup && row.combined_with.length > 0) {
+        out.push({ kind: 'one_change', priority: 4, item: item.id, marker: row.marker, text_zh: `${row.marker}：${togetherZh([item.title, ...row.combined_with])}下次调整一次只改一项。` })
       }
       if (row.verdict === '波动内' && item.adherence.level === 'good' && item.days >= 90) {
         out.push({
