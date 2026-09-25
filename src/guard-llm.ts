@@ -437,7 +437,7 @@ export interface TurnStoppingPayload {
 }
 
 /** What the person typed in this step: user-sourced messages only, never plugin notes or tool contexts. */
-/** A guidance note appended by the mounted dsh-plugin-mirobody's own pre-step guard (1.0.1 and later). */
+/** A guidance note appended by the mounted dsh-plugin-mirobody's own pre-step guard (0.1.1 and later). */
 export function isMirobodyNotice(message: { source?: { kind?: string; plugin?: string; form?: string } }): boolean {
   const source = message.source
   return source?.kind === 'plugin' && source.plugin === 'dsh-plugin-mirobody' && source.form === 'notice'

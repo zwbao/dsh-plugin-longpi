@@ -152,7 +152,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   // One guidance note after the person's words for what the guard flagged; their message is never replaced.
   // Outermost, so it runs on every step even when a listener registered earlier ends the waterfall.
-  // The mounted dsh-plugin-mirobody (1.0.1 and later) has its own rule guard that appends a notice and never
+  // The mounted dsh-plugin-mirobody (0.1.1 and later) has its own rule guard that appends a notice and never
   // rewrites the message. LongPi's listener runs outermost: when the host model labelled the message, it drops
   // that notice and adds its own; when the model call failed, both rule notes stay.
   ctx.on('agent/pre-step', (payload, next) => guard.preStep(payload, next), { prepend: true })

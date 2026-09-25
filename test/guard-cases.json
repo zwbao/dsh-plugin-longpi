@@ -2668,7 +2668,7 @@
    "tags": [
     "acute"
    ],
-   "source": "mirobody-1.0.1"
+   "source": "mirobody-0.1.1"
   },
   {
    "text": "医生给我开了二甲双胍，每天一片",
@@ -2678,7 +2678,7 @@
    "tags": [
     "record"
    ],
-   "source": "mirobody-1.0.1"
+   "source": "mirobody-0.1.1"
   },
   {
    "text": "医生给我开了二甲双胍，我想停掉",
@@ -2690,7 +2690,7 @@
    "tags": [
     "medicine"
    ],
-   "source": "mirobody-1.0.1"
+   "source": "mirobody-0.1.1"
   },
   {
    "text": "我现在胸口剧痛出冷汗会不会是心梗？",

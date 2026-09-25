@@ -182,13 +182,18 @@ function checkStateOf(value: unknown, legacy: boolean): CheckState {
   return null
 }
 
-/** True for a version string below 5.1 ("5.0.0"); false when newer or unknown. */
+/**
+ * True for a server that predates the tri-state check-in. The journey route arrived in the release first numbered
+ * 5.0.0 (now 0.5.0), so only 5.0.x and 0.x below 0.5.1 need the old reading; a later 1.x or anything unknown is current.
+ */
 export function beforeTriState(version: string): boolean {
-  const match = /^(\d+)\.(\d+)/.exec(version.trim())
+  const match = /^(\d+)\.(\d+)(?:\.(\d+))?/.exec(version.trim())
   if (!match) return false
   const major = Number(match[1])
   const minor = Number(match[2])
-  return major < 5 || (major === 5 && minor < 1)
+  const patch = Number(match[3] ?? 0)
+  if (major === 0) return minor < 5 || (minor === 5 && patch < 1)
+  return major === 5 && minor === 0
 }
 
 function planOf(raw: Raw, legacy: boolean): Journey['plan'] {

@@ -185,7 +185,7 @@ curl -s -b "$JAR" "http://127.0.0.1:3080/api/mirobody/resolve?q=%E8%A1%80%E7%BA%
 Expected output, with your own numbers:
 
 ```text
-{"product":"dsh-plugin-longpi","version":"5.1.0"}
+{"product":"dsh-plugin-longpi","version":"0.5.1"}
 skills   171 version 2026.39.0
 mirobody mounted
 engine   ok 1.5.0
@@ -199,7 +199,7 @@ record   ok 21 indicators
 - Type `/longpi` and press Enter. You should see:
 
   ```text
-  dsh-plugin-longpi 4.2.0
+  dsh-plugin-longpi 0.5.1
   skills 171 (personal 98)  version 2026.39.0  revision …  from catalog.json
   profile age unset  sex unknown  birth unset
   mirobody mounted
@@ -248,7 +248,7 @@ git -C "$LONGPI_HOME/longevity-skills" pull          # new skills, no restart ne
 dsh plugin --profile web remove dsh-plugin-longpi   # uninstall; then delete the LongPi row from cordis.patch.yml
 ```
 
-To pin a version, install `github:zwbao/dsh-plugin-longpi#v4.2.0` (or another tag). Uninstalling keeps the profile, plans and check-ins in `~/.dsh/longpi`.
+To pin a version, install `github:zwbao/dsh-plugin-longpi#v0.5.1` (or another tag). Uninstalling keeps the profile, plans and check-ins in `~/.dsh/longpi`.
 
 ## Without DSH (developers)
 

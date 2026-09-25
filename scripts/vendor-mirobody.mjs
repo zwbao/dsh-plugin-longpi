@@ -7,7 +7,7 @@
 // against a peer range, so the dev checkout would not install.)
 //
 //   node scripts/vendor-mirobody.mjs            # the tag recorded in vendor/.../VENDORED.json
-//   node scripts/vendor-mirobody.mjs v1.0.1     # another release tag
+//   node scripts/vendor-mirobody.mjs v0.1.1     # another release tag
 //   node scripts/vendor-mirobody.mjs ../dsh-plugin-mirobody   # a local checkout, for testing
 
 import { spawnSync } from 'node:child_process'
@@ -23,7 +23,7 @@ const recordPath = join(target, 'VENDORED.json')
 const FILES = ['package.json', 'LICENSE', 'NOTICE', 'lib/index.js', 'bridge/dsh_bridge.py', 'skills']
 
 function recordedTag() {
-  if (!existsSync(recordPath)) return 'v1.0.0'
+  if (!existsSync(recordPath)) return 'v0.1.1'
   return JSON.parse(readFileSync(recordPath, 'utf8')).tag
 }
 

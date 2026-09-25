@@ -185,7 +185,7 @@ curl -s -b "$JAR" "http://127.0.0.1:3080/api/mirobody/resolve?q=%E8%A1%80%E7%BA%
 应看到类似下面的输出（数字以你的为准）：
 
 ```text
-{"product":"dsh-plugin-longpi","version":"5.1.0"}
+{"product":"dsh-plugin-longpi","version":"0.5.1"}
 技能库   171 个，版本 2026.39.0
 Mirobody 已挂载
 术语引擎 正常 1.5.0
@@ -199,7 +199,7 @@ Mirobody 已挂载
 - 在输入框输入 `/longpi` 回车，应看到：
 
   ```text
-  dsh-plugin-longpi 4.2.0
+  dsh-plugin-longpi 0.5.1
   skills 171 (personal 98)  version 2026.39.0  revision …  from catalog.json
   profile age unset  sex unknown  birth unset
   mirobody mounted
@@ -248,7 +248,7 @@ git -C "$LONGPI_HOME/longevity-skills" pull          # 更新技能库，不用�
 dsh plugin --profile web remove dsh-plugin-longpi   # 卸载；再删掉 cordis.patch.yml 里 LongPi 那一行
 ```
 
-要固定版本，安装时用 `github:zwbao/dsh-plugin-longpi#v4.2.0` 这样的标签。卸载不会删除 `~/.dsh/longpi` 里的档案、方案和打卡记录。
+要固定版本，安装时用 `github:zwbao/dsh-plugin-longpi#v0.5.1` 这样的标签。卸载不会删除 `~/.dsh/longpi` 里的档案、方案和打卡记录。
 
 ## 不装 DSH，先看一眼（开发者）
 

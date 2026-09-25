@@ -1,7 +1,7 @@
 {
   "repo": "https://github.com/zwbao/dsh-plugin-mirobody",
-  "tag": "v1.0.1",
-  "version": "1.0.1",
+  "tag": "v0.1.1",
+  "version": "0.1.1",
   "files": [
     "package.json",
     "LICENSE",
