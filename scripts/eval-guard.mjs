@@ -1,5 +1,6 @@
 // Evaluate the guard's input classifier on test/guard-cases.json: precision and recall per label.
-// Not part of `npm test`; it runs only when you run it.
+// Not part of `npm test`; it runs only when you run it. Cases tagged reply are replies for the output check
+// (test/guard.mjs), not messages a person sends, so neither the rules nor the classifier are scored on them.
 //
 //   npm run build
 //   node scripts/eval-guard.mjs --rules-only          # the rule layer alone (what runs when the model fails); no network
@@ -32,7 +33,9 @@ const option = (name, fallback) => {
 
 const mod = await import(pathToFileURL(join(root, 'lib', 'index.js')).href)
 const { cases: allCases } = JSON.parse(readFileSync(join(root, 'test', 'guard-cases.json'), 'utf8'))
-const cases = allCases.slice(0, Number(option('limit', allCases.length)))
+const inputCases = allCases.filter((item) => !(item.tags ?? []).includes('reply'))
+const cases = inputCases.slice(0, Number(option('limit', inputCases.length)))
+const skipped = allCases.length - inputCases.length
 const KEYS = mod.LABEL_KEYS
 
 function score(results) {
@@ -71,7 +74,7 @@ function printMisses(results) {
 }
 
 const rulesResults = cases.map((item) => ({ item, labels: mod.ruleLabels(item.text), source: 'rules' }))
-printScores(`Rule layer alone (${cases.length} cases)`, score(rulesResults))
+printScores(`Rule layer alone (${cases.length} cases${skipped ? `; ${skipped} replies for the output check left out` : ''})`, score(rulesResults))
 if (flag('rules-only')) {
   if (flag('verbose')) printMisses(rulesResults)
   process.exit(0)
