@@ -1,5 +1,5 @@
 {
-  "version": "5.0.0",
+  "version": "5.1.0",
   "today": "2026-09-24",
   "consent": { "accepted": true, "version": "2026-09-24", "accepted_at": "2026-09-24T01:12:00.000Z", "current": "2026-09-24" },
   "profile": {
@@ -29,7 +29,9 @@
     { "key": "sleep", "label_zh": "睡眠" },
     { "key": "plan", "label_zh": "看方案有没有用" }
   ],
-  "records": { "status": "ok", "error": "", "indicator_count": 21, "full_checkups": 4, "latest_checkup": "2026-08-26", "mirobody_mounted": true },
+  "records": { "status": "ok", "error": "", "indicator_count": 21, "full_checkups": 4, "latest_checkup": "2026-08-26", "mirobody_mounted": true,
+    "read_errors": [], "missing_reads": [],
+    "summary": { "checkups": 4, "first_date": "2025-10-18", "last_date": "2026-08-26", "categories_zh": ["血脂", "血常规", "血糖", "肝功能", "肾功能", "炎症"], "wearable_days": 355 } },
   "results": {
     "bioage": { "status": "ok", "phenoage": 44.76, "advance": -8.14, "date": "2026-08-26", "checkups": 4, "band_years": 2.94, "blocker_zh": "", "missing": [],
       "caveat_zh": "表型年龄用到的平均红细胞体积近期变化明显，原因可能与衰老无关，这次的身体年龄请谨慎看待。" },
@@ -57,7 +59,7 @@
     "items": 4,
     "started": "2025-10-20",
     "days": 339,
-    "checkin_items": [{ "id": "imufy5xey0", "title": "地中海饮食", "done_today": false }],
+    "checkin_items": [{ "id": "imufy5xey0", "title": "地中海饮食", "done_today": null }],
     "streak": 0,
     "adherence_pct": 77
   },
@@ -97,5 +99,6 @@
       "verified": true
     }
   ],
-  "changes_note_zh": "判断依据：两次结果之差超过同一个人正常波动与检测误差合成的参考变化值（RCV，z=1.96）才算真实变化；变异数据来自 longevity-skills 的 data/biological_variation.json，每一行注明期刊出处。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。"
+  "changes_note_zh": "判断依据：两次结果之差超过同一个人正常波动与检测误差合成的参考变化值（RCV，z=1.96）才算真实变化；变异数据来自 longevity-skills 的 data/biological_variation.json，每一行注明期刊出处。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。",
+  "changes_unjudged": []
 }

@@ -6,8 +6,9 @@
 import { BOUNDARY_FALLBACK } from './constants.ts'
 import { localToday } from './format.ts'
 import type {
-  Addon, DraftCategory, DraftGoal, DraftItem, Focus, FollowupKind, FollowupLogRow, FollowupResponse, FollowupSettings, Journey, JourneyQuestion,
-  NextAction, PlanBrief, PlanDraftResponse, RecordChange, Reminder, RiskFact, SelfKey, SelfKeySpec, SelfLatest, Sex, Stage, WebhookKind, Weekday,
+  Addon, CheckState, Connection, ConnectionResult, DraftCategory, DraftGoal, DraftItem, Focus, FollowupKind, FollowupLogRow, FollowupResponse,
+  FollowupSettings, GroupKey, IndicatorChange, IndicatorDetail, IndicatorRow, IndicatorsResponse, Journey, JourneyQuestion, NextAction, PlanBrief,
+  PlanDraftResponse, RecordChange, RecordsSummary, Reminder, RiskFact, SelfKey, SelfKeySpec, SelfLatest, Sex, Stage, WebhookKind, Weekday,
 } from './types.ts'
 
 type Raw = Record<string, unknown>
@@ -170,7 +171,27 @@ function selfOf(raw: Raw): Journey['self'] {
   return { latest, keys }
 }
 
-function planOf(raw: Raw): Journey['plan'] {
+/**
+ * Before 5.1 a journey said done_today: false for an item not ticked yet; from
+ * 5.1 false is an explicit miss (没做到) and null means no record. A server that
+ * names an older version gets its false read as null.
+ */
+function checkStateOf(value: unknown, legacy: boolean): CheckState {
+  if (value === true) return true
+  if (value === false) return legacy ? null : false
+  return null
+}
+
+/** True for a version string below 5.1 ("5.0.0"); false when newer or unknown. */
+export function beforeTriState(version: string): boolean {
+  const match = /^(\d+)\.(\d+)/.exec(version.trim())
+  if (!match) return false
+  const major = Number(match[1])
+  const minor = Number(match[2])
+  return major < 5 || (major === 5 && minor < 1)
+}
+
+function planOf(raw: Raw, legacy: boolean): Journey['plan'] {
   return {
     exists: raw.exists === true,
     title: str(raw.title),
@@ -180,7 +201,7 @@ function planOf(raw: Raw): Journey['plan'] {
     days: num(raw.days),
     checkin_items: objects(raw.checkin_items)
       .filter((row) => typeof row.id === 'string')
-      .map((row) => ({ id: row.id as string, title: str(row.title, row.id as string), done_today: row.done_today === true })),
+      .map((row) => ({ id: row.id as string, title: str(row.title, row.id as string), done_today: checkStateOf(row.done_today, legacy) })),
     streak: num(raw.streak) ?? 0,
     adherence_pct: num(raw.adherence_pct),
   }
@@ -195,11 +216,16 @@ function remindersOf(value: unknown): Reminder[] {
   }))
 }
 
+/** A record that answered, fully or in part: some reads failing is not "not connected". */
+export function recordConnected(status: Journey['records']['status']): boolean {
+  return status === 'ok' || status === 'partial'
+}
+
 /** The same order the server uses, for a journey that arrives without a stage. */
 function stageOf(journey: Pick<Journey, 'consent' | 'profile' | 'records' | 'results' | 'plan'>): Stage {
   if (!journey.consent.accepted) return 'consent'
   if (!journey.profile.complete) return 'profile'
-  if (journey.records.status !== 'ok') return 'records'
+  if (!recordConnected(journey.records.status)) return 'records'
   if (journey.results.bioage.status !== 'ok' && journey.results.risk.status !== 'ok') return 'first_result'
   return journey.plan.exists ? 'routine' : 'plan'
 }
@@ -209,8 +235,9 @@ export function normalizeJourney(input: unknown): Journey {
   if (!('stage' in raw) && !('consent' in raw) && !('profile' in raw)) throw new Error('返回的不是 LongPi 的进度数据')
   const consent = obj(raw.consent)
   const records = obj(raw.records)
+  const version = str(raw.version)
   const body = {
-    version: str(raw.version),
+    version,
     today: str(raw.today) || localToday(),
     consent: {
       accepted: consent.accepted === true,
@@ -223,18 +250,21 @@ export function normalizeJourney(input: unknown): Journey {
       .filter((row) => FOCUS.includes(row.key as Focus))
       .map((row) => ({ key: row.key as Focus, label_zh: str(row.label_zh, row.key as string) })),
     records: {
-      status: oneOf(records.status, ['unconfigured', 'ok', 'error'] as const, 'unconfigured'),
+      status: oneOf(records.status, ['unconfigured', 'ok', 'partial', 'error'] as const, 'unconfigured'),
       error: str(records.error),
       indicator_count: num(records.indicator_count) ?? 0,
       full_checkups: num(records.full_checkups) ?? 0,
       latest_checkup: strOrNull(records.latest_checkup),
       // Only a server that says so is taken to mean the Mirobody plugin is missing.
       mirobody_mounted: records.mirobody_mounted !== false,
+      read_errors: strings(records.read_errors),
+      missing_reads: strings(records.missing_reads),
+      summary: summaryOf(records.summary),
     },
     results: resultsOf(obj(raw.results)),
     addons: addonsOf(raw.addons),
     self: selfOf(obj(raw.self)),
-    plan: planOf(obj(raw.plan)),
+    plan: planOf(obj(raw.plan), beforeTriState(version)),
     reminders: remindersOf(raw.reminders),
     boundary_zh: str(raw.boundary_zh) || BOUNDARY_FALLBACK,
   }
@@ -255,6 +285,24 @@ export function normalizeJourney(input: unknown): Journey {
     followup: journeyFollowupOf(obj(raw.followup)),
     changes: changesOf(raw.changes),
     changes_note_zh: str(raw.changes_note_zh),
+    changes_unjudged: objects(raw.changes_unjudged)
+      .filter((row) => str(row.label_zh))
+      .map((row) => ({ label_zh: str(row.label_zh), reason_zh: str(row.reason_zh) })),
+  }
+}
+
+/** records.summary (A1 §J): counts are never guessed, so a summary without its counts is none. */
+export function summaryOf(value: unknown): RecordsSummary | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const raw = value as Raw
+  const checkups = num(raw.checkups)
+  if (checkups == null) return null
+  return {
+    checkups,
+    first_date: strOrNull(raw.first_date),
+    last_date: strOrNull(raw.last_date),
+    categories_zh: strings(raw.categories_zh),
+    wearable_days: num(raw.wearable_days) ?? 0,
   }
 }
 
@@ -420,5 +468,136 @@ export function normalizeFollowup(input: unknown): FollowupResponse {
     next: { checkin: strOrNull(next.checkin), retest: strOrNull(next.retest), weekly: strOrNull(next.weekly) },
     log,
     platform_desktop: raw.platform_desktop === true,
+  }
+}
+
+// --- connection ---------------------------------------------------------------------------
+
+const CONNECTION_SOURCES = ['saved', 'config', 'none'] as const
+const CONNECTION_STATES = ['ok', 'error', 'none'] as const
+
+export function normalizeConnection(input: unknown): Connection {
+  const raw = obj(input)
+  if (!('source' in raw) && !('status' in raw) && !('url_masked' in raw)) throw new Error('返回的不是连接状态')
+  return {
+    source: oneOf(raw.source, CONNECTION_SOURCES, 'none'),
+    url_masked: str(raw.url_masked),
+    token_set: raw.token_set === true,
+    status: oneOf(raw.status, CONNECTION_STATES, 'none'),
+    error: str(raw.error),
+    summary: summaryOf(raw.summary),
+  }
+}
+
+/** A save or test answer: ok with the connection's new state, or ok:false with the reason. */
+export function normalizeConnectionResult(input: unknown): ConnectionResult {
+  const raw = obj(input)
+  const error = str(raw.error)
+  let connection: Connection | null = null
+  try {
+    connection = normalizeConnection(raw)
+  } catch {
+    connection = null
+  }
+  const ok = raw.ok === false ? false : raw.ok === true || (connection != null && connection.status === 'ok')
+  return { ok, error: ok ? '' : error || connection?.error || '连接没有成功', connection }
+}
+
+// --- indicators ---------------------------------------------------------------------------
+
+const GROUP_KEYS: readonly GroupKey[] = ['lipids', 'glucose', 'inflammation', 'blood', 'liver', 'kidney', 'thyroid', 'body', 'wearable', 'other']
+const INDICATOR_SOURCES = ['checkup', 'device', 'self'] as const
+const JUDGED = ['changed', 'within', 'unjudged'] as const
+
+function indicatorChangeOf(value: unknown): IndicatorChange | null {
+  if (!value || typeof value !== 'object') return null
+  const raw = value as Raw
+  const band = obj(raw.band_pct)
+  const pct = num(raw.pct)
+  const up = num(band.up)
+  const down = num(band.down)
+  if (pct == null || up == null || down == null) return null
+  const verdict = oneOf(raw.verdict, VERDICTS, 'unclear')
+  return { verdict, ask_doctor: raw.ask_doctor === true || verdict === 'worse', pct, band_pct: { up, down }, text_zh: str(raw.text_zh) }
+}
+
+function indicatorRowOf(raw: Raw): IndicatorRow | null {
+  const id = str(raw.id)
+  const label = str(raw.label_zh)
+  if (!id || !label) return null
+  const latestRaw = raw.latest == null ? null : obj(raw.latest)
+  const latestText = latestRaw ? str(latestRaw.text) : ''
+  const latestValue = latestRaw ? num(latestRaw.value) : null
+  const latest = latestRaw && str(latestRaw.date) && (latestValue != null || latestText)
+    ? { date: str(latestRaw.date), value: latestValue, ...(latestText ? { text: latestText } : {}) }
+    : null
+  const change = indicatorChangeOf(raw.change)
+  const readError = str(raw.read_error)
+  // A row the server could not read is never judged, whatever else it says.
+  const judged = readError ? 'unjudged' : oneOf(raw.judged, JUDGED, 'unjudged')
+  return {
+    id,
+    label_zh: label,
+    unit: str(raw.unit),
+    source: oneOf(raw.source, INDICATOR_SOURCES, 'checkup'),
+    latest,
+    points: pointsOf(raw.points),
+    change: judged === 'changed' ? change : null,
+    // "changed" needs the change behind it; without one it is not judged.
+    judged: judged === 'changed' && !change ? 'unjudged' : judged,
+    plan_marker: raw.plan_marker === true,
+    ...(readError ? { read_error: readError } : {}),
+  }
+}
+
+export function normalizeIndicators(input: unknown): IndicatorsResponse {
+  const raw = obj(input)
+  if (!('groups' in raw) && !('record' in raw)) throw new Error('返回的不是指标数据')
+  const record = obj(raw.record)
+  const groups = objects(raw.groups)
+    .map((group) => {
+      const key = oneOf(group.key, GROUP_KEYS, 'other')
+      const indicators = objects(group.indicators).map(indicatorRowOf).filter((row): row is IndicatorRow => row != null)
+      return { key, label_zh: str(group.label_zh) || key, indicators }
+    })
+    .filter((group) => group.indicators.length > 0)
+  return {
+    record: { status: oneOf(record.status, ['ok', 'partial', 'error', 'none'] as const, groups.length > 0 ? 'ok' : 'none'), error: str(record.error) },
+    updated_at: str(raw.updated_at),
+    groups,
+  }
+}
+
+export function normalizeIndicatorDetail(input: unknown): IndicatorDetail {
+  const raw = obj(input)
+  const row = indicatorRowOf(obj(raw.row))
+  if (!row) throw new Error('返回的不是指标详情')
+  const biovar = raw.biovar == null ? null : obj(raw.biovar)
+  const band = obj(biovar?.band_pct)
+  const cvi = num(biovar?.cvi_pct)
+  const up = num(band.up)
+  const down = num(band.down)
+  const source = obj(biovar?.source)
+  return {
+    row,
+    all_points: objects(raw.all_points)
+      .filter((point) => str(point.date) && (num(point.value) != null || str(point.text)))
+      .slice(0, 200)
+      .map((point) => ({
+        date: str(point.date),
+        value: num(point.value),
+        ...(str(point.text) ? { text: str(point.text) } : {}),
+        ...(str(point.file) ? { file: str(point.file) } : {}),
+        unit: str(point.unit, row.unit),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
+    biovar: biovar && cvi != null && up != null && down != null
+      ? {
+        cvi_pct: cvi,
+        band_pct: { up, down },
+        source: { title: str(source.title), url: str(source.url), ...(str(source.doi) ? { doi: str(source.doi) } : {}) },
+        ...(str(biovar.caveat_zh) ? { caveat_zh: str(biovar.caveat_zh) } : {}),
+      }
+      : null,
   }
 }

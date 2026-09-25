@@ -7,9 +7,9 @@ import { fmt } from './charts.ts'
 import { PREFERRED_UNITS, SELF_FALLBACK } from './constants.ts'
 import { chineseDate, localToday } from './format.ts'
 import { Icon } from './icons.ts'
-import { notifyChanged, useSelfRows } from './store.ts'
+import { notifyChanged, reload, useSelfRows } from './store.ts'
 import type { Journey, SelfKey, SelfKeySpec, SelfLatest, SelfRow } from './types.ts'
-import { Btn } from './ui.ts'
+import { Btn, LoadError } from './ui.ts'
 
 const h = React.createElement
 
@@ -158,10 +158,12 @@ export function SelfMeasureForm(props: { journey: Journey | null; idPrefix: stri
 }
 
 export function SelfRecent(props: { onNotice: Notify }): React.ReactElement | null {
-  const { data, loading } = useSelfRows()
+  const { data, loading, error } = useSelfRows()
   const [busy, setBusy] = React.useState<string | null>(null)
   const rows = (data?.rows ?? []).slice(0, 6)
   if (loading && !data) return null
+  // A first read that failed is not an empty log.
+  if (!data && error) return h(LoadError, { what: '自测记录', error, compact: true, onRetry: () => reload('self') })
   if (rows.length === 0) return h('p', { className: 'lp-caption lp-self-empty' }, '还没有自测记录。')
   async function remove(row: SelfRow): Promise<void> {
     setBusy(row.id)

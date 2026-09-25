@@ -2,7 +2,8 @@
 // bridge that puts prompts into the composer. The row belongs to the greeting
 // (home.ts renders it, portalled in right after the composer card), so it shows
 // exactly when the greeting does and never under a running conversation: in
-// the routine, today's check-ins, the nearest retest and a link to the page; in
+// the routine, today's check-ins (a tap opens 完成 / 没做到 / 撤销), the
+// nearest retest and a link to the page; in
 // every other stage, the journey's two prompts, which a tap puts into the
 // composer (the person still decides whether to send them).
 //
@@ -13,15 +14,15 @@
 // and the row says what to do.
 
 import React from 'react'
-import { errorText, postJson } from './api.ts'
+import { useCheckIns } from './checkin.ts'
 import { chineseDate } from './format.ts'
 import { Icon } from './icons.ts'
 import { retestDates } from './plan.ts'
 import {
-  hasPendingPrompt, notifyChanged, setPendingPrompt, setPromptNote, takePendingPrompt, useBridgeMounted, useComposerReady,
+  hasPendingPrompt, setPendingPrompt, setPromptNote, takePendingPrompt, useBridgeMounted, useComposerReady,
   usePendingVersion, usePromptNote, useTracking,
 } from './store.ts'
-import type { Journey } from './types.ts'
+import type { CheckState, Journey } from './types.ts'
 import { copyText } from './ui.ts'
 
 const h = React.createElement
@@ -112,49 +113,61 @@ function Note(props: { text: string | null }): React.ReactElement | null {
   return props.text ? h('span', { className: 'lp-row-note', role: 'status' }, props.text) : null
 }
 
+/**
+ * A check-in pill's three answers in a small popover under it: 完成, 没做到,
+ * and 撤销 once there is an answer. Escape or a click elsewhere closes it.
+ */
+function CheckPill(props: { id: string; title: string; state: CheckState; busy: boolean; onAnswer: (state: CheckState) => void }): React.ReactElement {
+  const [open, setOpen] = React.useState(false)
+  const wrap = React.useRef<HTMLSpanElement>(null)
+  const menuId = `lp-pill-menu-${props.id.replace(/[^A-Za-z0-9_-]/g, '_')}`
+  React.useEffect(() => {
+    if (!open) return undefined
+    const onDown = (event: PointerEvent) => { if (!wrap.current?.contains(event.target as Node)) setOpen(false) }
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false) }
+    document.addEventListener('pointerdown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+  const choose = (state: CheckState) => {
+    setOpen(false)
+    props.onAnswer(state)
+  }
+  const { state } = props
+  const label = state === true ? '今天已完成' : state === false ? '今天没做到' : '今天还没记录'
+  return h('span', { className: 'lp-task-wrap', ref: wrap },
+    h('button', {
+      type: 'button', className: `lp-task ${state === true ? 'lp-task-done' : state === false ? 'lp-task-missed' : ''}`,
+      'aria-haspopup': 'menu', 'aria-expanded': open, 'aria-controls': menuId, disabled: props.busy,
+      title: `${label}，点一下记录`, 'aria-label': `${props.title}：${label}`,
+      onClick: () => setOpen((current) => !current),
+    },
+    h('span', { className: 'lp-task-ring', 'aria-hidden': true },
+      state === true ? h(Icon, { name: 'check', size: 10, strokeWidth: 2.4 }) : state === false ? h(Icon, { name: 'close', size: 9, strokeWidth: 2.4 }) : null),
+    props.title),
+    open ? h('span', { className: 'lp-task-menu', id: menuId, role: 'menu', 'aria-label': `${props.title}：今天` },
+      h('button', { type: 'button', role: 'menuitem', className: 'lp-task-choice', disabled: state === true, onClick: () => choose(true) },
+        h(Icon, { name: 'check', size: 12, strokeWidth: 2 }), '完成'),
+      h('button', { type: 'button', role: 'menuitem', className: 'lp-task-choice', disabled: state === false, onClick: () => choose(false) }, '没做到'),
+      state !== null ? h('button', { type: 'button', role: 'menuitem', className: 'lp-task-choice lp-task-undo', onClick: () => choose(null) }, '撤销') : null) : null)
+}
+
 function RoutineRow(props: { journey: Journey; openPage: () => void; note: string | null }): React.ReactElement {
   const { journey } = props
-  // Ticked here and not yet in a refreshed journey. The marks belong to one day, and go once the server
-  // agrees, so a home left open overnight (or an undo on the page) shows what the server says.
-  const [done, setDone] = React.useState<{ day: string; ids: string[] }>({ day: journey.today, ids: [] })
-  const [busy, setBusy] = React.useState<string | null>(null)
-  const [failed, setFailed] = React.useState<string | null>(null)
+  const { stateOf, busy, error, answer } = useCheckIns(journey)
   const items = journey.plan.checkin_items
-  React.useEffect(() => {
-    setDone((current) => {
-      const ids = current.day === journey.today ? current.ids.filter((id) => !items.some((row) => row.id === id && row.done_today)) : []
-      return current.day === journey.today && ids.length === current.ids.length ? current : { day: journey.today, ids }
-    })
-  }, [journey])
   const reminder = journey.reminders
     .filter((row) => row.kind === 'retest' && row.date)
     .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))[0]
 
   // Check-ins post straight to LongPi: no session or composer needed.
-  const checkIn = (id: string, title: string) => {
-    setBusy(id)
-    setFailed(null)
-    postJson('/api/longpi/checkin', { item: id, done: true })
-      .then(() => {
-        setDone((current) => ({ day: journey.today, ids: [...(current.day === journey.today ? current.ids : []), id] }))
-        notifyChanged()
-      })
-      .catch((err: unknown) => setFailed(`没有记下「${title}」：${errorText(err, '请稍后再试')}`))
-      .finally(() => setBusy(null))
-  }
-
-  const lead: React.ReactNode[] = items.map((row) => {
-    const isDone = row.done_today || (done.day === journey.today && done.ids.includes(row.id))
-    return h('button', {
-      key: row.id, type: 'button', className: `lp-task ${isDone ? 'lp-task-done' : ''}`,
-      'aria-pressed': isDone, disabled: busy === row.id,
-      title: isDone ? '今天已完成' : '点一下记为今天完成',
-      // A done item stays done: a second tap does nothing (undo lives on the page and in chat).
-      onClick: isDone || busy ? undefined : () => checkIn(row.id, row.title),
-    },
-    h('span', { className: 'lp-task-ring', 'aria-hidden': true }, isDone ? h(Icon, { name: 'check', size: 10, strokeWidth: 2.4 }) : null),
-    row.title)
-  })
+  const lead: React.ReactNode[] = items.map((row) => h(CheckPill, {
+    key: row.id, id: row.id, title: row.title, state: stateOf(row.id), busy: busy === row.id,
+    onAnswer: (state) => answer(row.id, row.title, state),
+  }))
   if (items.length === 0 && journey.next.detail_zh) lead.push(h('span', { key: 'next' }, journey.next.detail_zh))
   return h('div', { className: 'lp lp-home-row', role: 'group', 'aria-label': 'LongPi 今天' },
     ...lead,
@@ -162,7 +175,7 @@ function RoutineRow(props: { journey: Journey; openPage: () => void; note: strin
       ? h(RetestPart, { text: retestText(reminder.date, reminder.text_zh, journey.today), before: lead.length > 0 })
       : h(LaterRetest, { today: journey.today, before: lead.length > 0 }),
     h('button', { type: 'button', className: 'lp-row-link', onClick: props.openPage }, '健康页 →'),
-    h(Note, { text: failed ?? props.note }))
+    h(Note, { text: error ?? props.note }))
 }
 
 /** The row itself; null when the stage has nothing for it (then the host stays empty and takes no room). */

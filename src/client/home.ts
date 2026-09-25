@@ -16,7 +16,7 @@ import { fmt } from './charts.ts'
 import { greeting, riskText, versusAge } from './format.ts'
 import { HomeRow } from './home-actions.ts'
 import { Icon } from './icons.ts'
-import { requestScroll, useHeroShown, useJourney } from './store.ts'
+import { requestView, useHeroShown, useJourney } from './store.ts'
 import type { Face, Journey } from './types.ts'
 
 const h = React.createElement
@@ -240,7 +240,7 @@ export function HomeHero(props: Partial<Face>): React.ReactElement | null {
     journey,
     open: () => props.openPage?.(),
     openAt: (id: string) => {
-      requestScroll(id)
+      requestView({ tab: 'overview', id })
       props.openPage?.()
     },
   })

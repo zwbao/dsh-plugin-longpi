@@ -35,8 +35,16 @@ export function localToday(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 }
 
+/**
+ * A fraction as a signed percentage: one decimal below 10 % (+0.4%, −3.2%),
+ * none above (+18%). A change that rounds to nothing is 0%, never +0% or -0%.
+ */
 export function pct(value: number): string {
-  return `${value > 0 ? '+' : ''}${fmt(value * 100, 0)}%`
+  const percent = value * 100
+  const text = fmt(percent, Math.abs(percent) < 10 ? 1 : 0)
+  if (text === '—') return text
+  if (Number(text) === 0) return '0%'
+  return `${percent > 0 ? '+' : ''}${text}%`
 }
 
 /** How the body age compares with the calendar age, in words. */

@@ -1,0 +1,20 @@
+{
+ "source": "config",
+ "url_masked": "https://mirobody.example.com/mcp/••••••",
+ "token_set": false,
+ "status": "ok",
+ "summary": {
+  "checkups": 4,
+  "first_date": "2025-10-18",
+  "last_date": "2026-08-26",
+  "categories_zh": [
+   "血脂",
+   "血常规",
+   "血糖",
+   "肝功能",
+   "肾功能",
+   "炎症"
+  ],
+  "wearable_days": 355
+ }
+}
