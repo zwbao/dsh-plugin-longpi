@@ -72,7 +72,8 @@ try {
     if (roll < 7) entries.push({ item: '地中海饮食', date, done: true })
     else if (roll < 8) entries.push({ item: '地中海饮食', date, done: false, note: '外食' })
   }
-  mod.addCheckIns(dataDir, entries, { today: TODAY, source: 'chat' })
+  // addCheckIns takes at most 40 entries a call (a chat turn's worth): the 12 weeks go in chunks.
+  for (let at = 0; at < entries.length; at += 40) mod.addCheckIns(dataDir, entries.slice(at, at + 40), { today: TODAY, source: 'chat' })
 
   // Follow-up on, with desktop notifications and a Feishu bot (a made-up URL: the page only ever sees it masked).
   const now = new Date(`${TODAY}T10:00:00`)
