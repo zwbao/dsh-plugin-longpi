@@ -101,15 +101,24 @@ try {
     { key: 'waist', value: 2.6, unit: '尺', date: '2026-09-20' },
     { key: 'waist', value: '34', unit: 'INCH', date: '2026-09-21' },
     { key: 'waist', value: 88 },
+    { key: 'waist', value: 26, unit: '寸', date: '2026-09-19' },
     { key: 'sbp', value: 300, unit: 'mmHg' },
+    { key: 'sbp', value: 80, date: '2026-09-22' },
+    { key: 'dbp', value: 120, date: '2026-09-22' },
     { key: 'dbp', value: 80, date: '2026-09-25' },
     { key: 'weight', value: 70, date: '1989-12-31' },
     { key: 'weight', value: 70, unit: 'stone' },
     { key: 'glucose', value: 5.4 },
     { key: 'sbp', value: 'high' },
   ], { today: TODAY, now: NOW })
-  assert.equal(added.saved.length, 4, added.problems.join('\n'))
-  const [weight, waistChi, waistInch, waistPlain] = added.saved
+  assert.equal(added.saved.length, 5, added.problems.join('\n'))
+  const [weight, waistChi, waistInch, waistPlain, waistCun] = added.saved
+  assert.deepEqual([waistCun.value, waistCun.unit, waistCun.given], [86.7, 'cm', { value: 26, unit: '寸' }], '寸 → cm (10/3 cm each)')
+  assert.ok(added.problems.some((line) => line.includes('收缩压 80 低于舒张压 120') && line.includes('请核对是否填反')), 'a swapped pair is refused')
+  assert.equal(added.saved.some((row) => row.key === 'sbp' || row.key === 'dbp'), false, 'neither row of the swapped pair is saved')
+  const samePair = mod.addSelf(tempDir('pair'), [{ key: 'sbp', value: 120, date: '2026-09-20' }, { key: 'dbp', value: 80, date: '2026-09-20' }, { key: 'sbp', value: 90, date: '2026-09-21' }, { key: 'dbp', value: 90, date: '2026-09-21' }], { today: TODAY })
+  assert.deepEqual(samePair.saved.map((row) => [row.key, row.date]), [['sbp', '2026-09-20'], ['dbp', '2026-09-20']], 'an equal pair is refused, a normal one kept')
+  assert.ok(samePair.problems.some((line) => line.includes('等于')))
   assert.deepEqual([weight.value, weight.unit, weight.given], [75, 'kg', { value: 150, unit: '斤' }], '斤 → kg')
   assert.deepEqual([waistChi.value, waistChi.unit, waistChi.given], [86.7, 'cm', { value: 2.6, unit: '尺' }], '尺 → cm, rounded to 0.1')
   assert.deepEqual([waistInch.value, waistInch.given], [86.4, { value: 34, unit: 'inch' }], 'latin units ignore case')
@@ -124,7 +133,7 @@ try {
   assert.ok(added.problems.some((line) => line.includes('high')), 'a value must be a number')
   assert.equal(statSync(join(selfDir, 'self_measurements.jsonl')).mode & 0o777, 0o600)
   assert.equal(mod.addSelf(selfDir, Array.from({ length: 51 }, () => ({ key: 'weight', value: 70 })), { today: TODAY }).saved.length, 50, 'at most 50 per call')
-  assert.equal(mod.readSelf(selfDir).length, 54)
+  assert.equal(mod.readSelf(selfDir).length, 55)
   assert.equal(mod.deleteSelf(selfDir, waistChi.id), true)
   assert.equal(mod.deleteSelf(selfDir, waistChi.id), false)
   assert.equal(mod.readSelf(selfDir).some((row) => row.id === waistChi.id), false)
@@ -132,7 +141,8 @@ try {
 
   // home blood pressure: the mean of the 7 days ending at the latest reading
   const bpDir = tempDir('bp')
-  const cuff = [['2026-09-10', 150, 95], ['2026-09-17', 130, 85], ['2026-09-18', 128, 84], ['2026-09-20', 126, 82], ['2026-09-20', 124, 80], ['2026-09-23', 122, 78]]
+  // 2026-09-16 is day −7 before the latest reading: outside the window, so its distinctive 200 must not count.
+  const cuff = [['2026-09-10', 150, 95], ['2026-09-16', 200, 120], ['2026-09-17', 130, 85], ['2026-09-18', 128, 84], ['2026-09-20', 126, 82], ['2026-09-20', 124, 80], ['2026-09-23', 122, 78]]
   mod.addSelf(bpDir, cuff.flatMap(([date, sbp, dbp]) => [{ key: 'sbp', value: sbp, date }, { key: 'dbp', value: dbp, date }]), { today: TODAY })
   const latest = mod.latestSelf(mod.readSelf(bpDir))
   assert.deepEqual(latest.sbp, { value: 126, unit: 'mmHg', date: '2026-09-23', n: 5 }, '2026-09-17..23: (130+128+126+124+122)/5')
@@ -142,7 +152,7 @@ try {
     name: '收缩压（自测）', label: '收缩压', value: '126', unit: 'mmHg', loinc: '8480-6', date: '2026-09-23', count: 5, source: 'self',
   })
   assert.deepEqual(mod.selfSeries(mod.readSelf(bpDir), 'sbp').map((point) => [point.date, point.value]), [
-    ['2026-09-10', 150], ['2026-09-17', 130], ['2026-09-18', 128], ['2026-09-20', 125], ['2026-09-23', 122],
+    ['2026-09-10', 150], ['2026-09-16', 200], ['2026-09-17', 130], ['2026-09-18', 128], ['2026-09-20', 125], ['2026-09-23', 122],
   ], 'one daily mean per date')
 
   // merge precedence against record rows
@@ -157,6 +167,19 @@ try {
   assert.equal(mod.mergeSelf(remote, [selfWaist('2026-09-20')]).at(-1).name, '腰围（自测）', 'a newer self waist joins, last')
   assert.equal(mod.mergeSelf(remote, [selfSbp('2026-09-19')]).length, 2, 'the wearable cuff row counts as the same thing')
   assert.equal(mod.mergeSelf(remote, [selfSbp('2026-09-22')]).at(-1).name, '收缩压（自测）')
+  // a record row with no LOINC code is still the same measure by its name, and an older self row never overrides it
+  const plainWaist = [{ name: '腰围', value: '95', unit: 'cm', date: '2026-09-01' }]
+  assert.equal(mod.mergeSelf(plainWaist, [selfWaist('2026-06-01')]).length, 1, 'an older self waist does not override a checkup 腰围 without LOINC')
+  assert.equal(mod.mergeSelf(plainWaist, [selfWaist('2026-09-02')]).length, 2)
+  const labelled = [{ name: 'WAIST-01', label: 'Waist circumference', value: '95', unit: 'cm', date: '2026-09-01' }]
+  assert.equal(mod.mergeSelf(labelled, [selfWaist('2026-06-01')]).length, 1, 'matched by label too')
+  const measuredWeight = [{ name: 'Body weight', value: '80', unit: 'kg', loinc: '3141-9', date: '2026-09-01' }]
+  const selfWeight = (date) => ({ name: '体重（自测）', label: '体重', value: '78', unit: 'kg', loinc: '29463-7', date, source: 'self' })
+  assert.equal(mod.mergeSelf(measuredWeight, [selfWeight('2026-08-01')]).length, 1, 'LOINC 3141-9 is the same measure as 29463-7')
+  assert.equal(mod.mergeSelf(measuredWeight, [selfWeight('2026-09-05')]).length, 2)
+  const scale = [{ name: 'bodyMasss', value: '75.1', unit: 'kg', date: '2026-09-16' }]
+  assert.equal(mod.mergeSelf(scale, [selfWeight('2026-09-10')]).length, 1, 'an older self weight does not override the smart scale')
+  assert.equal(mod.mergeSelf(scale, [selfWeight('2026-09-20')]).at(-1).name, '体重（自测）', 'a newer one does')
 
   // --- 3. stage progression ----------------------------------------------------
   const dataDir = tempDir('stages')
@@ -178,8 +201,8 @@ try {
   const questions = journey.profile.questions
   assert.deepEqual(questions.map((row) => row.key), ['age', 'sex', 'smoker', 'diabetes', 'bp_treated', 'north', 'urban', 'family_history'])
   assert.equal(questions[0].unlocks_zh, '身体年龄、心血管风险')
-  assert.equal(questions[1].unlocks_zh, '身体年龄、心血管风险')
-  assert.ok(questions.slice(2).every((row) => row.unlocks_zh === '心血管风险'))
+  assert.equal(questions[1].unlocks_zh, '心血管风险', 'PhenoAge does not use sex; China-PAR does')
+  assert.ok(questions.slice(1).every((row) => row.unlocks_zh === '心血管风险'))
   assert.deepEqual(questions.filter((row) => row.men_only).map((row) => row.key), ['urban', 'family_history'])
   assert.equal(questions[2].label_zh, mod.RISK_FACT_ZH.smoker)
   assert.ok(questions.every((row) => row.answered === false))
@@ -263,7 +286,8 @@ try {
   assert.equal(journey.stage, 'plan', 'one first result is enough to move on')
   assert.deepEqual(journey.self.latest.map((row) => [row.key, row.value, row.n]), [['waist', 88, 1]])
   assert.equal(journey.records.indicator_count, step.records.indicators.filter((row) => row.source !== 'self').length, 'self rows are not Mirobody indicators')
-  assertSuggestions(journey, ['我的心血管风险怎么样？哪些因素影响最大？', '帮我保存我的干预方案', '有哪些经过研究验证的改善方法？'])
+  assertSuggestions(journey, ['我的心血管风险怎么样？哪些因素影响最大？', '帮我制定一份改善方案', '帮我保存我的干预方案'])
+  assert.deepEqual(journey.next, { stage: 'plan', title_zh: '制定改善方案', detail_zh: '让 LongPi 按你的检查结果和研究证据起草一份方案，你确认后才保存。', action: 'plan' })
   assert.equal(journey.suggestions[0].text_zh, '我的心血管风险怎么样？哪些因素影响最大？', 'the first suggestion follows the first focus')
 
   // the full fixture record: both results, several checkups
@@ -349,7 +373,8 @@ try {
     { kind: 'checkin', text_zh: '今天还有 1 项待打卡', date: TODAY, due: true },
   ])
   assert.deepEqual(journey.next, { stage: 'routine', title_zh: '今天的打卡', detail_zh: '还有 1 项待完成', action: 'checkin' })
-  assertSuggestions(journey, ['今天的方案我都完成了', '我的方案有没有效果？', '该复测什么了？'])
+  assertSuggestions(journey, ['今天的方案我都完成了', '该复测什么了？'])
+  // TODO(followup) '每天晚上提醒我打卡' and journey.followup
 
   mod.addCheckIns(dataDir, [{ item: '地中海饮食', date: TODAY, done: true }, { item: '地中海饮食', date: '2026-09-23', done: true }], { today: TODAY, source: 'board' })
   step = await journeyOf(fullConfig)
@@ -377,8 +402,20 @@ try {
   assert.equal(unfolded.filter((line) => line === 'BEGIN:VEVENT').length, 3, 'two retests and one daily check-in')
   const uids = unfolded.filter((line) => line.startsWith('UID:'))
   assert.equal(new Set(uids).size, uids.length)
-  assert.ok(uids.every((uid) => /^UID:longpi-(retest-[a-z0-9-]+-\d{4}-\d{2}-\d{2}|checkin)@dsh-plugin-longpi$/.test(uid)), uids.join(' '))
-  assert.ok(unfolded.includes('DTSTART;VALUE=DATE:20260924'))
+  assert.ok(uids.every((uid) => /^UID:longpi-(retest-[a-z0-9-]+-v1|checkin)@dsh-plugin-longpi$/.test(uid)), `no moving date in a UID: ${uids.join(' ')}`)
+  assert.ok(unfolded.includes('DTSTART;VALUE=DATE:20260924'), 'due today for the first time: today')
+  // two days later the triglyceride retest is overdue: same UIDs, the event moves to tomorrow with a higher SEQUENCE
+  const later = '2026-09-26'
+  mod.invalidateTracking()
+  const laterRecords = await mod.loadRecords(fullConfig, dataDir, '/nonexistent/plugin')
+  const laterStep = await mod.buildJourneyFull({ config: fullConfig, dataDir, skillsHome: home, catalog, records: laterRecords, today: later, mount: MOUNT })
+  const laterIcs = mod.buildCalendar(laterStep.journey, laterStep.tracking, { now: new Date(`${later}T12:00:00Z`) }).replace(/\r\n /g, '').split('\r\n')
+  assert.deepEqual(laterIcs.filter((line) => line.startsWith('UID:')).sort(), uids.slice().sort(), 're-exporting keeps every UID')
+  const tgEvent = laterIcs.slice(laterIcs.indexOf('SUMMARY:LongPi 复测：甘油三酯') - 6, laterIcs.indexOf('SUMMARY:LongPi 复测：甘油三酯'))
+  assert.ok(tgEvent.includes('DTSTART;VALUE=DATE:20260927'), `overdue: tomorrow ${tgEvent.join(' ')}`)
+  assert.ok(tgEvent.includes('SEQUENCE:2'))
+  assert.deepEqual(mod.retestDay({ date: '2026-09-30', first_due: '2026-09-30' }, TODAY), { date: '2026-09-30', sequence: 0 })
+  assert.deepEqual(mod.retestDay({ date: TODAY, first_due: '2026-09-20' }, TODAY), { date: '2026-09-25', sequence: 4 })
   assert.ok(unfolded.includes('SUMMARY:LongPi 复测：甘油三酯'))
   assert.ok(unfolded.includes('TRIGGER:PT9H'))
   assert.ok(unfolded.includes('DTSTART:20260924T210000'))
@@ -403,6 +440,12 @@ try {
   assert.match(prompt, /save_self_measurement/)
   assert.match(prompt, /onboarding/)
   assert.match(prompt, /never store it as no/)
+  assert.match(prompt, /When questions_unanswered is not empty/, 'profile questions follow what is unanswered, not the consent stage')
+  assert.match(prompt, /noise band where the tool gives one/)
+  assert.doesNotMatch(prompt, /Never propose plan items/)
+  const dispatch = readFileSync(join(root, '..', 'skills', 'longpi-dispatch', 'SKILL.md'), 'utf8')
+  assert.match(dispatch, /questions_unanswered/)
+  assert.doesNotMatch(dispatch, /consent \/ profile：先帮对方建档/)
 
   let res = await call(host, 'GET', '/api/longpi/journey')
   assert.equal(res.status, 200)
@@ -437,6 +480,10 @@ try {
   assert.equal(mod.readProfile(routeDir).consent.version, mod.CONSENT_VERSION, 'saving the profile in chat keeps consent')
   assert.deepEqual(mod.readProfile(routeDir).focus, ['sleep'])
   assert.equal(mod.readProfile(routeDir).age, 52)
+  await saveProfile.execute({ smoker: false, diabetes: true })
+  assert.deepEqual(mod.readProfile(routeDir).risk, { smoker: false, diabetes: true })
+  await saveProfile.execute({ smoker: null })
+  assert.deepEqual(mod.readProfile(routeDir).risk, { diabetes: true }, 'null clears a fact back to unknown (the person is unsure)')
 
   res = await call(host, 'POST', '/api/longpi/self', { entries: [{ key: 'waist', value: 2.6, unit: '尺' }, { key: 'weight', value: 150, unit: '斤' }] })
   assert.equal(res.status, 200, res.text)
@@ -467,8 +514,11 @@ try {
   assert.equal(situation.onboarding.results.risk.status, 'blocked')
   assert.ok(situation.onboarding.addons.some((row) => row.item_zh === '总胆固醇'))
   assert.deepEqual(situation.self_measurements.map((row) => row.key), ['waist', 'weight'])
+  assert.match(situation.onboarding.how_to_read, /lower bound/)
+  assert.match(situation.onboarding.how_to_read, /China-PAR \(results.risk\) has no band/)
   const status = await host.tools.get('longpi_status').execute({})
   assert.equal(status.stage, 'records')
+  assert.equal(status.next, '连接体检记录')
   const command = host.commands.get('longpi').handler({ rawInput: '/longpi' })
   assert.match(command.text, /^stage records · next 连接体检记录$/m)
   assert.doesNotMatch(command.text, /mmHg|cm|kg/, 'no health values in the command')
@@ -480,6 +530,124 @@ try {
   assert.match(res.text, /^BEGIN:VCALENDAR\r\n/)
   res = await call(host, 'GET', '/api/longpi/journey?refresh=1')
   assert.equal(res.json().self.latest.find((row) => row.key === 'weight').value, 75, 'the newest weight wins')
+
+  // --- 6. review fixes ----------------------------------------------------------
+  // (1) one home reading must never erase a plan marker's record history
+  const history = tempDir('history')
+  const historyConfig = configFor(history, full.url)
+  mod.writeProfile(history, { age: 53, sex: 'male', risk: FACTS, consent: { version: mod.CONSENT_VERSION, accepted_at: NOW.toISOString() } })
+  mod.savePlan(history, mod.normalizePlan({
+    title: '控压减重',
+    items: [
+      { category: 'diet', title: '少盐', start: '2026-06-01', markers: ['收缩压'] },
+      { category: 'weight', title: '减重', start: '2026-05-01', markers: ['体重'] },
+    ],
+  }, { today: TODAY, medications: [], previous: null }).plan)
+  const trackingOf = async (dir, config) => {
+    mod.invalidateRecords()
+    mod.invalidateTracking()
+    const recs = await mod.loadRecords(config, dir, '/nonexistent/plugin')
+    return mod.buildTracking({ config, dataDir: dir, skillsHome: home, catalog, records: recs, today: TODAY })
+  }
+  const verdictOf = (tracking, marker) => tracking.items.flatMap((item) => item.verdicts).find((row) => row.marker === marker)
+  const chartOf = (tracking, key) => tracking.charts.find((chart) => chart.key === key)
+  let hist = await trackingOf(history, historyConfig)
+  const sbpBefore = verdictOf(hist, '收缩压')
+  assert.equal(sbpBefore.indicator, 'systolicPressures')
+  assert.ok(sbpBefore.baseline, 'the wearable cuff gives a baseline')
+  assert.notEqual(sbpBefore.verdict, '无法判断')
+  const sbpPoints = chartOf(hist, 'sbp').points.length
+  const weightBefore = verdictOf(hist, '体重')
+  assert.equal(weightBefore.indicator, 'bodyMasss')
+  assert.ok(weightBefore.baseline)
+  const weightPoints = chartOf(hist, 'weight').points.length
+  mod.addSelf(history, [{ key: 'sbp', value: 150, date: '2026-09-23' }, { key: 'dbp', value: 90, date: '2026-09-23' }, { key: 'weight', value: 74, date: '2026-09-23' }], { today: TODAY })
+  hist = await trackingOf(history, historyConfig)
+  const sbpAfter = verdictOf(hist, '收缩压')
+  assert.equal(sbpAfter.indicator, '收缩压（自测）', 'the newer self reading is the marker now')
+  assert.deepEqual(sbpAfter.baseline, sbpBefore.baseline, 'and the verdict keeps its record baseline')
+  assert.ok(chartOf(hist, 'sbp').points.length >= sbpPoints, `the chart keeps its history (${sbpPoints} → ${chartOf(hist, 'sbp').points.length})`)
+  assert.equal(chartOf(hist, 'sbp').points.at(-1).date >= '2026-09-21', true, 'the self reading is on the chart')
+  const weightAfter = verdictOf(hist, '体重')
+  assert.equal(weightAfter.indicator, '体重（自测）')
+  assert.deepEqual(weightAfter.baseline, weightBefore.baseline, 'bodyMasss keeps the weight baseline')
+  assert.equal(weightAfter.followup.date, '2026-09-23', 'the newest self weight is the follow-up')
+  assert.equal(chartOf(hist, 'weight').points.length, weightPoints + 1)
+  for (const server of servers) {
+    for (const call of server.calls) {
+      for (const name of call.args.indicators ?? []) assert.ok(!String(name).endsWith('（自测）'), `self row ${name} sent to Mirobody`)
+    }
+  }
+
+  // (2) China-PAR's home blood pressure pools the cuff's week with the typed reading
+  const pooled = await mod.homeBloodPressure({ config: historyConfig, dataDir: history, skillsHome: home, catalog, records: await mod.loadRecords(historyConfig, history, '/nonexistent/plugin'), today: TODAY })
+  // cuff 09-17 125 and 09-20 126 (09-14 is day −9), typed 150 on 09-23
+  assert.deepEqual(pooled, { value: 133.7, unit: 'mmHg', date: '2026-09-23', n: 3 })
+
+  // (4) a configured record that fails to read is never called 'not connected'
+  const broken = tempDir('broken')
+  mod.writeProfile(broken, { age: 53, sex: 'male', risk: FACTS, consent: { version: mod.CONSENT_VERSION, accepted_at: NOW.toISOString() } })
+  const brokenStep = await journeyOf(configFor(broken, 'http://127.0.0.1:1/mcp'))
+  assert.equal(brokenStep.journey.records.status, 'error')
+  assert.equal(brokenStep.journey.stage, 'records')
+  assert.match(brokenStep.journey.results.bioage.blocker_zh, /^记录读取失败：/)
+  assert.match(brokenStep.journey.results.risk.blocker_zh, /^记录读取失败：/)
+  assert.doesNotMatch(JSON.stringify(brokenStep.journey.results), /还没有连接/)
+  assert.deepEqual(brokenStep.journey.addons, [], 'no add-on tests while the record cannot be read')
+  assert.match(brokenStep.journey.next.detail_zh, /^记录读取失败：/)
+
+  // (5) the report and the board count Mirobody indicators only
+  const withSelf = await mod.loadRecords(historyConfig, history, '/nonexistent/plugin')
+  const mirobodyCount = withSelf.indicators.filter((row) => row.source !== 'self').length
+  assert.ok(withSelf.indicators.length > mirobodyCount, 'self rows are merged')
+  const board = mod.buildBoard({ catalog, records: withSelf, mount: MOUNT, receipts: [], limit: 6, outputs: {} })
+  assert.equal(board.records.indicator_count, mirobodyCount)
+  assert.match(mod.buildReport({ name: '', today: TODAY, records: withSelf, tracking: null }), new RegExp(`已接入 Mirobody（${mirobodyCount} 项指标）`))
+
+  // (6) the band's lower-bound note reaches the model
+  const band = step.journey.results.bioage
+  assert.deepEqual(band.band_missing, step.tracking.bioage.band_missing)
+  assert.equal(band.band_verified, step.tracking.bioage.band_verified)
+  assert.ok(band.band_missing.length > 0, 'the fixture band leaves inputs out')
+
+  // (8) sex 'other' leaves the profile step; China-PAR asks for male or female
+  const other = tempDir('other')
+  mod.writeProfile(other, { age: 53, sex: 'other', risk: FACTS, consent: { version: mod.CONSENT_VERSION, accepted_at: NOW.toISOString() } })
+  const otherJourney = (await journeyOf(configFor(other, full.url))).journey
+  assert.equal(otherJourney.profile.complete, true)
+  assert.equal(otherJourney.profile.questions.find((row) => row.key === 'sex').answered, true)
+  assert.equal(otherJourney.results.bioage.status, 'ok', 'body age does not need sex')
+  assert.equal(otherJourney.results.risk.status, 'blocked')
+  assert.deepEqual(otherJourney.results.risk.missing_facts, ['性别（男或女）'])
+  assert.equal(otherJourney.stage, 'plan')
+  assert.equal(mod.profileComplete({ age: 53, sex: 'unknown' }), false)
+  assert.equal(mod.profileComplete({ age: null, sex: 'female' }), false)
+
+  // (11) the journey has a deadline; failed skill runs are not retried within the memo TTL
+  assert.deepEqual(await mod.within(new Promise(() => {}), 20), { timeout: true })
+  assert.deepEqual(await mod.within(Promise.resolve(5), 1000), { value: 5 })
+  const noRuntime = tempDir('no-runtime')
+  mod.writeProfile(noRuntime, { age: 53, sex: 'male', risk: FACTS, consent: { version: mod.CONSENT_VERSION, accepted_at: NOW.toISOString() } })
+  const noRuntimeConfig = { ...configFor(noRuntime, full.url), skillPython: '/nonexistent/python' }
+  await journeyOf(noRuntimeConfig)
+  const tried = mod.readReceipts(noRuntime, 1000).length
+  assert.ok(tried > 0, 'the broken runtime was tried')
+  assert.ok(mod.readReceipts(noRuntime, 1000).every((row) => !row.ok))
+  await journeyOf(noRuntimeConfig)
+  assert.equal(mod.readReceipts(noRuntime, 1000).length, tried, 'and not tried again within the TTL')
+
+  // (13) nine blood tests never on the same day: the add-on says so
+  const shifted = (name, days) => {
+    const record = loadRecord()
+    return { ...record, observations: record.observations.map((row) => (row.indicator === name ? { ...row, date: mod.addDays(row.date, days), time: `${mod.addDays(row.date, days)}${row.time.slice(10)}` } : row)) }
+  }
+  const apart = await startFakeMirobody({ record: shifted('hs-CRP', 1) })
+  servers.push(apart)
+  const apartDir = tempDir('apart')
+  mod.writeProfile(apartDir, { age: 53, sex: 'male', risk: FACTS, consent: { version: mod.CONSENT_VERSION, accepted_at: NOW.toISOString() } })
+  const apartJourney = (await journeyOf(configFor(apartDir, apart.url))).journey
+  assert.equal(apartJourney.results.bioage.blocker_zh, '九项血检还没有在同一天测齐。')
+  assert.ok(apartJourney.addons.some((row) => row.item_zh === '九项血检安排在同一天' && row.unlocks_zh === '身体年龄' && !row.self_measurable))
 
   console.log(`journey ok (stages consent → profile → records → first_result → plan → routine; China-PAR ${journey.results.risk.risk_pct}% ${journey.results.risk.category_zh}, phenotypic age at ${journey.results.bioage.checkups} checkups)`)
 } finally {

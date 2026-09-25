@@ -29,7 +29,8 @@ export interface Journey {
   focus_options: Array<{ key: Focus; label_zh: string }>
   records: { status: 'unconfigured' | 'ok' | 'error'; error: string; indicator_count: number; full_checkups: number; latest_checkup: string | null; mirobody_mounted: boolean }
   results: {
-    bioage: { status: 'ok' | 'blocked'; phenoage: number | null; advance: number | null; date: string | null; checkups: number; band_years: number | null; blocker_zh: string; missing: string[] }
+    /** band_verified and band_missing are additions for the model: with band_missing the band is a lower bound. */
+    bioage: { status: 'ok' | 'blocked'; phenoage: number | null; advance: number | null; date: string | null; checkups: number; band_years: number | null; band_verified: boolean; band_missing: string[]; blocker_zh: string; missing: string[] }
     risk: { status: 'ok' | 'blocked'; risk_pct: number | null; category_zh: string; date: string | null; blocker_zh: string; missing_labs: string[]; missing_facts: string[] }
   }
   addons: Array<{ item_zh: string; unlocks_zh: string; self_measurable: boolean; self_key?: SelfKey }>
@@ -75,14 +76,37 @@ const FOCUS_PROMPT: Record<Focus | 'none', { id: string; text_zh: string }> = {
 let lastBuilt: { at: number; journey: Journey } | null = null
 
 export async function buildJourney(context: TrackingContext & { mount: MountState }): Promise<Journey> {
+  return (await buildJourneyFull(context)).journey
+}
+
+/** The journey and the tracking it was built from (retest dates, bands, adherence calendars). */
+export async function buildJourneyFull(context: TrackingContext & { mount: MountState }): Promise<{ journey: Journey; tracking: Tracking }> {
   const tracking = await buildTracking(context)
   const journey = journeyFrom(context, tracking)
   lastBuilt = { at: Date.now(), journey }
-  return journey
+  return { journey, tracking }
 }
 
+/**
+ * The value of a promise, or null when it has not settled within ms. The work
+ * goes on: buildTracking memoizes the promise, so the next call picks it up.
+ */
+export async function within<T>(promise: Promise<T>, ms: number): Promise<{ value: T } | { timeout: true }> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<{ timeout: true }>((resolve) => {
+    timer = setTimeout(() => resolve({ timeout: true }), ms)
+    timer.unref?.()
+  })
+  try {
+    return await Promise.race([promise.then((value) => ({ value })), deadline])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
+/** Age is set and sex is answered (female, male or other). China-PAR's own need for male or female shows in its missing_facts. */
 export function profileComplete(profile: Pick<Profile, 'age' | 'sex'>): boolean {
-  return profile.age != null && (profile.sex === 'male' || profile.sex === 'female')
+  return profile.age != null && profile.sex !== 'unknown'
 }
 
 export function consentAccepted(profile: Pick<Profile, 'consent'>): boolean {
@@ -94,24 +118,36 @@ function clip(text: string, max = DETAIL_MAX): string {
   return chars.length <= max ? text : `${chars.slice(0, max - 1).join('')}…`
 }
 
-/** Retest dates the plan's verdicts give, the earliest per marker. The only dates LongPi suggests a retest on. */
-export function retestsOf(tracking: Tracking): Array<{ marker: string; date: string }> {
-  const earliest = new Map<string, string>()
+/**
+ * Retest dates the plan's verdicts give, the earliest per marker. The only dates LongPi suggests a retest on.
+ * date moves with today once the retest is due; first_due is the day it first became due and does not move.
+ */
+export function retestsOf(tracking: Tracking): Array<{ marker: string; date: string; first_due: string }> {
+  const earliest = new Map<string, { date: string; first_due: string }>()
   for (const item of tracking.items) {
     for (const row of item.verdicts) {
       if (!row.indicator || !row.next_retest) continue
       const seen = earliest.get(row.marker)
-      if (!seen || row.next_retest < seen) earliest.set(row.marker, row.next_retest)
+      const firstDue = row.first_due ?? row.next_retest
+      if (!seen || row.next_retest < seen.date || (row.next_retest === seen.date && firstDue < seen.first_due)) {
+        earliest.set(row.marker, { date: row.next_retest, first_due: firstDue })
+      }
     }
   }
-  return [...earliest.entries()].map(([marker, date]) => ({ marker, date }))
+  return [...earliest.entries()].map(([marker, row]) => ({ marker, ...row }))
     .sort((a, b) => a.date.localeCompare(b.date) || a.marker.localeCompare(b.marker))
+}
+
+/** Labels of the profile questions not answered yet (unknown is not an answer). */
+export function unansweredOf(profile: Profile): string[] {
+  return questionsOf(profile).filter((row) => !row.answered).map((row) => row.label_zh)
 }
 
 function questionsOf(profile: Profile): Journey['profile']['questions'] {
   return [
     { key: 'age', label_zh: '年龄', unlocks_zh: BOTH, answered: profile.age != null },
-    { key: 'sex', label_zh: '性别', unlocks_zh: BOTH, answered: profile.sex !== 'unknown' },
+    // PhenoAge does not use sex; China-PAR does (male or female). Same predicate as profileComplete.
+    { key: 'sex', label_zh: '性别', unlocks_zh: CARDIO, answered: profile.sex !== 'unknown' },
     ...RISK_FACTS.map((fact) => ({
       key: fact, label_zh: RISK_FACT_ZH[fact], unlocks_zh: CARDIO, answered: profile.risk[fact] != null,
       ...(MEN_ONLY.has(fact) ? { men_only: true } : {}),
@@ -131,6 +167,8 @@ function bioageResult(bioage: BioAge): Journey['results']['bioage'] {
     date: last?.date ?? null,
     checkups: bioage.points.length,
     band_years: last ? bioage.band_years : null,
+    band_verified: last ? bioage.band_verified : false,
+    band_missing: last ? [...bioage.band_missing] : [],
     blocker_zh: blocker,
     missing: [...bioage.missing],
   }
@@ -234,7 +272,7 @@ function nextOf(stage: Stage, journey: Omit<Journey, 'stage' | 'next' | 'suggest
       return step('暂时算不出结果', clip(journey.results.bioage.blocker_zh || journey.results.risk.blocker_zh), 'open')
     }
     case 'plan':
-      return step('选一项开始改善', '说出你的方案，或上传医生、长寿师给的方案。', 'plan')
+      return step('制定改善方案', '让 LongPi 按你的检查结果和研究证据起草一份方案，你确认后才保存。', 'plan')
     case 'routine': {
       const open = journey.plan.checkin_items.filter((item) => !item.done_today).length
       if (open > 0) return step('今天的打卡', `还有 ${open} 项待完成`, 'checkin')
@@ -255,7 +293,7 @@ function suggestionsOf(stage: Stage, journey: Omit<Journey, 'stage' | 'next' | '
     picks.push({ id: 'next-checkup', text_zh: '下次体检需要加测哪些项目？' }, { id: 'what-now', text_zh: '用我现有的记录能算出什么？' })
     if (journey.addons.some((row) => row.self_measurable)) picks.push({ id: 'log-self', text_zh: '帮我记录腰围和家庭血压' })
   } else if (stage === 'plan') {
-    picks.push(FOCUS_PROMPT[journey.profile.focus[0] ?? 'none'], { id: 'save-plan', text_zh: '帮我保存我的干预方案' }, { id: 'evidence', text_zh: '有哪些经过研究验证的改善方法？' })
+    picks.push(FOCUS_PROMPT[journey.profile.focus[0] ?? 'none'], { id: 'draft-plan', text_zh: '帮我制定一份改善方案' }, { id: 'save-plan', text_zh: '帮我保存我的干预方案' })
   } else {
     picks.push({ id: 'checkin-all', text_zh: '今天的方案我都完成了' }, { id: 'plan-effect', text_zh: '我的方案有没有效果？' })
     if (journey.reminders.some((row) => row.kind === 'retest' && row.due)) picks.push({ id: 'retest-due', text_zh: '该复测什么了？' })

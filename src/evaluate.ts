@@ -70,6 +70,8 @@ export interface MarkerVerdict {
   combined_with: string[]
   expected: Expectation[]
   next_retest: string | null
+  /** The first date a retest means anything (start + the marker's minimum interval), when a retest is suggested. Stable while next_retest moves with today. */
+  first_due: string | null
 }
 
 export interface ItemSummary {
@@ -298,7 +300,7 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
   const base: MarkerVerdict = {
     item: item.id, item_title: item.title, marker: marker.label, indicator: marker.indicator, unit: marker.unit,
     verdict: '无法判断', reason_zh: '', baseline: null, followup: null, change: null, band: null, direction: 'unknown',
-    confounders: [], combined_with: [], expected: [], next_retest: null,
+    confounders: [], combined_with: [], expected: [], next_retest: null, first_due: null,
   }
   const retestDays = marker.biovar?.min_retest_days ?? DEFAULT_RETEST_DAYS
   if (!marker.indicator) {
@@ -316,11 +318,13 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
   if (!baseline) {
     base.reason_zh = `开始前 ${BASELINE_LOOKBACK_DAYS} 天内没有${marker.label}的结果，没有基线可比。`
     base.next_retest = earliest > input.today ? earliest : null
+    base.first_due = base.next_retest ? earliest : null
     return base
   }
   base.baseline = { date: baseline.date, value: baseline.value }
   if (!followup) {
     base.next_retest = earliest > input.today ? earliest : input.today
+    base.first_due = earliest
     base.reason_zh = earliest > input.today
       ? `开始才 ${Math.max(0, daysBetween(item.start, input.today))} 天。${marker.label}至少要隔 ${retestDays} 天复测才有意义，${earliest} 之后复测。`
       : `开始后还没有复测${marker.label}。现在可以复测了。`

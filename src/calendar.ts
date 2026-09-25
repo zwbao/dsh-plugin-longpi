@@ -2,9 +2,11 @@
 // has no push notifications, and a calendar already knows how to remind. Only
 // retest dates the plan's verdicts give and a daily check-in while the plan
 // has items to tick. RFC 5545: CRLF, lines folded at 75 octets, text escaped.
+// UIDs never contain a date that moves, so importing the file again updates
+// the same events instead of adding new ones.
 
 import { createHash } from 'node:crypto'
-import { addDays } from './interventions.ts'
+import { addDays, daysBetween } from './interventions.ts'
 import { retestsOf, type Journey } from './journey.ts'
 import type { Tracking } from './tracking.ts'
 
@@ -56,17 +58,30 @@ function alarm(description: string, trigger: string): string[] {
   return ['BEGIN:VALARM', 'ACTION:DISPLAY', `DESCRIPTION:${escapeText(description)}`, `TRIGGER:${trigger}`, 'END:VALARM']
 }
 
+/**
+ * The day a retest event sits on: its date while that is still ahead or due
+ * today for the first time; once it is overdue, tomorrow, so the 09:00 alarm
+ * can still fire. The UID stays the same, so a re-import moves the one event.
+ */
+export function retestDay(retest: { date: string; first_due: string }, today: string): { date: string; sequence: number } {
+  if (retest.first_due >= today) return { date: retest.date > today ? retest.date : today, sequence: 0 }
+  return { date: addDays(today, 1), sequence: Math.max(0, daysBetween(retest.first_due, today)) }
+}
+
 export function buildCalendar(journey: Journey, tracking: Tracking, opts: { now: Date }): string {
   const dtstamp = stamp(opts.now)
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', `PRODID:${PRODID}`, 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', 'X-WR-CALNAME:LongPi']
+  const version = tracking.plan?.version ?? journey.plan.version ?? 0
   for (const retest of retestsOf(tracking)) {
     const summary = `LongPi 复测：${retest.marker}`
+    const day = retestDay(retest, journey.today)
     lines.push(
       'BEGIN:VEVENT',
-      `UID:longpi-retest-${slug(retest.marker)}-${retest.date}${UID_HOST}`,
+      `UID:longpi-retest-${slug(retest.marker)}-v${version}${UID_HOST}`,
       `DTSTAMP:${dtstamp}`,
-      `DTSTART;VALUE=DATE:${compactDate(retest.date)}`,
-      `DTEND;VALUE=DATE:${compactDate(addDays(retest.date, 1))}`,
+      `SEQUENCE:${day.sequence}`,
+      `DTSTART;VALUE=DATE:${compactDate(day.date)}`,
+      `DTEND;VALUE=DATE:${compactDate(addDays(day.date, 1))}`,
       `SUMMARY:${escapeText(summary)}`,
       `DESCRIPTION:${escapeText(`LongPi 按方案给出的${retest.marker}复测日期。结果进入 Mirobody 后，LongPi 会判断变化是否超出正常波动。`)}`,
       'TRANSP:TRANSPARENT',

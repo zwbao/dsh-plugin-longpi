@@ -26,6 +26,18 @@ export const SELF_DEVICE_NAMES: Partial<Record<SelfKey, string[]>> = {
   weight: ['bodyMasss', 'bodyMass'],
 }
 
+/**
+ * Other ways a record names the same measure: a checkup row with no LOINC code
+ * (腰围), a different LOINC code for it (3141-9 is a measured body weight), or
+ * an English report name. mergeSelf counts all of them as the same thing.
+ */
+export const SELF_ALIASES: Record<SelfKey, { names: string[]; loinc: string[] }> = {
+  waist: { names: ['腰围', 'waist', 'waist circumference', 'WC'], loinc: ['8280-0'] },
+  sbp: { names: ['收缩压', '高压', 'sbp', 'systolic', 'systolic blood pressure', 'systolicPressure'], loinc: ['8480-6'] },
+  dbp: { names: ['舒张压', '低压', 'dbp', 'diastolic', 'diastolic blood pressure', 'diastolicPressure'], loinc: ['8462-4'] },
+  weight: { names: ['体重', 'weight', 'body weight', 'bodyMass'], loinc: ['29463-7', '3141-9'] },
+}
+
 export const SELF_SUFFIX = '（自测）'
 
 export interface SelfRow {
@@ -163,11 +175,38 @@ export function addSelf(dataDir: string, entries: unknown[], opts: { today: stri
     }
     saved.push(row)
   }
+  refuseSwappedPressure(saved, problems)
   if (saved.length > 0) {
     mkdirSync(dataDir, { recursive: true, mode: 0o700 })
     appendFileSync(path(dataDir), saved.map((row) => `${JSON.stringify(row)}\n`).join(''), { mode: 0o600 })
   }
   return { saved, problems }
+}
+
+/**
+ * A systolic reading at or below the diastolic one of the same day, in the same
+ * call, is almost always a swapped pair ('120/80' saved as 80/120). Both rows of
+ * such a pair are dropped from `saved` so the risk model never sees them. Pairs
+ * are matched in the order given, per date.
+ */
+function refuseSwappedPressure(saved: SelfRow[], problems: string[]): void {
+  const dates = new Set(saved.filter((row) => row.key === 'sbp').map((row) => row.date))
+  const drop = new Set<SelfRow>()
+  for (const date of dates) {
+    const sbp = saved.filter((row) => row.key === 'sbp' && row.date === date)
+    const dbp = saved.filter((row) => row.key === 'dbp' && row.date === date)
+    for (let i = 0; i < Math.min(sbp.length, dbp.length); i += 1) {
+      const high = sbp[i] as SelfRow
+      const low = dbp[i] as SelfRow
+      if (high.value > low.value) continue
+      drop.add(high).add(low)
+      problems.push(`收缩压 ${fmt(high.value)} ${high.value === low.value ? '等于' : '低于'}舒张压 ${fmt(low.value)}，请核对是否填反。这一对（${date}）没有保存。`)
+    }
+  }
+  if (drop.size === 0) return
+  const kept = saved.filter((row) => !drop.has(row))
+  saved.length = 0
+  saved.push(...kept)
 }
 
 export function deleteSelf(dataDir: string, id: string): boolean {
