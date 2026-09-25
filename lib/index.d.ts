@@ -787,9 +787,10 @@ interface BridgeStatus {
   error?: string;
 }
 /**
- * What the Mirobody terminology bridge gets: the same short list as a skill script (path, language) plus what it
- * needs to import mirobody: the real home (a --user install lives there), the Python path if one is set, and
- * MIROBODY_HOME. Never the rest of the harness's environment (API keys, tokens). Not a sandbox either.
+ * What the Mirobody terminology bridge gets for the status check: the same list the mounted Mirobody plugin gives
+ * it for every tool call (path, home, language, TMPDIR, MIROBODY_HOME; no user site-packages, no PYTHONPATH), so
+ * the status says what the tools will find. Never the rest of the harness's environment (API keys, tokens). Not a
+ * sandbox either.
  */
 declare function bridgeEnv(mirobodyHome: string): Record<string, string>;
 //#endregion
@@ -1480,6 +1481,8 @@ interface MarkerVerdict {
   next_retest: string | null;
   /** The first date a retest means anything (start + the marker's minimum interval), when a retest is suggested. Stable while next_retest moves with today. */
   first_due: string | null;
+  /** Not found because the record was not read whole (never a sign the test is missing). */
+  unread?: boolean;
 }
 interface ItemSummary {
   id: string;
@@ -1535,6 +1538,8 @@ interface EvaluateInput {
   effects: EffectRow[];
   /** Indicator names whose readings failed to read or came back cut: judged from nothing, never from what is left. */
   unread?: readonly string[];
+  /** The record failed to read, or its catalogue came back cut: a marker not found may be in the part not read. */
+  record_unread?: 'failed' | 'cut';
 }
 declare function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: EvaluateInput): MarkerVerdict;
 declare function evaluatePlan(input: EvaluateInput): ItemSummary[];

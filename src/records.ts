@@ -18,8 +18,10 @@ const CACHE_TTL_MS = 60_000
 /** A read that failed, in part or whole, is kept only long enough for one turn: the next one tries again. */
 const FAILED_TTL_MS = 10_000
 const SERIES_CHUNK = 12
-/** Raw readings per indicator asked of Mirobody; a series that fills it was cut. */
+/** Raw readings per indicator asked of Mirobody; a series that fills it is read again for the older ones. */
 const RAW_LIMIT = 500
+/** Reads of one series before it is called cut: 20 x 500 readings (a home cuff twice a day for over 13 years). */
+const RAW_PAGES = 20
 const LOG_WINDOW_DAYS = 90
 
 export interface RecordSnapshot {
@@ -357,11 +359,21 @@ export async function loadSeries(
         fail(chunk, `${table.error.kind}: ${table.error.message}`)
         continue
       }
-      const counts = new Map<string, number>()
+      const rows = new Map<string, Array<Record<string, string>>>()
       for (const row of table.rows) {
         const indicator = (row.indicator ?? '').trim()
-        if (!indicator) continue
-        counts.set(indicator, (counts.get(indicator) ?? 0) + 1)
+        if (indicator) rows.set(indicator, [...(rows.get(indicator) ?? []), row])
+      }
+      // A series that filled the limit lost its oldest readings: read those again, a window ending earlier each time.
+      const full = options.resolution === 'raw' ? chunk.filter((name) => (rows.get(name)?.length ?? 0) >= RAW_LIMIT) : []
+      const stillCut: string[] = []
+      for (const name of full) {
+        const older = await readOlder(config, name, options, rows.get(name) ?? [])
+        if (older) rows.set(name, older)
+        else stillCut.push(name)
+      }
+      for (const row of [...rows.values()].flat()) {
+        const indicator = (row.indicator ?? '').trim()
         const value = cellNumber(options.resolution === 'raw' ? row.value : row.avg)
         const date = options.resolution === 'raw' ? (row.date || (row.time ?? '').slice(0, 10)) : (row.period ?? '').slice(0, 10)
         if (value == null || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue
@@ -370,12 +382,11 @@ export async function loadSeries(
         if ((row.system ?? '').toLowerCase() === 'loinc' && row.code && !series.loinc) series.loinc = row.code
         series.points.push({ date, time: row.time ?? date, value, unit: (row.unit ?? series.unit).trim(), ...(row.file ? { file: row.file } : {}) })
       }
-      // Cut: a series that filled the row limit, or a table Mirobody marked cut (by its limit or its text cap)
-      // with no series to pin it on.
-      const full = options.resolution === 'raw' ? chunk.filter((name) => (counts.get(name) ?? 0) >= RAW_LIMIT) : []
+      // Cut: a series still full after its older readings were read again, or a table Mirobody marked cut (by its
+      // limit or its text cap) with no series to pin it on.
       const marked = table.meta.truncated || (payload && typeof payload === 'object' && (payload as { truncated?: unknown }).truncated === true)
         || textOf(payload).includes('\n… cut at ')
-      out.cut.push(...(full.length > 0 ? full : marked ? chunk : []))
+      out.cut.push(...(full.length > 0 ? stillCut : marked ? chunk : []))
     }
     out.failed = [...new Set(out.failed)]
     out.cut = [...new Set(out.cut)].filter((name) => !out.failed.includes(name))
@@ -383,6 +394,47 @@ export async function loadSeries(
     for (const series of Object.values(out.series)) series.points.sort((a, b) => a.time.localeCompare(b.time))
     return out
   }, (value) => value.failed.length > 0)
+}
+
+function rowDate(row: Record<string, string>): string {
+  return row.date || (row.time ?? '').slice(0, 10)
+}
+
+/**
+ * Every raw reading of one series in the window, given the first read that filled the limit. Mirobody returns the
+ * newest readings first and drops the oldest, so each further read ends on the oldest day returned so far; that
+ * day is taken whole from the later read. Null when the readings cannot all be read (a read failed, one day
+ * alone fills the limit, or RAW_PAGES reads were not enough): the series is then cut.
+ */
+async function readOlder(
+  config: Config,
+  name: string,
+  options: { start: string; end: string },
+  first: Array<Record<string, string>>,
+): Promise<Array<Record<string, string>> | null> {
+  let page = first
+  const kept: Array<Record<string, string>> = []
+  // Mirobody gives each row the size of the whole series in the window; when it does, the pieces must add up to it.
+  const total = Number(first[0]?.total)
+  for (let reads = 1; reads < RAW_PAGES; reads += 1) {
+    const dates = page.map(rowDate).filter((date) => /^\d{4}-\d{2}-\d{2}$/.test(date)).sort()
+    const oldest = dates[0]
+    // One day alone fills the limit: no earlier end can split it.
+    if (!oldest || dates.at(-1) === oldest) return null
+    kept.push(...page.filter((row) => rowDate(row) > oldest))
+    const args = { ...memberArgs(config.member), indicators: [name], start: options.start, end: oldest, resolution: 'raw', aggregate: 'none', limit: RAW_LIMIT }
+    const call = await callMcpTool({ url: config.mcpUrl, token: config.mcpToken, name: 'query_health_indicators', args, timeoutMs: config.timeoutMs })
+    if (call.success === false) return null
+    const table = tableOf(payloadOf(call))
+    if (!table || table.error) return null
+    const next = table.rows.filter((row) => (row.indicator ?? '').trim() === name && rowDate(row) <= oldest)
+    if (next.length < RAW_LIMIT) {
+      const all = [...kept, ...next]
+      return Number.isInteger(total) && total > 0 && all.length !== total ? null : all
+    }
+    page = next
+  }
+  return null
 }
 
 function textOf(payload: unknown): string {

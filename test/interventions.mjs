@@ -121,9 +121,11 @@ try {
   assert.equal(early.verdict, '无法判断')
   assert.equal(early.next_retest, '2026-10-02')
 
+  // 腰围 has no variation row: it is found under its report name, compared, and not judged against a band
   const waist = byItem['减少久坐'].verdicts[0]
   assert.equal(waist.verdict, '无法判断')
-  assert.equal(waist.indicator, null)
+  assert.equal(waist.indicator, 'Waist Circumference-WC')
+  assert.match(waist.reason_zh, /缺少腰围的个体内变异数据/)
 
   assert.equal(byItem['快走'].adherence.source, 'wearable')
   assert.ok(byItem['快走'].adherence.rate > 0.3 && byItem['快走'].adherence.rate < 1)
@@ -131,7 +133,7 @@ try {
   assert.equal(byItem['鱼油'].adherence.level, 'good')
   assert.equal(byItem['地中海饮食'].adherence.source, 'check_in')
 
-  assert.ok(tracking.suggestions.some((row) => row.kind === 'missing_marker'), 'the missing waist measurement is a next step')
+  assert.equal(tracking.suggestions.some((row) => row.kind === 'missing_marker'), false, 'waist is on file: no test to add')
   assert.ok(tracking.suggestions.some((row) => row.kind === 'retest'))
   for (const row of tracking.suggestions) assert.doesNotMatch(row.text_zh, /\d+\s*(mg|毫克|粒|片)/, 'no dose in a suggestion')
 
@@ -294,6 +296,24 @@ try {
   assert.equal(steps[0].text_zh, `空腹血糖：${together}下次调整一次只改一项。`)
   for (const row of mod.suggestNext(summaries, { today: TODAY })) assert.doesNotMatch(row.text_zh, /来自|组合/)
 
+  // A marker not found in a record that failed to read, or whose catalogue was cut, is never "add the test"
+  const notFound = { asked: '超敏C反应蛋白', label: '超敏C反应蛋白', indicator: null, unit: '', biovar: null }
+  const crpOnly = { items: [itemOf('c1', '地中海饮食', ['超敏C反应蛋白'])] }
+  const unreadInput = (recordUnread) => ({
+    plan: crpOnly, goals: [], today: TODAY, markers: { 超敏C反应蛋白: notFound }, series: {},
+    adherence: { c1: followed }, courses: [], checkins: [], biovar: bv, effects: [], record_unread: recordUnread,
+  })
+  for (const [recordUnread, reason] of [['failed', /^记录读取失败，没有读到超敏C反应蛋白的结果，这次无法判断。$/], ['cut', /^指标目录没有读全，超敏C反应蛋白可能在没有读到的部分，这次无法判断。$/]]) {
+    const rows = mod.evaluatePlan(unreadInput(recordUnread))
+    assert.match(rows[0].verdicts[0].reason_zh, reason)
+    assert.equal(mod.suggestNext(rows, { today: TODAY }).some((row) => row.kind === 'missing_marker'), false, recordUnread)
+  }
+  // A marker with no variation row is found under its report name (腰围 is Waist Circumference-WC in the record)
+  assert.equal(mod.resolveMarkers(['腰围'], records.indicators, bv)[0].indicator, 'Waist Circumference-WC')
+  const readWhole = mod.evaluatePlan(unreadInput(undefined))
+  assert.match(readWhole[0].verdicts[0].reason_zh, /^记录里还没有超敏C反应蛋白。下次检查时加测/)
+  assert.equal(mod.suggestNext(readWhole, { today: TODAY }).filter((row) => row.kind === 'missing_marker').length, 1)
+
   // 7d: a goal the skill cannot read is named, and no "at the goal" value is shown for it
   const badUnit = await mod.modelGoals({ config, dataDir, skillsHome: home, catalog, records, today: TODAY }, [{ marker: '空腹血糖', value: 5.0, unit: 'mmol/mol' }])
   const badCard = badUnit.models.find((row) => row.model === 'phenoage')
@@ -324,6 +344,18 @@ try {
   }
   assert.equal(plan([{ category: 'diet', title: '控糖', detail: '空腹血糖 5.6 mmol/L，甘油三酯 42.6 mg/dL', start: TODAY }]).plan.items[0].detail, '空腹血糖 5.6 mmol/L，甘油三酯 42.6 mg/dL', 'a concentration is not a dose')
   assert.equal(plan([{ category: 'weight', title: '减重', detail: '目标 70 千克', start: TODAY }]).plan.items[0].detail, '目标 70 千克', '千克 is a weight')
+  // A number that is part of a product's name stays; the item links to that product, never to a neighbour
+  for (const title of ['维生素B12片', '辅酶Q10胶囊', 'Omega-3 胶囊', '维生素K2 片', '维生素D3滴剂']) {
+    const kept = plan([{ category: 'supplement', title, start: TODAY }])
+    assert.equal(kept.plan.items[0].title, title)
+    assert.equal(kept.warnings.some((line) => line.includes('剂量没有保存')), false, title)
+  }
+  assert.equal(plan([{ category: 'supplement', title: '维生素D2000IU', start: TODAY }]).plan.items[0].title, '维生素D', 'glued to a Latin unit it is an amount')
+  const b12 = mod.normalizePlan({ items: [{ category: 'supplement', title: '维生素B12片', start: TODAY }] }, { today: TODAY, medications: [{ name: '维生素B6' }], previous: null })
+  assert.equal(b12.plan.items[0].mirobody.medication, '维生素B12片', 'not linked to 维生素B6')
+  const d3 = mod.normalizePlan({ items: [{ category: 'supplement', title: '维生素D3 2000IU', start: TODAY }] }, { today: TODAY, medications: [{ name: '维生素D3' }, { name: '维生素D' }], previous: null })
+  assert.equal(d3.plan.items[0].title, '维生素D3')
+  assert.equal(d3.plan.items[0].mirobody.medication, '维生素D3')
   const medName = plan([{ category: 'drug', title: '二甲双胍', medication: '二甲双胍 500mg 每日两次', start: TODAY }])
   assert.equal(medName.plan.items[0].mirobody.medication, '二甲双胍 每日两次')
   const titled = plan([{ category: 'exercise', title: '快走', detail: '每天 30 分钟，饭后', start: TODAY }], { title: '维生素D 2000IU 方案', note: '每天 2000 IU' })
@@ -388,6 +420,11 @@ try {
     const older = await mod.buildTracking({ config: run.config, dataDir: run.dir, skillsHome: home, catalog, records: { ...run.records, profile: mod.readProfile(run.dir) }, today: TODAY })
     assert.equal(older.bioage.runs, 4, 'all four checkups are computed again')
     assert.ok(older.bioage.points.every((row, i) => row.phenoage !== run.tracking.bioage.points[i].phenoage))
+    // weeks later, with the same saved age, the past checkups are not computed again at a lower age
+    mod.invalidateTracking()
+    const later = await mod.buildTracking({ config: run.config, dataDir: run.dir, skillsHome: home, catalog, records: { ...run.records, profile: mod.readProfile(run.dir) }, today: '2026-11-15' })
+    assert.equal(later.bioage.runs, 0, 'nothing computed again as the calendar moves')
+    assert.deepEqual(later.bioage.points.map((row) => row.phenoage), older.bioage.points.map((row) => row.phenoage))
   } finally {
     await run.close()
   }
@@ -493,6 +530,47 @@ try {
   } finally {
     await cutSeries.close()
     rmSync(cutDir, { recursive: true, force: true })
+  }
+
+  // A home cuff twice a day fills Mirobody's 500-row limit: the older readings are read again, never judged as cut
+  {
+    const record = JSON.parse(readFileSync(join(root, 'fixtures', 'mirobody', 'record.json'), 'utf8'))
+    record.observations = record.observations.filter((row) => row.indicator !== 'systolicPressures')
+    let readings = 0
+    for (let day = new Date('2025-10-01T00:00:00Z'); day <= new Date('2026-09-20T00:00:00Z'); day.setUTCDate(day.getUTCDate() + 1)) {
+      const date = day.toISOString().slice(0, 10)
+      for (const hour of ['07', '21']) {
+        record.observations.push({ indicator: 'systolicPressures', name: '', system: 'device', code: 'systolicPressures', unit: 'mmHg', date, time: `${date} ${hour}:40:00`, value: String(date >= '2026-05-01' ? 124 : 142), file: '' })
+        readings += 1
+      }
+    }
+    // One day alone past the limit cannot be split by date: that series stays cut.
+    for (let i = 0; i < 520; i += 1) record.observations.push({ indicator: 'heartRates', name: '', system: 'device', code: 'heartRates', unit: 'bpm', date: '2026-09-01', time: `2026-09-01 ${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:00`, value: '70', file: '' })
+    const dense = await startFakeMirobody({ record })
+    const denseDir = mkdtempSync(join(tmpdir(), 'longpi-interventions-dense-'))
+    try {
+      mod.writeProfile(denseDir, { age: 53, sex: 'male', risk: facts })
+      const denseConfig = { ...config, mcpUrl: dense.url, dataDir: denseDir }
+      mod.invalidateRecords()
+      mod.invalidateTracking()
+      const read = await mod.loadSeries(denseConfig, ['systolicPressures', 'heartRates'], { start: '2025-08-01', end: TODAY, resolution: 'raw' })
+      assert.equal(read.series.systolicPressures.points.length, readings, 'every reading of the dense series')
+      assert.equal(new Set(read.series.systolicPressures.points.map((point) => point.time)).size, readings, 'none twice')
+      assert.deepEqual(read.cut, ['heartRates'])
+      assert.ok(dense.calls.length <= 6, `a few reads (${dense.calls.length})`)
+      const recs = await mod.loadRecords(denseConfig, denseDir, '/nonexistent/plugin')
+      const drafted = mod.normalizePlan({ title: '减盐', items: [{ category: 'diet', title: '减盐', start: '2026-03-01', markers: ['收缩压'] }] }, { today: TODAY, medications: [], previous: null })
+      mod.savePlan(denseDir, drafted.plan)
+      const denseTracking = await mod.buildTracking({ config: denseConfig, dataDir: denseDir, skillsHome: home, catalog, records: recs, today: TODAY })
+      const verdict = denseTracking.items[0].verdicts[0]
+      assert.equal(verdict.indicator, 'systolicPressures')
+      assert.doesNotMatch(verdict.reason_zh, /没有读全/)
+      assert.ok(verdict.baseline && verdict.followup && verdict.change, verdict.reason_zh)
+      assert.match(verdict.reason_zh, /变化 -13%/)
+    } finally {
+      await dense.close()
+      rmSync(denseDir, { recursive: true, force: true })
+    }
   }
 
   console.log(`interventions ok (${tracking.items.length} items, ${tracking.items.flatMap((item) => item.verdicts).length} verdicts, phenotypic age at ${tracking.bioage.points.length} checkups, band ±${tracking.bioage.band_years.toFixed(1)} y)`)

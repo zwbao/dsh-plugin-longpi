@@ -42,12 +42,16 @@ const MARKER_NUMBER = /\b(?:ldl|hdl|tg|tc|crp|hs-?crp|sbp|dbp|bmi|hba1c|a1c|glu|
 // A value in Chinese numerals: a decimal (六点八), or a number of tens or more (一百五, 七十五). A lone 一 or 两 is a
 // word as often as a number (一直, 两次) and is not read as one.
 const CN_VALUE = '(?:[零〇一二两三四五六七八九十百千万]+点[零〇一二两三四五六七八九]+|[零〇一二两三四五六七八九]*[十百千万][零〇一二两三四五六七八九十百千万]*)'
+// After a health word, a single digit that ends the word is a value too (血糖七, 胆固醇是五); one that starts a word
+// (一直, 一周) is not.
+const CN_HEALTH_VALUE = `(?:${CN_VALUE}|(?<!第)[一二三四五六七八九](?![\\u4e00-\\u9fff]))`
 // Words a health value follows (steps are not one). Up to eight more characters may name the marker in full
 // (糖化血红蛋白, 空腹血糖, 低密度脂蛋白) before the number; a count (一百天, 十次) is not a value.
 const HEALTH_WORD = '(?:血压|收缩压|舒张压|高压|低压|血糖|体重|腰围|心率|脉搏|胆固醇|甘油三酯|血脂|脂蛋白|糖化|血红蛋白|尿酸|肌酐|反应蛋白|ldl|hdl|hba1c|a1c|crp|bmi)'
 // The whole number, never a part of it: 一百五十天 is a count, not 一百五 followed by 十天.
-const COUNT_AFTER = '(?![零〇一二两三四五六七八九十百千万点])(?!\\s*(?:个)?(?:天|次|项|条|周|星期|个月|月|年|分钟|小时|点钟|步|遍|岁))'
-const HEALTH_CN = new RegExp(`${HEALTH_WORD}[^，,。.！!？?；;、\\n]{0,8}?${CN_VALUE}${COUNT_AFTER}`, 'i')
+// A date (十月十日) and 十分 (very) are not values either.
+const COUNT_AFTER = '(?![零〇一二两三四五六七八九十百千万点])(?!\\s*(?:个)?(?:天|次|项|条|周|星期|个月|月|日|号|年|分|小时|点钟|步|遍|岁))'
+const HEALTH_CN = new RegExp(`${HEALTH_WORD}[^，,。.！!？?；;、\\n]{0,8}?${CN_HEALTH_VALUE}${COUNT_AFTER}`, 'i')
 // Blood pressure as a/b in Chinese numerals: 一百五十/九十, 一百四比九十.
 const CN_PRESSURE = new RegExp(`${CN_NUMBER}\\s*[/／比]\\s*${CN_NUMBER}`)
 

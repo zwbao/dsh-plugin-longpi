@@ -15,10 +15,15 @@ const LATIN_UNIT = '(?:mcg|µg|μg|ug|mg|iu|ml|g|milligrams?|micrograms?|grams?|
 const CN_UNIT = '(?:毫克|微克|国际单位|单位|(?<!千)克|毫升|粒|片|胶囊|丸|滴)'
 // Not a dose when a volume follows: mg/dL, g/L, 毫克/分升.
 const NOT_CONCENTRATION = '(?!\\s*[/／]\\s*(?:d?l|ml|分升|升|毫升)(?![A-Za-z]))'
+// A number glued to a name is part of the name, not an amount: B12片, Q10胶囊, D3滴剂, Omega-3 胶囊 (a range, 5-10 mg,
+// still is one). Glued to a Latin unit it is an amount all the same: D2000IU.
+const LEAD = '(?<![A-Za-z0-9.])(?<![A-Za-z]-)'
+const GLUED_UNIT = '(?:mcg|µg|μg|ug|mg|iu|ml|g)(?![A-Za-z])'
+const FIRST = `(?:${LEAD}${DIGITS}|${CN_NUMBER})`
 // "2 x 500mg" and "500mg/天" go as one piece, so neither half is left behind.
-const TIMES = `(?:(?:${DIGITS}|${CN_NUMBER})\\s*[x×*]\\s*)?`
+const TIMES = `${FIRST}\\s*[x×*]\\s*(?:${DIGITS}|${CN_NUMBER})`
 const PER = '(?:\\s*[/／]\\s*(?:天|日|次|d|day)(?![A-Za-z]))?'
-const SOURCE = `${TIMES}(?:${DIGITS}|${CN_NUMBER})\\s*(?:${LATIN_UNIT}|${CN_UNIT})${NOT_CONCENTRATION}${PER}`
+const SOURCE = `(?:(?:${TIMES}|${FIRST})\\s*(?:${LATIN_UNIT}|${CN_UNIT})|${DIGITS}${GLUED_UNIT})${NOT_CONCENTRATION}${PER}`
 
 /** A fresh pattern: `g` for replacing, none for testing (a global pattern keeps lastIndex between tests). */
 export function dosePattern(flags = 'i'): RegExp {

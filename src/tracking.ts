@@ -192,6 +192,7 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
     }
   }
 
+  if (context.records.record_status === 'error') errors.push(readFailed(context.records))
   const names = [...new Set([...plan.items.flatMap((item) => item.markers), ...goals.map((goal) => goal.marker)])]
   const resolvedList = resolveMarkers(names, context.records.indicators, reference.biovar)
   const markers: Record<string, ResolvedMarker> = Object.fromEntries(resolvedList.map((row) => [row.asked, row]))
@@ -247,6 +248,7 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
     plan, goals, today: context.today, markers, series, adherence, courses, checkins, biovar: reference.biovar, effects: reference.effects,
     // A marker whose readings failed to read is not judged from what is left: it says the read failed.
     unread: [...labs.failed, ...labs.cut],
+    record_unread: context.records.record_status === 'error' ? 'failed' : context.records.catalog_truncated ? 'cut' : undefined,
   })
   const suggestions = suggestNext(items, { today: context.today, levers })
   const charts = chartsFor(plan, resolvedList, series, reference, goals)
@@ -381,7 +383,7 @@ async function checkupDays(context: TrackingContext, pairs: readonly Pair[]): Pr
   return { byDate, complete, error: '' }
 }
 
-/** What one checkup's phenotypic age is computed from; a stored result with another key is stale. */
+/** What one checkup's phenotypic age is computed from (with the age as saved); a stored result with another key is stale. */
 function inputsKey(context: TrackingContext, date: string, measurements: MeasurementIn[], age: number): string {
   const version = [context.catalog.version, context.catalog.revision]
   return createHash('sha1').update(JSON.stringify([date, measurements.map((row) => [row.key, row.value, row.unit]), age, version])).digest('hex').slice(0, 16)
@@ -418,7 +420,9 @@ async function ensureBioAge(context: TrackingContext, reference: Reference): Pro
   const wanted = new Map(checkups.map((date) => {
     const measurements = latestMeasurements(pairs, days.byDate, date)
     const age = ageOn(date, context.today, ageNow)
-    return [date, { measurements, age, key: inputsKey(context, date, measurements, age) }]
+    // Keyed on the age as saved, not the age worked out from today: the saved age does not grow with the calendar,
+    // so a key on the worked-out age would recompute a past checkup every few weeks at an ever lower age.
+    return [date, { measurements, age, key: inputsKey(context, date, measurements, ageNow) }]
   }))
   const have = currentRows(context.dataDir, wanted)
   let runs = 0
