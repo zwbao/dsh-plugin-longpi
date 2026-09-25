@@ -100,6 +100,18 @@
   .pv-msg-user { display: flex; justify-content: flex-end; }
   .pv-msg-user span { background: var(--dsw-alias-interactive-bg-hover); padding: 8px 14px; border-radius: 16px; }
   .pv-done { position: fixed; left: 16px; bottom: 16px; font-size: 12px; color: var(--dsw-alias-label-tertiary); }
+  /* A rough DSH settings panel (dsh-client-ui-settings-general): nav on the left, the section in the content column. */
+  .pv-settings-mask { position: fixed; inset: 0; background: var(--dsw-alias-bg-mask-1); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .pv-settings { width: min(920px, calc(100vw - 48px)); height: min(760px, calc(100vh - 48px)); display: flex; border-radius: 20px; overflow: hidden; background: var(--dsw-alias-bg-layer-2); box-shadow: var(--dsw-elevation-prominent); }
+  .pv-settings-nav { width: 200px; flex: none; padding: 20px 12px; background: var(--dsw-specific-sidebar-fill); border-right: .5px solid var(--dsw-alias-border-l3); }
+  .pv-settings-nav h2 { margin: 0 10px 14px; font-size: 16px; font-weight: 500; }
+  .pv-settings-item { height: 34px; display: flex; align-items: center; padding: 0 10px; border-radius: 10px; font-size: 14px; color: var(--dsw-alias-label-secondary); }
+  .pv-settings-item.on { background: var(--dsw-alias-interactive-bg-active); color: var(--dsw-alias-label-primary); font-weight: 500; }
+  .pv-settings-body { flex: 1; min-width: 0; overflow-y: auto; padding: 28px 32px; }
+  /* A chat transcript with LongPi's cards in DSH's tool-call rows. */
+  .pv-transcript { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 28px 24px; }
+  .pv-transcript .pv-msg { width: min(744px, 100%); }
+  .pv-callrow { width: min(744px, 100%); }
 </style>
 </head>
 <body>
@@ -130,7 +142,12 @@
     self: (DATA && DATA.self) || readSync('fixtures/self.json') || { rows: [] },
     planDraft: (DATA && DATA.planDraft) || readSync('fixtures/plan-draft.json'),
     followup: (DATA && DATA.followup) || readSync('fixtures/followup.json'),
+    indicators: (DATA && DATA.indicators) || readSync('fixtures/indicators.json'),
+    connection: (DATA && DATA.connection) || readSync('fixtures/connection.json'),
   }
+  // ?tab=: open the page on a tab (the page remembers the tab in localStorage).
+  if (params.get('tab')) { try { localStorage.setItem('dsh-plugin-longpi.page-tab', params.get('tab')) } catch {} }
+  else { try { localStorage.removeItem('dsh-plugin-longpi.page-tab') } catch {} }
   // Follow-up as a fresh install has it: off, no channel, nothing sent.
   const FOLLOWUP_OFF = {
     settings: { enabled: false, checkin_time: '21:00', retest_time: '09:00', weekly: { day: 7, time: '20:00' }, desktop: true, webhook: null, detail: 'minimal', quiet: null },
@@ -159,7 +176,9 @@
     const tracking = clone(base.tracking)
     const planDraft = clone(base.planDraft)
     let followup = clone(base.followup)
-    if (!stage || stage === journey.stage) return { journey, board, tracking, planDraft, followup }
+    let indicators = clone(base.indicators)
+    let connection = clone(base.connection)
+    if (!stage || stage === journey.stage) return { journey, board, tracking, planDraft, followup, indicators, connection }
     const order = ['consent', 'profile', 'records', 'first_result', 'plan', 'routine']
     const at = order.indexOf(stage)
     journey.stage = stage
@@ -172,7 +191,9 @@
       journey.profile.questions.forEach((row) => { row.answered = false })
     }
     if (at < 3) {
-      journey.records = { status: 'unconfigured', error: '', indicator_count: 0, full_checkups: 0, latest_checkup: null, mirobody_mounted: true }
+      journey.records = { status: 'unconfigured', error: '', indicator_count: 0, full_checkups: 0, latest_checkup: null, mirobody_mounted: true, read_errors: [], missing_reads: [], summary: null }
+      indicators = { record: { status: 'none', error: '' }, updated_at: '', groups: [] }
+      connection = { source: 'none', url_masked: '', token_set: false, status: 'none', summary: null }
       journey.changes = []
       journey.self.latest = []
       board.records = { status: 'unconfigured', error: '', indicator_count: 0, indicators: [], medications: [] }
@@ -208,7 +229,7 @@
       followup = clone(FOLLOWUP_OFF)
       journey.followup = { enabled: false, channels: [], next_at: null }
     }
-    return { journey, board, tracking, planDraft, followup }
+    return { journey, board, tracking, planDraft, followup, indicators, connection }
   }
   // ?variant=: the real server's edge cases. noaddons = a first result held up
   // only by profile answers (next.action 'profile', no add-ons); recerror = a
@@ -258,14 +279,17 @@
       j.records = { ...j.records, full_checkups: 0, latest_checkup: null }
     }
     if (variant === 'recerror') {
-      const error = 'Mirobody MCP 返回 401：个人访问令牌已过期或被撤销，请在 Mirobody 网页的“设置 → MCP”中重新生成地址后再运行安装命令'
+      const error = 'Mirobody MCP 返回 401：个人访问令牌已过期或被撤销，请在 Mirobody 网页重新生成地址'
       j.records = { ...j.records, status: 'error', error }
+      data.connection = { ...data.connection, status: 'error', error }
       j.next = { stage: 'records', title_zh: '连接体检记录', detail_zh: `记录读取失败：${error}`, action: 'records' }
       data.board.records = { ...data.board.records, status: 'error', error }
     }
     return data
   }
   const state = variantData(stageData(STAGE), params.get('variant'))
+  if (params.get('variant') === 'indfail') state.indicators = null
+  if (params.get('variant') === 'trackfail') state.tracking = null
   if (params.get('variant') === 'nodraft') state.planDraft = { brief: { ...state.planDraft.brief, priorities: [] }, draft: null }
   state.self = clone(base.self)
   if (STAGE && ['consent', 'profile', 'records'].includes(STAGE)) state.self.rows = []
@@ -287,7 +311,34 @@
     const j = state.journey
     if (path.endsWith('/journey')) return json(j)
     if (path.endsWith('/board')) return json(state.board)
-    if (path.endsWith('/tracking')) return json(state.tracking)
+    if (path.endsWith('/tracking')) return state.tracking ? json(state.tracking) : json({ ok: false, error: '方案评判没有算完（技能脚本超时）' }, 500)
+    if (path.endsWith('/indicators')) return state.indicators ? json(state.indicators) : json({ ok: false, error: 'Mirobody 读取超时' }, 502)
+    if (path.endsWith('/indicators/detail')) {
+      const id = u.searchParams.get('id')
+      const row = (state.indicators ? state.indicators.groups : []).flatMap((group) => group.indicators).find((item) => item.id === id)
+      if (!row) return json({ ok: false, error: '没有这一项' }, 404)
+      const files = { '2025-10-18': '2025-10 年度体检报告.pdf', '2026-01-20': '2026-01 复查.pdf', '2026-04-22': '2026-04 复查.pdf', '2026-08-26': '2026-08 年度体检报告.pdf' }
+      const all_points = row.latest && row.latest.text ? [{ date: row.latest.date, value: null, text: row.latest.text, unit: row.unit, file: files[row.latest.date] }]
+        : row.points.map((point) => ({ ...point, unit: row.unit, ...(row.source === 'checkup' && files[point.date] ? { file: files[point.date] } : {}) }))
+      const change = (j.changes || []).find((item) => item.label_zh === row.label_zh)
+      const biovar = change ? { cvi_pct: Math.round(change.band_pct.up / 2.77 * 100) / 100, band_pct: change.band_pct, source: change.source, ...(change.caveat_zh ? { caveat_zh: change.caveat_zh } : {}) } : null
+      return json({ row, all_points, ...(biovar ? { biovar } : {}) })
+    }
+    if (path.endsWith('/connection/test') || path.endsWith('/connection')) {
+      if (method === 'GET') return json(state.connection)
+      if (method === 'DELETE') {
+        state.connection = { source: 'config', url_masked: 'https://mirobody.example.com/mcp/••••••', token_set: false, status: 'ok', summary: base.connection.summary }
+        return json({ ok: true, ...state.connection })
+      }
+      const url = body && body.mcp_url
+      if (url && /fail/.test(url)) return json({ ok: false, error: '连接没有成功：Mirobody 返回 401，令牌无效或已过期。' }, 400)
+      const next = { source: path.endsWith('/test') ? state.connection.source : 'saved', url_masked: url ? `${url.split('/mcp/')[0]}/mcp/••••••` : state.connection.url_masked, token_set: !!(body && body.mcp_token), status: 'ok', summary: base.connection.summary }
+      if (!path.endsWith('/test')) {
+        state.connection = next
+        j.records = { ...j.records, status: 'ok', error: '', indicator_count: 21, summary: base.connection.summary }
+      }
+      return json({ ok: true, ...next })
+    }
     if (path.endsWith('/consent')) {
       j.consent = { ...j.consent, accepted: !!body.accept, accepted_at: body.accept ? new Date().toISOString() : null, version: j.consent.current }
       if (j.stage === 'consent' && body.accept) j.stage = 'profile'
@@ -316,16 +367,17 @@
       return json({ ok: true })
     }
     if (path.endsWith('/checkin')) {
-      j.plan.checkin_items.forEach((row) => { if (row.id === body.item) row.done_today = true })
-      j.reminders = j.reminders.filter((row) => row.kind !== 'checkin' || j.plan.checkin_items.some((item) => !item.done_today))
-      return json({ ok: true, saved: [{}], problems: [] })
+      const done = body.done === true ? true : body.done === false ? false : null
+      j.plan.checkin_items.forEach((row) => { if (row.id === body.item) row.done_today = done })
+      j.reminders = j.reminders.filter((row) => row.kind !== 'checkin' || j.plan.checkin_items.some((item) => item.done_today == null))
+      return json({ ok: true, saved: [{ item: body.item, date: j.today, done }], problems: [] })
     }
     if (path.endsWith('/plan-draft') && method === 'GET') return json(state.planDraft)
     if (path.endsWith('/plan-draft/accept')) {
       const draft = body && body.draft
       if (!draft || !Array.isArray(draft.items) || draft.items.length === 0) return json({ ok: false, error: '方案里没有项目', problems: ['至少保留一项'] }, 400)
       const version = (j.plan.version || 0) + 1
-      const checkins = draft.items.filter((item) => !item.target).map((item) => ({ id: item.id, title: item.title, done_today: false }))
+      const checkins = draft.items.filter((item) => !item.target).map((item) => ({ id: item.id, title: item.title, done_today: null }))
       j.plan = { exists: true, title: draft.title, version, items: draft.items.length, started: j.today, days: 0, checkin_items: checkins, streak: 0, adherence_pct: null }
       j.stage = 'routine'
       j.next = { stage: 'routine', title_zh: '今天的打卡', detail_zh: `还有 ${checkins.length} 项待完成`, action: 'checkin' }
@@ -396,13 +448,18 @@
   plugin.apply({
     slots: {
       inject: (name, make) => make(),
-      register: (options, component) => { seats[options.name] = { options, component } },
+      // Keyed slots (the chat's tool views) by name:key; every seat also by its name, first one wins.
+      register: (options, component) => {
+        const entry = { options, component }
+        if (options.key) seats[`${options.name}:${options.key}`] = entry
+        if (!seats[options.name]) seats[options.name] = entry
+      },
     },
     layout: { selectPanel: (id) => setView(id === 'longpi' ? 'page' : 'dock') },
   })
   function Seat(props) {
-    const seat = seats[props.name]
-    if (!seat) return h('div', null, `缺少 ${props.name}`)
+    const seat = seats[props.slotKey ? `${props.name}:${props.slotKey}` : props.name]
+    if (!seat) return h('div', null, `缺少 ${props.name}${props.slotKey ? `:${props.slotKey}` : ''}`)
     const injected = seat.options.inject ? seat.options.inject() : {}
     return h(seat.component, { ...injected, ...(props.owner || {}) })
   }
@@ -476,11 +533,58 @@
       h('div', { className: 'pv-composer-seat composerSeat', 'data-composer-seat': '' }, h(ComposerStack, { hero: false, session: true })))
   }
 
+  // --- chat cards: a fake toolview host rendering each keyed view with a running or settled node -----
+  const text = (value) => [{ type: 'text', text: JSON.stringify(value, null, 2) }]
+  const settled = (name, args, value, isError) => ({ kind: 'tool-result', seq: 1, time: 0, callId: `call-${name}-${Math.random().toString(36).slice(2, 7)}`, call: { name, argsRaw: JSON.stringify(args) }, callTime: 0, content: typeof value === 'string' ? [{ type: 'text', text: value }] : text(value), isError: !!isError, subCalls: [] })
+  const running = (name, args) => ({ callId: `run-${name}`, name, argsRaw: JSON.stringify(args), turn: 1, step: 1, time: 0, subCalls: [] })
+  function chatCards() {
+    const j = state.journey
+    const item = j.plan.checkin_items[0] || { id: 'imufy5xey0', title: '地中海饮食' }
+    const readBack = ['饮食｜减盐；2026-09-24 起；看 收缩压', '饮食｜车前子壳纤维；2026-09-24 起；看 低密度脂蛋白胆固醇', '饮食｜限时进食；2026-09-24 起；看 体重']
+    return {
+      draft: [['user', '帮我制定一份改善方案'], ['draft_intervention_plan', settled('draft_intervention_plan', {}, { brief: state.planDraft.brief, draft: state.planDraft.draft, how_to_use: '…' })],
+        ['text', '按你最关心的身体年龄和心血管，从收录的试验证据里挑了几项，都不涉及处方药。每项注明试验里的平均效果，个人结果会不同。']],
+      checkin: [['user', '今天地中海饮食做到了'], ['log_intervention_checkin', settled('log_intervention_checkin', { entries: [{ item: item.title, done: true }] }, { ok: true, saved: 1, entries: [{ at: '2026-09-24T12:00:00.000Z', date: j.today, item: item.id, done: true, amount: null, unit: '', note: '', tags: [], source: 'chat' }], problems: [] })],
+        ['text', '记下了。今天的方案都完成了。']],
+      save: [['save_intervention_plan', settled('save_intervention_plan', { confirm: false }, { ok: true, saved: false, read_back: readBack, goals: [], warnings: ['「车前子壳纤维」是补充剂类饮食纤维，需先与医生确认，不含剂量。'] })],
+        ['save_intervention_plan', settled('save_intervention_plan', { confirm: true }, { ok: true, saved: true, version: 2, read_back: readBack, warnings: [] })]],
+      skill: [['run_longevity_skill', settled('run_longevity_skill', { name: 'accelerated-biological-aging-risk' }, { ok: true, skill: 'accelerated-biological-aging-risk', exit_code: 0, measured_at: '2026-08-26', outputs: { phenoage: { value: 44.76, unit: 'a', label_zh: '表型年龄' }, phenoage_advance: { value: -8.14, unit: 'a', label_zh: '表型年龄减实足年龄' } }, report_excerpt: '表型年龄 44.8 岁……边界：模型估计，不是诊断。' })],
+        ['run_longevity_skill', settled('run_longevity_skill', { name: 'china-par-ascvd-risk' }, { ok: true, skill: 'china-par-ascvd-risk', exit_code: 0, measured_at: '2026-08-26', outputs: { risk_10y_pct: { value: 4.0, unit: '%', label_zh: '10 年动脉粥样硬化性心血管病风险（China-PAR 模型估计）' }, risk_category: { value: '低危', unit: '', label_zh: '风险分层' } }, report_excerpt: '' })],
+        ['run_longevity_skill', settled('run_longevity_skill', { name: 'wearable-aging-clock' }, { ok: true, skill: 'wearable-aging-clock', exit_code: 0, outputs: { wearable_age: { value: 47.2, unit: 'a', label_zh: '可穿戴衰老时钟年龄' } }, report_excerpt: '可穿戴衰老时钟：47.2 岁（模型估计）。' })],
+        ['run_longevity_skill', settled('run_longevity_skill', { name: 'proteomic-aging-clock' }, { ok: false, skill: 'proteomic-aging-clock', error_kind: 'missing_input', error: '记录里没有蛋白组学数据', exit_code: 3, report_excerpt: '' })]],
+      situation: [['read_personal_situation', settled('read_personal_situation', {}, { indicator_count: j.records.indicator_count, record_status: 'ok', record_changes: (j.changes || []).map(({ points, ...row }) => row), onboarding: { stage: j.stage } })],
+        ['draft_intervention_plan', running('draft_intervention_plan', {})],
+        ['log_intervention_checkin', settled('log_intervention_checkin', {}, 'log_intervention_checkin: tool timed out after 20000 ms', true)]],
+    }
+  }
+  function ChatCards() {
+    const which = params.get('card') || 'draft'
+    const rows = which === 'all' ? Object.values(chatCards()).flat() : chatCards()[which] || []
+    return h('div', { className: 'pv-chat' },
+      h('div', { className: 'pv-chat-top' }, '健康对话'),
+      h('div', { className: 'pv-transcript' },
+        ...rows.map(([kind, value], index) => kind === 'user' ? h('div', { key: index, className: 'pv-msg pv-msg-user' }, h('span', null, value))
+          : kind === 'text' ? h('div', { key: index, className: 'pv-msg' }, value)
+          : h('div', { key: index, className: 'pv-callrow' }, h(Seat, { name: 'tool.call.toolview', slotKey: kind, owner: { callId: value.callId, toolName: kind, block: value, openFile: () => {}, loadImage: () => '' } })))),
+      h('div', { className: 'pv-composer-seat composerSeat' }, h(ComposerStack, { hero: false, session: true })))
+  }
+  function SettingsPanel() {
+    return h('div', { className: 'pv-settings-mask' },
+      h('div', { className: 'pv-settings', role: 'dialog', 'aria-label': '设置' },
+        h('nav', { className: 'pv-settings-nav' }, h('h2', null, '设置'),
+          ...['通用', '模型', '插件', 'LongPi'].map((label) => h('div', { key: label, className: `pv-settings-item ${label === 'LongPi' ? 'on' : ''}` }, label))),
+        h('div', { className: 'pv-settings-body' }, h(Seat, { name: 'settings.section', owner: { close: () => {} } }))))
+  }
+
   // ?tap=suggest clicks the first suggestion pill after load, ?pick=1 then picks a workspace:
   // screenshots of the queued-prompt note and of the prompt landing once a session exists.
   // ?tap=changes follows the home's changes line to the page (which should land on the card).
   if (params.get('tap') === 'changes') {
     setTimeout(() => { const link = document.querySelector('.lp-hero-changes .lp-hero-link'); if (link) link.click() }, 1500)
+  }
+  // ?tap=task opens the first check-in pill's popover (完成 / 没做到 / 撤销).
+  if (params.get('tap') === 'task') {
+    setTimeout(() => { const pill = document.querySelector('.lp-task'); if (pill) pill.click() }, 1500)
   }
   if (params.get('tap') === 'suggest') {
     setTimeout(() => {
@@ -498,6 +602,8 @@
     if (view === 'page') main = h(Seat, { name: 'main' })
     else if (view === 'home') main = h(Hero)
     else if (view === 'onboarding') main = h(Hero)
+    else if (view === 'chat') main = h(ChatCards)
+    else if (view === 'settings') main = h(Hero)
     else main = h(Chat)
     const step = params.get('step')
     return h('div', { className: 'pv-frame' },
@@ -509,6 +615,7 @@
         name: 'settings.onboarding',
         owner: { stepId: 'longpi', complete: () => setDone(true), openSection: () => {}, initialStep: step ? Number(step) - 1 : undefined, explicit: params.get('explicit') === '1' },
       }) : null,
+      view === 'settings' ? h(SettingsPanel) : null,
       done ? h('div', { className: 'pv-done' }, 'onboarding complete()') : null)
   }
   ReactDOM.createRoot(document.getElementById('root')).render(h(App))

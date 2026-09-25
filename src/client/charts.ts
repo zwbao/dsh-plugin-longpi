@@ -27,11 +27,13 @@ export function monthLabel(iso: string): string {
   return `${year?.slice(2)}/${month}`
 }
 
-/** Two decimals under 10, one under 100, none above: 1.26 mmol/L, 44.8 岁, 125 mmHg. */
+/**
+ * Two decimals under 10, one from 10 up: 1.26 mmol/L, 44.8 岁, 138.7 mmHg. A
+ * whole number stays whole (125 mmHg): fmt drops trailing zeros.
+ */
 export function fmtAuto(value: number | null | undefined): string {
   if (value == null || !Number.isFinite(value)) return '—'
-  const size = Math.abs(value)
-  return fmt(value, size >= 100 ? 0 : size >= 10 ? 1 : 2)
+  return fmt(value, Math.abs(value) >= 10 ? 1 : 2)
 }
 
 export function fmt(value: number | null | undefined, digits = 1): string {

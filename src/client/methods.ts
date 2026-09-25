@@ -6,9 +6,9 @@ import React from 'react'
 import { errorText, getJson, postJson } from './api.ts'
 import { fmt } from './charts.ts'
 import { Icon } from './icons.ts'
-import { notifyChanged } from './store.ts'
+import { notifyChanged, reload } from './store.ts'
 import type { Board, MatchHit } from './types.ts'
-import { Btn, Section, Skeleton } from './ui.ts'
+import { Btn, LoadError, Skeleton } from './ui.ts'
 
 const h = React.createElement
 
@@ -82,16 +82,17 @@ function Search(props: { board: Board }): React.ReactElement {
       h('span', { className: 'lp-strong' }, item.name), h('span', { className: 'lp-caption' }, (item.why ?? []).join('；') || item.blurb || '')))) : null)
 }
 
+/** The method library, for those who want it: now on the settings page under 高级. */
 export function MethodsSection(props: { board: Board | null; loading: boolean; error: string | null; onNotice: Notify }): React.ReactElement {
   const board = props.board
   if (!board) {
-    return h(Section, { id: 'lp-methods', title: '记录与方法', kicker: '数据' },
-      props.loading ? h(Skeleton, { height: 160 }) : h('div', { className: 'lp-card' }, h('p', { className: 'lp-muted' }, `方法和记录没有读到${props.error ? `（${props.error}）` : ''}。点右上角的刷新再试一次。`)))
+    return props.loading ? h(Skeleton, { height: 160 }) : h(LoadError, { what: '方法库', error: props.error, onRetry: () => reload('board') })
   }
   const unlock = board.readiness?.unlock ?? []
   const meds = board.records?.medications ?? []
   const readouts = board.readouts ?? []
-  return h(Section, { id: 'lp-methods', title: '记录与方法', kicker: '数据', aside: h('span', { className: 'lp-caption' }, `方法库 ${board.skills?.version ?? ''} · ${board.readiness?.declared ?? 0} 个个人方法`) },
+  return h('div', { className: 'lp-methods', id: 'lp-methods' },
+    h('p', { className: 'lp-caption' }, `方法库 ${board.skills?.version ?? ''} · ${board.readiness?.declared ?? 0} 个个人方法。对话里照常可用。`),
     h('div', { className: 'lp-grid-2' },
       h(RunReady, { board, onNotice: props.onNotice }),
       h('div', { className: 'lp-card' },
