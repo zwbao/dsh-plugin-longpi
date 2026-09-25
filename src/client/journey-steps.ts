@@ -64,13 +64,13 @@ function FoundTiles(props: { journey: Journey }): React.ReactElement {
       ? `${month(summary.first_date)} → ${month(summary.last_date)}` : summary.last_date ? chineseDate(summary.last_date) : ''
     tiles.push({ label: '体检', figure: String(summary.checkups), unit: '次', caption: range })
     tiles.push({
-      label: '化验指标', figure: String(records.indicator_count), unit: '项',
+      label: '指标', figure: String(records.indicator_count), unit: '项',
       caption: summary.categories_zh.length > 0 ? `${summary.categories_zh.slice(0, 3).join(' · ')}${summary.categories_zh.length > 3 ? '…' : ''}` : '',
     })
     tiles.push({ label: '手环', figure: String(summary.wearable_days), unit: '天', caption: summary.wearable_days > 0 ? '近一年有记录的天数' : '没有手环数据' })
   } else {
     // An older server: the two counts it has.
-    tiles.push({ label: '化验指标', figure: String(records.indicator_count), unit: '项', caption: '' })
+    tiles.push({ label: '指标', figure: String(records.indicator_count), unit: '项', caption: '' })
     tiles.push({ label: '完整体检', figure: String(records.full_checkups), unit: '次', caption: records.latest_checkup ? `最近 ${chineseDate(records.latest_checkup)}` : '九项血检还没有在同一天测齐' })
   }
   return h('ul', { className: 'lp-found' },
