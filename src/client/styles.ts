@@ -257,6 +257,31 @@ p.lp-muted { margin: 0; }
 .lp-addon-box { width: 30px; height: 30px; flex: none; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; background: var(--lp-layer); color: var(--lp-ink-2); box-shadow: 0 0 0 .5px var(--lp-line-3); }
 .lp-addon-text { flex: 1; min-width: 150px; }
 
+/* The body-age card's note when one of its inputs changed beyond normal fluctuation. */
+.lp-caveat { display: flex; gap: 6px; align-items: flex-start; margin: -4px 0 14px; padding: 8px 10px; border-radius: 10px; background: var(--lp-warn-wash); font-size: 12px; line-height: 18px; color: var(--lp-ink); }
+.lp-caveat .lp-icon { margin-top: 2px; color: var(--lp-warn-ink); }
+
+/* --- record changes beyond normal fluctuation ------------------------------------------------ */
+.lp-changes { margin-bottom: 16px; scroll-margin-top: 24px; }
+.lp-change-list { list-style: none; margin: 0; padding: 0; }
+.lp-change { display: grid; grid-template-columns: minmax(0, 1fr) 208px; gap: 8px 28px; align-items: center; padding: 16px 0; border-top: .5px solid var(--lp-line-2); }
+.lp-change:first-child { border-top: 0; padding-top: 2px; }
+.lp-change:last-child { padding-bottom: 4px; }
+@container lp-root (max-width: 640px) { .lp-change { grid-template-columns: minmax(0, 1fr); } }
+.lp-change-main { min-width: 0; }
+.lp-change-text { margin: 4px 0 0; color: var(--lp-ink); font-variant-numeric: tabular-nums; }
+.lp-change-advice { display: flex; gap: 6px; align-items: flex-start; width: fit-content; max-width: 100%; margin: 8px 0 0; padding: 5px 10px; border-radius: 10px; font-size: 13px; line-height: 20px; color: var(--lp-ink); }
+.lp-change-advice .lp-icon { margin-top: 3px; }
+.lp-change-warn { background: var(--lp-warn-wash); }
+.lp-change-warn .lp-icon { color: var(--lp-warn-ink); }
+.lp-change-good { background: var(--lp-good-wash); }
+.lp-change-good .lp-icon { color: var(--lp-good-ink); }
+.lp-change-caveat, .lp-change-source { margin: 6px 0 0; }
+.lp-change-source a { color: var(--lp-accent); text-decoration: none; overflow-wrap: anywhere; }
+.lp-change-source a:hover { text-decoration: underline; }
+.lp-change-spark { min-width: 0; }
+.lp-change-spark .lp-caption { margin-top: 4px; }
+
 /* --- journey stepper and first-run steps -------------------------------------------------- */
 .lp-stepper { padding: 24px 24px 6px; margin-bottom: 16px; }
 .lp-stepper-head .lp-h2 { font-size: 20px; line-height: 28px; }
@@ -302,6 +327,7 @@ p.lp-muted { margin: 0; }
 .lp-first-wait { margin-top: 6px; font-size: 18px; line-height: 26px; font-weight: 500; }
 .lp-first-figure { font-size: 32px; line-height: 40px; font-weight: 500; margin-top: 2px; font-variant-numeric: tabular-nums; }
 .lp-first-figure .lp-bignum-unit { margin-left: 4px; font-size: 14px; }
+.lp-first-caveat { margin: 6px 0 0; color: var(--lp-warn-ink); }
 .lp-first-addons .lp-subhead { margin-top: 18px; }
 .lp-pointer { display: grid; gap: 12px; justify-items: start; }
 
@@ -531,9 +557,22 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
 }
 .lp-hero-link:hover, .lp-row-link:hover { text-decoration: underline; text-underline-offset: 3px; }
 
-/* --- the row under the composer (conversation.composer.dock, only with the greeting) ------------- */
+/* The second line: record changes a doctor should see. Quiet, but in the warning ink. */
+.lp-hero-changes { margin: -2px 0 0; max-width: 100%; font-size: 13px; line-height: 20px; font-weight: 400; color: var(--lp-warn-ink); text-wrap: balance; }
+.lp-hero-changes-icon { margin-right: 4px; vertical-align: -2px; }
+.lp-hero-changes .lp-hero-sep { margin: 0 6px; }
+.lp-hero-row { width: 100%; margin-top: 4px; }
+
+/* --- the row under the composer (portalled in after conversation.composer.bar, only with the greeting) --- */
+/* The host is the last child of DSH's hero composer stack; home.ts sets its top margin so the row sits
+   12 px under the card whatever the stack's gap. Empty (no row for this stage), it takes no room. */
+.lp-home-host {
+  display: flex; flex-wrap: wrap; justify-content: center; width: 100%; min-width: 0;
+  padding: 0 var(--dsh-composer-side-clearance, 16px);
+}
+.lp-home-host:empty { display: none; }
 .lp-home-row {
-  width: 100%; max-width: var(--dsh-composer-card-max-width, 744px); margin: 12px auto 0; padding: 0 8px;
+  width: 100%; max-width: var(--dsh-composer-card-max-width, 744px); margin: 0 auto; padding: 0 8px;
   display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 6px;
   font-size: 13px; line-height: 20px; color: var(--lp-ink-2); animation: lp-fade .35s ease both;
 }

@@ -31,7 +31,8 @@
   ],
   "records": { "status": "ok", "error": "", "indicator_count": 21, "full_checkups": 4, "latest_checkup": "2026-08-26", "mirobody_mounted": true },
   "results": {
-    "bioage": { "status": "ok", "phenoage": 44.76, "advance": -8.14, "date": "2026-08-26", "checkups": 4, "band_years": 2.94, "blocker_zh": "", "missing": [] },
+    "bioage": { "status": "ok", "phenoage": 44.76, "advance": -8.14, "date": "2026-08-26", "checkups": 4, "band_years": 2.94, "blocker_zh": "", "missing": [],
+      "caveat_zh": "表型年龄用到的平均红细胞体积近期变化明显，原因可能与衰老无关，这次的身体年龄请谨慎看待。" },
     "risk": { "status": "ok", "risk_pct": 4.0, "category_zh": "低危", "date": "2026-08-26", "blocker_zh": "", "missing_labs": [], "missing_facts": [] }
   },
   "addons": [],
@@ -70,5 +71,31 @@
     { "id": "routine-effect", "text_zh": "我的方案有没有效果？" }
   ],
   "boundary_zh": "模型估计，不是诊断，也不是用药建议。紧急情况请拨打 120。",
-  "followup": { "enabled": true, "channels": ["desktop", "webhook"], "next_at": "2026-09-24T21:00:00" }
+  "followup": { "enabled": true, "channels": ["desktop", "webhook"], "next_at": "2026-09-24T21:00:00" },
+  "changes": [
+    {
+      "key": "mcv", "label_zh": "平均红细胞体积", "unit": "fL",
+      "points": [{ "date": "2025-10-18", "value": 94.8 }, { "date": "2026-04-22", "value": 92.6 }, { "date": "2026-08-26", "value": 90.1 }],
+      "compare": { "from_date": "2025-10-18", "from": 94.8, "to_date": "2026-08-26", "to": 90.1, "pct": -5.0 },
+      "band_pct": { "up": 2.3, "down": -2.3 },
+      "direction": "down", "verdict": "unclear", "ask_doctor": true,
+      "text_zh": "平均红细胞体积 94.8 → 90.1 fL（2025-10-18 → 2026-08-26），下降 5.0%，超出正常波动（±2.3%）",
+      "advice_zh": "建议带着这几次体检报告咨询医生，看看是否需要进一步检查。",
+      "caveat_zh": "MCV 的个体内变异非常小，仪器误差可能和它一样大；按默认规则估的检测误差偏小，噪声带可能偏窄。",
+      "source": { "title": "Coskun A et al. Systematic review and meta-analysis of within-subject and between-subject biological variation estimates of 20 haematological parameters. Clin Chem Lab Med 2020;58(1):25-32", "url": "https://doi.org/10.1515/cclm-2019-0658", "doi": "10.1515/cclm-2019-0658" },
+      "verified": true
+    },
+    {
+      "key": "ldl", "label_zh": "低密度脂蛋白胆固醇", "unit": "mmol/L",
+      "points": [{ "date": "2025-10-18", "value": 4.2 }, { "date": "2026-01-20", "value": 3.7 }, { "date": "2026-04-22", "value": 3.3 }, { "date": "2026-08-26", "value": 3.0 }],
+      "compare": { "from_date": "2025-10-18", "from": 4.2, "to_date": "2026-08-26", "to": 3.0, "pct": -28.6 },
+      "band_pct": { "up": 26.2, "down": -26.2 },
+      "direction": "down", "verdict": "better", "ask_doctor": false,
+      "text_zh": "低密度脂蛋白胆固醇 4.2 → 3.0 mmol/L（2025-10-18 → 2026-08-26），下降 28.6%，超出正常波动（±26.2%）",
+      "advice_zh": "变化超出了正常波动，方向是好的。",
+      "source": { "title": "Carobene A et al. The European Biological Variation Study (EuBIVAS): a summary report. Clin Chem Lab Med 2022;60(4):505-17", "url": "https://doi.org/10.1515/cclm-2021-0370", "doi": "10.1515/cclm-2021-0370" },
+      "verified": true
+    }
+  ],
+  "changes_note_zh": "判断依据：两次结果之差超过同一个人正常波动与检测误差合成的参考变化值（RCV，z=1.96）才算真实变化；变异数据来自 longevity-skills 的 data/biological_variation.json，每一行注明期刊出处。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。"
 }
