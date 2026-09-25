@@ -13,7 +13,8 @@ import { latestOutputs } from './history.ts'
 import { loadEvidenceLexicon } from './intents.ts'
 import { buildStats } from './stats.ts'
 import { PRODUCT_NAME, PRODUCT_VERSION } from './version.ts'
-import { addCheckIns, isoDay } from './interventions.ts'
+import { addCheckIns, currentPlan, isoDay, normalizePlan, savePlan } from './interventions.ts'
+import { acceptedPlan, buildPlanBrief, draftPlan } from './planner.ts'
 import { buildReport, readiness, runReady } from './overview.ts'
 import { invalidateRecords } from './records.ts'
 import { buildTracking, invalidateTracking } from './tracking.ts'
@@ -102,6 +103,63 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
           }
           sendJson(res, 200, await buildJourney(await journeyContext()))
         })().catch(() => sendJson(res, 500, { ok: false, error: 'journey failed' }))
+      },
+    })
+
+    scoped.webServer.register({
+      kind: 'exact',
+      path: '/api/longpi/plan-draft',
+      handler: (req, res) => {
+        if (req.method !== 'GET') {
+          sendJson(res, 405, { ok: false, error: 'GET only' })
+          return
+        }
+        void (async () => {
+          const input = await journeyContext()
+          const brief = await buildPlanBrief(input)
+          sendJson(res, 200, { brief, draft: draftPlan(brief, { today: input.today }) })
+        })().catch(() => sendJson(res, 500, { ok: false, error: 'plan draft failed' }))
+      },
+    })
+
+    scoped.webServer.register({
+      kind: 'exact',
+      path: '/api/longpi/plan-draft/accept',
+      handler: (req, res) => {
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { ok: false, error: 'POST only' })
+          return
+        }
+        void (async () => {
+          const body = await readJson(req, 64_000)
+          const posted = body.ok && body.value && typeof body.value === 'object' ? (body.value as Record<string, unknown>).draft : undefined
+          if (!posted || typeof posted !== 'object') {
+            sendJson(res, 400, { ok: false, error: 'body must be {"draft": {...}}' })
+            return
+          }
+          const input = await journeyContext()
+          // The items are rebuilt from the evidence by id, then saved exactly like a confirmed plan.
+          const accepted = acceptedPlan(await buildPlanBrief(input), posted, input.today)
+          if (!accepted.ok) {
+            sendJson(res, 400, { ok: false, error: accepted.error, problems: accepted.problems })
+            return
+          }
+          const normalized = normalizePlan(accepted.plan, {
+            today: input.today,
+            medications: input.records.medications.map((row) => ({ name: row.name, ...(row.plan_id ? { plan_id: row.plan_id } : {}) })),
+            previous: currentPlan(input.dataDir),
+          })
+          if (normalized.errors.length > 0) {
+            sendJson(res, 400, { ok: false, error: normalized.errors[0], problems: normalized.errors })
+            return
+          }
+          const saved = savePlan(input.dataDir, normalized.plan)
+          invalidateTracking()
+          sendJson(res, 200, { ok: true, plan: { version: saved.version, title: saved.title, items: saved.items.length } })
+        })().catch((error: unknown) => {
+          const message = error instanceof Error && error.message === 'body too large' ? error.message : 'accept failed'
+          sendJson(res, 400, { ok: false, error: message })
+        })
       },
     })
 

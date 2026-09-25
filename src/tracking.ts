@@ -71,7 +71,11 @@ export interface ModelCard {
   /** Stated facts the profile does not hold yet (age, sex, the yes/no facts); unknown is never no. */
   missing_facts?: string[]
   levers: LeverHint[]
-  sensitivity: Array<{ label: string; unit: string; years_per_step: number; step: string }>
+  /**
+   * How far one within-person step of each input moves the model, largest first: years of phenotypic age,
+   * or for china-par percentage points of 10-year risk. key is the biological-variation key (or waist).
+   */
+  sensitivity: Array<{ label: string; unit: string; years_per_step: number; step: string; key?: string }>
   boundary_zh: string
 }
 
@@ -538,7 +542,7 @@ async function modelCards(context: TrackingContext, reference: Reference, goals:
             const marker = pair?.indicator ? markerFor(reference.biovar, pair.indicator) : null
             const relative = marker ? marker.cvi_pct / 100 : 0.1
             const stepValue = row.value * relative
-            return { label: row.label_zh, unit: row.unit, years_per_step: (row.years_per_unit ?? 0) * stepValue, step: `${fmt(stepValue)} ${row.unit}` }
+            return { label: row.label_zh, unit: row.unit, years_per_step: (row.years_per_unit ?? 0) * stepValue, step: `${fmt(stepValue)} ${row.unit}`, ...(marker ? { key: marker.key } : {}) }
           }).filter((row) => Number.isFinite(row.years_per_step)).sort((a, b) => Math.abs(b.years_per_step) - Math.abs(a.years_per_step)).slice(0, 5)
           cards.push({
             model: 'phenoage',
@@ -685,8 +689,20 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
     const goal = targets.find((row) => row.key === key)
     return now && goal ? { from: `${fmt(Number(now.value))} ${now.unit}`.trim(), to: `${fmt(Number(goal.value))} ${goal.unit}`.trim() } : fallback
   }
+  // One within-person step of each modifiable input, in percentage points of risk (the skill's own slope).
+  const sensitivity = run.levers.sensitivity.map((row) => {
+    const spec = measurementInputs(card).find((item) => item.key === row.key)
+    const codes = spec?.loinc ?? []
+    const marker = reference.biovar.markers.find((item) => item.loinc.some((code) => codes.includes(code))) ?? null
+    const relative = marker ? marker.cvi_pct / 100 : 0.1
+    const stepValue = row.value * relative
+    // Waist has no biological-variation row (and China-PAR gives it no LOINC): it is keyed as the self measurement.
+    const key = marker?.key ?? (codes.includes(SELF_SPEC.waist.loinc) || spec?.label_zh === SELF_SPEC.waist.label_zh ? 'waist' : undefined)
+    return { label: row.label_zh, unit: row.unit, years_per_step: (row.per_unit ?? 0) * stepValue, step: `${fmt(stepValue)} ${row.unit}`, ...(key ? { key } : {}) }
+  }).filter((row) => Number.isFinite(row.years_per_step)).sort((a, b) => Math.abs(b.years_per_step) - Math.abs(a.years_per_step))
   return {
     ...base,
+    sensitivity,
     status: target ? 'ok' : 'no_goal',
     note_zh: target
       ? '达到方案目标时的 10 年风险按同一模型计算。'

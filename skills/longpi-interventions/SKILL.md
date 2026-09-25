@@ -1,21 +1,34 @@
 ---
 name: longpi-interventions
-description: Help the person pick what to improve, save their own intervention plan after they confirm a read-back, record check-ins and self measurements, judge each item against their record (noise band, retest timing, adherence, confounders), remind retests on the dates the tools give, and show model estimates for their goals. No medicine or dose advice.
+description: Draft an intervention plan with the person from their results and the collected trial evidence (lifestyle items with concrete behavioral targets, supplements only as options to confirm with a doctor, never a dose or a prescription change), or save their own plan, after they confirm a read-back; record check-ins and self measurements, judge each item against their record (noise band, retest timing, adherence, confounders), remind retests on the dates the tools give, set up follow-up reminders they agree to, and show model estimates for their goals.
 ---
 
 # 干预方案
 
-方案是这个人自己的（或医生、长寿师给的），插件只负责保存、跟踪和对照检查结果。不替对方制定方案，不加项，不给剂量。
+方案可以是对方自己的（或医生、长寿师给的），也可以由 LongPi 按对方的检查结果和研究证据起草、再和对方一起调整。不论哪种，都要读给对方确认后才保存。
 
-## 从第一个结果到方案
+## 起草方案
 
-给出第一个结果后问“想先改善哪一项？”。对方说出自己的方案或上传方案文档后：
+对方问“帮我制定一份改善方案”，或给出第一个结果后想改善某一项时：
 
-1. 整理成条目：类别、名称、开始日期（YYYY-MM-DD，没有就问）、针对的指标、方案里写明的目标值。手环能记录的项目（步数、睡眠）给 `target`，指标名用 `read_personal_situation` 里 Mirobody 的名字。
+1. 调 `draft_intervention_plan`（对方这次说了想改善什么，就传 `focus` 或 `markers`；说了限制，比如膝盖不好、上夜班，传 `constraints`）。
+2. `brief.priorities` 说明为什么先改这些指标（模型估计或对方最关心的）；`draft.items` 是按证据选的 2–3 项生活方式；`goals` 是“最新值 + 试验平均效应”，只是估算。
+3. 和对方一起调整：去掉做不到的，换成 `brief.candidates` 里的其他选项，按对方的习惯改写做法。行为目标（步数、分钟、小时、份数）只用证据、对方数据或技能给出的数字。每一项都说出证据：试验平均效应、人群、DOI，并说明个人效果因人而异。
+4. 补剂只作为“需先与医生确认”的选项，说证据，不给剂量。`needs_doctor` 和 `cautions_zh` 要照实转述。
+5. 不开始、不停止、不调整任何处方药，也不给药物或补剂剂量。
+6. 调整好后按下面“保存”的步骤读回确认。健康页上的「采用这份方案」也会按同样的检查保存。
+
+## 保存
+
+1. 整理成条目：类别、名称、开始日期（YYYY-MM-DD，没有就问）、针对的指标、目标值（对方方案里写明的，或草稿按证据估算的）。手环能记录的项目（步数、睡眠）给 `target`，指标名用 `read_personal_situation` 里 Mirobody 的名字。
 2. 先调 `save_intervention_plan`，`confirm` 为 false，把 `read_back` 和 `warnings` 原样读给对方听。
 3. 对方确认后，再用同样的内容调一次，`confirm` 为 true。以后调整一次只改一项，存成新版本。
 
 药物和补剂只按名字保存，剂量和服用打卡在 Mirobody 的用药计划里。方案文档里的剂量不保存，也不要复述成建议。
+
+## 随访提醒
+
+方案保存后，问一次要不要提醒：每天晚上提醒打卡、复测日提醒、每周小结。说明发什么、什么时候、走哪个渠道（桌面通知，或飞书、企业微信、钉钉、Bark 等 webhook），以及默认“简要”模式不会把健康数值和项目名称发出去。对方同意后才用 `set_followup` 打开。对方想要 AI 自己写的随访，就用 `schedule_create` 建一个定时任务，指令是：“LongPi 随访：先调用 review_interventions，再写一段不超过 120 字的中文随访（肯定做到的、指出一项最值得坚持的下一步，不提剂量），然后调用 send_followup_message 发送。”提醒只在 DeepSeek Harness 运行时发送。
 
 ## 每天
 
@@ -30,7 +43,7 @@ description: Help the person pick what to improve, save their own intervention p
 - **反向**：超出波动但方向不好。建议复查确认，并和医生讨论。
 - **无法判断**：没有基线、复测太早、执行率太低、CRP 超过 10 mg/L，或缺少变异数据。要说清是哪一种。
 
-同期还有别的干预或用药变化时，只能评价组合。`expected` 是人群平均，不是对这个人的预测。下一步只从 `suggestions` 里选。
+同期还有别的干预或用药变化时，只能评价组合。`expected` 是人群平均，不是对这个人的预测。调整方案时一次只改一项，按上面的步骤起草、读回、确认。
 
 ## 模型估计
 

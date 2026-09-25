@@ -42,6 +42,8 @@ export { buildTracking, invalidateTracking, modelGoals, homeBloodPressure, readF
 export { buildJourney, buildJourneyFull, retestsOf, stageNow, profileComplete, unansweredOf, within } from './journey.ts'
 export type { Journey, Stage } from './journey.ts'
 export { buildCalendar, escapeText, foldLine, retestDay } from './calendar.ts'
+export { buildPlanBrief, draftPlan, acceptedPlan, expectedText, DRAFT_CATEGORIES } from './planner.ts'
+export type { PlanBrief, PlanDraft, DraftItem } from './planner.ts'
 
 export async function apply(ctx: Context, config: Config): Promise<void> {
   const pluginHome = resolveMirobodyPlugin(config.mirobodyPluginHome)

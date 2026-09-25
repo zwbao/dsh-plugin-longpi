@@ -14,6 +14,8 @@ import { resolveDataDir, resolveSkillsHome } from './paths.ts'
 import { invalidateRecords, loadRecords } from './records.ts'
 import { addSelf, SELF_KEYS, SELF_SPEC } from './selfmeasure.ts'
 import { buildTracking, describeItem, invalidateTracking, modelGoals } from './tracking.ts'
+import { buildPlanBrief, draftPlan } from './planner.ts'
+import { FOCUS, type Focus } from './profile.ts'
 
 function jsonText(value: unknown): [{ type: 'text'; text: string }] {
   return [{ type: 'text', text: JSON.stringify(value, null, 2) }]
@@ -32,8 +34,10 @@ const HOW_TO_READ = [
   'combined_with and confounders mean the change cannot be credited to one item. Say so.',
   'expected rows are trial averages for a population, not a prediction for this person.',
   'Model cards (phenoage, china-par) are model estimates. Say 模型估计 and quote boundary_zh. Never turn them into "you will live X more years".',
-  'suggestions are the only next steps to offer. Never add a medicine, a supplement, or a dose.',
+  'suggestions are the next steps to offer for the saved plan. A change to the plan is a new draft (draft_intervention_plan), read back and confirmed like any plan. Never add a medicine or a dose.',
 ]
+
+const DRAFT_HOW_TO_USE = 'Tailor the draft with the person (their preferences, constraints, what they already do). State each item\'s evidence (trial average, population, DOI) and that individual results vary. Supplements are options to confirm with a doctor, without a dose. Never start, stop or change a prescription medicine or any dose. Read the plan back with save_intervention_plan confirm=false and save only after they agree.'
 
 export function registerTrackingTools(ctx: Context, config: () => Config, mount: MountState): void {
   const where = () => {
@@ -50,7 +54,7 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
 
   ctx.tools.register(defineTool({
     name: 'save_intervention_plan',
-    description: 'Save the person\'s own intervention plan (from what they said, or a plan document from their doctor or longevity coach that they shared). First call with confirm=false: the tool checks it and returns the structured read-back and warnings. Read that back to the person. Only after they confirm, call again with the same plan and confirm=true. Each item needs a start date (YYYY-MM-DD) so its effect can be judged against a baseline. List the markers each item aims to move (hs-CRP, 空腹血糖, LDL-C, 血压…) and goal values if the plan has them. For a wearable-tracked item give target {metric, op, value} using a Mirobody indicator name from read_personal_situation (dailySteps, dailyTotalSleepTime). Medicines and supplements are saved by name only: their dose and dose log stay in Mirobody. Never add an item, a dose or a goal the person did not state. Saving a new plan keeps earlier versions.',
+    description: 'Save the person\'s intervention plan: their own (from what they said, or a plan document from their doctor or longevity coach that they shared), or a draft from draft_intervention_plan tailored with them. First call with confirm=false: the tool checks it and returns the structured read-back and warnings. Read that back to the person. Only after they confirm, call again with the same plan and confirm=true. Each item needs a start date (YYYY-MM-DD) so its effect can be judged against a baseline. List the markers each item aims to move (hs-CRP, 空腹血糖, LDL-C, 血压…) and goal values if the plan or the draft has them. For a wearable-tracked item give target {metric, op, value} using a Mirobody indicator name from read_personal_situation (dailySteps, dailyTotalSleepTime). Medicines and supplements are saved by name only: their dose and dose log stay in Mirobody. Never add a dose, a medicine, or a goal number that neither the person, their plan document nor the draft gave. Saving a new plan keeps earlier versions.',
     parameters: {
       title: { type: 'string', description: 'Plan title, such as 2026 秋季方案.' },
       note: { type: 'string', description: 'Anything else the plan says, in the person\'s words.' },
@@ -140,6 +144,42 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
         read_back: readBack,
         warnings: normalized.warnings,
         note: 'Saved locally in this harness (interventions/plan.jsonl). Not written to Mirobody. Check-ins go through log_intervention_checkin; medicine and supplement doses are logged in Mirobody.',
+      })
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'draft_intervention_plan',
+    description: 'Draft an intervention plan with the person, from their own results and the collected trial evidence. Returns brief (what is worth improving and why: the markers that move their phenotypic age or China-PAR risk most, and what they care about; evidence-backed lifestyle options with the trial average, population, DOI and cautions from a simple medication screen; their current plan\'s results) and draft (up to 3 items with a start date, target markers and goals computed as their latest value plus the trial average). Lifestyle items only (diet pattern, exercise, sleep, weight, alcohol, smoking, salt); a supplement only as an option marked 需先与医生确认, never with a dose; never a drug. Saves nothing. draft is null when no evidence fits; brief says why.',
+    parameters: {
+      focus: {
+        type: 'array',
+        items: { type: 'string', enum: [...FOCUS] },
+        description: 'What to improve first for this draft, when the person says so now (bioage, cardio, glucose, weight, sleep, plan). Default: their saved focus.',
+      },
+      markers: { type: 'array', items: { type: 'string' }, description: 'Markers the person wants to improve, by name as they said it (收缩压, LDL-C, 腰围…). They come first.' },
+      constraints: { type: 'string', description: 'What limits them, in their words (膝盖不好、夜班、素食…). Echoed back for you to tailor the draft; it does not change the evidence.' },
+      max_items: { type: 'integer', description: 'At most this many items, 1–5. Default 3; fewer is easier to keep and to judge.' },
+    },
+    output: jsonOut,
+    timeoutMs: 180000,
+    isConcurrencySafe: () => true,
+    async execute(args) {
+      const { current, dataDir, skillsHome } = where()
+      const catalog = loadCatalog(skillsHome)
+      const records = await loadRecords(current, dataDir, mount.pluginHome)
+      const today = isoDay()
+      const focus = (Array.isArray(args.focus) ? args.focus : []).filter((item): item is Focus => (FOCUS as readonly string[]).includes(String(item)))
+      const markers = (Array.isArray(args.markers) ? args.markers : []).map((item) => String(item).trim()).filter((item) => item && item.length <= 40).slice(0, 8)
+      const brief = await buildPlanBrief({ config: current, dataDir, skillsHome, catalog, records, today, mount }, {
+        ...(focus.length > 0 ? { focus } : {}), markers,
+      })
+      const constraints = typeof args.constraints === 'string' ? args.constraints.trim().slice(0, 500) : ''
+      return asJson({
+        brief,
+        draft: draftPlan(brief, { today, ...(Number.isFinite(Number(args.max_items)) && args.max_items != null ? { maxItems: Number(args.max_items) } : {}) }),
+        ...(constraints ? { constraints } : {}),
+        how_to_use: DRAFT_HOW_TO_USE,
       })
     },
   }))

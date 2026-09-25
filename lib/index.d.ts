@@ -82,7 +82,7 @@ declare function wrapGuardMessage(text: string, hit: GuardHit): string;
 //#endregion
 //#region src/version.d.ts
 declare const PRODUCT_VERSION = "5.0.0";
-declare const TOOL_NAMES: readonly ["read_personal_situation", "list_longevity_intents", "match_longevity_skills", "read_longevity_skill", "run_longevity_skill", "query_longevity_evidence", "list_longevity_domains", "save_personal_profile", "longpi_status", "save_intervention_plan", "log_intervention_checkin", "save_self_measurement", "read_intervention_plan", "review_interventions", "model_intervention_goals"];
+declare const TOOL_NAMES: readonly ["read_personal_situation", "list_longevity_intents", "match_longevity_skills", "read_longevity_skill", "run_longevity_skill", "query_longevity_evidence", "list_longevity_domains", "save_personal_profile", "longpi_status", "save_intervention_plan", "draft_intervention_plan", "log_intervention_checkin", "save_self_measurement", "read_intervention_plan", "review_interventions", "model_intervention_goals", "set_followup", "send_followup_message"];
 declare const HARNESS_SKILLS: readonly ["longpi-dispatch", "longpi-board", "longpi-boundary", "longpi-interventions"];
 //#endregion
 //#region src/catalog.d.ts
@@ -1175,11 +1175,16 @@ interface ModelCard {
   /** Stated facts the profile does not hold yet (age, sex, the yes/no facts); unknown is never no. */
   missing_facts?: string[];
   levers: LeverHint[];
+  /**
+   * How far one within-person step of each input moves the model, largest first: years of phenotypic age,
+   * or for china-par percentage points of 10-year risk. key is the biological-variation key (or waist).
+   */
   sensitivity: Array<{
     label: string;
     unit: string;
     years_per_step: number;
     step: string;
+    key?: string;
   }>;
   boundary_zh: string;
 }
@@ -1479,9 +1484,137 @@ declare function buildCalendar(journey: Journey, tracking: Tracking, opts: {
   now: Date;
 }): string;
 //#endregion
+//#region src/planner.d.ts
+declare const DRAFT_CATEGORIES: readonly ["diet", "exercise", "sleep", "weight", "behavior", "supplement"];
+type DraftCategory = (typeof DRAFT_CATEGORIES)[number];
+interface PlanBrief {
+  today: string;
+  focus: Focus[];
+  /** What is worth improving, most important first. */
+  priorities: Array<{
+    marker_key: string;
+    label_zh: string;
+    value: number | null;
+    unit: string;
+    date: string | null;
+    why_zh: string;
+    source: 'phenoage_levers' | 'china_par_levers' | 'focus';
+  }>;
+  /** Evidence-backed options for those priorities, from data/effects.jsonl; never a drug. */
+  candidates: Array<{
+    id: string;
+    intervention_zh: string;
+    category: string;
+    marker_key: string;
+    label_zh: string;
+    effect: {
+      value: number;
+      unit: string;
+      kind?: string;
+    };
+    duration_weeks: number | null;
+    population: string;
+    design: string;
+    doi: string;
+    verified: boolean;
+    expected_zh: string;
+    needs_doctor: boolean;
+    cautions_zh: string[];
+    /** The trial average in the unit of this person's latest value, when it converts exactly; else null. Used for goals. */
+    effect_in_record_unit: number | null;
+    /** The evidence row's own note (left out for supplements, whose notes name study doses). */
+    note_zh?: string;
+    /** Forms the evidence row lists (快走、骑车…), for exercise items. */
+    examples_zh: string[];
+  }>;
+  safety: {
+    medications: string[];
+    notes_zh: string[];
+  };
+  past_items: Array<{
+    title: string;
+    category: string;
+    verdicts: string[];
+    adherence_pct: number | null;
+  }>;
+  /** Daily wearable metrics on record (dailySteps, dailyTotalSleepTime): a target is only offered for these. */
+  metrics: string[];
+  /** Why a focus or a priority got no item (no evidence rows yet, no value on record). */
+  notes_zh: string[];
+  boundary_zh: string;
+}
+interface DraftItem {
+  /** The evidence row the item came from. */
+  id: string;
+  category: DraftCategory;
+  category_zh: string;
+  title: string;
+  detail: string;
+  start: string;
+  markers: string[];
+  target: {
+    metric: string;
+    op: '>=' | '<=';
+    value: number;
+    unit: string;
+  } | null;
+  evidence: {
+    effect_id: string;
+    expected_zh: string;
+    doi: string;
+    verified: boolean;
+    population: string;
+  };
+  needs_doctor: boolean;
+  cautions_zh: string[];
+}
+interface PlanDraft {
+  title: string;
+  items: DraftItem[];
+  goals: Array<{
+    marker: string;
+    value: number;
+    unit: string;
+    basis_zh: string;
+  }>;
+  notes_zh: string[];
+}
+interface BriefOptions {
+  /** Focus for this draft only (the saved profile is not changed). */
+  focus?: readonly Focus[];
+  /** Markers the person asked to improve, by name or key; they come first. */
+  markers?: readonly string[];
+}
+declare function buildPlanBrief(context: TrackingContext & {
+  mount?: MountState;
+}, options?: BriefOptions): Promise<PlanBrief>;
+declare function expectedText(row: EffectRow): string;
+/**
+ * Up to maxItems (default 3) items that cover the most important priorities with the largest verified
+ * effects: one item per intervention, at most one supplement, different categories first. Deterministic;
+ * saves nothing. Null when there is nothing evidence-backed to propose.
+ */
+declare function draftPlan(brief: PlanBrief, opts: {
+  today: string;
+  maxItems?: number;
+}): PlanDraft | null;
+/**
+ * The plan to save when the person accepts a draft on the page. Each item is rebuilt from the evidence
+ * by its id (so nothing but what the evidence says is saved, and never a drug), goals are recomputed for
+ * the items kept and filtered to the ones they kept. The caller normalizes and saves it like any plan.
+ */
+declare function acceptedPlan(brief: PlanBrief, posted: unknown, today: string): {
+  ok: true;
+  plan: Record<string, unknown>;
+} | {
+  ok: false;
+  error: string;
+  problems: string[];
+};
+//#endregion
 //#region src/index.d.ts
 declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { CONSENT_VERSION, Config, type Consent, EMPTY_PROFILE, FOCUS, FOCUS_ZH, type Focus, HARNESS_SKILLS, type Journey, PHENOAGE_SKILL, PRODUCT_VERSION, type Profile, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RiskFact, SELF_ALIASES, SELF_KEYS, SELF_SPEC, type SelfKey, type SelfRow, type Stage, TOOL_NAMES, addCheckIns, addDays, addSelf, adherenceFor, apply, buildBoard, buildCalendar, buildJourney, buildJourneyFull, buildReport, buildStats, buildTracking, cellNumber, commandExcerpt, currentPlan, daysBetween, deleteSelf, detectIntents, domainSummary, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, foldLine, foldName, homeBloodPressure, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, matchSkills, mentionedEntities, mergeProfile, mergeSelf, modelGoals, name, nameVariants, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, profileComplete, rcvBand, readCheckIns, readFailed, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, runReady, runSkill, runnableFrom, sameMeasure, savePlan, selfIndicators, selfSeries, seriesOf, setConsent, stageMeasurements, stageNow, suggestNext, summarizeIndicators, summarizeMedications, tableOf, unansweredOf, unitFactor, versionCheck, within, wrapGuardMessage, writeProfile, writeStats };
+export { CONSENT_VERSION, Config, type Consent, DRAFT_CATEGORIES, type DraftItem, EMPTY_PROFILE, FOCUS, FOCUS_ZH, type Focus, HARNESS_SKILLS, type Journey, PHENOAGE_SKILL, PRODUCT_VERSION, type PlanBrief, type PlanDraft, type Profile, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RiskFact, SELF_ALIASES, SELF_KEYS, SELF_SPEC, type SelfKey, type SelfRow, type Stage, TOOL_NAMES, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, apply, buildBoard, buildCalendar, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, cellNumber, commandExcerpt, currentPlan, daysBetween, deleteSelf, detectIntents, domainSummary, draftPlan, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expectedText, foldLine, foldName, homeBloodPressure, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, matchSkills, mentionedEntities, mergeProfile, mergeSelf, modelGoals, name, nameVariants, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, profileComplete, rcvBand, readCheckIns, readFailed, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, runReady, runSkill, runnableFrom, sameMeasure, savePlan, selfIndicators, selfSeries, seriesOf, setConsent, stageMeasurements, stageNow, suggestNext, summarizeIndicators, summarizeMedications, tableOf, unansweredOf, unitFactor, versionCheck, within, wrapGuardMessage, writeProfile, writeStats };
