@@ -495,6 +495,47 @@ try {
     rmSync(cutDir, { recursive: true, force: true })
   }
 
+  // A home cuff twice a day fills Mirobody's 500-row limit: the older readings are read again, never judged as cut
+  {
+    const record = JSON.parse(readFileSync(join(root, 'fixtures', 'mirobody', 'record.json'), 'utf8'))
+    record.observations = record.observations.filter((row) => row.indicator !== 'systolicPressures')
+    let readings = 0
+    for (let day = new Date('2025-10-01T00:00:00Z'); day <= new Date('2026-09-20T00:00:00Z'); day.setUTCDate(day.getUTCDate() + 1)) {
+      const date = day.toISOString().slice(0, 10)
+      for (const hour of ['07', '21']) {
+        record.observations.push({ indicator: 'systolicPressures', name: '', system: 'device', code: 'systolicPressures', unit: 'mmHg', date, time: `${date} ${hour}:40:00`, value: String(date >= '2026-05-01' ? 124 : 142), file: '' })
+        readings += 1
+      }
+    }
+    // One day alone past the limit cannot be split by date: that series stays cut.
+    for (let i = 0; i < 520; i += 1) record.observations.push({ indicator: 'heartRates', name: '', system: 'device', code: 'heartRates', unit: 'bpm', date: '2026-09-01', time: `2026-09-01 ${String(Math.floor(i / 60)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}:00`, value: '70', file: '' })
+    const dense = await startFakeMirobody({ record })
+    const denseDir = mkdtempSync(join(tmpdir(), 'longpi-interventions-dense-'))
+    try {
+      mod.writeProfile(denseDir, { age: 53, sex: 'male', risk: facts })
+      const denseConfig = { ...config, mcpUrl: dense.url, dataDir: denseDir }
+      mod.invalidateRecords()
+      mod.invalidateTracking()
+      const read = await mod.loadSeries(denseConfig, ['systolicPressures', 'heartRates'], { start: '2025-08-01', end: TODAY, resolution: 'raw' })
+      assert.equal(read.series.systolicPressures.points.length, readings, 'every reading of the dense series')
+      assert.equal(new Set(read.series.systolicPressures.points.map((point) => point.time)).size, readings, 'none twice')
+      assert.deepEqual(read.cut, ['heartRates'])
+      assert.ok(dense.calls.length <= 6, `a few reads (${dense.calls.length})`)
+      const recs = await mod.loadRecords(denseConfig, denseDir, '/nonexistent/plugin')
+      const drafted = mod.normalizePlan({ title: '减盐', items: [{ category: 'diet', title: '减盐', start: '2026-03-01', markers: ['收缩压'] }] }, { today: TODAY, medications: [], previous: null })
+      mod.savePlan(denseDir, drafted.plan)
+      const denseTracking = await mod.buildTracking({ config: denseConfig, dataDir: denseDir, skillsHome: home, catalog, records: recs, today: TODAY })
+      const verdict = denseTracking.items[0].verdicts[0]
+      assert.equal(verdict.indicator, 'systolicPressures')
+      assert.doesNotMatch(verdict.reason_zh, /没有读全/)
+      assert.ok(verdict.baseline && verdict.followup && verdict.change, verdict.reason_zh)
+      assert.match(verdict.reason_zh, /变化 -13%/)
+    } finally {
+      await dense.close()
+      rmSync(denseDir, { recursive: true, force: true })
+    }
+  }
+
   console.log(`interventions ok (${tracking.items.length} items, ${tracking.items.flatMap((item) => item.verdicts).length} verdicts, phenotypic age at ${tracking.bioage.points.length} checkups, band ±${tracking.bioage.band_years.toFixed(1)} y)`)
 } finally {
   await server.close()
