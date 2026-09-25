@@ -1,0 +1,73 @@
+{
+  "version": "5.0.0",
+  "today": "2026-09-24",
+  "consent": { "accepted": true, "version": "2026-09-24", "accepted_at": "2026-09-24T01:12:00.000Z", "current": "2026-09-24" },
+  "profile": {
+    "displayName": "陈明",
+    "birthYear": 1972,
+    "age": 53,
+    "sex": "male",
+    "risk": { "smoker": false, "diabetes": false, "bp_treated": false, "north": true, "urban": true, "family_history": false },
+    "focus": ["bioage", "cardio"],
+    "complete": true,
+    "questions": [
+      { "key": "age", "label_zh": "实足年龄", "unlocks_zh": "身体年龄、心血管风险", "answered": true },
+      { "key": "sex", "label_zh": "性别", "unlocks_zh": "身体年龄、心血管风险", "answered": true },
+      { "key": "smoker", "label_zh": "现在吸烟", "unlocks_zh": "心血管风险", "answered": true },
+      { "key": "diabetes", "label_zh": "有糖尿病（空腹血糖 ≥7.0 mmol/L 或在用降糖药）", "unlocks_zh": "心血管风险", "answered": true },
+      { "key": "bp_treated", "label_zh": "两周内用过降压药", "unlocks_zh": "心血管风险", "answered": true },
+      { "key": "north", "label_zh": "住在北方（长江以北）", "unlocks_zh": "心血管风险", "answered": true },
+      { "key": "urban", "label_zh": "住在城市", "unlocks_zh": "心血管风险", "answered": true, "men_only": true },
+      { "key": "family_history", "label_zh": "父母或兄弟姐妹有心梗或脑卒中", "unlocks_zh": "心血管风险", "answered": true, "men_only": true }
+    ]
+  },
+  "focus_options": [
+    { "key": "bioage", "label_zh": "身体年龄" },
+    { "key": "cardio", "label_zh": "心血管" },
+    { "key": "glucose", "label_zh": "血糖" },
+    { "key": "weight", "label_zh": "体重" },
+    { "key": "sleep", "label_zh": "睡眠" },
+    { "key": "plan", "label_zh": "看方案有没有用" }
+  ],
+  "records": { "status": "ok", "error": "", "indicator_count": 21, "full_checkups": 4, "latest_checkup": "2026-08-26", "mirobody_mounted": true },
+  "results": {
+    "bioage": { "status": "ok", "phenoage": 44.76, "advance": -8.14, "date": "2026-08-26", "checkups": 4, "band_years": 2.94, "blocker_zh": "", "missing": [] },
+    "risk": { "status": "ok", "risk_pct": 4.0, "category_zh": "低危", "date": "2026-08-26", "blocker_zh": "", "missing_labs": [], "missing_facts": [] }
+  },
+  "addons": [],
+  "self": {
+    "latest": [
+      { "key": "waist", "label_zh": "腰围", "value": 88, "unit": "cm", "date": "2026-09-20", "n": 1 },
+      { "key": "sbp", "label_zh": "收缩压", "value": 126.4, "unit": "mmHg", "date": "2026-09-23", "n": 7 },
+      { "key": "dbp", "label_zh": "舒张压", "value": 81.3, "unit": "mmHg", "date": "2026-09-23", "n": 7 },
+      { "key": "weight", "label_zh": "体重", "value": 72.5, "unit": "kg", "date": "2026-09-23", "n": 1 }
+    ],
+    "keys": [
+      { "key": "waist", "label_zh": "腰围", "unit": "cm", "units": ["cm", "厘米", "in", "inch", "英寸", "尺", "市尺", "寸"] },
+      { "key": "sbp", "label_zh": "收缩压", "unit": "mmHg", "units": ["mmHg", "mmhg"] },
+      { "key": "dbp", "label_zh": "舒张压", "unit": "mmHg", "units": ["mmHg", "mmhg"] },
+      { "key": "weight", "label_zh": "体重", "unit": "kg", "units": ["kg", "公斤", "千克", "斤", "jin", "lb", "lbs"] }
+    ]
+  },
+  "plan": {
+    "exists": true,
+    "title": "2025 秋季方案",
+    "version": 1,
+    "items": 4,
+    "started": "2025-10-20",
+    "days": 339,
+    "checkin_items": [{ "id": "imufy5xey0", "title": "地中海饮食", "done_today": false }],
+    "streak": 0,
+    "adherence_pct": 77
+  },
+  "reminders": [
+    { "kind": "checkin", "text_zh": "今天还有 1 项待打卡", "date": "2026-09-24", "due": true }
+  ],
+  "stage": "routine",
+  "next": { "stage": "routine", "title_zh": "今天的打卡", "detail_zh": "还有 1 项待完成", "action": "checkin" },
+  "suggestions": [
+    { "id": "routine-done", "text_zh": "今天的方案我都完成了" },
+    { "id": "routine-effect", "text_zh": "我的方案有没有效果？" }
+  ],
+  "boundary_zh": "模型估计，不是诊断，也不是用药建议。紧急情况请拨打 120。"
+}
