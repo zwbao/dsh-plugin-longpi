@@ -29,7 +29,7 @@ description: Draft an intervention plan with the person from their results and t
 
 ## 随访提醒
 
-方案保存后，问一次要不要提醒：每天晚上提醒打卡、复测日提醒、每周小结。说明发什么、什么时候、走哪个渠道（桌面通知，或飞书、企业微信、钉钉、Bark 等 webhook），以及默认“简要”模式不会把健康数值和项目名称发出去。对方同意后才用 `set_followup` 打开。对方想要 AI 自己写的随访，就用 `schedule_create` 建一个定时任务，指令是：“LongPi 随访：先调用 review_interventions，再写一段不超过 120 字的中文随访（肯定做到的、指出一项最值得坚持的下一步，不提剂量），然后调用 send_followup_message 发送。”提醒只在 DeepSeek Harness 运行时发送。
+方案保存后，问一次要不要提醒：每天晚上提醒打卡、复测日提醒、每周小结。说明发什么、什么时候、走哪个渠道（桌面通知，或飞书、企业微信、钉钉、Bark 等 webhook），以及默认“简要”模式不会把健康数值和项目名称发出去。对方同意后才用 `set_followup` 打开。对方想要 AI 自己写的随访，就用 `schedule_create` 建一个定时任务，指令是：“LongPi 随访：先调用 review_interventions，再写一段不超过 120 字的中文随访（肯定做到的、指出一项最值得坚持的下一步，不提剂量），然后调用 send_followup_message 发送；如果它因为“简要”设置拒绝，就去掉数值、指标名和项目名，改成笼统的鼓励和“打开健康页查看”再发一次。”免打扰时段里不会发送。提醒只在 DeepSeek Harness 运行时发送。
 
 ## 每天
 

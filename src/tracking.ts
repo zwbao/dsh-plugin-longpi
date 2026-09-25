@@ -25,6 +25,8 @@ export const RISK_SKILL = 'china-par-ascvd-risk'
 const BIOAGE_CHECKUPS = 6
 const LOOKBACK_DAYS = 3 * 365
 const CACHE_TTL_MS = 60_000
+/** A compute still running after this long (every skill run has its own timeout, at most 3 minutes) is started again. */
+const PENDING_MAX_MS = 10 * 60_000
 
 export interface TrackingContext {
   config: Config
@@ -110,7 +112,8 @@ export interface Tracking {
   changes_note_zh: string
 }
 
-const memo = new Map<string, { at: number; value: Promise<Tracking> }>()
+/** settled: when the compute finished (null while it runs). The TTL runs from then, so a slow compute is never started twice. */
+const memo = new Map<string, { started: number; settled: number | null; value: Promise<Tracking> }>()
 let generation = 0
 
 export function invalidateTracking(): void {
@@ -144,12 +147,19 @@ export async function buildTracking(context: TrackingContext): Promise<Tracking>
     createHash('sha1').update(indicators.map((row) => `${row.name}=${row.value}@${row.date ?? ''}`).join('\n')).digest('hex'),
   ].join('\u0000')
   const now = Date.now()
+  const fresh = (entry: { started: number; settled: number | null }) => entry.settled == null ? now - entry.started < PENDING_MAX_MS : now - entry.settled < CACHE_TTL_MS
   const hit = memo.get(key)
-  if (hit && now - hit.at < CACHE_TTL_MS) return hit.value
-  for (const [name, entry] of memo) if (now - entry.at >= CACHE_TTL_MS) memo.delete(name)
+  if (hit && fresh(hit)) return hit.value
+  for (const [name, entry] of memo) if (!fresh(entry)) memo.delete(name)
   const value = compute(context, plan, checkins)
-  memo.set(key, { at: now, value })
-  value.catch(() => memo.delete(key))
+  const entry = { started: now, settled: null as number | null, value }
+  memo.set(key, entry)
+  value.then(() => {
+    entry.settled = Date.now()
+  }, () => {
+    // A failed compute is not kept; a newer entry under the same key is not this one's to remove.
+    if (memo.get(key) === entry) memo.delete(key)
+  })
   return value
 }
 

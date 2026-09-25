@@ -66,6 +66,31 @@ try {
   const context = await contextOf(configFor(dir, full.url))
   const tracking = await mod.buildTracking(context)
   const brief = await mod.buildPlanBrief(context)
+
+  // the tracking memo keeps a compute that is still running, however long it takes; its 60 s start when it settles
+  mod.invalidateTracking()
+  let reads = 0
+  const counted = new Proxy(context, { get: (target, key) => { if (key === 'skillsHome') reads += 1; return target[key] } })
+  const realNow = Date.now
+  try {
+    const first = mod.buildTracking(counted)
+    assert.ok(reads > 1, 'the first call computes')
+    Date.now = () => realNow() + 61_000
+    reads = 0
+    const second = mod.buildTracking(counted)
+    assert.equal(reads, 1, 'still running after 60 s: shared, not started again')
+    await Promise.all([first, second])
+    reads = 0
+    await mod.buildTracking(counted)
+    assert.equal(reads, 1, 'fresh right after it settled')
+    Date.now = () => realNow() + 2 * 61_000 + 1000
+    reads = 0
+    const third = mod.buildTracking(counted)
+    assert.ok(reads > 1, '60 s after it settled it is computed again')
+    await third
+  } finally {
+    Date.now = realNow
+  }
   assert.equal(brief.today, TODAY)
   assert.deepEqual(brief.focus, ['bioage', 'cardio'])
   assert.ok(brief.priorities.length > 0)
@@ -132,6 +157,25 @@ try {
   assert.ok(by('omega3-2g-tg').cautions_zh.includes('可能增加出血风险，先与医生确认'))
   assert.equal(by('aerobic-sbp').needs_doctor, true)
 
+  // the latest value is the newest of the rows measuring a marker, whatever their order; a urine row is never one
+  const measuresOf = (row) => mod.markerFor(reference.biovar, row)?.key
+  const layered = await mod.buildPlanBrief(await contextOf(configFor(dir, full.url), (records) => ({
+    ...records,
+    indicators: [
+      { name: '体重', label: '体重', loinc: '29463-7', value: '80', unit: 'kg', date: '2024-03-01' },
+      { name: 'bodyMass', value: '74', unit: 'kg', date: '2026-09-20' },
+      { name: '空腹血糖', label: '空腹血糖', loinc: '14771-0', value: '6.5', unit: 'mmol/L', date: '2022-03-01' },
+      { name: '葡萄糖', label: '葡萄糖', loinc: '2345-7', value: '5.4', unit: 'mmol/L', date: '2026-03-01' },
+      { name: '尿葡萄糖', label: '尿葡萄糖(GLU)', loinc: '2350-7', value: '14', unit: 'mmol/L', date: '2026-09-01' },
+      ...records.indicators.filter((row) => !['weight', 'glucose'].includes(measuresOf(row))),
+    ],
+  })), { focus: ['weight', 'glucose'] })
+  const latestOf = (key) => layered.priorities.find((row) => row.marker_key === key)
+  assert.deepEqual([latestOf('weight').value, latestOf('weight').date], [74, '2026-09-20'], 'the smart scale is newer than the checkup')
+  assert.deepEqual([latestOf('glucose').value, latestOf('glucose').date], [5.4, '2026-03-01'], 'the newer glucose code, not the urine row')
+  const weightGoal = mod.draftPlan(layered, { today: TODAY })?.goals.find((goal) => goal.marker === '体重')
+  if (weightGoal) assert.ok(weightGoal.value < 74, 'a weight goal starts from today\'s weight')
+
   // --- 3. the draft --------------------------------------------------------------
   const draft = mod.draftPlan(brief, { today: TODAY })
   assert.ok(draft, 'there is something evidence-backed to propose')
@@ -151,8 +195,12 @@ try {
     assert.ok(typeof item.category_zh === 'string' && item.category_zh)
   }
   const saltGoal = draft.goals.find((goal) => goal.marker === '收缩压')
-  assert.deepEqual(saltGoal, { marker: '收缩压', value: 121.8, unit: 'mmHg', basis_zh: '按试验平均效应估算，不是个人预测（减盐：−4.18 mmHg）' }, '126 − 4.18')
-  for (const goal of draft.goals) assert.ok(goal.basis_zh.startsWith('按试验平均效应估算，不是个人预测'))
+  const salt = draft.items.find((item) => item.title === '减盐')
+  assert.deepEqual(saltGoal, { marker: '收缩压', value: 121.8, unit: 'mmHg', basis_zh: '按试验平均效应估算，不是个人预测（减盐：−4.18 mmHg）', basis_item_id: salt.id }, '126 − 4.18')
+  for (const goal of draft.goals) {
+    assert.ok(goal.basis_zh.startsWith('按试验平均效应估算，不是个人预测'))
+    assert.ok(draft.items.some((item) => item.id === goal.basis_item_id), 'every goal names the item it comes from')
+  }
   assert.ok(draft.notes_zh.includes('LongPi 不开始、不停止、也不调整任何处方药。'))
   const normalized = mod.normalizePlan({ title: draft.title, items: draft.items, goals: draft.goals }, { today: TODAY, medications: [], previous: null })
   assert.deepEqual(normalized.errors, [], 'the draft items pass normalizePlan')
@@ -198,6 +246,41 @@ try {
   assert.equal(mod.draftPlan(emptyBrief, { today: TODAY }), null)
   assert.match(emptyBrief.boundary_zh, /不开始、不停止、也不调整任何处方药/)
 
+  // goals from a hand-built brief: which item a goal comes from, and no goal a trial average cannot stand for
+  const effectRow = (id, intervention_zh, category, marker_key, label_zh, value, unit) => ({
+    id, intervention_zh, category, marker_key, label_zh, effect: { value, unit, kind: 'mean_difference' }, duration_weeks: 12, population: '成人',
+    design: 'rct', doi: `10.0/${id}`, verified: true, expected_zh: '试验中', needs_doctor: false, cautions_zh: [], effect_in_record_unit: value, examples_zh: [],
+  })
+  const priority = (marker_key, label_zh, value, unit) => ({ marker_key, label_zh, value, unit, date: '2026-09-01', why_zh: '你指定要改善的指标', source: 'focus' })
+  const handBrief = (priorities, candidates) => ({
+    today: TODAY, focus: [], priorities, candidates, safety: { medications: [], notes_zh: [] }, past_items: [], metrics: [], notes_zh: [], boundary_zh: '',
+  })
+  const lipids = handBrief([priority('ldl', 'LDL-C', 3.8, 'mmol/L'), priority('tg', '甘油三酯', 2.0, 'mmol/L')], [
+    effectRow('e2', '有氧运动', 'exercise', 'ldl', 'LDL-C', -0.1, 'mmol/L'),
+    effectRow('e2-tg', '有氧运动', 'exercise', 'tg', '甘油三酯', -0.2, 'mmol/L'),
+    effectRow('e1', '地中海饮食', 'diet', 'ldl', 'LDL-C', -0.3, 'mmol/L'),
+  ])
+  const lipidDraft = mod.draftPlan(lipids, { today: TODAY })
+  assert.deepEqual(lipidDraft.items.map((item) => item.id), ['e2', 'e1'])
+  assert.deepEqual(lipidDraft.goals.map((goal) => [goal.marker, goal.value, goal.basis_item_id]), [['LDL-C', 3.7, 'e2'], ['甘油三酯', 1.8, 'e2']])
+  // what the page keeps after removing an item: goals whose item stays; the server saves exactly those values
+  for (const removed of ['e1', 'e2']) {
+    const keptItems = lipidDraft.items.filter((item) => item.id !== removed)
+    const keptGoals = lipidDraft.goals.filter((goal) => keptItems.some((item) => item.id === goal.basis_item_id))
+    const accepted = mod.acceptedPlan(lipids, { items: keptItems, goals: keptGoals }, TODAY)
+    assert.deepEqual(accepted.plan.goals, keptGoals.map(({ marker, value, unit }) => ({ marker, value, unit })), `removing ${removed}: shown is saved`)
+  }
+  // hs-CRP 0.4 mg/L with a −0.98 mg/L trial average: no negative goal, and none that moves today's value by more than half
+  const lowCrp = handBrief([priority('crp', '超敏C反应蛋白', 0.4, 'mg/L'), priority('tg', '甘油三酯', 1.2, 'mmol/L'), priority('sbp', '收缩压', 126, 'mmHg')], [
+    effectRow('med-crp', '地中海饮食', 'diet', 'crp', '超敏C反应蛋白', -0.98, 'mg/L'),
+    effectRow('med-tg', '地中海饮食', 'diet', 'tg', '甘油三酯', -0.9, 'mmol/L'),
+    effectRow('salt-sbp', '减盐', 'diet', 'sbp', '收缩压', -4.18, 'mmHg'),
+  ])
+  const lowDraft = mod.draftPlan(lowCrp, { today: TODAY, maxItems: 3 })
+  assert.deepEqual(lowDraft.goals.map((goal) => [goal.marker, goal.value]), [['收缩压', 121.8]], 'no goal at or below zero, and none beyond half of today\'s value')
+  for (const label of ['超敏C反应蛋白', '甘油三酯']) assert.ok(lowDraft.notes_zh.some((line) => line.startsWith(`${label}：你现在的数值和试验人群相差较远`)), label)
+  assert.ok(mod.acceptedPlan(lowCrp, { items: lowDraft.items, goals: [{ marker: '超敏C反应蛋白', value: -0.58, unit: 'mg/L' }] }, TODAY).plan.goals.length === 0, 'nor is one saved')
+
   // --- 4. tool and routes -------------------------------------------------------------
   const routeDir = tempDir('routes')
   profileIn(routeDir)
@@ -229,7 +312,8 @@ try {
   // the person removed one item and kept one goal; a tampered detail and goal value are replaced by the evidence's
   const kept = got.draft.items.slice(0, -1)
   const tampered = kept.map((item, index) => (index === 0 ? { ...item, detail: '每天 2 片', markers: ['白蛋白'] } : item))
-  const keptGoal = got.draft.goals.filter((goal) => kept.some((item) => item.markers.includes(goal.marker))).slice(0, 1).map((goal) => ({ ...goal, value: 1 }))
+  const keptGoal = got.draft.goals.filter((goal) => kept.some((item) => item.id === goal.basis_item_id)).slice(0, 1).map((goal) => ({ ...goal, value: 1 }))
+  assert.equal(keptGoal.length, 1, 'a goal whose item was kept')
   res = await call(host, 'POST', '/api/longpi/plan-draft/accept', { draft: { ...got.draft, items: tampered, goals: keptGoal } })
   assert.equal(res.status, 200, res.text)
   assert.deepEqual(res.json(), { ok: true, plan: { version: 1, title: got.draft.title, items: kept.length } })

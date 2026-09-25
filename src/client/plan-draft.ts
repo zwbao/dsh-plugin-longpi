@@ -45,11 +45,15 @@ function covers(items: DraftItem[], goal: DraftGoal): boolean {
 
 /**
  * A goal is the latest value plus one item's trial effect. When the person
- * drops every item that stood behind a goal, the goal goes too; a goal no item
- * names (the server's own call) is kept.
+ * drops the item it came from, the goal goes too, even if another kept item
+ * covers the marker: the server would base it on that item's effect, a value
+ * the person never saw, so it is not saved. Older servers do not say which
+ * item a goal came from: then it goes with the last item covering its marker.
  */
 function keptGoals(draft: PlanDraft, kept: DraftItem[]): DraftGoal[] {
-  return draft.goals.filter((goal) => !covers(draft.items, goal) || covers(kept, goal))
+  return draft.goals.filter((goal) => goal.basis_item_id
+    ? kept.some((item) => item.id === goal.basis_item_id)
+    : !covers(draft.items, goal) || covers(kept, goal))
 }
 
 function Evidence(props: { item: DraftItem }): React.ReactElement {
@@ -229,12 +233,14 @@ export function PlanDraftCard(props: { journey: Journey; onNotice: Notify; onPro
       h('div', { className: 'lp-form-actions' }, h(Hint, { onPrompt: props.onPrompt })))
   }
   if (!data.draft) {
-    const why = [...data.brief.safety.notes_zh, data.brief.boundary_zh].filter(Boolean)
+    // The reasons first (no evidence for a focus, a change to show a doctor); the medication screen is fine print.
+    const reasons = data.brief.notes_zh
+    const fine = [...new Set([...reasons.slice(1), ...data.brief.safety.notes_zh, data.brief.boundary_zh].filter(Boolean))]
     return h('div', { className: 'lp-card lp-draft' },
       h('div', { className: 'lp-kicker' }, '方案草稿'),
       h('h3', { className: 'lp-h3 lp-draft-title' }, '现在还起草不了方案'),
-      h('p', { className: 'lp-muted' }, why[0] || '你的记录里还没有能对上研究证据的指标。'),
-      ...why.slice(1).map((text) => h('p', { key: text, className: 'lp-fine' }, text)),
+      h('p', { className: 'lp-muted' }, reasons[0] || '你的记录里还没有能对上研究证据的指标。'),
+      ...fine.map((text) => h('p', { key: text, className: 'lp-fine' }, text)),
       h(Priorities, { brief: data.brief }),
       h('div', { className: 'lp-form-actions lp-draft-actions' }, h(Hint, { onPrompt: props.onPrompt })))
   }

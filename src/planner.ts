@@ -13,9 +13,9 @@ import type { MountState } from './mirobody.ts'
 import { preferSelf } from './measurements.ts'
 import { FOCUS_ZH, type Focus } from './profile.ts'
 import { sameMeasure } from './records.ts'
-import { loadReference, markerFor, type Biovar, type BiovarMarker, type EffectRow } from './reference.ts'
+import { checkupMarkerFor, loadReference, markerFor, type Biovar, type BiovarMarker, type EffectRow } from './reference.ts'
 import { SELF_SPEC } from './selfmeasure.ts'
-import type { IndicatorRow, MedicationRow } from './situation.ts'
+import { currentMedications, GLUCOSE_LOWERING, type IndicatorRow, type MedicationRow } from './situation.ts'
 import { foldName, parseNumber } from './units.ts'
 
 export const DRAFT_CATEGORIES = ['diet', 'exercise', 'sleep', 'weight', 'behavior', 'supplement'] as const
@@ -84,7 +84,8 @@ export interface DraftItem {
 export interface PlanDraft {
   title: string
   items: DraftItem[]
-  goals: Array<{ marker: string; value: number; unit: string; basis_zh: string }>
+  /** basis_item_id: the draft item whose evidence gives the goal; the goal goes when that item is removed. */
+  goals: Array<{ marker: string; value: number; unit: string; basis_zh: string; basis_item_id: string }>
   notes_zh: string[]
 }
 
@@ -94,6 +95,8 @@ type Candidate = PlanBrief['candidates'][number]
 const BOUNDARY_ZH = 'LongPi 只起草生活方式方案：饮食、运动、睡眠、体重、饮酒、吸烟、盐这类行为目标，每一项都注明研究证据。它不开始、不停止、也不调整任何处方药，不给药物或补剂的剂量；补剂只作为需先与医生确认的选项。试验平均效应不是对你个人的预测，个人效果因人而异。'
 const SUPPLEMENT_DETAIL = '可选：需先与医生确认；不给剂量。'
 const GOAL_BASIS = '按试验平均效应估算，不是个人预测'
+/** A trial average that would move today's value by more than this share is no goal for this person. */
+const GOAL_MAX_CHANGE = 0.5
 const DETAIL_MAX = 300
 const PRIORITY_MAX = 8
 const LEVERS_PER_MODEL = 3
@@ -110,12 +113,10 @@ const DESIGN_ZH: Record<string, string> = { 'meta-analysis': '荟萃分析', rct
 
 // A conservative screen, not an exhaustive interaction check: name fragments of common medicine classes.
 const ANTIHYPERTENSIVE = /地平|普利|沙坦|洛尔|噻嗪|吲达帕胺|螺内酯|呋塞米|托拉塞米|降压|amlodipine|nifedipine|felodipine|pril\b|sartan|olol\b|thiazide|indapamide|spironolactone|furosemide/i
-const GLUCOSE_LOWERING = /二甲双胍|格列|列汀|列净|胰岛素|阿卡波糖|鲁肽|降糖|metformin|insulin|gliptin|gliflozin|glutide|glipizide|gliclazide|glimepiride|acarbose/i
 const ANTITHROMBOTIC = /阿司匹林|氯吡格雷|替格瑞洛|华法林|沙班|达比加群|肝素|抗凝|抗血小板|aspirin|clopidogrel|ticagrelor|prasugrel|warfarin|xaban\b|dabigatran|heparin/i
 const FISH_OIL = /鱼油|omega-?3|ω-?3|\bepa\b|\bdha\b/i
 const TIME_RESTRICTED = /限时进食|time-restricted|16:8|轻断食/i
 const SMOKING_CESSATION = /戒烟|smoking cessation|quit smoking/i
-const STOPPED = /^\s*(?:stopped|ended|inactive|completed|discontinued|停用|已停|已停用|停药|结束|已结束|已完成)\s*$/i
 
 export interface BriefOptions {
   /** Focus for this draft only (the saved profile is not changed). */
@@ -136,7 +137,7 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
   const priorities = prioritiesOf({
     focus, asked: options.markers ?? [], models: tracking.models, biovar: reference.biovar, indicators, notes,
   })
-  const current = medications.filter((row) => row.name && !STOPPED.test(row.status ?? '')).map((row) => row.name)
+  const current = currentMedications(medications)
   const screen = safetyScreen(profile.risk, medications, current)
   const candidates = candidatesOf(priorities, reference.effects, reference.biovar, screen, profile.risk.smoker === false)
   for (const row of priorities) {
@@ -235,20 +236,33 @@ function keyOf(name: string, biovar: Biovar): string | null {
   return (biovar.markers.find((row) => row.key === text) ?? markerFor(biovar, { name: text, label: text }))?.key ?? null
 }
 
-/** The latest value on record for a marker key: a self measurement only when it is newer (records.ts merges it only then). */
+function dateOf(row: IndicatorRow): string {
+  return row.date || row.last_date || ''
+}
+
+/** The newest of the rows; list order (a self measurement first) breaks a tie. */
+function newest(rows: IndicatorRow[]): IndicatorRow | undefined {
+  return rows.reduce<IndicatorRow | undefined>((best, row) => (!best || dateOf(row) > dateOf(best) ? row : best), undefined)
+}
+
+/**
+ * The latest value on record for a marker key. Several rows can measure one marker (a checkup weight and
+ * a smart scale, two glucose codes): the newest counts. Rows matched only by name are a fallback, and never
+ * a row whose LOINC code the marker does not list (urine glucose is not blood glucose).
+ */
 function latestFor(key: string, indicators: readonly IndicatorRow[], biovar: Biovar): { value: number; unit: string; date: string | null } | null {
   const rows = preferSelf(indicators).filter((row) => parseNumber(row.value) != null)
   let row: IndicatorRow | undefined
   if (key === 'waist') {
-    row = rows.find((item) => sameMeasure('waist', item))
+    row = newest(rows.filter((item) => sameMeasure('waist', item)))
   } else {
     const marker = biovar.markers.find((item) => item.key === key)
     if (!marker) return null
-    row = rows.find((item) => (item.loinc && marker.loinc.includes(item.loinc)) || (marker.device_codes ?? []).includes(item.name))
-      ?? rows.find((item) => markerFor(biovar, item) === marker)
+    row = newest(rows.filter((item) => (item.loinc && marker.loinc.includes(item.loinc)) || (marker.device_codes ?? []).includes(item.name)))
+      ?? newest(rows.filter((item) => checkupMarkerFor(biovar, item) === marker))
   }
   if (!row) return null
-  return { value: parseNumber(row.value) as number, unit: row.unit, date: row.date || row.last_date || null }
+  return { value: parseNumber(row.value) as number, unit: row.unit, date: dateOf(row) || null }
 }
 
 // --- candidates ----------------------------------------------------------------
@@ -517,14 +531,17 @@ export function draftPlan(brief: PlanBrief, opts: { today: string; maxItems?: nu
   }
   if (chosen.length === 0) return null
   const items = chosen.map((group) => itemFor(group, brief, opts.today))
+  const implausible: string[] = []
+  const goals = goalsFor(brief, chosen, implausible)
   const notes = [
     '这是草稿：先在对话里按你的习惯和限制调整，确认后才保存。',
     ...(items.some((item) => item.category === 'supplement') ? ['补剂只是可选项：需先与医生确认，不给剂量。'] : []),
     ...brief.priorities.filter((row) => row.value == null && items.some((item) => item.markers.includes(row.label_zh))).map((row) => `${row.label_zh}还没有记录，暂不设目标；下次检查测一次才有基线。`),
+    ...implausible.map((label) => `${label}：你现在的数值和试验人群相差较远，试验平均效应不宜直接换算成你的目标，暂不设目标。`),
     ...brief.notes_zh,
     'LongPi 不开始、不停止、也不调整任何处方药。',
   ]
-  return { title: `改善方案（${opts.today}）`, items, goals: goalsFor(brief, chosen), notes_zh: [...new Set(notes)] }
+  return { title: `改善方案（${opts.today}）`, items, goals, notes_zh: [...new Set(notes)] }
 }
 
 /**
@@ -577,18 +594,40 @@ export function acceptedPlan(brief: PlanBrief, posted: unknown, today: string): 
   }
 }
 
-function goalsFor(brief: PlanBrief, chosen: Group[]): PlanDraft['goals'] {
-  const out: PlanDraft['goals'] = []
+type Goal = PlanDraft['goals'][number]
+
+/**
+ * Today's value plus one row's trial average. A change that rounds away is no goal; nor is one that would
+ * reach zero or move today's value by more than half: the person is then too far from the trial's
+ * population for its average to stand as their target.
+ */
+function goalFrom(priority: Priority, row: Candidate): Omit<Goal, 'basis_item_id'> | 'rounds' | 'implausible' {
+  const today = priority.value as number
+  const delta = row.effect_in_record_unit as number
+  const value = round(today + delta, today)
+  if (value === today) return 'rounds'
+  if (value <= 0 || Math.abs(delta) > Math.abs(today) * GOAL_MAX_CHANGE) return 'implausible'
+  const signed = `${delta < 0 ? '−' : '+'}${amountText(delta, priority.unit)}`
+  return { marker: priority.label_zh, value, unit: priority.unit, basis_zh: `${GOAL_BASIS}（${row.intervention_zh}：${signed}）` }
+}
+
+/** One goal per priority with a value: from the first chosen item whose evidence gives a usable one. Markers left without one because every goal was implausible go into `implausible`. */
+function goalsFor(brief: PlanBrief, chosen: Group[], implausible: string[] = []): Goal[] {
+  const out: Goal[] = []
   for (const priority of brief.priorities) {
     if (priority.value == null) continue
-    const row = chosen.flatMap((group) => group.rows).find((item) => item.marker_key === priority.marker_key && item.verified && item.effect_in_record_unit != null)
-    if (!row) continue
-    const delta = row.effect_in_record_unit as number
-    const value = round(priority.value + delta, priority.value)
-    // Today's value plus the trial average; a change that rounds away is no goal.
-    if (value === priority.value) continue
-    const signed = `${delta < 0 ? '−' : '+'}${amountText(delta, priority.unit)}`
-    out.push({ marker: priority.label_zh, value, unit: priority.unit, basis_zh: `${GOAL_BASIS}（${row.intervention_zh}：${signed}）` })
+    let skipped = false
+    for (const group of chosen) {
+      const rows = group.rows.filter((item) => item.marker_key === priority.marker_key && item.verified && item.effect_in_record_unit != null)
+      const goal = rows.map((row) => goalFrom(priority, row)).find((row) => typeof row === 'object')
+      if (goal && typeof goal === 'object') {
+        out.push({ ...goal, basis_item_id: (group.rows[0] as Candidate).id })
+        skipped = false
+        break
+      }
+      if (rows.some((row) => goalFrom(priority, row) === 'implausible')) skipped = true
+    }
+    if (skipped) implausible.push(priority.label_zh)
   }
   return out
 }

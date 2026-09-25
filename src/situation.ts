@@ -27,6 +27,15 @@ export interface MedicationRow {
   plan_id?: string
 }
 
+// A conservative screen, not an exhaustive one: name fragments of glucose-lowering medicines.
+export const GLUCOSE_LOWERING = /二甲双胍|格列|列汀|列净|胰岛素|阿卡波糖|鲁肽|降糖|metformin|insulin|gliptin|gliflozin|glutide|glipizide|gliclazide|glimepiride|acarbose/i
+const STOPPED = /^\s*(?:stopped|ended|inactive|completed|discontinued|停用|已停|已停用|停药|结束|已结束|已完成)\s*$/i
+
+/** Names on the medication plan that are not marked stopped. */
+export function currentMedications(rows: readonly MedicationRow[]): string[] {
+  return rows.filter((row) => row.name && !STOPPED.test(row.status ?? '')).map((row) => row.name)
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   return value as Record<string, unknown>

@@ -72,7 +72,7 @@ export interface FollowupDeps {
   platform: string
   /** Run a command without a shell; resolves, never rejects. */
   run: (command: string, args: string[], timeoutMs: number) => Promise<ChannelResult>
-  fetch: (url: string, init: { method: 'POST'; headers: Record<string, string>; body: string; signal: AbortSignal }) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>
+  fetch: (url: string, init: { method: 'POST'; headers: Record<string, string>; body: string; signal: AbortSignal; redirect: 'manual' }) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>
 }
 
 export const DEFAULT_FOLLOWUP: FollowupSettings = {
@@ -205,6 +205,12 @@ function applyUpdate(current: FollowupSettings, update: Record<string, unknown>,
       next.quiet = { start: timeOf(quiet.start) as string, end: timeOf(quiet.end) as string }
     } else if (!lenient) return fail('quiet must be {start: HH:MM, end: HH:MM} (different times) or null')
   }
+  // A time in the part of a quiet window that runs to midnight could never go out: its day ends inside the window.
+  if (!lenient && ['checkin_time', 'retest_time', 'weekly', 'quiet'].some((key) => key in update)) {
+    const lost = ([['checkin_time', next.checkin_time], ['retest_time', next.retest_time], ['weekly.time', next.weekly?.time]] as const)
+      .find(([, time]) => time != null && heldUntil(time, next.quiet) == null)
+    if (lost) return fail(`${lost[0]} ${lost[1]} falls in the quiet hours ${next.quiet?.start}–${next.quiet?.end} before midnight, so it would never be sent; move it or the quiet hours`)
+  }
   if ('webhook' in update) {
     const hook = update.webhook
     if (hook === null) next.webhook = null
@@ -324,6 +330,20 @@ export function inQuiet(quiet: FollowupSettings['quiet'], now: Date): boolean {
   return start < end ? minutes >= start && minutes < end : minutes >= start || minutes < end
 }
 
+/**
+ * When a send planned at `time` goes out: inside quiet hours it waits for them to end, the same day. A
+ * time in the part of a window that runs to midnight (23:00 in 22:30–08:00) never goes out: null.
+ */
+export function heldUntil(time: string, quiet: FollowupSettings['quiet']): string | null {
+  if (!quiet) return time
+  const minutes = minutesOf(time)
+  const start = minutesOf(quiet.start)
+  const end = minutesOf(quiet.end)
+  if (start < end) return minutes >= start && minutes < end ? quiet.end : time
+  if (minutes >= start) return null
+  return minutes < end ? quiet.end : time
+}
+
 function localIso(day: string, time: string): string {
   return `${day}T${time}:00`
 }
@@ -421,30 +441,36 @@ export function followupArmed(settings: FollowupSettings, log: readonly Followup
   return Boolean(weekly && isoWeekday(now) === weekly.day && minutes >= minutesOf(weekly.time) && !sent.has(`weekly:${isoWeek(now)}`))
 }
 
-/** The next time each kind is planned (local ISO, no zone), or null: none while follow-up is off. */
+/**
+ * The next time each kind is planned (local ISO, no zone), or null: none while follow-up is off. A time
+ * inside quiet hours is shown when they end, and a time that can never go out is not shown at all.
+ */
 export function nextTimes(settings: FollowupSettings, state: FollowupState | null, now: Date, log: readonly FollowupLogRow[]): { checkin: string | null; retest: string | null; weekly: string | null } {
   if (!settings.enabled) return { checkin: null, retest: null, weekly: null }
   const today = isoDay(now)
   const minutes = localMinutes(now)
   const sent = sentKeys(log)
+  const checkinAt = heldUntil(settings.checkin_time, settings.quiet)
   let checkin: string | null = null
-  if (state && state.checkin_items > 0) {
-    const later = minutes < minutesOf(settings.checkin_time) && !sent.has(`checkin:${today}`)
-    checkin = localIso(later ? today : addDays(today, 1), settings.checkin_time)
+  if (state && state.checkin_items > 0 && checkinAt) {
+    const later = minutes < minutesOf(checkinAt) && !sent.has(`checkin:${today}`)
+    checkin = localIso(later ? today : addDays(today, 1), checkinAt)
   }
+  const retestAt = heldUntil(settings.retest_time, settings.quiet)
   let retest: string | null = null
-  for (const row of state?.retests ?? []) {
+  for (const row of retestAt ? state?.retests ?? [] : []) {
     if (sent.has(retestKey(row))) continue
     const day = row.date > today ? row.date : today
-    if (day === today && minutes >= minutesOf(settings.retest_time)) continue
-    const at = localIso(day, settings.retest_time)
+    if (day === today && minutes >= minutesOf(retestAt as string)) continue
+    const at = localIso(day, retestAt as string)
     if (!retest || at < retest) retest = at
   }
+  const weeklyAt = settings.weekly ? heldUntil(settings.weekly.time, settings.quiet) : null
   let weekly: string | null = null
-  if (settings.weekly && state?.plan_exists) {
+  if (settings.weekly && weeklyAt && state?.plan_exists) {
     const offset = (settings.weekly.day - isoWeekday(now) + 7) % 7
-    const thisWeek = offset > 0 || (minutes < minutesOf(settings.weekly.time) && !sent.has(`weekly:${isoWeek(now)}`))
-    weekly = localIso(addDays(today, thisWeek ? offset : offset + 7), settings.weekly.time)
+    const thisWeek = offset > 0 || (minutes < minutesOf(weeklyAt) && !sent.has(`weekly:${isoWeek(now)}`))
+    weekly = localIso(addDays(today, thisWeek ? offset : offset + 7), weeklyAt)
   }
   return { checkin, retest, weekly }
 }
@@ -599,6 +625,8 @@ export async function sendFollowup(settings: FollowupSettings, message: string, 
         headers: { 'Content-Type': 'application/json; charset=utf-8' },
         body: JSON.stringify(request.body),
         signal: AbortSignal.timeout(SEND_TIMEOUT_MS),
+        // A redirect is a failed send, never a message forwarded to another address.
+        redirect: 'manual',
       })
       channels.webhook = webhookAnswer(settings.webhook.kind, response.status, await response.text().catch(() => ''))
     } catch (error) {

@@ -90,7 +90,21 @@ function updateOf(form: Form, settings: FollowupSettings): FollowupUpdate {
   return body
 }
 
+const minutesOf = (time: string) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5))
+
+/** A time in the part of a quiet window that runs to midnight is never sent (the server refuses it too). */
+function lostInQuiet(form: Form): string | null {
+  if (!form.quietOn || form.quietStart <= form.quietEnd) return null
+  const start = minutesOf(form.quietStart)
+  const times: Array<[string, string]> = [['打卡提醒', form.checkin_time], ['复测提醒', form.retest_time]]
+  if (form.weeklyDay !== '0') times.push(['每周小结', form.weeklyTime])
+  const hit = times.find(([, time]) => minutesOf(time) >= start)
+  return hit ? `${hit[0]}的时间 ${hit[1]} 在免打扰时段（${form.quietStart}–${form.quietEnd}）的午夜前部分，当天就发不出去了；请调整时间或免打扰时段。` : null
+}
+
 function problemOf(form: Form, settings: FollowupSettings): string | null {
+  const quiet = lostInQuiet(form)
+  if (quiet) return quiet
   if (form.kind === '') return null
   const url = form.url.trim()
   const stored = settings.webhook?.kind === form.kind
@@ -187,7 +201,9 @@ function TestResult(props: { result: FollowupTestResponse; kind: WebhookKind | n
 function Settings(props: { data: FollowupResponse; onNotice: Notify }): React.ReactElement {
   const { data } = props
   const settings = data.settings
-  const signature = JSON.stringify(settings)
+  // The switch is not part of the form: flipping it must not throw away edits not yet saved.
+  const { enabled: _enabled, ...formSettings } = settings
+  const signature = JSON.stringify(formSettings)
   const [form, setForm] = React.useState<Form>(() => formOf(settings))
   const [saving, setSaving] = React.useState(false)
   const [switching, setSwitching] = React.useState(false)

@@ -1045,6 +1045,16 @@ declare function markerFor(biovar: Biovar, indicator: {
   label?: string;
 }): BiovarMarker | null;
 /**
+ * markerFor for a row that carries a LOINC code. A code the matched row does not list is a different
+ * measurement, often another specimen (urine creatinine is 2161-8, serum 2160-0; a report may print it as
+ * 肌酐(尿) or 尿肌酐(Cr)), so the name match only stands for a row with no codes of its own.
+ */
+declare function checkupMarkerFor(biovar: Biovar, indicator: {
+  name?: string;
+  loinc?: string;
+  label?: string;
+}): BiovarMarker | null;
+/**
  * Reference change value as fractions of the first result: a later result
  * outside [down, up] is unlikely (at z) to be noise alone. Symmetric for
  * normally distributed markers; asymmetric (log-normal) for right-skewed ones
@@ -1476,6 +1486,7 @@ interface FollowupDeps {
     headers: Record<string, string>;
     body: string;
     signal: AbortSignal;
+    redirect: 'manual';
   }) => Promise<{
     ok: boolean;
     status: number;
@@ -1512,6 +1523,11 @@ declare function isoWeekday(now: Date): Weekday;
 declare function isoWeek(now: Date): string;
 /** Inside quiet hours; a window whose start is after its end wraps midnight (22:30–08:00). */
 declare function inQuiet(quiet: FollowupSettings['quiet'], now: Date): boolean;
+/**
+ * When a send planned at `time` goes out: inside quiet hours it waits for them to end, the same day. A
+ * time in the part of a window that runs to midnight (23:00 in 22:30–08:00) never goes out: null.
+ */
+declare function heldUntil(time: string, quiet: FollowupSettings['quiet']): string | null;
 interface FollowupSend {
   kind: FollowupKind;
   key: string;
@@ -1532,7 +1548,10 @@ declare function decideFollowup(input: {
 }): FollowupSend[];
 /** Whether anything could be due now, from the clock, the settings and the log alone: the journey is read only then. */
 declare function followupArmed(settings: FollowupSettings, log: readonly FollowupLogRow[], now: Date): boolean;
-/** The next time each kind is planned (local ISO, no zone), or null: none while follow-up is off. */
+/**
+ * The next time each kind is planned (local ISO, no zone), or null: none while follow-up is off. A time
+ * inside quiet hours is shown when they end, and a time that can never go out is not shown at all.
+ */
 declare function nextTimes(settings: FollowupSettings, state: FollowupState | null, now: Date, log: readonly FollowupLogRow[]): {
   checkin: string | null;
   retest: string | null;
@@ -1816,8 +1835,18 @@ declare function buildCalendar(journey: Journey, tracking: Tracking, opts: {
 }): string;
 //#endregion
 //#region src/tools-followup.d.ts
-/** The model's text is refused, with the reason, when it names a dose or (with minimal detail) a health value. */
-declare function followupTextProblem(text: string, detail: 'minimal' | 'full'): string;
+/**
+ * The model's text is refused, with the reason, when it names a dose or, with minimal detail, a health
+ * value, a number that is not a date, a time or a count, or one of `names` (the plan's item titles and
+ * markers). Full-width digits and letters are read as their plain forms.
+ */
+declare function followupTextProblem(text: string, detail: 'minimal' | 'full', names?: readonly string[]): string;
+/**
+ * Why a set_followup call needs the person's own approval, or '' when it does not: turning reminders on,
+ * sending item names and adherence (detail full), or any webhook address. The tool's text says "only on
+ * their word"; this makes DSH ask them, so text the model read cannot switch it on alone.
+ */
+declare function followupApprovalReason(args: unknown): string;
 //#endregion
 //#region src/planner.d.ts
 declare const DRAFT_CATEGORIES: readonly ["diet", "exercise", "sleep", "weight", "behavior", "supplement"];
@@ -1906,11 +1935,13 @@ interface DraftItem {
 interface PlanDraft {
   title: string;
   items: DraftItem[];
+  /** basis_item_id: the draft item whose evidence gives the goal; the goal goes when that item is removed. */
   goals: Array<{
     marker: string;
     value: number;
     unit: string;
     basis_zh: string;
+    basis_item_id: string;
   }>;
   notes_zh: string[];
 }
@@ -1984,4 +2015,4 @@ declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { type BootstrapResult, CHANGES_NOTE_ZH, CONSENT_VERSION, Config, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMPTY_PROFILE, FOCUS, FOCUS_ZH, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, HARNESS_SKILLS, type Journey, PHENOAGE_SKILL, PRODUCT_VERSION, type PlanBrief, type PlanDraft, type Profile, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RecordChange, type RiskFact, SELF_ALIASES, SELF_KEYS, SELF_SPEC, type SelfKey, type SelfRow, type SendResult, type Stage, TOOL_NAMES, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, bootstrapWorkspace, buildBoard, buildCalendar, buildChanges, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, cellNumber, commandExcerpt, currentPlan, daysBetween, decideFollowup, deleteSelf, desktopCommand, desktopSupported, detectIntents, domainSummary, draftPlan, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expectedText, foldLine, foldName, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, homeBloodPressure, inQuiet, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, maskUrl, matchSkills, mentionedEntities, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, profileComplete, publicFollowup, rcvBand, readCheckIns, readFailed, readFollowup, readFollowupLog, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, runReady, runSkill, runnableFrom, sameMeasure, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, stageMeasurements, stageNow, startFollowup, suggestNext, summarizeIndicators, summarizeMedications, tableOf, trackingGeneration, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };
+export { type BootstrapResult, CHANGES_NOTE_ZH, CONSENT_VERSION, Config, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMPTY_PROFILE, FOCUS, FOCUS_ZH, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, HARNESS_SKILLS, type Journey, PHENOAGE_SKILL, PRODUCT_VERSION, type PlanBrief, type PlanDraft, type Profile, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RecordChange, type RiskFact, SELF_ALIASES, SELF_KEYS, SELF_SPEC, type SelfKey, type SelfRow, type SendResult, type Stage, TOOL_NAMES, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, bootstrapWorkspace, buildBoard, buildCalendar, buildChanges, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, cellNumber, checkupMarkerFor, commandExcerpt, currentPlan, daysBetween, decideFollowup, deleteSelf, desktopCommand, desktopSupported, detectIntents, domainSummary, draftPlan, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expectedText, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, heldUntil, homeBloodPressure, inQuiet, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, maskUrl, matchSkills, mentionedEntities, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, profileComplete, publicFollowup, rcvBand, readCheckIns, readFailed, readFollowup, readFollowupLog, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, runReady, runSkill, runnableFrom, sameMeasure, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, stageMeasurements, stageNow, startFollowup, suggestNext, summarizeIndicators, summarizeMedications, tableOf, trackingGeneration, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };

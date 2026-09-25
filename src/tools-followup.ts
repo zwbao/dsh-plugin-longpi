@@ -1,12 +1,15 @@
 // Tools for follow-up reminders the person opted into: change the settings
-// (only on their word), and send a message the model wrote through the same
-// channels, for DSH scheduled follow-ups they agreed to. Never a dose; with
-// minimal detail, never a health value.
+// (only on their word: turning reminders on, sending item names, or a webhook
+// address waits for their approval in DSH), and send a message the model wrote
+// through the same channels, for DSH scheduled follow-ups they agreed to.
+// Never a dose, never inside quiet hours; with minimal detail, never a health
+// value, a plan item or a marker name.
 
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Config } from './config.ts'
-import { followupResponse, readFollowup, sendNow, writeFollowup, WEBHOOK_KINDS, type FollowupState } from './followup.ts'
+import { followupResponse, inQuiet, maskUrl, readFollowup, sendNow, writeFollowup, WEBHOOK_KINDS, type FollowupState } from './followup.ts'
+import { currentPlan } from './interventions.ts'
 import { asJson } from './json.ts'
 import { resolveDataDir } from './paths.ts'
 
@@ -20,26 +23,90 @@ const jsonOut = {
 }
 
 const TEXT_MAX = 300
-// An amount of a medicine or supplement (mg, 粒, 片…); a concentration such as mmol/L is not one.
-const DOSE = /\d+(?:\.\d+)?\s*(?:mg|mcg|µg|μg|ug|iu|g|ml|毫克|微克|国际单位|克|毫升|粒|片|颗|支|滴|袋|勺)(?!\s*\/\s*(?:d?l|ml)\b)|[一二两三四五六七八九十半]+\s*(?:粒|片|颗|支|滴|袋|勺)|剂量/i
-// A health value: a number with a clinical unit (mmHg, mmol/L, kg, cm, %, 岁…).
-const HEALTH_VALUE = /\d+(?:\.\d+)?\s*(?:mmhg|mmol|umol|μmol|mg\/|g\/l|kg|公斤|斤|cm|厘米|%|％|岁|bpm|次\/分)/i
+const CN_NUMBER = '[零〇一二两三四五六七八九十百千万半]+'
+// An amount of a medicine or supplement (mg, 粒, 片, 单位…), in digits or Chinese numerals; a concentration
+// such as mmol/L is not one, and neither is a weight in 千克.
+const DOSE = new RegExp(
+  '\\d+(?:\\.\\d+)?\\s*(?:mg|mcg|µg|μg|ug|iu|g|ml|毫克|微克|国际单位|单位|克|毫升|粒|片|颗|支|滴|袋|勺|胶囊|丸|tablets?|capsules?)(?!\\s*\\/\\s*(?:d?l|ml)\\b)'
+  + `|${CN_NUMBER}\\s*(?:毫克|微克|国际单位|单位|(?<!千)克|毫升|粒|片|颗|支|滴|袋|勺|胶囊|丸)|剂量`,
+  'i',
+)
+// A health value: a number with a clinical unit (mmHg, mmol/L, kg, cm, %, 岁…), in digits or Chinese numerals.
+const HEALTH_VALUE = new RegExp(
+  '\\d+(?:\\.\\d+)?\\s*(?:mmhg|mmol|umol|μmol|mg\\/|g\\/l|kg|公斤|千克|斤|cm|厘米|毫米汞柱|毫摩尔|微摩尔|%|个?百分点|岁|bpm|次\\s*[/每]\\s*分)'
+  + `|${CN_NUMBER}\\s*(?:公斤|千克|斤|厘米|毫米汞柱|毫摩尔|微摩尔|个?百分点|岁)|百分之[零〇一二两三四五六七八九十\\d]`,
+  'i',
+)
+// With minimal detail a number may only be a date, a clock time or a count of days, times or items.
+const ALLOWED_NUMBERS = [
+  /(?:19|20)\d{2}\s*[-/.年]\s*\d{1,2}(?:\s*[-/.月]\s*\d{1,2}\s*[日号]?)?/g,
+  /\d{1,2}\s*月\s*\d{1,2}\s*[日号]?/g,
+  /\d{1,2}\s*[:：]\s*\d{2}/g,
+  /\d+\s*(?:个)?(?:天|次(?!\s*[/每])|项|条|周|星期|个月|分钟|小时|点(?!\s*\d))/g,
+]
+// A marker abbreviation followed by a number (LDL-C3.8, HbA1c 6.5): the lookbehind below lets HbA1c itself through.
+const MARKER_NUMBER = /\b(?:ldl|hdl|tg|tc|crp|hs-?crp|sbp|dbp|bmi|hba1c|a1c|glu|fbg|fpg)(?:-?c)?\s*[:：=]?\s*\d/i
 
-/** The model's text is refused, with the reason, when it names a dose or (with minimal detail) a health value. */
-export function followupTextProblem(text: string, detail: 'minimal' | 'full'): string {
+/**
+ * The model's text is refused, with the reason, when it names a dose or, with minimal detail, a health
+ * value, a number that is not a date, a time or a count, or one of `names` (the plan's item titles and
+ * markers). Full-width digits and letters are read as their plain forms.
+ */
+export function followupTextProblem(text: string, detail: 'minimal' | 'full', names: readonly string[] = []): string {
   if (!text) return '没有内容。'
   if ([...text].length > TEXT_MAX) return `超过 ${TEXT_MAX} 字。`
-  if (DOSE.test(text)) return '随访消息不能包含剂量。'
-  if (detail === 'minimal' && HEALTH_VALUE.test(text)) return '随访设置为“简要”，消息里不能有健康数值（血压、血脂、体重、百分比等）。'
+  const plain = text.normalize('NFKC')
+  if (DOSE.test(plain)) return '随访消息不能包含剂量。'
+  if (detail === 'full') return ''
+  const numbers = ALLOWED_NUMBERS.reduce((rest, pattern) => rest.replace(pattern, ' '), plain)
+  if (HEALTH_VALUE.test(plain) || MARKER_NUMBER.test(plain) || /(?<![A-Za-z])\d/.test(numbers)) {
+    return '随访设置为“简要”，消息里不能有健康数值（血压、血糖、血脂、体重、百分比等）；数字只能是日期、时间或天数、项数。'
+  }
+  const folded = plain.toLowerCase()
+  const named = names.map((name) => name.normalize('NFKC').trim()).find((name) => [...name].length >= 2 && folded.includes(name.toLowerCase()))
+  if (named) return `随访设置为“简要”，消息里不能出现方案项目或指标的名称（这次是「${named}」）；改成不含细节的提醒，例如“打开健康页查看”。`
   return ''
+}
+
+/** Item titles and marker names of the current plan: what minimal detail keeps on this machine. */
+function planNames(dataDir: string): string[] {
+  const plan = currentPlan(dataDir)
+  if (!plan) return []
+  return [...new Set([...plan.items.flatMap((item) => [item.title, ...item.markers]), ...plan.goals.map((goal) => goal.marker)])]
+}
+
+/**
+ * Why a set_followup call needs the person's own approval, or '' when it does not: turning reminders on,
+ * sending item names and adherence (detail full), or any webhook address. The tool's text says "only on
+ * their word"; this makes DSH ask them, so text the model read cannot switch it on alone.
+ */
+export function followupApprovalReason(args: unknown): string {
+  const update = args && typeof args === 'object' && !Array.isArray(args) ? args as Record<string, unknown> : {}
+  const parts: string[] = []
+  if (update.enabled === true) parts.push('开启随访提醒')
+  if (update.detail === 'full') parts.push('把提醒内容改为“完整”（项目名称、执行率会发出去）')
+  const hook = update.webhook
+  if (hook && typeof hook === 'object') {
+    const url = typeof (hook as Record<string, unknown>).url === 'string' ? (hook as Record<string, unknown>).url as string : ''
+    parts.push(url ? `把提醒发到 ${maskUrl(url)}` : '更改 Webhook 渠道')
+  }
+  return parts.length > 0 ? `LongPi 要${parts.join('、')}。只有你本人要求过才同意。` : ''
 }
 
 export function registerFollowupTools(ctx: Context, config: () => Config, state: () => Promise<FollowupState | null>): void {
   const dataDir = () => resolveDataDir(config().dataDir)
 
+  // After every other listener allowed it: turning follow-up on, full detail or a webhook address needs the person's yes.
+  ctx.on('tools/pre-execute', async (exec, next) => {
+    const decision = await next()
+    if (exec.name !== 'set_followup' || decision.kind !== 'allow') return decision
+    const reason = followupApprovalReason(exec.arguments)
+    return reason ? { kind: 'ask', reason } : decision
+  })
+
   ctx.tools.register(defineTool({
     name: 'set_followup',
-    description: 'Change follow-up reminders LongPi sends by itself while DeepSeek Harness runs: a check-in reminder at checkin_time when plan items are not ticked, a reminder at retest_time on retest days, a weekly summary, and one nudge when the first steps stall. Channels: a desktop notification and/or one webhook (feishu, wecom, dingtalk, bark, or generic: the person\'s own https endpoint). Pass only what the person just asked to change. Set enabled only when the person asked for follow-up (true) or to stop it (false). detail minimal (default) sends no health value or item name; full sends item names and adherence. Returns the settings (the webhook URL masked, the secret only as set or not) and the next planned times.',
+    description: 'Change follow-up reminders LongPi sends by itself while DeepSeek Harness runs: a check-in reminder at checkin_time when plan items are not ticked, a reminder at retest_time on retest days, a weekly summary, and one nudge when the first steps stall. Channels: a desktop notification and/or one webhook (feishu, wecom, dingtalk, bark, or generic: the person\'s own https endpoint). Pass only what the person just asked to change. Set enabled only when the person asked for follow-up (true) or to stop it (false). detail minimal (default) sends no health value or item name; full sends item names and adherence. Turning it on, detail full and a webhook ask the person to approve in DeepSeek Harness; if that is refused, point them to the settings page. Returns the settings (the webhook URL masked, the secret only as set or not) and the next planned times.',
     parameters: {
       enabled: { type: 'boolean', description: 'true only when the person asked for reminders; false when they want them off.' },
       checkin_time: { type: 'string', description: 'HH:MM local, default 21:00.' },
@@ -96,7 +163,7 @@ export function registerFollowupTools(ctx: Context, config: () => Config, state:
 
   ctx.tools.register(defineTool({
     name: 'send_followup_message',
-    description: 'Send one short follow-up message the person agreed to (for example from a DSH scheduled follow-up) through their follow-up channels. Only works when follow-up is on; refused otherwise, and at most 6 messages a day in all. Never include a dose. With detail minimal, include no health values (no blood pressure, lipid, weight or percent figures). Chinese, at most 300 characters.',
+    description: 'Send one short follow-up message the person agreed to (for example from a DSH scheduled follow-up) through their follow-up channels. Only works when follow-up is on and outside the quiet hours; refused otherwise, and at most 6 messages a day in all. Never include a dose. With detail minimal (the default), include no health values (no blood pressure, glucose, lipid, weight or percent figures; numbers only as dates, times or counts of days or items) and no plan item or marker names: write a general encouragement and point to the 健康 page. A refused message says why; rewrite it and send once more. Chinese, at most 300 characters.',
     parameters: {
       text: { type: 'string', required: true, description: 'The message, at most 300 characters.' },
       kind: { type: 'string', enum: ['checkin', 'weekly', 'custom'], description: 'What it is about; default custom.' },
@@ -109,8 +176,12 @@ export function registerFollowupTools(ctx: Context, config: () => Config, state:
       if (!settings.enabled) {
         return asJson({ ok: false, error: '随访提醒没有打开。只有本人要求后，才用 set_followup 打开。', sent: false })
       }
+      // The page's test button is the only send inside quiet hours.
+      if (inQuiet(settings.quiet, new Date())) {
+        return asJson({ ok: false, error: `现在是免打扰时段（${settings.quiet?.start}–${settings.quiet?.end}），没有发送。`, sent: false })
+      }
       const text = typeof args.text === 'string' ? args.text.trim() : ''
-      const problem = followupTextProblem(text, settings.detail)
+      const problem = followupTextProblem(text, settings.detail, planNames(dataDir()))
       if (problem) return asJson({ ok: false, error: problem, sent: false })
       const kind = args.kind === 'checkin' || args.kind === 'weekly' ? args.kind : 'custom'
       const result = await sendNow(dataDir(), text, kind)

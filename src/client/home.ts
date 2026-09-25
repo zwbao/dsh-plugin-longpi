@@ -43,13 +43,18 @@ function useOwnRow(ref: React.RefObject<HTMLDivElement>): void {
     if (!node) return undefined
     let item: HTMLElement = node
     let row = node.parentElement
+    let found = false
     for (let depth = 0; row && depth < 4; depth += 1) {
       const style = window.getComputedStyle(row)
-      if (style.display.includes('flex') && style.flexWrap === 'wrap' && !style.flexDirection.startsWith('column')) break
+      if (style.display.includes('flex') && style.flexWrap === 'wrap' && !style.flexDirection.startsWith('column')) {
+        found = true
+        break
+      }
       item = row
       row = row.parentElement
     }
-    if (!row) return undefined
+    // No wrapping row within reach: leave DSH's layout alone rather than style an unrelated ancestor.
+    if (!found) return undefined
     const saved = item.getAttribute('style')
     item.style.flex = '0 0 100%'
     item.style.maxWidth = '100%'

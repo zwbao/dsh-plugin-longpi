@@ -150,6 +150,8 @@ export interface PlanBrief {
   }>
   safety: { medications: string[]; notes_zh: string[] }
   past_items: Array<{ title: string; category: string; verdicts: string[]; adherence_pct: number | null }>
+  /** Why a focus or a priority got no item, and a record change to show a doctor first. */
+  notes_zh: string[]
   boundary_zh: string
 }
 
@@ -167,7 +169,8 @@ export interface DraftItem {
   cautions_zh: string[]
 }
 
-export interface DraftGoal { marker: string; value: number; unit: string; basis_zh: string }
+/** basis_item_id: the draft item whose evidence gives the goal (older servers leave it out). */
+export interface DraftGoal { marker: string; value: number; unit: string; basis_zh: string; basis_item_id?: string }
 
 export interface PlanDraft {
   title: string

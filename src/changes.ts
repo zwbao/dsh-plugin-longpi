@@ -3,13 +3,18 @@
 // one before it and against the first of the last six, and a change counts only
 // when it is larger than the reference change value (RCV): the same, sourced
 // criterion the plan verdicts use. Nothing else is invented: no reference
-// ranges, no thresholds of our own. A change the table cannot call good is one
-// to show a doctor; this module never names a cause.
+// ranges, no thresholds of our own. A change in the wrong direction, or in
+// either direction on a marker judged by its reference range (haemoglobin,
+// MCV), is one to show a doctor; a marker with no good direction (weight) is
+// shown neutrally. A fall in blood glucose is not called good news: for
+// someone with diabetes or on a glucose-lowering medicine it goes to a doctor
+// too. This module never names a cause.
 
 import type { Config } from './config.ts'
 import { addDays } from './interventions.ts'
 import { loadSeries, type RecordSnapshot, type SeriesPoint } from './records.ts'
-import { loadReference, markerFor, rcvBand, type BiovarMarker } from './reference.ts'
+import { checkupMarkerFor, loadReference, rcvBand, type BiovarMarker } from './reference.ts'
+import { currentMedications, GLUCOSE_LOWERING } from './situation.ts'
 import { normalizeUnit } from './units.ts'
 
 export interface RecordChange {
@@ -49,6 +54,9 @@ const RANGE_ZH = '变化超出了正常波动；是否需要处理要结合参�
 const BETTER_ZH = '变化超出了正常波动，方向是好的。'
 // Weight and other rows without a better direction: a real change, nothing more to say.
 const NEUTRAL_ZH = '变化超出了正常波动。'
+// A fall in these can go too far (low blood glucose), above all on a glucose-lowering medicine.
+const GLUCOSE_KEYS = ['glucose', 'hba1c']
+const GLUCOSE_FALL_ZH = '变化超出了正常波动。你有糖尿病或在用降糖药，血糖类指标明显下降也需要留意，建议带着这几次体检报告咨询医生。'
 /** Checkup days kept per marker, the most recent. */
 const KEEP_POINTS = 6
 const MAX_CHANGES = 6
@@ -117,7 +125,7 @@ function verdictOf(better: BiovarMarker['better'], direction: RecordChange['dire
   return 'unclear'
 }
 
-function changeOf(marker: BiovarMarker, points: Point[], z: number): (RecordChange & { ratio: number }) | null {
+function changeOf(marker: BiovarMarker, points: Point[], z: number, glucoseTreated: boolean): (RecordChange & { ratio: number }) | null {
   if (points.length < 2) return null
   const last = points.at(-1) as Point
   const band = rcvBand(marker, z)
@@ -126,8 +134,10 @@ function changeOf(marker: BiovarMarker, points: Point[], z: number): (RecordChan
   const pick = options.filter((row): row is Candidate => row != null).sort((a, b) => b.ratio - a.ratio)[0]
   if (!pick) return null
   const direction = pick.pct > 0 ? 'up' : 'down'
-  const verdict = verdictOf(marker.better, direction)
-  const askDoctor = verdict === 'worse' || (verdict === 'unclear' && marker.better === 'range')
+  // Fasting glucose falling is never called good news; HbA1c falling is, unless the person is treated for diabetes.
+  const glucoseFall = direction === 'down' && GLUCOSE_KEYS.includes(marker.key) && (glucoseTreated || marker.key === 'glucose')
+  const verdict = glucoseFall ? 'unclear' : verdictOf(marker.better, direction)
+  const askDoctor = verdict === 'worse' || (verdict === 'unclear' && marker.better === 'range') || (glucoseFall && glucoseTreated)
   const up = round1(band.up * 100)
   const down = marker.log_normal ? round1(band.down * 100) : -up
   // Log-normal rows (CRP, triglycerides) have an asymmetric band: both sides are shown.
@@ -143,7 +153,7 @@ function changeOf(marker: BiovarMarker, points: Point[], z: number): (RecordChan
     verdict,
     ask_doctor: askDoctor,
     text_zh: `${marker.label_zh} ${marker.unit === '%' ? `${shown(pick.from.value)}%` : shown(pick.from.value)} → ${withUnit(pick.to.value, marker.unit)}（${pick.from.date} → ${pick.to.date}），${direction === 'down' ? '下降' : '上升'} ${Math.abs(pick.pct).toFixed(1)}%，超出正常波动（${bandText}）`,
-    advice_zh: verdict === 'worse' ? WORSE_ZH : verdict === 'better' ? BETTER_ZH : askDoctor ? RANGE_ZH : NEUTRAL_ZH,
+    advice_zh: verdict === 'worse' ? WORSE_ZH : verdict === 'better' ? BETTER_ZH : glucoseFall && askDoctor ? GLUCOSE_FALL_ZH : askDoctor ? RANGE_ZH : NEUTRAL_ZH,
     ...(marker.caveat_zh ? { caveat_zh: marker.caveat_zh } : {}),
     source: { title: marker.cvi_source.title, url: marker.cvi_source.url, ...(marker.cvi_source.doi ? { doi: marker.cvi_source.doi } : {}) },
     verified: marker.verified,
@@ -165,7 +175,8 @@ export async function buildChanges(context: ChangesContext): Promise<{ changes: 
   const byKey = new Map<string, { marker: BiovarMarker; names: string[] }>()
   for (const row of context.records.indicators) {
     if (row.source === 'self' || !row.loinc) continue
-    const marker = markerFor(biovar, row)
+    // By LOINC: a name alone would pool urine creatinine or urine glucose into the blood marker.
+    const marker = checkupMarkerFor(biovar, row)
     // A marker compared on multi-day means (home blood pressure) has no band for a single reading.
     if (!marker || marker.average_days) continue
     const entry = byKey.get(marker.key) ?? { marker, names: [] }
@@ -180,9 +191,11 @@ export async function buildChanges(context: ChangesContext): Promise<{ changes: 
   const reads = await Promise.all(chunks.map((chunk) => loadSeries(context.config, chunk, window)))
   const series: Record<string, SeriesPoint[]> = {}
   for (const read of reads) for (const [name, row] of Object.entries(read.series)) series[name] = row.points
+  const { profile, medications } = context.records
+  const glucoseTreated = profile.risk.diabetes === true || currentMedications(medications).some((name) => GLUCOSE_LOWERING.test(name))
   const found: Array<RecordChange & { ratio: number }> = []
   for (const { marker, names: rows } of byKey.values()) {
-    const change = changeOf(marker, dailyPoints(marker, rows.flatMap((name) => series[name] ?? [])), biovar.z)
+    const change = changeOf(marker, dailyPoints(marker, rows.flatMap((name) => series[name] ?? [])), biovar.z, glucoseTreated)
     if (change) found.push(change)
   }
   found.sort((a, b) => Number(b.ask_doctor) - Number(a.ask_doctor) || b.ratio - a.ratio)

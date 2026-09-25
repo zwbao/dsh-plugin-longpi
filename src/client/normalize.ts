@@ -343,6 +343,7 @@ function briefOf(raw: Raw): PlanBrief {
       verdicts: strings(row.verdicts),
       adherence_pct: num(row.adherence_pct),
     })),
+    notes_zh: strings(raw.notes_zh),
     boundary_zh: str(raw.boundary_zh),
   }
 }
@@ -355,7 +356,10 @@ export function normalizePlanDraft(input: unknown): PlanDraftResponse {
   const goals: DraftGoal[] = draft
     ? objects(draft.goals)
       .filter((row) => str(row.marker) && num(row.value) != null)
-      .map((row) => ({ marker: str(row.marker), value: num(row.value) as number, unit: str(row.unit), basis_zh: str(row.basis_zh) }))
+      .map((row) => ({
+        marker: str(row.marker), value: num(row.value) as number, unit: str(row.unit), basis_zh: str(row.basis_zh),
+        ...(str(row.basis_item_id) ? { basis_item_id: str(row.basis_item_id) } : {}),
+      }))
     : []
   return {
     brief: briefOf(obj(raw.brief)),

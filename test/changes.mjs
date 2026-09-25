@@ -128,6 +128,13 @@ try {
     // a clinic blood pressure: its band is for 7-day home means, so single readings are not judged
     lab('Systolic Blood Pressure-SBP', '收缩压', '8480-6', 'mmHg', D1, 118),
     lab('Systolic Blood Pressure-SBP', '收缩压', '8480-6', 'mmHg', D3, 142),
+    // urine results printed under blood-marker names: another LOINC code, so never pooled into the blood marker
+    lab('Creatinine-Cr', '肌酐', '2160-0', 'umol/L', D1, 80),
+    lab('Creatinine-Cr', '肌酐', '2160-0', 'umol/L', D2, 82),
+    lab('Creatinine-Cr', '肌酐', '2160-0', 'umol/L', D3, 81),
+    lab('Urine Creatinine-UCr', '肌酐(尿)', '2161-8', 'umol/L', D3, 9000, '09:30:00'),
+    lab('Urine Creatinine Ratio-UCR', '尿肌酐(Cr)', '2161-8', 'umol/L', D3, 8800, '09:40:00'),
+    lab('Urine Glucose-UGLU', '尿葡萄糖(GLU)', '2350-7', 'mmol/L', D3, 14, '09:30:00'),
     // wearable series: never a checkup change
     device('bodyMasss', 'kg', D1, 80),
     device('bodyMasss', 'kg', D3, 70),
@@ -168,6 +175,7 @@ try {
   assert.equal(glucose.compare.from_date, D0)
   assert.equal(glucose.compare.pct, pctOf(5.0, Number((110 * factor).toPrecision(6))))
   assert.ok(glucose.compare.pct > bandOf('glucose').up * 100)
+  assert.equal(glucose.points.at(-1).value, Number((110 * factor).toPrecision(6)), 'the urine glucose read later that day is not the last glucose reading')
   assert.equal(glucose.verdict, 'worse', 'lower is better, and it rose')
   assert.equal(glucose.ask_doctor, true)
   assert.equal(glucose.advice_zh, ASK)
@@ -179,7 +187,28 @@ try {
   assert.equal(hba1c.compare.from_date, D1)
   assert.match(hba1c.text_zh, /^糖化血红蛋白 6\.2% → 5\.7%（/)
 
-  for (const key of ['albumin', 'crp', 'wbc', 'weight', 'sbp']) assert.ok(!built.changes.some((row) => row.key === key), `${key} is not listed`)
+  for (const key of ['albumin', 'crp', 'wbc', 'weight', 'sbp', 'creatinine']) assert.ok(!built.changes.some((row) => row.key === key), `${key} is not listed`)
+  assert.equal(mod.checkupMarkerFor(biovar, { name: 'Urine Creatinine-UCr', label: '肌酐(尿)', loinc: '2161-8' }), null, 'a code the row does not list is another measurement')
+  assert.equal(mod.checkupMarkerFor(biovar, { name: 'Creatinine-Cr', label: '肌酐', loinc: '2160-0' }).key, 'creatinine')
+  assert.equal(mod.markerFor(biovar, { name: 'Urine Creatinine-UCr', label: '肌酐(尿)', loinc: '2161-8' }).key, 'creatinine', 'the name alone would match')
+
+  // a fall in fasting glucose is not called good news; on a glucose-lowering medicine it goes to a doctor, HbA1c too
+  const lowGlucose = [
+    lab('Fasting Blood Glucose-FBG', '空腹血糖', '14771-0', 'mmol/L', D1, 5.2),
+    lab('Fasting Blood Glucose-FBG', '空腹血糖', '14771-0', 'mmol/L', D3, 3.6),
+    lab('Glycated Hemoglobin-HbA1c', '糖化血红蛋白', '4548-4', '%', D1, 7.0),
+    lab('Glycated Hemoglobin-HbA1c', '糖化血红蛋白', '4548-4', '%', D3, 4.6),
+  ]
+  const metformin = (status) => ({ medication: '二甲双胍缓释片', status, schedule: '每日1次', today: 'taken', since: '2026-01-01', until: '', source: 'self', plan_id: 'p-met' })
+  const fallsWith = async (plans) => {
+    const server = await serve({ tz: 'Asia/Shanghai', today: TODAY, observations: lowGlucose, medications: { plans, log: [], history: [] } })
+    const rows = (await mod.buildChanges(await contextOf(configFor(synthDir, server.url)))).changes
+    return Object.fromEntries(rows.map((row) => [row.key, [row.verdict, row.ask_doctor, row.advice_zh]]))
+  }
+  const GLUCOSE_FALL = '变化超出了正常波动。你有糖尿病或在用降糖药，血糖类指标明显下降也需要留意，建议带着这几次体检报告咨询医生。'
+  assert.deepEqual(await fallsWith([]), { glucose: ['unclear', false, NEUTRAL], hba1c: ['better', false, GOOD] }, 'no treatment: fasting glucose falling is only a change')
+  assert.deepEqual(await fallsWith([metformin('active')]), { glucose: ['unclear', true, GLUCOSE_FALL], hba1c: ['unclear', true, GLUCOSE_FALL] }, 'on metformin: both to a doctor')
+  assert.deepEqual(await fallsWith([metformin('已停用')]), { glucose: ['unclear', false, NEUTRAL], hba1c: ['better', false, GOOD] }, 'a stopped medicine does not count')
   assert.ok(Math.abs(pctOf(44, 45)) < bandOf('albumin').up * 100, 'albumin moved, within its band')
 
   // weight has no better direction: a real change, but not one for the doctor

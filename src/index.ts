@@ -45,7 +45,7 @@ export { buildBoard } from './board.ts'
 export { readiness, runReady, buildReport } from './overview.ts'
 export { normalizePlan, savePlan, currentPlan, readPlans, addCheckIns, readCheckIns, isoDay, addDays, daysBetween } from './interventions.ts'
 export { adherenceFor, evaluateMarker, evaluatePlan, resolveMarkers, suggestNext } from './evaluate.ts'
-export { loadReference, markerFor, rcvBand, effectsFor } from './reference.ts'
+export { loadReference, markerFor, checkupMarkerFor, rcvBand, effectsFor } from './reference.ts'
 export { buildTracking, invalidateTracking, trackingGeneration, modelGoals, homeBloodPressure, readFailed, PHENOAGE_SKILL, RISK_SKILL } from './tracking.ts'
 export { buildJourney, buildJourneyFull, followupStateOf, retestsOf, stageNow, profileComplete, unansweredOf, within } from './journey.ts'
 export type { Journey, Stage, RecordChange } from './journey.ts'
@@ -53,11 +53,11 @@ export { buildChanges, CHANGES_NOTE_ZH } from './changes.ts'
 export { buildCalendar, escapeText, foldLine, retestDay } from './calendar.ts'
 export {
   readFollowup, writeFollowup, publicFollowup, maskUrl, webhookUrlProblem, readFollowupLog, appendFollowupLog, sentToday, isoWeek, isoWeekday, inQuiet,
-  decideFollowup, followupArmed, nextTimes, desktopCommand, desktopSupported, webhookRequest, webhookAnswer, sendFollowup, sendNow, setFollowupDeps,
+  decideFollowup, followupArmed, nextTimes, heldUntil, desktopCommand, desktopSupported, webhookRequest, webhookAnswer, sendFollowup, sendNow, setFollowupDeps,
   followupTick, startFollowup, followupResponse, followupSummary, DEFAULT_FOLLOWUP, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, WEBHOOK_KINDS,
 } from './followup.ts'
 export type { FollowupSettings, FollowupState, FollowupLogRow, FollowupDeps, SendResult } from './followup.ts'
-export { followupTextProblem } from './tools-followup.ts'
+export { followupTextProblem, followupApprovalReason } from './tools-followup.ts'
 export { buildPlanBrief, draftPlan, acceptedPlan, expectedText, DRAFT_CATEGORIES } from './planner.ts'
 export type { PlanBrief, PlanDraft, DraftItem } from './planner.ts'
 export { bootstrapWorkspace, WORKSPACE_MARKER, WORKSPACE_DIR, WORKSPACE_TITLE } from './workspace.ts'

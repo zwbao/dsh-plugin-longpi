@@ -135,6 +135,18 @@ export function markerFor(biovar: Biovar, indicator: { name?: string; loinc?: st
 }
 
 /**
+ * markerFor for a row that carries a LOINC code. A code the matched row does not list is a different
+ * measurement, often another specimen (urine creatinine is 2161-8, serum 2160-0; a report may print it as
+ * 肌酐(尿) or 尿肌酐(Cr)), so the name match only stands for a row with no codes of its own.
+ */
+export function checkupMarkerFor(biovar: Biovar, indicator: { name?: string; loinc?: string; label?: string }): BiovarMarker | null {
+  const marker = markerFor(biovar, indicator)
+  if (!marker || !indicator.loinc || marker.loinc.includes(indicator.loinc)) return marker
+  if (indicator.name && (marker.device_codes ?? []).includes(indicator.name)) return marker
+  return marker.loinc.length === 0 ? marker : null
+}
+
+/**
  * Reference change value as fractions of the first result: a later result
  * outside [down, up] is unlikely (at z) to be noise alone. Symmetric for
  * normally distributed markers; asymmetric (log-normal) for right-skewed ones

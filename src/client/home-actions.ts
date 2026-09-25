@@ -114,10 +114,18 @@ function Note(props: { text: string | null }): React.ReactElement | null {
 
 function RoutineRow(props: { journey: Journey; openPage: () => void; note: string | null }): React.ReactElement {
   const { journey } = props
-  const [done, setDone] = React.useState<Set<string>>(new Set())
+  // Ticked here and not yet in a refreshed journey. The marks belong to one day, and go once the server
+  // agrees, so a home left open overnight (or an undo on the page) shows what the server says.
+  const [done, setDone] = React.useState<{ day: string; ids: string[] }>({ day: journey.today, ids: [] })
   const [busy, setBusy] = React.useState<string | null>(null)
   const [failed, setFailed] = React.useState<string | null>(null)
   const items = journey.plan.checkin_items
+  React.useEffect(() => {
+    setDone((current) => {
+      const ids = current.day === journey.today ? current.ids.filter((id) => !items.some((row) => row.id === id && row.done_today)) : []
+      return current.day === journey.today && ids.length === current.ids.length ? current : { day: journey.today, ids }
+    })
+  }, [journey])
   const reminder = journey.reminders
     .filter((row) => row.kind === 'retest' && row.date)
     .sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''))[0]
@@ -128,7 +136,7 @@ function RoutineRow(props: { journey: Journey; openPage: () => void; note: strin
     setFailed(null)
     postJson('/api/longpi/checkin', { item: id, done: true })
       .then(() => {
-        setDone((current) => new Set(current).add(id))
+        setDone((current) => ({ day: journey.today, ids: [...(current.day === journey.today ? current.ids : []), id] }))
         notifyChanged()
       })
       .catch((err: unknown) => setFailed(`没有记下「${title}」：${errorText(err, '请稍后再试')}`))
@@ -136,7 +144,7 @@ function RoutineRow(props: { journey: Journey; openPage: () => void; note: strin
   }
 
   const lead: React.ReactNode[] = items.map((row) => {
-    const isDone = row.done_today || done.has(row.id)
+    const isDone = row.done_today || (done.day === journey.today && done.ids.includes(row.id))
     return h('button', {
       key: row.id, type: 'button', className: `lp-task ${isDone ? 'lp-task-done' : ''}`,
       'aria-pressed': isDone, disabled: busy === row.id,

@@ -230,14 +230,15 @@ export function usePageShowing(): boolean {
 /**
  * A prompt waiting for the composer. PromptBridge (in conversation.input.dock,
  * which DSH renders only while a session exists) takes it and inserts it.
- * A page prompt is dropped after 30 s so a later chat is not surprised by it;
- * a home pill's prompt waits until a session exists, because the pill told the
- * person it would (the note below the row says so while it waits).
+ * While no session exists every prompt waits, a pill's or the page's, because
+ * the note below the home row tells the person it will be put in once they
+ * pick a workspace. Once a composer is there, a page prompt it did not take is
+ * dropped after 30 s so a later chat is not surprised by it.
  */
 const PAGE_PROMPT_MS = 30_000
 
 function livePending(): typeof pending {
-  if (pending && pending.origin === 'page' && Date.now() - pending.at > PAGE_PROMPT_MS) pending = null
+  if (pending && pending.origin === 'page' && bridges > 0 && Date.now() - pending.at > PAGE_PROMPT_MS) pending = null
   return pending
 }
 
@@ -263,6 +264,8 @@ export function usePendingVersion(): number {
 /** PromptBridge counts itself while mounted: that is how the home knows a session (and a composer to write into) exists. */
 export function useBridgeMounted(): void {
   React.useEffect(() => {
+    // A prompt that waited for a session gets its 30 s from when the first composer appears.
+    if (bridges === 0 && pending) pending = { ...pending, at: Date.now() }
     bridges += 1
     emit()
     return () => {

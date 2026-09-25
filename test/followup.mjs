@@ -76,6 +76,10 @@ try {
     [{ webhook: { kind: 'bark', url: 'https://user:pw@api.day.app/k' } }, /user name/],
     [{ webhook: { kind: 'feishu', url: FEISHU, secret: 'x'.repeat(201) } }, /200/],
     [{ webhook: { kind: 'wecom' } }, /url is required/],
+    // quiet hours that wrap midnight and start at or before a send time: that send could never go out
+    [{ quiet: { start: '21:00', end: '07:00' } }, /checkin_time 21:00 falls in the quiet hours/],
+    [{ quiet: { start: '19:30', end: '08:00' } }, /checkin_time 21:00/],
+    [{ checkin_time: '19:00', quiet: { start: '19:30', end: '08:00' } }, /weekly.time 20:00/],
   ]) {
     const result = mod.writeFollowup(dir, update)
     assert.equal(result.ok, false, JSON.stringify(update))
@@ -169,6 +173,16 @@ try {
   assert.equal(mod.nextTimes(on(), state(), at('2026-09-24', '22:00'), []).checkin, '2026-09-25T21:00:00')
   assert.equal(mod.nextTimes(on(), state(), at('2026-09-27', '20:30'), [row('weekly', 'weekly:2026-W39', sunday)]).weekly, '2026-10-04T20:00:00')
   assert.deepEqual(mod.nextTimes(on(), null, at('2026-09-24', '10:00'), []), { checkin: null, retest: null, weekly: null }, 'nothing planned without a plan')
+  // quiet hours: a time inside them is planned for when they end; one in the part before midnight never goes out
+  assert.equal(mod.heldUntil('21:00', { start: '20:00', end: '22:00' }), '22:00')
+  assert.equal(mod.heldUntil('07:00', { start: '22:30', end: '08:00' }), '08:00')
+  assert.equal(mod.heldUntil('23:00', { start: '22:30', end: '08:00' }), null)
+  assert.equal(mod.heldUntil('21:00', { start: '22:30', end: '08:00' }), '21:00')
+  assert.equal(mod.nextTimes(on({ quiet: { start: '20:00', end: '22:00' } }), state(), at('2026-09-24', '21:30'), []).checkin, '2026-09-24T22:00:00', 'held until 22:00 the same day, as decideFollowup sends it')
+  assert.ok(kinds(decide(at('2026-09-24', '22:00'), on({ quiet: { start: '20:00', end: '22:00' } }))).includes('checkin'))
+  const lostNight = on({ checkin_time: '23:00', quiet: { start: '22:30', end: '08:00' } })
+  assert.equal(mod.nextTimes(lostNight, state(), at('2026-09-24', '12:00'), []).checkin, null, 'a stored time that can never go out is not promised')
+  assert.equal(mod.nextTimes(on({ retest_time: '07:00', quiet: { start: '22:30', end: '08:00' } }), state(), at('2026-09-24', '06:00'), []).retest, '2026-09-24T08:00:00')
 
   // --- 3. the tick: sends, the log, restarts, the daily limit --------------------------------
   const tickDir = tempDir('tick')
@@ -247,6 +261,7 @@ try {
   assert.deepEqual(commands[0].args, ['-e', 'display notification "hi" with title "LongPi"'])
   assert.equal(requests[0].url, FEISHU)
   assert.equal(requests[0].init.method, 'POST')
+  assert.equal(requests[0].init.redirect, 'manual', 'a redirect is a failed send, never a message forwarded elsewhere')
   assert.equal(requests[0].body.sign, feishu.body.sign)
   fetchAnswer = () => {
     const error = new Error(`request to ${FEISHU} failed`)
@@ -328,6 +343,28 @@ try {
   assert.deepEqual(Object.keys(answer.next).sort(), ['checkin', 'retest', 'weekly'])
   assert.equal((await setTool.execute({ webhook: { kind: 'feishu', url: 'http://insecure' } })).ok, false)
 
+  // turning follow-up on, full detail and a webhook address wait for the person's approval in DSH
+  assert.equal(host.preExecute.length, 1, 'one tools/pre-execute listener')
+  const gate = (name, args, before = { kind: 'allow' }) => host.preExecute[0]({ name, arguments: args }, async () => before)
+  assert.deepEqual(await gate('set_followup', { enabled: true }), { kind: 'ask', reason: 'LongPi 要开启随访提醒。只有你本人要求过才同意。' })
+  assert.match((await gate('set_followup', { detail: 'full', webhook: { kind: 'generic', url: 'https://attacker.example/x?token=1' } })).reason, /完整.*https:\/\/attacker\.example\/…/)
+  assert.doesNotMatch((await gate('set_followup', { webhook: { kind: 'generic', url: 'https://attacker.example/x?token=1' } })).reason, /token/, 'the reason shows the host, not the secret path')
+  assert.deepEqual(await gate('set_followup', { checkin_time: '20:30', quiet: null }), { kind: 'allow' }, 'times need no approval')
+  assert.deepEqual(await gate('set_followup', { enabled: false, webhook: null, detail: 'minimal' }), { kind: 'allow' }, 'turning things off needs none')
+  assert.deepEqual(await gate('send_followup_message', { text: 'x' }), { kind: 'allow' })
+  assert.deepEqual(await gate('set_followup', { enabled: true }, { kind: 'deny', reason: 'policy' }), { kind: 'deny', reason: 'policy' }, 'another listener\'s denial stands')
+
+  // quiet hours hold model-written messages too (the page's test button is the only exception)
+  const hhmm = (date) => `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+  const clock = new Date()
+  mod.writeFollowup(routeDir, { quiet: { start: hhmm(new Date(clock.getTime() - 3_600_000)), end: hhmm(new Date(clock.getTime() + 3_600_000)) }, checkin_time: hhmm(new Date(clock.getTime() + 7_200_000)), retest_time: hhmm(new Date(clock.getTime() + 7_200_000)) })
+  const logBefore = mod.readFollowupLog(routeDir).length
+  answer = await message.execute({ text: '这周做得不错，继续坚持。' })
+  assert.equal(answer.ok, false)
+  assert.match(answer.error, /免打扰/)
+  assert.equal(mod.readFollowupLog(routeDir).length, logBefore, 'nothing sent or logged')
+  mod.writeFollowup(routeDir, { quiet: null, checkin_time: '20:30', retest_time: '09:00' })
+
   answer = await message.execute({ text: '这周做得不错，继续坚持快走。', kind: 'weekly' })
   assert.equal(answer.ok, true, JSON.stringify(answer))
   assert.equal(mod.readFollowupLog(routeDir).at(-1).kind, 'weekly')
@@ -338,6 +375,22 @@ try {
   assert.match((await message.execute({ text: '本周血压平均 128 mmHg。' })).error, /简要/)
   assert.match((await message.execute({ text: 'x'.repeat(301) })).error, /300/)
   assert.equal(mod.followupTextProblem('今天也记得快走哦', 'minimal'), '')
+  // minimal detail: a number may only be a date, a time or a count; unit-less values, Chinese units and full-width digits are values too
+  for (const text of ['LongPi：你今天的血压 150/95，记得晚上复测。', '体重72.5，比上周降了', '空腹血糖 6.8，偏高', '体重 72 千克', '血压150/95毫米汞柱',
+    '低密度脂蛋白 4.1，比上次高', '空腹血糖 7.2 毫摩尔/升', 'LDL-C 3.8 → 3.2', 'hs-CRP 由 4.1 降至 2.3', '糖化血红蛋白 6.5', '空腹血糖 ６.８', 'HbA1c 7', '本周执行率 80%', '降了三公斤']) {
+    assert.match(mod.followupTextProblem(text, 'minimal'), /简要/, text)
+  }
+  for (const text of ['LongPi：今天还有 2 项方案待打卡。', '这周坚持了 5 天，打开健康页看看小结。', '9 月 29 日可以复测了，晚上 8 点前记得打卡。', '2026-09-29 复测，21:00 前打卡']) {
+    assert.equal(mod.followupTextProblem(text, 'minimal'), '', text)
+  }
+  // ...and no plan item or marker name
+  assert.match(mod.followupTextProblem('这周坚持了减盐和快走', 'minimal', ['减盐', '收缩压']), /「减盐」/)
+  assert.equal(mod.followupTextProblem('这周坚持了减盐和快走', 'full', ['减盐']), '', 'full detail names items')
+  // never a dose, however it is written
+  for (const text of ['每天吃一百毫克阿司匹林', '鱼油每天两克', '维生素D 每天 1000 单位', '每天 2 胶囊鱼油', '鱼油 ２ｇ', '每天一千单位维生素D']) {
+    assert.match(mod.followupTextProblem(text, 'full'), /剂量/, text)
+  }
+  assert.equal(mod.followupTextProblem('体重 72 千克，继续保持', 'full'), '', '千克 is a weight, not a dose')
 
   // journey.followup and /longpi
   mod.setConsent(routeDir, true)
@@ -375,6 +428,11 @@ try {
   assert.equal(mod.readFollowupLog(scheduleDir).length, settled, 'nothing after dispose')
   assert.equal(ticks, 2)
 
+  // the tool reads the plan's names itself
+  mod.savePlan(routeDir, mod.normalizePlan({ items: [{ category: 'diet', title: '减盐', detail: '', start: '2026-09-01', markers: ['收缩压'] }] }, { today: '2026-09-24', medications: [], previous: null }).plan)
+  assert.match((await message.execute({ text: '这周减盐坚持得很好。' })).error, /「减盐」/)
+  assert.match((await message.execute({ text: '记得关注收缩压。' })).error, /「收缩压」/)
+
   host.dispose()
   console.log(`followup ok (${mod.readFollowupLog(routeDir).length} sends logged in the route test; no osascript, no network)`)
 } finally {
@@ -387,6 +445,7 @@ function fakeHost() {
   const routes = new Map()
   const commands = new Map()
   const effects = []
+  const preExecute = []
   const ctx = {
     tools: { register: (tool) => { tools.set(tool.name, tool); return () => {} } },
     skills: { register: () => () => {} },
@@ -394,14 +453,17 @@ function fakeHost() {
     webServer: { register: (route) => { routes.set(route.path, route.handler); return () => {} } },
     commands: { register: (command) => { commands.set(command.name, command) } },
     inject: (_names, callback) => callback(ctx),
-    on: () => () => {},
+    on: (name, listener) => {
+      if (name === 'tools/pre-execute') preExecute.push(listener)
+      return () => {}
+    },
     effect: (execute) => {
       const dispose = execute()
       effects.push(dispose)
       return dispose
     },
   }
-  return { ctx, tools, routes, commands, effects, dispose: () => effects.splice(0).forEach((fn) => fn()) }
+  return { ctx, tools, routes, commands, effects, preExecute, dispose: () => effects.splice(0).forEach((fn) => fn()) }
 }
 
 function call(host, method, url, body) {
