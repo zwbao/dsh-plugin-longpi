@@ -7,7 +7,7 @@ import { BOUNDARY_FALLBACK } from './constants.ts'
 import { localToday } from './format.ts'
 import type {
   Addon, DraftCategory, DraftGoal, DraftItem, Focus, FollowupKind, FollowupLogRow, FollowupResponse, FollowupSettings, Journey, JourneyQuestion,
-  NextAction, PlanBrief, PlanDraftResponse, Reminder, RiskFact, SelfKey, SelfKeySpec, SelfLatest, Sex, Stage, WebhookKind, Weekday,
+  NextAction, PlanBrief, PlanDraftResponse, RecordChange, Reminder, RiskFact, SelfKey, SelfKeySpec, SelfLatest, Sex, Stage, WebhookKind, Weekday,
 } from './types.ts'
 
 type Raw = Record<string, unknown>
@@ -17,6 +17,7 @@ const ACTIONS: readonly NextAction[] = ['consent', 'profile', 'records', 'addons
 const SEXES: readonly Sex[] = ['female', 'male', 'other', 'unknown']
 const SELF_KEYS: readonly SelfKey[] = ['waist', 'sbp', 'dbp', 'weight']
 const FOCUS: readonly Focus[] = ['bioage', 'cardio', 'glucose', 'weight', 'sleep', 'plan']
+const VERDICTS: readonly RecordChange['verdict'][] = ['better', 'worse', 'unclear']
 
 function obj(value: unknown): Raw {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Raw : {}
@@ -87,6 +88,7 @@ function resultsOf(raw: Raw): Journey['results'] {
       band_years: num(bio.band_years),
       blocker_zh: str(bio.blocker_zh),
       missing: strings(bio.missing),
+      ...(str(bio.caveat_zh) ? { caveat_zh: str(bio.caveat_zh) } : {}),
     },
     risk: {
       status: risk.status === 'ok' && riskPct != null ? 'ok' : 'blocked',
@@ -98,6 +100,57 @@ function resultsOf(raw: Raw): Journey['results'] {
       missing_facts: strings(risk.missing_facts),
     },
   }
+}
+
+/** Numeric points only, oldest first (the server already keeps one per day). */
+function pointsOf(value: unknown): RecordChange['points'] {
+  return objects(value)
+    .filter((row) => str(row.date) && num(row.value) != null)
+    .map((row) => ({ date: str(row.date), value: num(row.value) as number }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}
+
+/**
+ * A change row is shown only with its comparison and its band: without them
+ * the sentence has nothing behind it. A row the server did not mark as good
+ * news is treated as one for the doctor, whatever its flag says.
+ */
+function changeOf(row: Raw): RecordChange | null {
+  const compare = obj(row.compare)
+  const band = obj(row.band_pct)
+  const from = num(compare.from)
+  const to = num(compare.to)
+  const pct = num(compare.pct)
+  const up = num(band.up)
+  const down = num(band.down)
+  const key = str(row.key)
+  const label = str(row.label_zh)
+  const text = str(row.text_zh)
+  if (!key || !label || !text || from == null || to == null || pct == null || up == null || down == null) return null
+  const verdict = oneOf(row.verdict, VERDICTS, 'unclear')
+  const source = obj(row.source)
+  return {
+    key,
+    label_zh: label,
+    unit: str(row.unit),
+    points: pointsOf(row.points),
+    compare: { from_date: str(compare.from_date), from, to_date: str(compare.to_date), to, pct },
+    band_pct: { up, down },
+    direction: oneOf(row.direction, ['up', 'down'] as const, pct < 0 ? 'down' : 'up'),
+    verdict,
+    ask_doctor: row.ask_doctor === true || verdict !== 'better',
+    text_zh: text,
+    advice_zh: str(row.advice_zh),
+    ...(str(row.caveat_zh) ? { caveat_zh: str(row.caveat_zh) } : {}),
+    source: { title: str(source.title), url: str(source.url), ...(str(source.doi) ? { doi: str(source.doi) } : {}) },
+    verified: row.verified === true,
+  }
+}
+
+function changesOf(value: unknown): RecordChange[] {
+  const rows = objects(value).map(changeOf).filter((row): row is RecordChange => row != null)
+  // The server sorts them already; keep its order, but never let good news sit above a row for the doctor.
+  return [...rows.filter((row) => row.ask_doctor), ...rows.filter((row) => !row.ask_doctor)]
 }
 
 function addonsOf(value: unknown): Addon[] {
@@ -200,6 +253,8 @@ export function normalizeJourney(input: unknown): Journey {
       .filter((row) => str(row.text_zh))
       .map((row, index) => ({ id: str(row.id) || `s${index}`, text_zh: str(row.text_zh) })),
     followup: journeyFollowupOf(obj(raw.followup)),
+    changes: changesOf(raw.changes),
+    changes_note_zh: str(raw.changes_note_zh),
   }
 }
 

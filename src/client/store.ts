@@ -2,7 +2,9 @@
 // under the composer and the reminder pill all read the same journey, so
 // opening DSH costs one request, not four. Data is kept while it refreshes (the UI never blanks
 // on a refetch), refreshed on window focus when older than a minute, every ten
-// minutes while something shows it, and right after any save.
+// minutes while something shows it, and right after any save. The store also
+// carries the few hand-offs between surfaces: a prompt waiting for the
+// composer, the note about it, and a page section to scroll to.
 
 import React from 'react'
 import { errorText, getJson } from './api.ts'
@@ -10,6 +12,8 @@ import { normalizeFollowup, normalizeJourney, normalizePlanDraft } from './norma
 import type { Board, FollowupResponse, Journey, PlanDraftResponse, SelfRow, Tracking } from './types.ts'
 
 type Key = 'journey' | 'board' | 'tracking' | 'self' | 'planDraft' | 'followup'
+/** Where a waiting prompt came from: a pill on the home, or a button on the page. */
+export type PromptOrigin = 'hero' | 'page'
 
 const PATHS: Record<Key, string> = {
   journey: '/api/longpi/journey',
@@ -45,8 +49,10 @@ const listeners = new Set<() => void>()
 let version = 0
 let timersOn = false
 let pageUsers = 0
-let heroShown = 0
-let pending: { text: string; at: number } | null = null
+let bridges = 0
+let pending: { text: string; at: number; origin: PromptOrigin } | null = null
+let promptNote: { text: string; id: number } | null = null
+let scrollTarget: string | null = null
 
 function emit(): void {
   version += 1
@@ -190,28 +196,6 @@ export function putFollowup(raw: unknown): void {
 }
 
 /**
- * Whether the home greeting is on screen with content. The composer-dock row
- * belongs to the greeting: it shows exactly when the greeting does, so it
- * never appears under a running conversation or under DSH's own headline.
- */
-export function useHeroShown(shown: boolean): void {
-  React.useEffect(() => {
-    if (!shown) return undefined
-    heroShown += 1
-    emit()
-    return () => {
-      heroShown -= 1
-      emit()
-    }
-  }, [shown])
-}
-
-export function useHeroShowing(): boolean {
-  React.useSyncExternalStore(subscribe, () => version, () => version)
-  return heroShown > 0
-}
-
-/**
  * The reminder pill hides while the LongPi page is on screen. On screen, not
  * mounted: a host that keeps a hidden panel mounted must not silence the pill.
  */
@@ -244,25 +228,85 @@ export function usePageShowing(): boolean {
 }
 
 /**
- * A prompt chosen on the page, waiting for the composer dock of the chat the
- * page switches to. Old prompts are dropped so a later chat is not surprised.
+ * A prompt waiting for the composer. PromptBridge (in conversation.input.dock,
+ * which DSH renders only while a session exists) takes it and inserts it.
+ * A page prompt is dropped after 30 s so a later chat is not surprised by it;
+ * a home pill's prompt waits until a session exists, because the pill told the
+ * person it would (the note below the row says so while it waits).
  */
-export function setPendingPrompt(text: string): void {
-  pending = { text, at: Date.now() }
+const PAGE_PROMPT_MS = 30_000
+
+function livePending(): typeof pending {
+  if (pending && pending.origin === 'page' && Date.now() - pending.at > PAGE_PROMPT_MS) pending = null
+  return pending
+}
+
+export function setPendingPrompt(text: string, origin: PromptOrigin = 'page'): void {
+  pending = { text, at: Date.now(), origin }
   emit()
 }
 
 export function takePendingPrompt(): string | null {
-  const current = pending
+  const current = livePending()
   pending = null
-  if (!current || Date.now() - current.at > 30_000) return null
-  return current.text
+  return current ? current.text : null
 }
 
 export function hasPendingPrompt(): boolean {
-  return pending != null
+  return livePending() != null
 }
 
 export function usePendingVersion(): number {
   return React.useSyncExternalStore(subscribe, () => version, () => version)
+}
+
+/** PromptBridge counts itself while mounted: that is how the home knows a session (and a composer to write into) exists. */
+export function useBridgeMounted(): void {
+  React.useEffect(() => {
+    bridges += 1
+    emit()
+    return () => {
+      bridges -= 1
+      emit()
+    }
+  }, [])
+}
+
+export function useComposerReady(): boolean {
+  React.useSyncExternalStore(subscribe, () => version, () => version)
+  return bridges > 0
+}
+
+/** The bridge renders nothing, so what it has to say (the clipboard fallback) shows under the home row. */
+export function setPromptNote(text: string | null): void {
+  if (!text && !promptNote) return
+  promptNote = text ? { text, id: Date.now() } : null
+  emit()
+  if (!text) return
+  const id = promptNote?.id
+  window.setTimeout(() => {
+    if (promptNote?.id !== id) return
+    promptNote = null
+    emit()
+  }, 4000)
+}
+
+export function usePromptNote(): string | null {
+  React.useSyncExternalStore(subscribe, () => version, () => version)
+  return promptNote?.text ?? null
+}
+
+/** Open the page at a section: the page scrolls there once it shows the section. */
+export function requestScroll(id: string): void {
+  scrollTarget = id
+  emit()
+}
+
+export function useScrollRequest(): string | null {
+  React.useSyncExternalStore(subscribe, () => version, () => version)
+  return scrollTarget
+}
+
+export function clearScrollRequest(id: string): void {
+  if (scrollTarget === id) scrollTarget = null
 }

@@ -25,7 +25,7 @@
     --dsw-elevation-soft: var(--dsw-elevation-stroke), 0 4px 16px 0 #00000008, 0 0 24px 0 #00000008;
     --dsw-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
     --ds-font-family-code: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    --dsh-composer-card-max-width: 744px;
+    --dsh-composer-card-max-width: 744px; --dsh-composer-side-clearance: 16px;
   }
   body[data-ds-dark-theme] {
     --dsw-alias-bg-base: rgb(21, 21, 23); --dsw-alias-bg-layer-1: rgb(35, 35, 36); --dsw-alias-bg-layer-2: rgb(44, 44, 46); --dsw-alias-bg-layer-3: rgb(53, 54, 56);
@@ -64,28 +64,41 @@
   .pv-main { flex: 1; min-width: 0; position: relative; overflow: hidden; background: var(--dsw-alias-bg-base); }
   .pv-overlay { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
   .pv-overlay > * { pointer-events: auto; }
-  .pv-hero { height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 24px; box-sizing: border-box; gap: 8px; }
-  .pv-stack { width: 100%; max-width: var(--dsh-composer-card-max-width); display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
+  /* DSH's conversation root around the composer (dsh-client-ui-conversation 0.1.5: ConversationRoot,
+     HeroShell and InputBar CSS modules, geometry copied). The hero phase centres the composer seat. */
+  .pv-conv { height: 100%; min-width: 0; display: flex; flex-direction: column; background: var(--dsw-alias-bg-base); }
+  .pv-scroll { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow-y: auto; }
+  .pv-conv[data-phase=hero] .pv-scroll { justify-content: center; }
+  .pv-composer-seat { flex: none; display: flex; flex-direction: column; }
+  .pv-composer-stack { --dsh-composer-stack-gap: 6px; gap: var(--dsh-composer-stack-gap); display: flex; flex-direction: column; }
+  .pv-composer-hero { width: min(calc(var(--dsh-composer-card-max-width) + 2 * var(--dsh-composer-side-clearance)), 100%); z-index: 1; align-self: center; gap: 8px; padding-bottom: 32px; }
+  .pv-hero-root { display: flex; justify-content: center; align-items: center; min-width: 0; height: 100%; padding: 0 24px; }
+  .pv-stack { width: 100%; max-width: var(--dsh-composer-card-max-width); display: flex; flex-direction: column; align-items: stretch; gap: 12px; overflow: visible; }
   .pv-headline { color: var(--dsw-alias-label-primary); flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px 10px; font-size: 26px; font-weight: 500; line-height: 32px; display: flex; }
   .pv-fish { flex: none; justify-content: center; align-items: center; display: inline-flex; }
   .pv-title { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 7px; min-width: 0; }
-  .pv-hero-body { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .pv-hero-body { display: flex; flex-direction: column; gap: 12px; min-width: 0; position: relative; }
   .pv-badge { border: .5px solid var(--dsw-alias-interactive-bg-hover); background: var(--dsw-alias-state-business-tertiary); color: var(--dsw-alias-state-business-primary); font-family: var(--ds-font-family-code); border-radius: 24px; align-self: flex-start; margin-top: 2px; padding: 1px 7px 0; font-size: 12px; font-weight: 500; line-height: 18px; }
-  .pv-composer-seat { width: min(calc(var(--dsh-composer-card-max-width) + 32px), 100%); display: flex; flex-direction: column; align-items: center; padding: 0 16px 8px; box-sizing: border-box; }
-  .pv-composer-hero { padding-bottom: 32px; }
-  .pv-composer { box-sizing: border-box; width: 100%; background: var(--dsw-specific-input-major); box-shadow: 0 0 0 .5px var(--dsw-alias-border-l2), 0 4px 16px #00000008, 0 0 24px #00000008; border-radius: 22px; padding: 14px 16px 10px; min-height: 104px; display: flex; flex-direction: column; justify-content: space-between; }
+  .pv-workspace-row { display: flex; align-items: center; gap: 2px; min-width: 0; margin-top: 4px; padding: 0 16px 0 20px; }
+  .pv-workspace { display: inline-flex; align-items: center; gap: 4px; min-height: 28px; max-width: min(100%, 360px); padding: 0 8px; border: 0; border-radius: 16px; background: transparent; color: var(--dsw-alias-label-primary); font: 500 13px/20px var(--dsw-font-family); cursor: pointer; }
+  .pv-workspace:hover { background: var(--dsw-alias-interactive-bg-hover); }
+  .pv-workspace-caret { color: var(--dsw-alias-label-caption); font-size: 10px; }
+  .pv-preset { height: 28px; display: inline-flex; align-items: center; padding: 0 8px; border-radius: 16px; font-size: 13px; color: var(--dsw-alias-label-secondary); }
+  .pv-inputbar { padding: 0 var(--dsh-composer-side-clearance) 8px; display: flex; flex-direction: column; align-items: center; }
+  .pv-inputbar-hero { padding: 0 var(--dsh-composer-side-clearance); }
+  .pv-composer { box-sizing: border-box; width: 100%; max-width: var(--dsh-composer-card-max-width); background: var(--dsw-specific-input-major); box-shadow: 0 0 0 .5px var(--dsw-alias-border-l2), 0 4px 16px #00000008, 0 0 24px #00000008; border-radius: 22px; padding: 14px 16px 10px; min-height: 104px; display: flex; flex-direction: column; justify-content: space-between; }
   .pv-composer-text { font-size: 14px; line-height: 24px; color: var(--dsw-alias-label-primary); min-height: 24px; white-space: pre-wrap; }
-  .pv-composer-text:empty::before { content: '给 DeepSeek 发送消息'; color: var(--dsw-alias-label-caption); }
+  .pv-composer-text:empty::before { content: attr(data-placeholder); color: var(--dsw-alias-label-caption); }
+  .pv-composer-inert { opacity: .72; }
   .pv-composer-bar { display: flex; justify-content: space-between; align-items: center; }
   .pv-chip { height: 28px; display: inline-flex; align-items: center; padding: 0 10px; border-radius: 14px; font-size: 12px; color: var(--dsw-alias-label-secondary); background: var(--dsw-alias-interactive-bg-hover); }
   .pv-send { width: 32px; height: 32px; border-radius: 50%; background: var(--dsw-alias-brand-primary); opacity: .3; }
   .pv-chat { height: 100%; display: flex; flex-direction: column; }
   .pv-chat-top { height: 52px; border-bottom: .5px solid var(--dsw-alias-border-l3); display: flex; align-items: center; padding: 0 20px; font-size: 14px; color: var(--dsw-alias-label-primary); font-weight: 500; flex: none; }
-  .pv-messages { flex: 1; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 28px 24px; }
+  .pv-messages { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; align-items: center; gap: 18px; padding: 28px 24px; }
   .pv-msg { width: min(712px, 100%); font-size: 14px; line-height: 24px; color: var(--dsw-alias-label-primary); }
   .pv-msg-user { display: flex; justify-content: flex-end; }
   .pv-msg-user span { background: var(--dsw-alias-interactive-bg-hover); padding: 8px 14px; border-radius: 16px; }
-  .pv-bottom { display: flex; justify-content: center; flex: none; }
   .pv-done { position: fixed; left: 16px; bottom: 16px; font-size: 12px; color: var(--dsw-alias-label-tertiary); }
 </style>
 </head>
@@ -160,6 +173,7 @@
     }
     if (at < 3) {
       journey.records = { status: 'unconfigured', error: '', indicator_count: 0, full_checkups: 0, latest_checkup: null, mirobody_mounted: true }
+      journey.changes = []
       journey.self.latest = []
       board.records = { status: 'unconfigured', error: '', indicator_count: 0, indicators: [], medications: [] }
       board.readiness = { ready: [], near: [], unlock: [], declared: board.readiness?.declared ?? 0 }
@@ -198,7 +212,10 @@
   }
   // ?variant=: the real server's edge cases. noaddons = a first result held up
   // only by profile answers (next.action 'profile', no add-ons); recerror = a
-  // record that fails with a long message (next.detail_zh past 40 characters).
+  // record that fails with a long message (next.detail_zh past 40 characters);
+  // nochanges = nothing moved beyond its band (what most records show);
+  // manychanges = three rows for the doctor, so the home line counts the rest.
+  // nocheckup = a connected record with no complete checkup yet.
   function variantData(data, variant) {
     const j = data.journey
     if (variant === 'noaddons') {
@@ -211,6 +228,34 @@
       j.results.risk = { status: 'blocked', risk_pct: null, category_zh: '', date: null, blocker_zh: `档案里还缺：${facts.join('、')}。`, missing_labs: [], missing_facts: facts }
       j.next = { stage: 'first_result', title_zh: '补充档案', detail_zh: `回答档案里的 ${facts.length} 个问题即可计算心血管风险。`, action: 'profile' }
       j.suggestions = [{ id: 'next-checkup', text_zh: '下次体检需要加测哪些项目？' }, { id: 'what-now', text_zh: '用我现有的记录能算出什么？' }]
+    }
+    if (variant === 'nochanges') {
+      j.changes = []
+      delete j.results.bioage.caveat_zh
+    }
+    if (variant === 'manychanges') {
+      // Synthetic values; each band is rcvBand() of that marker's row in longevity-skills
+      // data/biological_variation.json (WBC ±31.0 %, albumin ±7.7 %), with the row's source.
+      const coskun = j.changes.find((row) => row.key === 'mcv').source
+      const eubivas = j.changes.find((row) => row.key === 'ldl').source
+      const doctor = '建议带着这几次体检报告咨询医生，看看是否需要进一步检查。'
+      j.changes.splice(1, 0, {
+        key: 'wbc', label_zh: '白细胞计数', unit: '10^9/L',
+        points: [{ date: '2025-10-18', value: 8.9 }, { date: '2026-04-22', value: 7.2 }, { date: '2026-08-26', value: 6.0 }],
+        compare: { from_date: '2025-10-18', from: 8.9, to_date: '2026-08-26', to: 6.0, pct: -32.6 }, band_pct: { up: 31.0, down: -31.0 },
+        direction: 'down', verdict: 'unclear', ask_doctor: true,
+        text_zh: '白细胞计数 8.9 → 6.0 10^9/L（2025-10-18 → 2026-08-26），下降 32.6%，超出正常波动（±31.0%）', advice_zh: doctor, source: coskun, verified: true,
+      }, {
+        key: 'albumin', label_zh: '白蛋白', unit: 'g/L',
+        points: [{ date: '2026-04-22', value: 49.8 }, { date: '2026-08-26', value: 45.6 }],
+        compare: { from_date: '2026-04-22', from: 49.8, to_date: '2026-08-26', to: 45.6, pct: -8.4 }, band_pct: { up: 7.7, down: -7.7 },
+        direction: 'down', verdict: 'unclear', ask_doctor: true,
+        text_zh: '白蛋白 49.8 → 45.6 g/L（2026-04-22 → 2026-08-26），下降 8.4%，超出正常波动（±7.7%）', advice_zh: doctor, source: eubivas, verified: true,
+      })
+      j.results.bioage.caveat_zh = '表型年龄用到的平均红细胞体积、白细胞计数、白蛋白近期变化明显，原因可能与衰老无关，这次的身体年龄请谨慎看待。'
+    }
+    if (variant === 'nocheckup') {
+      j.records = { ...j.records, full_checkups: 0, latest_checkup: null }
     }
     if (variant === 'recerror') {
       const error = 'Mirobody MCP 返回 401：个人访问令牌已过期或被撤销，请在 Mirobody 网页的“设置 → MCP”中重新生成地址后再运行安装命令'
@@ -375,30 +420,51 @@
     return h('div', { 'data-slot': props.name, style: { display: 'contents' } }, h(Seat, props))
   }
 
-  // DSH's InputBar: the composer card, then the conversation.composer.dock list below it.
-  function Composer(props) {
-    const [text, setText] = React.useState(props.initial || '')
-    const inputActions = {
-      captureInsertion: () => ({ at: text.length }),
-      insertText: (value) => { setText((current) => (current ? `${current} ${value}` : value)); return true },
-    }
-    return h('div', { className: `pv-composer-seat ${props.hero ? 'pv-composer-hero' : ''}` },
-      h('div', { className: 'pv-composer', 'data-composer-card': '' },
-        h('div', { className: 'pv-composer-text' }, text),
-        h('div', { className: 'pv-composer-bar' }, h('span', { className: 'pv-chip' }, 'DeepSeek V4'), h('span', { className: 'pv-send' }))),
-      h(Slot, { name: 'conversation.composer.dock', owner: { inputActions, input: { draft: text }, session: {} } }))
-  }
+  // ?session=0: a fresh DSH with no workspace, hence no session: the composer is inert and no
+  // session-scope slot (conversation.input.dock) renders. Clicking the workspace chip "picks" one.
+  // ?bar=0: the composer wrapper without its data-slot anchor, to see the row's inline fallback.
+  const NO_BAR = params.get('bar') === '0'
 
-  // DSH's HeroShell: headline div > span.fishHitbox (the brand-mark seat) + span.titleGroup, then the composer.
-  function Hero() {
-    return h('div', { className: 'pv-hero' },
-      h('div', { className: 'pv-stack' },
+  // DSH's HeroShell: root > stack > headline (span.fishHitbox with the brand-mark seat, span.titleGroup) + body.
+  function HeroShell() {
+    return h('div', { className: 'pv-hero-root root' },
+      h('div', { className: 'pv-stack stack' },
         h('div', { className: 'pv-headline headline' },
           h('span', { className: 'pv-fish fishHitbox' },
             h(Slot, { name: 'conversation.hero.brand.mark', owner: { size: 34, className: 'pv-fish-svg' } })),
           h('span', { className: 'pv-title titleGroup' }, h('span', null, '探索未至之境'), h('span', { className: 'pv-badge previewBadge' }, 'Preview'))),
-        h('div', { className: 'pv-hero-body' })),
-      h(Composer, { hero: true }))
+        h('div', { className: 'pv-hero-body body' })))
+  }
+
+  // DSH's ConversationRoot composer stack. Hero: HeroShell, the workspace row, the input dock (only with a
+  // session), then the composer.bar slot whose child is InputBar's root around the card. Active chat: the
+  // input dock and the composer bar only. conversation.composer.dock is not rendered on the hero at all.
+  function ComposerStack(props) {
+    const [text, setText] = React.useState('')
+    const inputActions = {
+      captureInsertion: () => ({ at: text.length }),
+      insertText: (value) => { setText((current) => (current ? `${current} ${value}` : value)); return true },
+    }
+    const inert = !props.session
+    const card = h('div', { className: `pv-inputbar ${props.hero ? 'pv-inputbar-hero' : ''}` },
+      h('div', { className: `pv-composer ${inert ? 'pv-composer-inert' : ''}`, 'data-composer-card': '' },
+        h('div', { className: 'pv-composer-text', 'data-placeholder': inert ? '选择一个工作区开始' : '给 DeepSeek 发送消息' }, inert ? '' : text),
+        h('div', { className: 'pv-composer-bar' }, h('span', { className: 'pv-chip' }, 'DeepSeek V4'), h('span', { className: 'pv-send' }))))
+    return h('div', { className: `pv-composer-stack composerStack ${props.hero ? 'pv-composer-hero composerHero' : ''}` },
+      props.hero ? h(HeroShell) : null,
+      props.hero ? h('div', { className: 'pv-workspace-row heroWorkspaceRow' },
+        h('button', { type: 'button', className: 'pv-workspace', onClick: props.onPick }, props.session ? '健康' : '选择工作区', h('span', { className: 'pv-workspace-caret' }, '▾')),
+        h('span', { className: 'pv-preset' }, '默认')) : null,
+      props.session ? h(Slot, { name: 'conversation.input.dock', owner: { session: {}, input: { draft: text }, inputActions } }) : null,
+      NO_BAR ? h('div', { style: { display: 'contents' } }, card) : h('div', { 'data-slot': 'conversation.composer.bar', style: { display: 'contents' } }, card))
+  }
+
+  function Hero() {
+    const [session, setSession] = React.useState(params.get('session') !== '0')
+    return h('div', { className: 'pv-conv', 'data-phase': 'hero' },
+      h('div', { className: 'pv-scroll' },
+        h('div', { className: 'pv-composer-seat composerSeat', 'data-composer-seat': '' },
+          h(ComposerStack, { hero: true, session, onPick: () => setSession(true) }))))
   }
 
   function Chat() {
@@ -407,7 +473,21 @@
       h('div', { className: 'pv-messages' },
         h('div', { className: 'pv-msg pv-msg-user' }, h('span', null, '我这周的家庭血压记下来了，帮我看看。')),
         h('div', { className: 'pv-msg' }, '已记下。家庭血压按最近 7 天的平均值来看，单次读数有波动是正常的，继续早晚各量一次就好。')),
-      h('div', { className: 'pv-bottom' }, h(Composer)))
+      h('div', { className: 'pv-composer-seat composerSeat', 'data-composer-seat': '' }, h(ComposerStack, { hero: false, session: true })))
+  }
+
+  // ?tap=suggest clicks the first suggestion pill after load, ?pick=1 then picks a workspace:
+  // screenshots of the queued-prompt note and of the prompt landing once a session exists.
+  // ?tap=changes follows the home's changes line to the page (which should land on the card).
+  if (params.get('tap') === 'changes') {
+    setTimeout(() => { const link = document.querySelector('.lp-hero-changes .lp-hero-link'); if (link) link.click() }, 1500)
+  }
+  if (params.get('tap') === 'suggest') {
+    setTimeout(() => {
+      const pill = document.querySelector('.lp-suggest')
+      if (pill) pill.click()
+      if (params.get('pick') === '1') setTimeout(() => { const chip = document.querySelector('.pv-workspace'); if (chip) chip.click() }, 400)
+    }, 1500)
   }
 
   function App() {

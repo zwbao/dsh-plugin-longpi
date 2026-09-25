@@ -1,12 +1,13 @@
 // LongPi's seats in the DSH client: a full page with a 健康 entry in the
-// sidebar, a greeting in place of the blank-session headline with one row
-// under the composer, a step in first-run onboarding, and a reminder pill in
-// the shell overlay. Nothing sits above the composer.
+// sidebar, a greeting in place of the blank-session headline (which also
+// places one row under the composer), an invisible prompt bridge in the input
+// dock, a step in first-run onboarding, and a reminder pill in the shell
+// overlay. Nothing visible sits above the composer.
 
 import React from 'react'
 import { PANEL_ID } from './constants.ts'
 import { HomeHero } from './home.ts'
-import { HomeActions } from './home-actions.ts'
+import { PromptBridge } from './home-actions.ts'
 import { Icon } from './icons.ts'
 import { Onboarding } from './onboarding.ts'
 import { LongPiPage } from './page.ts'
@@ -47,7 +48,8 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID, inject: face }, LongPiPage))
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: PANEL_ID, order: 5, label: () => '健康' }, PanelIcon))
   ctx.slots.inject('conversation.hero.brand.mark', () => ctx.slots.register({ name: 'conversation.hero.brand.mark', inject: face }, HomeHero))
-  ctx.slots.inject('conversation.composer.dock', () => ctx.slots.register({ name: 'conversation.composer.dock', id: 'dsh-plugin-longpi', order: 10, inject: face }, HomeActions))
+  // Rendered whenever a session exists, on the home and in a chat; draws nothing, inserts queued prompts.
+  ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'dsh-plugin-longpi', order: 90 }, PromptBridge))
   ctx.slots.inject('settings.onboarding', () => ctx.slots.register({ name: 'settings.onboarding', id: 'longpi', order: 100, inject: face }, Onboarding))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'longpi-reminders', order: 50, inject: face }, ReminderPill))
 }

@@ -47,6 +47,28 @@ export interface Reminder {
   due: boolean
 }
 
+/**
+ * Round 4: a record value that moved further than its reference change value
+ * (RCV) from the biological-variation table. The server's src/changes.ts shape,
+ * field for field.
+ */
+export interface RecordChange {
+  key: string
+  label_zh: string
+  unit: string
+  points: Array<{ date: string; value: number }>
+  compare: { from_date: string; from: number; to_date: string; to: number; pct: number }
+  band_pct: { up: number; down: number }
+  direction: 'up' | 'down'
+  verdict: 'better' | 'worse' | 'unclear'
+  ask_doctor: boolean
+  text_zh: string
+  advice_zh: string
+  caveat_zh?: string
+  source: { title: string; url: string; doi?: string }
+  verified: boolean
+}
+
 export interface Journey {
   version: string
   today: string
@@ -64,7 +86,8 @@ export interface Journey {
   focus_options: Array<{ key: Focus; label_zh: string }>
   records: { status: 'unconfigured' | 'ok' | 'error'; error: string; indicator_count: number; full_checkups: number; latest_checkup: string | null; mirobody_mounted: boolean }
   results: {
-    bioage: { status: 'ok' | 'blocked'; phenoage: number | null; advance: number | null; date: string | null; checkups: number; band_years: number | null; blocker_zh: string; missing: string[] }
+    /** caveat_zh (round 4): set when a PhenoAge input changed beyond its normal fluctuation and a doctor should look first. */
+    bioage: { status: 'ok' | 'blocked'; phenoage: number | null; advance: number | null; date: string | null; checkups: number; band_years: number | null; blocker_zh: string; missing: string[]; caveat_zh?: string }
     risk: { status: 'ok' | 'blocked'; risk_pct: number | null; category_zh: string; date: string | null; blocker_zh: string; missing_labs: string[]; missing_facts: string[] }
   }
   addons: Addon[]
@@ -87,6 +110,10 @@ export interface Journey {
   boundary_zh: string
   /** Round 3: proactive follow-up. Older servers leave it out; normalizeJourney fills in "off". */
   followup: { enabled: boolean; channels: Array<'desktop' | 'webhook'>; next_at: string | null }
+  /** Round 4: changes beyond normal fluctuation, ask_doctor rows first. Older servers leave it out: []. */
+  changes: RecordChange[]
+  /** How a change is judged (RCV, source, limits); shown under the changes card. */
+  changes_note_zh: string
 }
 
 // --- plan draft (GET /api/longpi/plan-draft) ----------------------------------------------

@@ -1,8 +1,11 @@
 // The LongPi page (the 健康 entry in DSH's sidebar). In the first days it
 // leads with the journey stepper; after that with the two results, the plan
-// and what changed. Profile and self measurements are always one scroll away.
+// and what changed. Record changes beyond normal fluctuation sit right under
+// the stepper, above the results. Profile and self measurements are always
+// one scroll away.
 
 import React from 'react'
+import { ChangesCard } from './changes.ts'
 import { BOUNDARY_FALLBACK } from './constants.ts'
 import { FollowupSection } from './followup.ts'
 import { chineseDate, goTo, greeting, localToday, weekday } from './format.ts'
@@ -15,13 +18,37 @@ import { ProfileEditor } from './profile-editor.ts'
 import { ResultsRow, type ResultTarget } from './results.ts'
 import { SelfLatestList, SelfMeasureForm, SelfRecent } from './self-measure.ts'
 import { JourneyStepper, openStepOf, stepOf, type StepKey } from './stepper.ts'
-import { setPendingPrompt, useBoard, useJourney, usePageShown, useTracking } from './store.ts'
+import { clearScrollRequest, setPendingPrompt, useBoard, useJourney, usePageShown, useScrollRequest, useTracking } from './store.ts'
 import type { Face, Journey } from './types.ts'
 import { Btn, copyText, LinkButton, Section, Skeleton, useNotice } from './ui.ts'
 
 const h = React.createElement
 
 type Notify = (text: string, tone?: 'info' | 'good' | 'bad') => void
+
+/** How long a link from elsewhere (the home's changes line) waits for its section to be on screen. */
+const SCROLL_WAIT_MS = 2000
+
+/**
+ * Scroll to the section another surface asked for, once it is laid out: the
+ * page may still be mounting, or be shown a moment after the request.
+ */
+function useScrollToRequested(ready: boolean): void {
+  const target = useScrollRequest()
+  React.useEffect(() => {
+    if (!target || !ready) return undefined
+    const started = Date.now()
+    const timer = window.setInterval(() => {
+      const node = document.getElementById(target)
+      const shown = node != null && node.getClientRects().length > 0
+      if (!shown && Date.now() - started < SCROLL_WAIT_MS) return
+      window.clearInterval(timer)
+      clearScrollRequest(target)
+      if (shown) goTo(target)
+    }, 100)
+    return () => window.clearInterval(timer)
+  }, [target, ready])
+}
 
 function Header(props: { journey: Journey | null; failed: boolean; refreshing: boolean; onRefresh: () => void }): React.ReactElement {
   const journey = props.journey
@@ -88,6 +115,7 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
   const early = stage != null && stepOf(stage) < 3
 
   React.useEffect(() => { setOpenStep(null) }, [stage])
+  useScrollToRequested(journey != null)
 
   const doRefresh = React.useCallback(async () => {
     setRefreshing(true)
@@ -107,8 +135,8 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
     goTo(target === 'self' ? 'lp-self-card' : target === 'profile' ? 'lp-profile-card' : 'lp-results')
   }
 
-  // The chat's composer dock picks the prompt up and inserts it; the clipboard
-  // copy is the fallback when no composer is on screen to take it.
+  // The prompt bridge in the chat's input dock picks the prompt up and inserts
+  // it; the clipboard copy is the fallback when no composer is on screen to take it.
   const onPrompt = (text: string) => {
     setPendingPrompt(text)
     const copying = copyText(text)
@@ -127,6 +155,7 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
     const showPlan = journey.plan.exists || stage === 'plan' || stage === 'routine'
     body = h('div', { className: `lp-body ${refreshing ? 'lp-refreshing' : ''}` },
       early ? h(JourneyStepper, { journey, open: openStep, onOpen: setOpenStep, onRecheck: doRefresh, onNotice: notify }) : null,
+      h(ChangesCard, { journey }),
       h(ResultsRow, { journey, tracking: trackingData, canShowAddons: early, onAction, onNotice: notify }),
       showPlan ? h(PlanSection, { journey, tracking: trackingData, loading: tracking.loading, onNotice: notify, onPrompt }) : null,
       showPlan ? h(Markers, { tracking: trackingData }) : null,

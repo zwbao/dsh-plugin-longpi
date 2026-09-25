@@ -53,12 +53,17 @@ export function ConsentInline(props: { journey: Journey; onNotice: Notify }): Re
       h('span', { className: 'lp-caption' }, `点“开始”表示你已读过以上说明（版本 ${props.journey.consent.current}）。`)))
 }
 
+/** '· N 次完整体检', left out at 0: "0 次完整体检" reads as a fault, and step 3 says what is missing under it. */
+function checkupsText(count: number): string {
+  return count > 0 ? ` · ${count} 次完整体检` : ''
+}
+
 export function RecordsStatusLine(props: { journey: Journey }): React.ReactElement {
   const records = props.journey.records
   if (records.status === 'ok') {
     return h('div', { className: 'lp-status' },
       h('span', { className: 'lp-statusdot lp-statusdot-on', 'aria-hidden': true }),
-      `Mirobody 已连接 · ${records.indicator_count} 项指标 · ${records.full_checkups} 次完整体检`)
+      `Mirobody 已连接 · ${records.indicator_count} 项指标${checkupsText(records.full_checkups)}`)
   }
   return h('div', { className: 'lp-status' },
     h('span', { className: `lp-statusdot ${records.status === 'error' ? 'lp-statusdot-bad' : ''}`, 'aria-hidden': true }),
@@ -85,7 +90,7 @@ export function RecordsGuide(props: { journey: Journey; onRecheck: () => Promise
       h('div', { className: 'lp-connected' },
         h('span', { className: 'lp-connected-icon', 'aria-hidden': true }, h(Icon, { name: 'check', size: 16 })),
         h('div', null,
-          h('div', { className: 'lp-strong' }, `已连接 · ${records.indicator_count} 项指标 · ${records.full_checkups} 次完整体检`),
+          h('div', { className: 'lp-strong' }, `已连接 · ${records.indicator_count} 项指标${checkupsText(records.full_checkups)}`),
           h('div', { className: 'lp-caption' }, records.latest_checkup ? `最近一次完整体检：${chineseDate(records.latest_checkup)}` : '还没有九项血检测齐的一次体检'))),
       h(CanCompute, { journey: props.journey }),
       h('div', { className: 'lp-form-actions' }, recheckButton))
@@ -133,7 +138,8 @@ export function FirstResult(props: { journey: Journey; onNotice: Notify; idPrefi
         bioage.status === 'ok'
           ? h('div', null,
             h('div', { className: 'lp-first-figure' }, fmt(bioage.phenoage), h('span', { className: 'lp-bignum-unit' }, '岁')),
-            h('div', { className: 'lp-caption' }, [versusAge(bioage.advance), bioage.band_years != null ? `正常波动 ±${fmt(bioage.band_years)} 岁` : ''].filter(Boolean).join(' · ')))
+            h('div', { className: 'lp-caption' }, [versusAge(bioage.advance), bioage.band_years != null ? `正常波动 ±${fmt(bioage.band_years)} 岁` : ''].filter(Boolean).join(' · ')),
+            bioage.caveat_zh ? h('p', { className: 'lp-caption lp-first-caveat', role: 'note' }, bioage.caveat_zh) : null)
           : h('div', null, h('div', { className: 'lp-first-wait' }, '还不能计算'), h('p', { className: 'lp-blocker' }, bioage.blocker_zh))),
       h('div', { className: 'lp-first-cell' },
         h('div', { className: 'lp-caption' }, '10 年心血管病风险 · 模型估计'),

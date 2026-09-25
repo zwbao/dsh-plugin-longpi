@@ -134,6 +134,8 @@ export function BodyAgeCard(props: {
     h('div', { className: 'lp-result-sub' },
       versus ? h('span', { className: `lp-pill ${advance != null && advance < -0.5 ? 'lp-pill-good' : ''}` }, versus) : null,
       date ? h('span', { className: 'lp-caption' }, `${chineseDate(date)}体检 · 共 ${count} 次完整血检`) : null),
+    // Set by the server when an input of this model changed beyond normal fluctuation (the changes card above has the rows).
+    result.caveat_zh ? h('p', { className: 'lp-caveat', role: 'note' }, h(Icon, { name: 'warn', size: 14 }), h('span', null, result.caveat_zh)) : null,
     points.length > 1 ? h(LineChart, {
       points: points.filter((row) => row.advance != null).map((row) => ({ date: row.date, value: row.advance as number })),
       unit: '岁', label: '表型年龄减实足年龄', height: 132,

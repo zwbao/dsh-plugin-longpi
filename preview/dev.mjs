@@ -66,7 +66,9 @@ const SHOTS = [
   ['page-consent', 'view=page&stage=consent', 1280, 2300],
   ['page-profile', 'view=page&stage=profile', 1280, 2900],
   ['page-records', 'view=page&stage=records', 1280, 2500],
-  ['page-first_result', 'view=page&stage=first_result', 1280, 2700],
+  ['page-first_result', 'view=page&stage=first_result&variant=nochanges', 1280, 2700],
+  ['page-first_result-changes', 'view=page&stage=first_result', 1280, 3200],
+  ['page-first_result-nocheckup', 'view=page&stage=first_result&variant=nocheckup', 1280, 1000],
   ['page-first_result-noaddons', 'view=page&stage=first_result&variant=noaddons', 1280, 2700],
   ['page-records-error', 'view=page&stage=records&variant=recerror', 1280, 1400],
   ['page-plan', 'view=page&stage=plan', 1280, 4300],
@@ -80,7 +82,13 @@ const SHOTS = [
   ['home-consent', 'view=home&stage=consent', 1280, 760],
   ['home-profile', 'view=home&stage=profile', 1280, 760],
   ['home-records', 'view=home&stage=records', 1280, 760],
-  ['home-first_result', 'view=home&stage=first_result', 1280, 760],
+  ['home-first_result', 'view=home&stage=first_result&variant=nochanges', 1280, 760],
+  ['home-first_result-changes', 'view=home&stage=first_result', 1280, 760],
+  ['home-manychanges', 'view=home&stage=routine&variant=manychanges', 1280, 760],
+  ['home-nosession', 'view=home&stage=first_result&session=0&tap=suggest', 1280, 760],
+  ['home-nosession-picked', 'view=home&stage=first_result&session=0&tap=suggest&pick=1', 1280, 760],
+  ['home-fallback', 'view=home&stage=plan&bar=0', 1280, 760],
+  ['home-changes-open', 'view=home&stage=first_result&tap=changes', 1280, 900],
   ['home-first_result-noaddons', 'view=home&stage=first_result&variant=noaddons', 1280, 760],
   ['home-records-error', 'view=home&stage=records&variant=recerror', 1280, 760],
   ['home-plan', 'view=home&stage=plan', 1280, 760],
@@ -93,6 +101,7 @@ const SHOTS = [
   ['onboarding-1', 'view=onboarding&stage=consent&step=1', 1280, 900],
   ['onboarding-2', 'view=onboarding&stage=profile&step=2', 1280, 1100],
   ['onboarding-3', 'view=onboarding&stage=records&step=3', 1280, 900],
+  ['onboarding-3-nocheckup', 'view=onboarding&stage=first_result&step=3&variant=nocheckup', 1280, 900],
   ['onboarding-4', 'view=onboarding&stage=plan&step=4', 1280, 900],
   ['onboarding-4-blocked', 'view=onboarding&stage=first_result&step=4', 1280, 900],
   ['onboarding-2-dark', 'view=onboarding&stage=profile&step=2&theme=dark', 1280, 1100],
@@ -138,7 +147,7 @@ const port = arg('--serve')
 if (shotDir) await shots(shotDir)
 else if (port) {
   await serve(Number(port))
-  console.log(`preview at http://127.0.0.1:${port}/?view=page (views: page, home, dock, onboarding, pill; ?stage=, ?theme=dark)`)
+  console.log(`preview at http://127.0.0.1:${port}/?view=page (views: page, home, dock, onboarding, pill; ?stage=, ?variant=, ?theme=dark; home: ?session=0, ?bar=0, ?tap=suggest)`)
 } else {
   console.log(`preview written to ${out}; serve it with --serve 4173`)
 }
