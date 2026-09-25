@@ -194,7 +194,9 @@ function Status(props: { journey: Journey; open: () => void }): React.ReactEleme
     } else {
       // Held up by something other than a checkup (usually profile answers): say what the server says.
       const detail = journey.next.detail_zh || journey.results.risk.blocker_zh || journey.results.bioage.blocker_zh || '打开健康页看看还缺什么'
-      parts.push(detail, h(Sep, { key: 's' }), h(Go, { key: 'go', label: journey.next.action === 'profile' ? '去填写' : '健康页', onClick: open }))
+      // In the routine the row under the composer already ends with 健康页 →.
+      if (journey.stage === 'routine') parts.push(detail)
+      else parts.push(detail, h(Sep, { key: 's' }), h(Go, { key: 'go', label: journey.next.action === 'profile' ? '去填写' : '健康页', onClick: open }))
     }
   }
   return h('p', { className: 'lp-hero-status' }, ...parts)

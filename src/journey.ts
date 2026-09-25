@@ -276,10 +276,11 @@ function remindersOf(today: string, tracking: Tracking, plan: Journey['plan']): 
 function stageOf(journey: Pick<Journey, 'consent' | 'profile' | 'records' | 'results' | 'plan'>): Stage {
   if (!journey.consent.accepted) return 'consent'
   if (!journey.profile.complete) return 'profile'
+  // A saved plan is lived day by day even while the record is unreachable or no first result can be computed yet.
+  if (journey.plan.exists) return 'routine'
   if (journey.records.status !== 'ok') return 'records'
   if (journey.results.bioage.status !== 'ok' && journey.results.risk.status !== 'ok') return 'first_result'
-  if (!journey.plan.exists) return 'plan'
-  return 'routine'
+  return 'plan'
 }
 
 function nextOf(stage: Stage, journey: Body): Next {
@@ -307,7 +308,7 @@ function nextOf(stage: Stage, journey: Body): Next {
       if (open > 0) return step('今天的打卡', `还有 ${open} 项待完成`, 'checkin')
       const due = journey.reminders.filter((row) => row.kind === 'retest' && row.due).map((row) => row.text_zh.replace(/^复测/, ''))
       if (due.length > 0) return step('该复测了', `可以复测${due.slice(0, 3).join('、')}`, 'review')
-      return step('继续保持', `方案已进行 ${journey.plan.days ?? 0} 天`, 'open')
+      return step('继续保持', journey.plan.days ? `方案已进行 ${journey.plan.days} 天` : '方案从今天开始', 'open')
     }
   }
 }
@@ -319,7 +320,8 @@ function suggestionsOf(stage: Stage, journey: Body, followupOn: boolean): Journe
   } else if (stage === 'records') {
     picks.push({ id: 'import-reports', text_zh: '怎么把体检报告导入 Mirobody？' }, { id: 'before-records', text_zh: '还没有体检记录，现在可以先做什么？' })
   } else if (stage === 'first_result') {
-    picks.push({ id: 'next-checkup', text_zh: '下次体检需要加测哪些项目？' }, { id: 'what-now', text_zh: '用我现有的记录能算出什么？' })
+    // A plan does not have to wait for the first result: many checkups never include CRP or waist.
+    picks.push({ id: 'next-checkup', text_zh: '下次体检需要加测哪些项目？' }, { id: 'draft-plan', text_zh: '帮我制定一份改善方案' })
     if (journey.addons.some((row) => row.self_measurable)) picks.push({ id: 'log-self', text_zh: '帮我记录腰围和家庭血压' })
   } else if (stage === 'plan') {
     picks.push(FOCUS_PROMPT[journey.profile.focus[0] ?? 'none'], { id: 'draft-plan', text_zh: '帮我制定一份改善方案' }, { id: 'save-plan', text_zh: '帮我保存我的干预方案' })
@@ -328,6 +330,10 @@ function suggestionsOf(stage: Stage, journey: Body, followupOn: boolean): Journe
     if (journey.reminders.some((row) => row.kind === 'retest' && row.due)) picks.push({ id: 'retest-due', text_zh: '该复测什么了？' })
     if (!followupOn) picks.push({ id: 'followup-on', text_zh: '每天晚上提醒我打卡' })
     picks.push({ id: 'plan-effect', text_zh: '我的方案有没有效果？' })
+  }
+  // Changes for a doctor come before everything else once the person is past consent and profile.
+  if (stage !== 'consent' && stage !== 'profile' && journey.changes.some((row) => row.ask_doctor)) {
+    picks.unshift({ id: 'record-changes', text_zh: '我的记录里哪些变化需要注意？' })
   }
   const seen = new Set<string>()
   return picks.filter((row) => !seen.has(row.text_zh) && seen.add(row.text_zh)).slice(0, 3)

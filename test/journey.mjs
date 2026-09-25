@@ -271,7 +271,17 @@ try {
     { item_zh: 'C反应蛋白', unlocks_zh: '身体年龄', self_measurable: false },
   ])
   assert.deepEqual(journey.next, { stage: 'first_result', title_zh: '还差 2 项检查', detail_zh: '下次体检加测：腰围、C反应蛋白', action: 'addons' })
-  assertSuggestions(journey, ['下次体检需要加测哪些项目？', '用我现有的记录能算出什么？', '帮我记录腰围和家庭血压'])
+  assertSuggestions(journey, ['下次体检需要加测哪些项目？', '帮我制定一份改善方案', '帮我记录腰围和家庭血压'])
+
+  // a plan saved before any first result is lived day by day: the routine, not first_result
+  const early = tempDir('plan-before-result')
+  mod.writeProfile(early, { ...mod.readProfile(dataDir) })
+  mod.savePlan(early, mod.normalizePlan({ title: '先动起来', items: [{ category: 'exercise', title: '快走', start: TODAY }] }, { today: TODAY, medications: [], previous: null }).plan)
+  const earlyJourney = (await journeyOf(configFor(early, thin.url))).journey
+  assert.equal(earlyJourney.results.bioage.status, 'blocked')
+  assert.equal(earlyJourney.stage, 'routine', 'a saved plan moves on even without a first result')
+  assert.deepEqual(earlyJourney.plan.checkin_items.map((row) => row.title), ['快走'])
+  assert.deepEqual(earlyJourney.next, { stage: 'routine', title_zh: '今天的打卡', detail_zh: '还有 1 项待完成', action: 'checkin' })
 
   // a tape-measure waist lets China-PAR compute before the next checkup
   const tape = mod.addSelf(dataDir, [{ key: 'waist', value: 88, unit: 'cm', date: '2026-09-20' }], { today: TODAY })

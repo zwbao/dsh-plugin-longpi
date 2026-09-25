@@ -152,7 +152,7 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
   else if (!journey) body = h(Failed, { error: error ?? '没有返回', onRetry: () => { void doRefresh() } })
   else {
     const trackingData = tracking.data
-    const showPlan = journey.plan.exists || stage === 'plan' || stage === 'routine'
+    const showPlan = journey.plan.exists || stage === 'first_result' || stage === 'plan' || stage === 'routine'
     body = h('div', { className: `lp-body ${refreshing ? 'lp-refreshing' : ''}` },
       early ? h(JourneyStepper, { journey, open: openStep, onOpen: setOpenStep, onRecheck: doRefresh, onNotice: notify }) : null,
       h(ChangesCard, { journey }),
