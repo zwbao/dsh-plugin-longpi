@@ -61,7 +61,7 @@ const cache = new Map<string, { at: number; ttl: number; value: Promise<unknown>
 
 /**
  * The account a read is for, without the token itself: another token on the same address is another account.
- * TODO(merge): the same value as connection.ts connectionKey(config); use that once it is in.
+ * connection.ts re-exports it as connectionKey.
  */
 export function tokenKey(config: Pick<Config, 'mcpToken'>): string {
   const token = config.mcpToken.trim()

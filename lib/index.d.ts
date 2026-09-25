@@ -1,5 +1,6 @@
 import Schema from "@deepseek-ai/schemastery";
 import { Context } from "@deepseek-ai/cordis";
+import { IncomingMessage, ServerResponse } from "node:http";
 //#region src/host-shims.d.ts
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -64,7 +65,7 @@ interface Config {
   maxSkillMatches: number;
   skillRuntimes: Record<string, string>;
   skillsVersion: string;
-  /** On a DSH with no workspace, register <dataDir>/workspace as 「健康」 once, so a session can open. */
+  /** On a DSH with no workspace, register <dataDir>/workspace as 「健康对话」 once, so a session can open. */
   bootstrapWorkspace: boolean;
 }
 declare const Config: Schema<Config>;
@@ -83,7 +84,7 @@ declare function preGuard(text: string): GuardHit | null;
 declare function wrapGuardMessage(text: string, hit: GuardHit): string;
 //#endregion
 //#region src/version.d.ts
-declare const PRODUCT_VERSION = "5.0.0";
+declare const PRODUCT_VERSION = "5.1.0";
 declare const TOOL_NAMES: readonly ["read_personal_situation", "list_longevity_intents", "match_longevity_skills", "read_longevity_skill", "run_longevity_skill", "query_longevity_evidence", "list_longevity_domains", "save_personal_profile", "longpi_status", "save_intervention_plan", "draft_intervention_plan", "log_intervention_checkin", "save_self_measurement", "read_intervention_plan", "review_interventions", "model_intervention_goals", "set_followup", "send_followup_message"];
 declare const HARNESS_SKILLS: readonly ["longpi-dispatch", "longpi-board", "longpi-boundary", "longpi-interventions"];
 //#endregion
@@ -633,7 +634,7 @@ interface RecordSnapshot {
 declare function recordReadable(records: Pick<RecordSnapshot, 'record_status'>): boolean;
 /**
  * The account a read is for, without the token itself: another token on the same address is another account.
- * TODO(merge): the same value as connection.ts connectionKey(config); use that once it is in.
+ * connection.ts re-exports it as connectionKey.
  */
 declare function tokenKey(config: Pick<Config, 'mcpToken'>): string;
 /** Forget cached record reads, after a change the next read must see. */
@@ -1618,8 +1619,8 @@ declare const DEFAULT_FOLLOWUP: FollowupSettings;
 /** At most this many sends per local day, across kinds, model-written and test ones included. */
 declare const FOLLOWUP_MAX_PER_DAY = 6;
 declare const FOLLOWUP_TEST_TEXT = "这是一条 LongPi 测试提醒。";
-/** https for every kind; the generic kind may also be http to this machine or the local network. */
-declare function webhookUrlProblem(kind: WebhookKind, url: string): string;
+/** https for every kind, to a host that is not this machine, link-local, unspecified or a metadata service. */
+declare function webhookUrlProblem(_kind: WebhookKind, url: string): string;
 /** The saved settings, with defaults for anything missing or unreadable. */
 declare function readFollowup(dataDir: string): FollowupSettings;
 /** Check and save a partial update from the page or a tool. The file is private to the person (0600). */
@@ -1758,6 +1759,122 @@ declare function followupSummary(dataDir: string, state: FollowupState | null, n
   next_at: string | null;
 };
 //#endregion
+//#region src/groups.d.ts
+declare const GROUP_KEYS: readonly ["lipids", "glucose", "inflammation", "blood", "liver", "kidney", "thyroid", "body", "wearable", "other"];
+type GroupKey = (typeof GROUP_KEYS)[number];
+declare const GROUP_ZH: Record<GroupKey, string>;
+/** The group of a checkup row, by LOINC code, then by words in its names, then 其他. */
+declare function groupOf(row: {
+  loinc?: string;
+  name?: string;
+  label?: string;
+}): GroupKey;
+//#endregion
+//#region src/indicators.d.ts
+type IndicatorSource = 'checkup' | 'device' | 'self';
+interface IndicatorChange {
+  verdict: 'better' | 'worse' | 'unclear';
+  ask_doctor: boolean;
+  pct: number;
+  band_pct: {
+    up: number;
+    down: number;
+  };
+  text_zh: string;
+}
+/** One row of the 指标 tab (the client's IndicatorRow). */
+interface IndicatorEntry {
+  /** Stable: 'loinc:<code>' | 'device:<name>' | 'self:<key>' | 'name:<folded name>'. */
+  id: string;
+  label_zh: string;
+  unit: string;
+  source: IndicatorSource;
+  /** text for a result that is not a number ("阴性", "<3.0"). */
+  latest: {
+    date: string;
+    value: number | null;
+    text?: string;
+  } | null;
+  /** Oldest first. Checkups: one per day, the 12 most recent; device: weekly means, 26 weeks; self: daily, 30. */
+  points: Array<{
+    date: string;
+    value: number;
+  }>;
+  /** From changes.ts, when it lists this indicator. */
+  change: IndicatorChange | null;
+  /** within: two or more checkup days and the last change inside the band; unjudged: no band, too few days, or a failed read. */
+  judged: 'changed' | 'within' | 'unjudged';
+  plan_marker: boolean;
+  /** The series read failed or timed out: show this, never "no data". */
+  read_error?: string;
+}
+interface IndicatorsResponse {
+  /** partial: some series could not be read; their rows carry read_error. */
+  record: {
+    status: 'ok' | 'partial' | 'error' | 'none';
+    error?: string;
+  };
+  updated_at: string;
+  groups: Array<{
+    key: GroupKey;
+    label_zh: string;
+    indicators: IndicatorEntry[];
+  }>;
+}
+interface IndicatorDetail {
+  row: IndicatorEntry;
+  /** Every reading, oldest first, the 200 most recent, each in the unit it was recorded in. */
+  all_points: Array<{
+    date: string;
+    value: number | null;
+    text?: string;
+    file?: string;
+    unit: string;
+  }>;
+  /** The biological-variation row a checkup row is judged against. */
+  biovar?: {
+    cvi_pct: number;
+    band_pct: {
+      up: number;
+      down: number;
+    };
+    source: {
+      title: string;
+      url: string;
+      doi?: string;
+    };
+    caveat_zh?: string;
+  };
+}
+/**
+ * What the record holds, for onboarding: checkup days (distinct dates of LOINC rows), their span, the checkup
+ * groups present (most rows first; 其他 left out), wearable days in the last year.
+ */
+interface RecordsSummary {
+  checkups: number;
+  first_date: string | null;
+  last_date: string | null;
+  categories_zh: string[];
+  wearable_days: number;
+}
+interface IndicatorsContext {
+  config: Config;
+  dataDir: string;
+  skillsHome: string;
+  records: RecordSnapshot;
+  today: string;
+  /** How long the reads may take before the rows not read yet say so. Default 20 s. */
+  budgetMs?: number;
+}
+/** GET /api/longpi/indicators. */
+declare function buildIndicators(context: IndicatorsContext): Promise<IndicatorsResponse>;
+/** GET /api/longpi/indicators/detail: the row, every reading (200 at most) and its band; null for an unknown id. */
+declare function indicatorDetail(context: IndicatorsContext, id: string): Promise<IndicatorDetail | null>;
+/** The record summary for onboarding; null when the record is not connected, or a read failed or timed out. */
+declare function recordsSummary(context: IndicatorsContext): Promise<RecordsSummary | null>;
+/** Forget built indicators (tests; the tracking generation already covers every change the routes make). */
+declare function invalidateIndicators(): void;
+//#endregion
 //#region src/journey.d.ts
 type Stage = 'consent' | 'profile' | 'records' | 'first_result' | 'plan' | 'routine';
 interface Journey {
@@ -1789,7 +1906,12 @@ interface Journey {
     key: Focus;
     label_zh: string;
   }>;
-  /** partial: read, but some reads failed or came back cut; read_errors says which, and missing_reads names indicators not read (unknown, never "not measured"). */
+  /**
+   * status partial: read, but some reads failed or came back cut; read_errors says which, and missing_reads names
+   * indicators not read (unknown, never "not measured"). summary: what the record holds, for onboarding (checkup days
+   * and their span, the groups present, wearable days in the last year); null when the record is not connected, or a
+   * read failed or timed out (a count would then be too small).
+   */
   records: {
     status: 'unconfigured' | 'ok' | 'partial' | 'error';
     error: string;
@@ -1799,6 +1921,7 @@ interface Journey {
     full_checkups: number;
     latest_checkup: string | null;
     mirobody_mounted: boolean;
+    summary: RecordsSummary | null;
   };
   results: {
     /**
@@ -2107,6 +2230,94 @@ declare function acceptedPlan(brief: PlanBrief, posted: unknown, today: string):
   problems: string[];
 };
 //#endregion
+//#region src/connection.d.ts
+declare const CONNECTION_FILE = "connection.json";
+/** One catalogue read, all round trips included. */
+declare const CONNECTION_TEST_MS = 10000;
+interface SavedConnection {
+  mcp_url: string;
+  mcp_token?: string;
+  saved_at: string;
+}
+type ConnectionSource = 'saved' | 'config' | 'none';
+/** The saved connection, or null when there is none or the file is unreadable. */
+declare function readConnection(dataDir: string): SavedConnection | null;
+/** Write the connection, private to the person (0600), replacing the file in one step. */
+declare function saveConnection(dataDir: string, input: {
+  mcp_url: string;
+  mcp_token?: string;
+}, now?: Date): SavedConnection;
+/** Remove the saved connection; the configured values apply again. True when there was one. */
+declare function clearConnection(dataDir: string): boolean;
+/**
+ * The configuration every module reads: the plugin's own, with mcpUrl and mcpToken taken from the saved
+ * connection when there is one. A saved connection without a token means none, never the configured one:
+ * a token belongs to its address.
+ */
+declare function effectiveConfig(config: Config): Config;
+/** Where the effective address comes from. */
+declare function connectionSource(config: Config): ConnectionSource;
+/**
+ * A short hash of the MCP token, for cache keys: two accounts behind one address never share a cached
+ * record. sha256 of the trimmed token, first 16 hex characters; '' when there is no token.
+ */
+declare function connectionKey(config: Pick<Config, 'mcpToken'>): string;
+/**
+ * The address as the page may show it. The installer's rule: everything after /mcp/ is the personal
+ * secret and is hidden. A query or fragment is hidden too, and so is anything that does not parse.
+ */
+declare function maskMcpUrl(url: string): string;
+/** Why an address cannot be used, in Chinese; '' when it can. https, or http to this machine only. */
+declare function connectionUrlProblem(url: unknown): string;
+/** Why a token cannot be used, in Chinese; '' when it can (or when there is none). */
+declare function connectionTokenProblem(token: unknown): string;
+type ConnectionTest = {
+  ok: true;
+  indicators: number;
+} | {
+  ok: false;
+  error: string;
+};
+/**
+ * Read the record catalogue once through an address and token, within CONNECTION_TEST_MS in all.
+ * Never saves anything. Errors are in Chinese, with the address and token taken out.
+ */
+declare function testConnection(input: {
+  mcp_url: string;
+  mcp_token?: string;
+  member?: string;
+}, timeoutMs?: number): Promise<ConnectionTest>;
+//#endregion
+//#region src/routes.d.ts
+type Handler = (req: IncomingMessage, res: ServerResponse) => void;
+/**
+ * The part of DSH's `connection` service (dsh-client-connection, HostConnectionHandle) the routes use:
+ * the Host/Origin/Sec-Fetch-Site fence, then the signed `dsh-auth` cookie. 401 or 403 rejects.
+ */
+interface ConnectionGuard {
+  requestRejection(request: {
+    headers: IncomingMessage['headers'];
+  }): 401 | 403 | undefined;
+}
+declare const CONNECTION_UNAVAILABLE = "longpi: DeepSeek Harness connection service unavailable";
+/** application/json, with or without a charset or other parameters. */
+declare function isJsonRequest(req: Pick<IncomingMessage, 'headers'>): boolean;
+/**
+ * DSH's exact routes skip the /api prefix route and its checks, so every LongPi handler runs them itself,
+ * before anything else: no connection service, no route (503); then DSH's own rejection; then a write
+ * that is not JSON (415), which a page on another site could otherwise send without a preflight.
+ */
+declare function guardRoute(connection: () => ConnectionGuard | null, handler: Handler): Handler;
+/** GET /api/longpi/connection, and the answer of every connection write. */
+interface ConnectionStatus {
+  source: ConnectionSource;
+  url_masked: string;
+  token_set: boolean;
+  status: 'ok' | 'error' | 'none';
+  error?: string;
+  summary?: RecordsSummary;
+}
+//#endregion
 //#region src/workspace.d.ts
 /** The part of DSH's workspaceRegistry service (@deepseek-ai/dsh-workspace) this uses. */
 interface WorkspaceRegistryLike {
@@ -2121,7 +2332,7 @@ interface WorkspaceRegistryLike {
 }
 declare const WORKSPACE_MARKER = "workspace-bootstrap.json";
 declare const WORKSPACE_DIR = "workspace";
-declare const WORKSPACE_TITLE = "健康";
+declare const WORKSPACE_TITLE = "健康对话";
 type BootstrapResult = {
   status: 'created';
   path: string;
@@ -2132,7 +2343,7 @@ type BootstrapResult = {
   status: 'error';
   error: string;
 };
-/** Create the 健康 workspace when the registry is empty and it was never created before. Never throws. */
+/** Create the 健康对话 workspace when the registry is empty and it was never created before. Never throws. */
 declare function bootstrapWorkspace(registry: WorkspaceRegistryLike | null | undefined, options: {
   dataDir: string;
   enabled: boolean;
@@ -2159,4 +2370,4 @@ declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { type BootstrapResult, CHANGES_NOTE_ZH, CONSENT_VERSION, Config, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMPTY_PROFILE, FOCUS, FOCUS_ZH, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, HARNESS_SKILLS, type Journey, PHENOAGE_SKILL, PRODUCT_VERSION, type PlanBrief, type PlanDraft, type Profile, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RecordChange, type RiskFact, SELF_ALIASES, SELF_KEYS, SELF_SPEC, type SelfKey, type SelfRow, type SendResult, type Stage, TOOL_NAMES, type UnjudgedChange, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, bootstrapWorkspace, bridgeEnv, buildBoard, buildCalendar, buildChanges, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, candidatesFor, cellNumber, checkinStatus, checkupMarkerFor, commandExcerpt, currentPlan, daysBetween, decideFollowup, deleteSelf, describeItem, describePlan, desktopCommand, desktopSupported, detectIntents, domainSummary, dosePattern, draftPlan, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expectedText, factorFor, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, goalProblems, hasDose, heldUntil, homeBloodPressure, inQuiet, indicatorFor, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, maskUrl, matchSkills, mentionedEntities, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, profileComplete, publicFollowup, rcvBand, readCheckIns, readFailed, readFollowup, readFollowupLog, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, recordReadable, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, runReady, runSkill, runnableFrom, sameMeasure, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, skillEnv, stageMeasurements, stageNow, startFollowup, stripDoses, suggestNext, summarizeIndicators, summarizeMedications, tableOf, togetherZh, tokenKey, trackingGeneration, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };
+export { type BootstrapResult, CHANGES_NOTE_ZH, CONNECTION_FILE, CONNECTION_TEST_MS, CONNECTION_UNAVAILABLE, CONSENT_VERSION, Config, type ConnectionGuard, type ConnectionSource, type ConnectionStatus, type ConnectionTest, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMPTY_PROFILE, FOCUS, FOCUS_ZH, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, GROUP_KEYS, GROUP_ZH, type GroupKey, HARNESS_SKILLS, type IndicatorChange, type IndicatorDetail, type IndicatorEntry, type IndicatorSource, type IndicatorsResponse, type Journey, PHENOAGE_SKILL, PRODUCT_VERSION, type PlanBrief, type PlanDraft, type Profile, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RecordChange, type RecordsSummary, type RiskFact, SELF_ALIASES, SELF_KEYS, SELF_SPEC, type SavedConnection, type SelfKey, type SelfRow, type SendResult, type Stage, TOOL_NAMES, type UnjudgedChange, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, bootstrapWorkspace, bridgeEnv, buildBoard, buildCalendar, buildChanges, buildIndicators, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, candidatesFor, cellNumber, checkinStatus, checkupMarkerFor, clearConnection, commandExcerpt, connectionKey, connectionSource, connectionTokenProblem, connectionUrlProblem, currentPlan, daysBetween, decideFollowup, deleteSelf, describeItem, describePlan, desktopCommand, desktopSupported, detectIntents, domainSummary, dosePattern, draftPlan, effectiveConfig, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expectedText, factorFor, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, goalProblems, groupOf, guardRoute, hasDose, heldUntil, homeBloodPressure, inQuiet, indicatorDetail, indicatorFor, indicatorsFromTable, inject, invalidateIndicators, invalidateRecords, invalidateTracking, isJsonRequest, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, maskMcpUrl, maskUrl, matchSkills, mentionedEntities, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, profileComplete, publicFollowup, rcvBand, readCheckIns, readConnection, readFailed, readFollowup, readFollowupLog, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, recordReadable, recordsSummary, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, runReady, runSkill, runnableFrom, sameMeasure, saveConnection, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, skillEnv, stageMeasurements, stageNow, startFollowup, stripDoses, suggestNext, summarizeIndicators, summarizeMedications, tableOf, testConnection, togetherZh, tokenKey, trackingGeneration, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };

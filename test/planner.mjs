@@ -380,6 +380,7 @@ function fakeHost() {
     skills: { register: () => () => {} },
     systemPrompt: { section: (section) => { prompts.push(section) } },
     webServer: { register: (route) => { routes.set(route.path, route.handler); return () => {} } },
+    connection: { requestRejection: () => undefined },
     commands: { register: (command) => { commands.set(command.name, command) } },
     inject: (_names, callback) => callback(ctx),
     on: () => () => {},
@@ -398,6 +399,7 @@ function call(host, method, url, body) {
   const req = Readable.from(body === undefined ? [] : [Buffer.from(JSON.stringify(body))])
   req.method = method
   req.url = url
+  req.headers = { host: '127.0.0.1', 'content-type': 'application/json' }
   return new Promise((resolveCall) => {
     const headers = {}
     const res = {

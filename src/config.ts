@@ -15,7 +15,7 @@ export interface Config {
   maxSkillMatches: number
   skillRuntimes: Record<string, string>
   skillsVersion: string
-  /** On a DSH with no workspace, register <dataDir>/workspace as 「健康」 once, so a session can open. */
+  /** On a DSH with no workspace, register <dataDir>/workspace as 「健康对话」 once, so a session can open. */
   bootstrapWorkspace: boolean
 }
 

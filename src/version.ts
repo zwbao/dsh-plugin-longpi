@@ -1,4 +1,4 @@
-export const PRODUCT_VERSION = '5.0.0'
+export const PRODUCT_VERSION = '5.1.0'
 export const PRODUCT_NAME = 'dsh-plugin-longpi'
 
 export const TOOL_NAMES = [

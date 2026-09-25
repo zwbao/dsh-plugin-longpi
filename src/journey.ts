@@ -7,6 +7,7 @@
 
 import type { RecordChange } from './changes.ts'
 import { followupSummary, readFollowup, type FollowupState } from './followup.ts'
+import { recordsSummary, type RecordsSummary } from './indicators.ts'
 import { addDays, checkinStatus, daysBetween, readCheckIns } from './interventions.ts'
 import { measurementInputs } from './measurements.ts'
 import type { MountState } from './mirobody.ts'
@@ -32,8 +33,17 @@ export interface Journey {
     questions: Array<{ key: 'age' | 'sex' | RiskFact; label_zh: string; unlocks_zh: string; answered: boolean; men_only?: boolean }>
   }
   focus_options: Array<{ key: Focus; label_zh: string }>
-  /** partial: read, but some reads failed or came back cut; read_errors says which, and missing_reads names indicators not read (unknown, never "not measured"). */
-  records: { status: 'unconfigured' | 'ok' | 'partial' | 'error'; error: string; read_errors: string[]; missing_reads: string[]; indicator_count: number; full_checkups: number; latest_checkup: string | null; mirobody_mounted: boolean }
+  /**
+   * status partial: read, but some reads failed or came back cut; read_errors says which, and missing_reads names
+   * indicators not read (unknown, never "not measured"). summary: what the record holds, for onboarding (checkup days
+   * and their span, the groups present, wearable days in the last year); null when the record is not connected, or a
+   * read failed or timed out (a count would then be too small).
+   */
+  records: {
+    status: 'unconfigured' | 'ok' | 'partial' | 'error'; error: string; read_errors: string[]; missing_reads: string[]
+    indicator_count: number; full_checkups: number; latest_checkup: string | null; mirobody_mounted: boolean
+    summary: RecordsSummary | null
+  }
   results: {
     /**
      * band_verified and band_missing are additions for the model: with band_missing the band is a lower bound.
@@ -100,8 +110,9 @@ export async function buildJourney(context: JourneyContext): Promise<Journey> {
 
 /** The journey and the tracking it was built from (retest dates, bands, adherence calendars). */
 export async function buildJourneyFull(context: JourneyContext): Promise<{ journey: Journey; tracking: Tracking }> {
-  const tracking = await buildTracking(context)
-  const journey = journeyFrom(context, tracking)
+  // The summary's reads run beside the skill runs and have their own deadline; a failure leaves it null.
+  const [tracking, summary] = await Promise.all([buildTracking(context), recordsSummary(context).catch(() => null)])
+  const journey = journeyFrom(context, tracking, summary)
   lastBuilt = { at: Date.now(), journey }
   return { journey, tracking }
 }
@@ -282,6 +293,7 @@ function stageOf(journey: Pick<Journey, 'consent' | 'profile' | 'records' | 'res
   if (!journey.profile.complete) return 'profile'
   // A saved plan is lived day by day even while the record is unreachable or no first result can be computed yet.
   if (journey.plan.exists) return 'routine'
+  // A record read in part is connected: the rows that failed say so where they are shown.
   if (journey.records.status !== 'ok' && journey.records.status !== 'partial') return 'records'
   if (journey.results.bioage.status !== 'ok' && journey.results.risk.status !== 'ok') return 'first_result'
   return 'plan'
@@ -297,7 +309,7 @@ function nextOf(stage: Stage, journey: Body): Next {
     case 'records':
       return journey.records.status === 'error'
         ? step('连接体检记录', clip(`记录读取失败：${journey.records.error}`), 'records')
-        : step('连接体检记录', '在 Mirobody 中生成个人 MCP 地址，重新运行安装命令时加上 --mcp-url。', 'records')
+        : step('连接体检记录', '在 Mirobody 中生成个人 MCP 地址，粘贴到设置里的 LongPi 页。', 'records')
     case 'first_result': {
       const n = journey.addons.length
       if (n > 0) return step(`还差 ${n} 项检查`, `下次体检加测：${journey.addons.slice(0, 3).map((row) => row.item_zh).join('、')}`, 'addons')
@@ -343,7 +355,7 @@ function suggestionsOf(stage: Stage, journey: Body, followupOn: boolean): Journe
   return picks.filter((row) => !seen.has(row.text_zh) && seen.add(row.text_zh)).slice(0, 3)
 }
 
-function journeyFrom(context: JourneyContext, tracking: Tracking): Journey {
+function journeyFrom(context: JourneyContext, tracking: Tracking, summary: RecordsSummary | null = null): Journey {
   const { records, today } = context
   const profile = records.profile
   const points = tracking.bioage.points
@@ -382,6 +394,7 @@ function journeyFrom(context: JourneyContext, tracking: Tracking): Journey {
       full_checkups: points.length,
       latest_checkup: points.at(-1)?.date ?? null,
       mirobody_mounted: context.mount.mounted,
+      summary,
     },
     results: { bioage, risk },
     addons: addonsOf(tracking.bioage, risk),

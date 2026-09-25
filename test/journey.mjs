@@ -231,8 +231,9 @@ try {
   assert.deepEqual(journey.profile.risk, { north: true })
   assert.deepEqual(questions.map((row) => row.key).filter((key) => journey.profile.questions.find((row) => row.key === key).answered), ['age', 'sex', 'north'])
   assert.equal(journey.records.status, 'unconfigured')
+  assert.equal(journey.records.summary, null, 'no record, no summary')
   assert.equal(journey.next.action, 'records')
-  assert.equal(journey.next.detail_zh, '在 Mirobody 中生成个人 MCP 地址，重新运行安装命令时加上 --mcp-url。')
+  assert.equal(journey.next.detail_zh, '在 Mirobody 中生成个人 MCP 地址，粘贴到设置里的 LongPi 页。')
   assertSuggestions(journey, ['怎么把体检报告导入 Mirobody？', '还没有体检记录，现在可以先做什么？'])
   assert.equal(journey.results.bioage.status, 'blocked')
   assert.equal(journey.results.bioage.blocker_zh, '还没有连接 Mirobody 记录。')
@@ -311,6 +312,13 @@ try {
   assert.equal(journey.results.bioage.checkups, 4)
   assert.equal(journey.records.full_checkups, 4)
   assert.equal(journey.records.latest_checkup, '2026-08-26')
+  // what onboarding shows of the record: checkup days and their span, the groups present, wearable days in the last year
+  const { summary } = journey.records
+  assert.deepEqual({ ...summary, wearable_days: undefined }, {
+    checkups: 4, first_date: '2025-10-18', last_date: '2026-08-26',
+    categories_zh: ['血脂', '血常规', '血糖', '肝功能', '炎症', '肾功能', '体格与血压'], wearable_days: undefined,
+  })
+  assert.ok(summary.wearable_days > 300, `${summary.wearable_days} wearable days`)
   assert.equal(journey.results.bioage.date, '2026-08-26')
   assert.equal(journey.results.bioage.phenoage, step.tracking.bioage.points.at(-1).phenoage, 'the number is the skill output')
   assert.ok(journey.results.bioage.band_years > 0)
@@ -720,6 +728,7 @@ function fakeHost() {
     skills: { register: () => () => {} },
     systemPrompt: { section: (section) => { prompts.push(section) } },
     webServer: { register: (route) => { routes.set(route.path, route.handler); return () => {} } },
+    connection: { requestRejection: () => undefined },
     commands: { register: (command) => { commands.set(command.name, command) } },
     inject: (_names, callback) => callback(ctx),
     on: () => () => {},
@@ -739,6 +748,7 @@ function call(host, method, url, body) {
   const req = Readable.from(body === undefined ? [] : [Buffer.from(JSON.stringify(body))])
   req.method = method
   req.url = url
+  req.headers = { host: '127.0.0.1', 'content-type': 'application/json' }
   return new Promise((resolveCall) => {
     const headers = {}
     const res = {
