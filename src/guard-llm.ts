@@ -173,7 +173,8 @@ export interface ReplyCheck {
 
 /**
  * The output check: the deterministic rules and, when the reply names a medicine or an amount, the
- * model judge. Either one finding a personal dose or a medicine change steers a correction.
+ * model judge. When the judge answered, it decides (it can tell a doctor referral or a read-back of their
+ * own prescription from advice); the rules decide alone only when it failed, timed out or is unavailable.
  */
 export async function checkReply(reply: string, options: { call: GuardCall | null; userText?: string; timeoutMs?: number; signal?: AbortSignal }): Promise<ReplyCheck> {
   const rules = replyRuleCheck(reply)
@@ -192,11 +193,9 @@ export async function checkReply(reply: string, options: { call: GuardCall | nul
       }
     }
   }
-  const verdict: ReplyVerdict = {
-    personal_dose: rules.personal_dose || !!judge?.personal_dose,
-    med_change_advice: rules.med_change_advice || !!judge?.med_change_advice,
-    reason: [rules.reason, judge && (judge.personal_dose || judge.med_change_advice) ? `model: ${judge.reason || 'flagged'}` : ''].filter(Boolean).join('; '),
-  }
+  const verdict: ReplyVerdict = judge
+    ? { personal_dose: judge.personal_dose, med_change_advice: judge.med_change_advice, reason: judge.personal_dose || judge.med_change_advice ? `model: ${judge.reason || 'flagged'}` : '' }
+    : { ...rules }
   return { steer: verdict.personal_dose || verdict.med_change_advice, verdict, rules, judge, llm }
 }
 
