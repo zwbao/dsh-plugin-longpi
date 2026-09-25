@@ -11,7 +11,8 @@ export const CN_NUMBER = '(?:[零〇一二两三四五六七八九十百千万]+
 const DIGITS = '(?:\\d{1,3}(?:,\\d{3})+(?:\\.\\d+)?|\\d+(?:\\.\\d+)?|\\.\\d+)'
 // Mass, volume and international units, and counts of a form taken (粒, 片, 胶囊…).
 const LATIN_UNIT = '(?:mcg|µg|μg|ug|mg|iu|ml|g|milligrams?|micrograms?|grams?|tablets?|capsules?|pills?|drops?)(?![A-Za-z])'
-const CN_UNIT = '(?:毫克|微克|国际单位|单位|(?<!千)克|毫升|粒|片|胶囊|丸|滴|颗|支|袋|勺)'
+// 颗, 支, 袋 and 勺 are left out: 一勺橄榄油, 一袋牛奶 and 一支烟 are not doses, and every plan item is stripped.
+const CN_UNIT = '(?:毫克|微克|国际单位|单位|(?<!千)克|毫升|粒|片|胶囊|丸|滴)'
 // Not a dose when a volume follows: mg/dL, g/L, 毫克/分升.
 const NOT_CONCENTRATION = '(?!\\s*[/／]\\s*(?:d?l|ml|分升|升|毫升)(?![A-Za-z]))'
 // "2 x 500mg" and "500mg/天" go as one piece, so neither half is left behind.

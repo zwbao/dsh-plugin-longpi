@@ -407,7 +407,7 @@ try {
     assert.match(mod.followupTextProblem(text, 'full'), /剂量/, text)
     assert.equal(mod.hasDose(text), true, `the plan side reads it as a dose too: ${text}`)
   }
-  for (const text of ['42.6 mg/dL', '5 毫克/分升', '体重 72 千克', '七十千克', '每天走 8000 步', '30 分钟']) assert.equal(mod.hasDose(text), false, text)
+  for (const text of ['42.6 mg/dL', '5 毫克/分升', '体重 72 千克', '七十千克', '每天走 8000 步', '30 分钟', '每天一勺橄榄油', '一袋牛奶', '每天少抽一支烟']) assert.equal(mod.hasDose(text), false, text)
 
   // journey.followup and /longpi
   mod.setConsent(routeDir, true)

@@ -21,6 +21,7 @@ export function buildBoard(input: {
     intents: input.catalog.intents,
     profile: { age: input.records.profile.age, sex: input.records.profile.sex },
     outputs,
+    reads: { failed: input.records.missing_reads, catalog_truncated: input.records.catalog_truncated },
   })
   return {
     product: 'dsh-plugin-longpi',

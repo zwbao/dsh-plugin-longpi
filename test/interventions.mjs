@@ -450,6 +450,14 @@ try {
     assert.match(flakyRisk.note_zh, /最新值没有读到（读取失败），不是没有测过/)
     const ready = mod.readiness(catalog, partial, {})
     assert.equal(ready.unlock.length + ready.near.length, 0, 'no add-on test for a value that failed to read')
+    const matched = mod.matchSkills(catalog.cards, '', partial.indicators, 8, {
+      intents: catalog.intents, profile: { age: 53, sex: 'male' }, outputs: {}, reads: { failed: partial.missing_reads, catalog_truncated: partial.catalog_truncated },
+    })
+    assert.ok(matched.near.every((item) => !item.runnable.missing.includes('白蛋白')), 'almost_runnable never names a value that failed to read')
+    const partialBoard = mod.buildBoard({ catalog, records: partial, mount: { mounted: false, peer: false, error: '', pluginHome: '' }, receipts: [], limit: 8, outputs: {} })
+    assert.ok(partialBoard.near.every((item) => !item.runnable.missing.includes('白蛋白')))
+    assert.equal(partialBoard.records.status, 'partial')
+    assert.equal(partialBoard.records.missing_reads.length, partial.missing_reads.length)
   } finally {
     await flaky.close()
     rmSync(flakyDir, { recursive: true, force: true })
@@ -469,6 +477,22 @@ try {
   } finally {
     await flakySeries.close()
     rmSync(seriesDir, { recursive: true, force: true })
+  }
+  // ...and one that came back cut is not read whole either
+  const cutSeries = await startFlakyMirobody({ fail: (_name, args) => args.aggregate === 'none' && (args.indicators ?? []).includes('Albumin-ALB') ? { cut: true } : null })
+  const cutDir = mkdtempSync(join(tmpdir(), 'longpi-interventions-cut-'))
+  try {
+    mod.writeProfile(cutDir, { age: 53, sex: 'male', risk: facts })
+    const cutConfig = { ...config, mcpUrl: cutSeries.url, dataDir: cutDir }
+    mod.invalidateRecords()
+    mod.invalidateTracking()
+    const recs = await mod.loadRecords(cutConfig, cutDir, '/nonexistent/plugin')
+    const cutTracking = await mod.buildTracking({ config: cutConfig, dataDir: cutDir, skillsHome: home, catalog, records: recs, today: TODAY })
+    assert.equal(cutTracking.bioage.status, 'error')
+    assert.match(cutTracking.bioage.note_zh, /读数太多被截断，没有读全/)
+  } finally {
+    await cutSeries.close()
+    rmSync(cutDir, { recursive: true, force: true })
   }
 
   console.log(`interventions ok (${tracking.items.length} items, ${tracking.items.flatMap((item) => item.verdicts).length} verdicts, phenotypic age at ${tracking.bioage.points.length} checkups, band ±${tracking.bioage.band_years.toFixed(1)} y)`)

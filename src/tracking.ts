@@ -359,8 +359,10 @@ async function checkupDays(context: TrackingContext, pairs: readonly Pair[]): Pr
   const names = [...new Set(pairs.flatMap((pair) => pair.names))]
   const read = await loadSeries(context.config, names, { start: addDays(context.today, -LOOKBACK_DAYS), end: context.today, resolution: 'raw' })
   const byDate = new Map<string, Map<string, SeriesPoint>>()
-  // Any series that failed to read makes the days unknown: a missing value is never taken for a checkup without it.
+  // Any series that failed to read, or came back cut, makes the days unknown: a value not read is never taken
+  // for a checkup without it.
   if (read.failed.length > 0) return { byDate, complete: [], error: read.error || '读取失败' }
+  if (read.cut.length > 0) return { byDate, complete: [], error: '读数太多被截断，没有读全' }
   for (const pair of pairs) {
     const rank = new Map<string, number>()
     pair.names.forEach((name, index) => {

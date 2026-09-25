@@ -110,7 +110,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
       const { catalog, records, outputs, current } = input
       const profile = { age: records.profile.age, sex: records.profile.sex }
       const dispatch = matchSkills(catalog.cards, '', records.indicators, clampMatches(current.maxSkillMatches), {
-        intents: catalog.intents, profile, outputs,
+        intents: catalog.intents, profile, outputs, reads: { failed: records.missing_reads, catalog_truncated: records.catalog_truncated },
       })
       const read = await journeyOf(input)
       return asJson({
@@ -191,6 +191,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
         profile: { age: records.profile.age, sex: records.profile.sex },
         outputs,
         lexicon,
+        reads: { failed: records.missing_reads, catalog_truncated: records.catalog_truncated },
       })
       return asJson({
         question,
