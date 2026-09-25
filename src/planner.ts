@@ -115,7 +115,7 @@ const ANTITHROMBOTIC = /阿司匹林|氯吡格雷|替格瑞洛|华法林|沙班|
 const FISH_OIL = /鱼油|omega-?3|ω-?3|\bepa\b|\bdha\b/i
 const TIME_RESTRICTED = /限时进食|time-restricted|16:8|轻断食/i
 const SMOKING_CESSATION = /戒烟|smoking cessation|quit smoking/i
-const STOPPED = /stop|end|inactive|completed|停|结束|已完成/i
+const STOPPED = /^\s*(?:stopped|ended|inactive|completed|discontinued|停用|已停|已停用|停药|结束|已结束|已完成)\s*$/i
 
 export interface BriefOptions {
   /** Focus for this draft only (the saved profile is not changed). */
@@ -549,7 +549,8 @@ export function acceptedPlan(brief: PlanBrief, posted: unknown, today: string): 
       problems.push(`「${name}」不在当前按证据起草的选项里，没有保存。请重新打开草稿。`)
       continue
     }
-    if (kept.includes(group)) continue
+    // One item per intervention, even if two of its evidence rows were posted.
+    if (kept.some((item) => item.key === group.key)) continue
     // Rebuild from the evidence row the person saw, even if it was not the group's first.
     kept.push({ ...group, rows: [...group.rows.filter((candidate) => candidate.id === id), ...group.rows.filter((candidate) => candidate.id !== id)] })
   }

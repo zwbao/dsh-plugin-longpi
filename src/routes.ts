@@ -18,7 +18,8 @@ import { acceptedPlan, buildPlanBrief, draftPlan } from './planner.ts'
 import { buildReport, readiness, runReady } from './overview.ts'
 import { invalidateRecords } from './records.ts'
 import { buildTracking, invalidateTracking } from './tracking.ts'
-import { buildJourney } from './journey.ts'
+import { buildJourney, buildJourneyFull, followupStateOf, within } from './journey.ts'
+import { followupResponse, sendNow, writeFollowup, FOLLOWUP_TEST_TEXT } from './followup.ts'
 import { buildCalendar } from './calendar.ts'
 import { addSelf, deleteSelf, readSelf } from './selfmeasure.ts'
 
@@ -160,6 +161,63 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
           const message = error instanceof Error && error.message === 'body too large' ? error.message : 'accept failed'
           sendJson(res, 400, { ok: false, error: message })
         })
+      },
+    })
+
+    // Retest dates and open check-ins for the next planned follow-up; null when the journey is slow or fails.
+    const followupStateNow = async () => {
+      const built = await within(buildJourneyFull(await journeyContext()), 20_000).catch(() => null)
+      return built && 'value' in built ? followupStateOf(built.value.journey, built.value.tracking) : null
+    }
+
+    scoped.webServer.register({
+      kind: 'exact',
+      path: '/api/longpi/followup',
+      handler: (req, res) => {
+        const dataDir = resolveDataDir(config().dataDir)
+        if (req.method === 'GET') {
+          void (async () => {
+            sendJson(res, 200, followupResponse(dataDir, await followupStateNow()))
+          })().catch(() => sendJson(res, 500, { ok: false, error: 'follow-up failed' }))
+          return
+        }
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { ok: false, error: 'GET or POST' })
+          return
+        }
+        void (async () => {
+          const body = await readJson(req, 8000)
+          if (!body.ok) {
+            sendJson(res, 400, { ok: false, error: 'settings must be JSON' })
+            return
+          }
+          const written = writeFollowup(dataDir, body.value)
+          if (!written.ok) {
+            sendJson(res, 400, { ok: false, error: written.error })
+            return
+          }
+          sendJson(res, 200, { ok: true, ...followupResponse(dataDir, await followupStateNow()) })
+        })().catch((error: unknown) => {
+          const message = error instanceof Error && error.message === 'body too large' ? error.message : 'follow-up failed'
+          sendJson(res, 400, { ok: false, error: message })
+        })
+      },
+    })
+
+    scoped.webServer.register({
+      kind: 'exact',
+      path: '/api/longpi/followup/test',
+      handler: (req, res) => {
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { ok: false, error: 'POST only' })
+          return
+        }
+        void (async () => {
+          // A test goes out even while follow-up is off (it is how the person checks a channel before turning it on);
+          // it is logged and counts toward the daily limit, but never stands in for a scheduled reminder.
+          const result = await sendNow(resolveDataDir(config().dataDir), FOLLOWUP_TEST_TEXT, 'test')
+          sendJson(res, 200, result)
+        })().catch(() => sendJson(res, 500, { ok: false, channels: {}, error: 'test failed' }))
       },
     })
 

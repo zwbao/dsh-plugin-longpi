@@ -373,8 +373,8 @@ try {
     { kind: 'checkin', text_zh: '今天还有 1 项待打卡', date: TODAY, due: true },
   ])
   assert.deepEqual(journey.next, { stage: 'routine', title_zh: '今天的打卡', detail_zh: '还有 1 项待完成', action: 'checkin' })
-  assertSuggestions(journey, ['今天的方案我都完成了', '该复测什么了？'])
-  // TODO(followup) '每天晚上提醒我打卡' and journey.followup
+  assertSuggestions(journey, ['今天的方案我都完成了', '该复测什么了？', '每天晚上提醒我打卡'])
+  assert.deepEqual(journey.followup, { enabled: false, channels: [], next_at: null }, 'follow-up is off until the person turns it on')
 
   mod.addCheckIns(dataDir, [{ item: '地中海饮食', date: TODAY, done: true }, { item: '地中海饮食', date: '2026-09-23', done: true }], { today: TODAY, source: 'board' })
   step = await journeyOf(fullConfig)
@@ -435,7 +435,8 @@ try {
   const host = fakeHost()
   await mod.apply(host.ctx, configFor(routeDir))
   for (const name of mod.TOOL_NAMES) assert.ok(host.tools.has(name), `tool ${name} is registered`)
-  assert.equal(mod.TOOL_NAMES.length, 15)
+  assert.equal(mod.TOOL_NAMES.length, 18)
+  assert.equal(host.effects, 1, 'the follow-up scheduler runs as one Cordis effect')
   const prompt = host.prompts.map((row) => (typeof row.text === 'function' ? row.text() : row.text)).join('\n')
   assert.match(prompt, /save_self_measurement/)
   assert.match(prompt, /onboarding/)
@@ -443,6 +444,13 @@ try {
   assert.match(prompt, /When questions_unanswered is not empty/, 'profile questions follow what is unanswered, not the consent stage')
   assert.match(prompt, /noise band where the tool gives one/)
   assert.doesNotMatch(prompt, /Never propose plan items/)
+  assert.doesNotMatch(prompt, /Never add an item/)
+  assert.match(prompt, /Start from draft_intervention_plan/)
+  assert.match(prompt, /需先与医生确认/)
+  assert.match(prompt, /Never start, stop or change a prescription medicine/)
+  assert.match(prompt, /set_followup only after they agree/)
+  assert.match(prompt, /schedule_create/)
+  assert.match(prompt, /send_followup_message/)
   const dispatch = readFileSync(join(root, '..', 'skills', 'longpi-dispatch', 'SKILL.md'), 'utf8')
   assert.match(dispatch, /questions_unanswered/)
   assert.doesNotMatch(dispatch, /consent \/ profile：先帮对方建档/)
@@ -521,6 +529,7 @@ try {
   assert.equal(status.next, '连接体检记录')
   const command = host.commands.get('longpi').handler({ rawInput: '/longpi' })
   assert.match(command.text, /^stage records · next 连接体检记录$/m)
+  assert.match(command.text, /^followup off$/m)
   assert.doesNotMatch(command.text, /mmHg|cm|kg/, 'no health values in the command')
 
   res = await call(host, 'GET', '/api/longpi/calendar.ics')
@@ -649,6 +658,7 @@ try {
   assert.equal(apartJourney.results.bioage.blocker_zh, '九项血检还没有在同一天测齐。')
   assert.ok(apartJourney.addons.some((row) => row.item_zh === '九项血检安排在同一天' && row.unlocks_zh === '身体年龄' && !row.self_measurable))
 
+  host.dispose()
   console.log(`journey ok (stages consent → profile → records → first_result → plan → routine; China-PAR ${journey.results.risk.risk_pct}% ${journey.results.risk.category_zh}, phenotypic age at ${journey.results.bioage.checkups} checkups)`)
 } finally {
   for (const server of servers) await server.close()
@@ -660,6 +670,8 @@ function fakeHost() {
   const routes = new Map()
   const commands = new Map()
   const prompts = []
+  const disposers = []
+  const host = { tools, routes, commands, prompts, effects: 0, dispose: () => disposers.splice(0).forEach((fn) => fn()) }
   const ctx = {
     tools: { register: (tool) => { tools.set(tool.name, tool); return () => {} } },
     skills: { register: () => () => {} },
@@ -668,8 +680,14 @@ function fakeHost() {
     commands: { register: (command) => { commands.set(command.name, command) } },
     inject: (_names, callback) => callback(ctx),
     on: () => () => {},
+    effect: (execute) => {
+      host.effects += 1
+      const dispose = execute()
+      disposers.push(dispose)
+      return dispose
+    },
   }
-  return { ctx, tools, routes, commands, prompts }
+  return { ctx, ...host, get effects() { return host.effects }, dispose: host.dispose }
 }
 
 function call(host, method, url, body) {

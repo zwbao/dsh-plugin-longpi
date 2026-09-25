@@ -1,5 +1,6 @@
 // Page preview with demo data: the real plugin code (records, self
-// measurements, tracking, journey, skills) against the fake Mirobody record,
+// measurements, tracking, journey, plan draft, follow-up settings, skills)
+// against the fake Mirobody record,
 // rendered by the built lib/client.js in a plain page. No DeepSeek Harness needed.
 //
 //   npm run build && node preview/build.mjs && python3 -m http.server 4173 -d preview/out
@@ -63,10 +64,25 @@ try {
   }
   mod.addCheckIns(dataDir, entries, { today: TODAY, source: 'chat' })
 
+  // Follow-up on, with desktop notifications and a Feishu bot (a made-up URL: the page only ever sees it masked).
+  const now = new Date(`${TODAY}T10:00:00`)
+  mod.setFollowupDeps({ platform: 'darwin' })
+  const followupSaved = mod.writeFollowup(dataDir, {
+    enabled: true, desktop: true, webhook: { kind: 'feishu', url: 'https://open.feishu.cn/open-apis/bot/v2/hook/preview-demo-token', secret: 'preview-demo-secret' },
+  })
+  if (!followupSaved.ok) throw new Error(followupSaved.error)
+  mod.appendFollowupLog(dataDir, { at: new Date(`${mod.addDays(TODAY, -1)}T21:00:00`).toISOString(), kind: 'checkin', key: `checkin:${mod.addDays(TODAY, -1)}`, channels: { desktop: true, webhook: true }, ok: true })
+  mod.appendFollowupLog(dataDir, { at: new Date(`${TODAY}T09:00:00`).toISOString(), kind: 'test', key: `test:${TODAY}`, channels: { desktop: true, webhook: false }, ok: false, error: 'webhook: 飞书返回 19021：sign match fail' })
+
   const catalog = mod.loadCatalog(home)
   const mount = { mounted: true, pluginHome: '', peer: false, error: '' }
   const tracking = await mod.buildTracking({ config, dataDir, skillsHome: home, catalog, records, today: TODAY })
-  const journey = await mod.buildJourney({ config, dataDir, skillsHome: home, catalog, records, today: TODAY, mount })
+  const built = await mod.buildJourneyFull({ config, dataDir, skillsHome: home, catalog, records, today: TODAY, mount, now })
+  const journey = built.journey
+  // The same two answers the routes give: GET /api/longpi/plan-draft and GET /api/longpi/followup.
+  const brief = await mod.buildPlanBrief({ config, dataDir, skillsHome: home, catalog, records, today: TODAY, mount })
+  const planDraft = { brief, draft: mod.draftPlan(brief, { today: TODAY }) }
+  const followup = mod.followupResponse(dataDir, mod.followupStateOf(journey, built.tracking), now)
   const selfRows = { rows: mod.readSelf(dataDir).reverse() }
   const outputs = mod.latestOutputs(dataDir)
   const board = {
@@ -78,13 +94,15 @@ try {
   const client = join(here, '..', 'lib', 'client.js')
   copyFileSync(client, join(out, 'client.js'))
   const template = readFileSync(join(here, 'index.html'), 'utf8')
-  const payload = JSON.stringify({ board, tracking, journey, self: selfRows }).replace(/</g, '\\u003c')
+  const payload = JSON.stringify({ board, tracking, journey, self: selfRows, planDraft, followup }).replace(/</g, '\\u003c')
   writeFileSync(join(out, 'index.html'), template.replace('/*__DATA__*/null', payload))
   writeFileSync(join(out, 'board.json'), `${JSON.stringify(board, null, 1)}\n`)
   writeFileSync(join(out, 'tracking.json'), `${JSON.stringify(tracking, null, 1)}\n`)
   writeFileSync(join(out, 'journey.json'), `${JSON.stringify(journey, null, 1)}\n`)
   writeFileSync(join(out, 'self.json'), `${JSON.stringify(selfRows, null, 1)}\n`)
-  console.log(`preview written to ${out} (${tracking.items.length} items, phenotypic age at ${tracking.bioage.points.length} checkups, stage ${journey.stage})`)
+  writeFileSync(join(out, 'plan-draft.json'), `${JSON.stringify(planDraft, null, 1)}\n`)
+  writeFileSync(join(out, 'followup.json'), `${JSON.stringify(followup, null, 1)}\n`)
+  console.log(`preview written to ${out} (${tracking.items.length} items, phenotypic age at ${tracking.bioage.points.length} checkups, stage ${journey.stage}, draft ${planDraft.draft?.items.length ?? 0} items, follow-up ${followup.settings.enabled ? 'on' : 'off'})`)
 } finally {
   await server.close()
   rmSync(dataDir, { recursive: true, force: true })

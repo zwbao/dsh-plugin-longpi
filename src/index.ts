@@ -5,11 +5,17 @@ import { registerCommands } from './commands.ts'
 import { extractUserText, preGuard, wrapGuardMessage } from './guardrails.ts'
 import { registerHarnessSkills } from './harness-skills.ts'
 import { mountMirobody } from './mirobody.ts'
-import { resolveMirobodyPlugin } from './paths.ts'
 import { registerPrompt } from './prompt.ts'
 import { registerRoutes } from './routes.ts'
 import { registerTools } from './tools.ts'
 import { registerTrackingTools } from './tools-tracking.ts'
+import { registerFollowupTools } from './tools-followup.ts'
+import { startFollowup, type FollowupState } from './followup.ts'
+import { buildJourneyFull, followupStateOf, within } from './journey.ts'
+import { loadCatalog } from './catalog.ts'
+import { loadRecords } from './records.ts'
+import { isoDay } from './interventions.ts'
+import { resolveDataDir, resolveMirobodyPlugin, resolveSkillsHome } from './paths.ts'
 
 export const name = 'dsh-plugin-longpi'
 export const inject = ['tools']
@@ -39,9 +45,16 @@ export { normalizePlan, savePlan, currentPlan, readPlans, addCheckIns, readCheck
 export { adherenceFor, evaluateMarker, evaluatePlan, resolveMarkers, suggestNext } from './evaluate.ts'
 export { loadReference, markerFor, rcvBand, effectsFor } from './reference.ts'
 export { buildTracking, invalidateTracking, modelGoals, homeBloodPressure, readFailed, PHENOAGE_SKILL, RISK_SKILL } from './tracking.ts'
-export { buildJourney, buildJourneyFull, retestsOf, stageNow, profileComplete, unansweredOf, within } from './journey.ts'
+export { buildJourney, buildJourneyFull, followupStateOf, retestsOf, stageNow, profileComplete, unansweredOf, within } from './journey.ts'
 export type { Journey, Stage } from './journey.ts'
 export { buildCalendar, escapeText, foldLine, retestDay } from './calendar.ts'
+export {
+  readFollowup, writeFollowup, publicFollowup, maskUrl, webhookUrlProblem, readFollowupLog, appendFollowupLog, sentToday, isoWeek, isoWeekday, inQuiet,
+  decideFollowup, followupArmed, nextTimes, desktopCommand, desktopSupported, webhookRequest, webhookAnswer, sendFollowup, sendNow, setFollowupDeps,
+  followupTick, startFollowup, followupResponse, followupSummary, DEFAULT_FOLLOWUP, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, WEBHOOK_KINDS,
+} from './followup.ts'
+export type { FollowupSettings, FollowupState, FollowupLogRow, FollowupDeps, SendResult } from './followup.ts'
+export { followupTextProblem } from './tools-followup.ts'
 export { buildPlanBrief, draftPlan, acceptedPlan, expectedText, DRAFT_CATEGORIES } from './planner.ts'
 export type { PlanBrief, PlanDraft, DraftItem } from './planner.ts'
 
@@ -55,8 +68,19 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     timeoutMs: config.timeoutMs,
   }, pluginHome)
   const source = () => config
+  // What the follow-up decisions read: the journey and its tracking, within a deadline so a slow skill never stacks up.
+  const followupState = async (deadlineMs: number): Promise<FollowupState> => {
+    const dataDir = resolveDataDir(config.dataDir)
+    const skillsHome = resolveSkillsHome(config.skillsHome)
+    const records = await loadRecords(config, dataDir, mount.pluginHome)
+    const built = await within(buildJourneyFull({ config, dataDir, skillsHome, catalog: loadCatalog(skillsHome), records, today: isoDay(), mount }), deadlineMs)
+    if (!('value' in built)) throw new Error('journey not ready')
+    return followupStateOf(built.value.journey, built.value.tracking)
+  }
   registerTools(ctx, source, mount)
   registerTrackingTools(ctx, source, mount)
+  registerFollowupTools(ctx, source, () => followupState(20_000).catch(() => null))
+  startFollowup(ctx, () => ({ dataDir: resolveDataDir(config.dataDir), getState: () => followupState(60_000) }))
   registerHarnessSkills(ctx)
   registerPrompt(ctx, source, mount)
   registerRoutes(ctx, source, mount)

@@ -18,6 +18,7 @@ import { runnableFrom } from './measurements.ts'
 import { isoDay } from './interventions.ts'
 import { buildJourneyFull, consentAccepted, stageNow, unansweredOf, within, type Journey } from './journey.ts'
 import { invalidateTracking, type Tracking } from './tracking.ts'
+import { latestSelf, readSelf, SELF_KEYS, SELF_SPEC } from './selfmeasure.ts'
 
 function jsonText(value: unknown): [{ type: 'text'; text: string }] {
   return [{ type: 'text', text: JSON.stringify(value, null, 2) }]
@@ -124,7 +125,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
         record_status: records.record_status,
         record_error: records.record_error,
         mcp: records.mcp,
-        ...onboardingOf(await journeyOf(input), records.profile),
+        ...onboardingOf(await journeyOf(input), records.profile, input.dataDir),
         note: 'Medication doses are what the record says. They are not an instruction to change a dose. A missing indicator was not on file. Indicators named ...（自测） are measurements the person entered themselves (source self), used only when newer than the record. earlier_readouts are outputs of skills already run for this person; cite them with their date. onboarding says where the person is, the first results or what blocks them, and what to add at the next checkup.',
       })
     },
@@ -494,6 +495,15 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
   }))
 }
 
+/** The person's latest self measurements, as journey.self.latest lists them; read from dataDir alone. */
+function selfLatestRows(dataDir: string) {
+  const latest = latestSelf(readSelf(dataDir))
+  return SELF_KEYS.flatMap((key) => {
+    const row = latest[key]
+    return row ? [{ key, label_zh: SELF_SPEC[key].label_zh, ...row }] : []
+  })
+}
+
 interface JourneyRead {
   journey: Journey | null
   tracking: Tracking | null
@@ -510,7 +520,7 @@ const HOW_TO_READ_RESULTS = [
   'When a result is blocked, say blocker_zh and offer addons as tests for the next checkup.',
 ].join(' ')
 
-function onboardingOf(read: JourneyRead, profile: Profile) {
+function onboardingOf(read: JourneyRead, profile: Profile, dataDir: string) {
   const { journey, error, pending } = read
   if (!journey) {
     if (!pending) return { onboarding: null, onboarding_error: error, self_measurements: [] }
@@ -524,7 +534,7 @@ function onboardingOf(read: JourneyRead, profile: Profile) {
         pending: true,
         how_to_read: 'The first results are still being computed (the skill scripts are slow right now). Do not guess them; say they are on the way and call read_personal_situation again later.',
       },
-      self_measurements: [],
+      self_measurements: selfLatestRows(dataDir),
     }
   }
   return {

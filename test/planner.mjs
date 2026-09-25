@@ -244,6 +244,10 @@ try {
   assert.equal(res.json().stage, 'routine', 'tracking was invalidated')
   res = await call(host, 'POST', '/api/longpi/plan-draft/accept', { draft: got.draft })
   assert.equal(res.json().plan.version, 2, 'accepting again is a new version')
+  const twice = mod.acceptedPlan(tool.brief, { items: [got.draft.items[0], { ...got.draft.items[0] }] }, TODAY)
+  assert.equal(twice.ok, true)
+  assert.equal(twice.plan.items.length, 1, 'one item per intervention')
+  assert.deepEqual(mod.acceptedPlan(tool.brief, { items: [] }, TODAY).ok, false)
 
   console.log(`planner ok (${brief.priorities.length} priorities, ${brief.candidates.length} candidates, draft: ${draft.items.map((item) => item.title).join('、')})`)
 } finally {

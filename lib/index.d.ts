@@ -1303,6 +1303,235 @@ declare function buildReport(input: {
   tracking: Tracking | null;
 }): string;
 //#endregion
+//#region src/followup.d.ts
+declare const WEBHOOK_KINDS: readonly ["feishu", "wecom", "dingtalk", "bark", "generic"];
+type WebhookKind = (typeof WEBHOOK_KINDS)[number];
+type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+interface FollowupSettings {
+  enabled: boolean;
+  checkin_time: string;
+  retest_time: string;
+  weekly: {
+    day: Weekday;
+    time: string;
+  } | null;
+  desktop: boolean;
+  webhook: {
+    kind: WebhookKind;
+    url: string;
+    secret: string;
+  } | null;
+  detail: 'minimal' | 'full';
+  quiet: {
+    start: string;
+    end: string;
+  } | null;
+}
+interface PublicFollowup extends Omit<FollowupSettings, 'webhook'> {
+  webhook: {
+    kind: WebhookKind;
+    url_masked: string;
+    secret_set: boolean;
+  } | null;
+}
+type FollowupKind = 'checkin' | 'retest' | 'weekly' | 'nudge' | 'custom' | 'test';
+interface FollowupLogRow {
+  at: string;
+  kind: FollowupKind;
+  key: string;
+  channels: {
+    desktop?: boolean;
+    webhook?: boolean;
+  };
+  ok: boolean;
+  error?: string;
+}
+interface ChannelResult {
+  ok: boolean;
+  error?: string;
+}
+interface SendResult {
+  ok: boolean;
+  channels: {
+    desktop?: ChannelResult;
+    webhook?: ChannelResult;
+  };
+}
+/** What the decisions need from the journey and tracking (journey.ts builds it). */
+interface FollowupState {
+  stage: string;
+  /** When the person accepted the notice (ISO), or null. */
+  consent_at: string | null;
+  next_title_zh: string;
+  next_detail_zh: string;
+  plan_exists: boolean;
+  /** How many plan items are ticked by hand (check-in items), done or not. */
+  checkin_items: number;
+  /** Titles of check-in items not done today. */
+  checkin_open: string[];
+  /** Retest dates from the plan's verdicts: date moves with today once due, first_due does not. */
+  retests: Array<{
+    marker: string;
+    date: string;
+    first_due: string;
+  }>;
+  week: {
+    pct: number | null;
+    streak: number;
+    next_retest: {
+      marker: string;
+      date: string;
+    } | null;
+  };
+}
+interface FollowupDeps {
+  platform: string;
+  /** Run a command without a shell; resolves, never rejects. */
+  run: (command: string, args: string[], timeoutMs: number) => Promise<ChannelResult>;
+  fetch: (url: string, init: {
+    method: 'POST';
+    headers: Record<string, string>;
+    body: string;
+    signal: AbortSignal;
+  }) => Promise<{
+    ok: boolean;
+    status: number;
+    text: () => Promise<string>;
+  }>;
+}
+declare const DEFAULT_FOLLOWUP: FollowupSettings;
+/** At most this many sends per local day, across kinds, model-written and test ones included. */
+declare const FOLLOWUP_MAX_PER_DAY = 6;
+declare const FOLLOWUP_TEST_TEXT = "这是一条 LongPi 测试提醒。";
+/** https for every kind; the generic kind may also be http to this machine or the local network. */
+declare function webhookUrlProblem(kind: WebhookKind, url: string): string;
+/** The saved settings, with defaults for anything missing or unreadable. */
+declare function readFollowup(dataDir: string): FollowupSettings;
+/** Check and save a partial update from the page or a tool. The file is private to the person (0600). */
+declare function writeFollowup(dataDir: string, update: unknown): {
+  ok: true;
+  settings: FollowupSettings;
+} | {
+  ok: false;
+  error: string;
+};
+/** scheme://host/… only: the rest of a webhook URL is its secret token. */
+declare function maskUrl(url: string): string;
+/** Settings as the page and the model see them: never the full webhook URL or the secret. */
+declare function publicFollowup(settings: FollowupSettings): PublicFollowup;
+declare function readFollowupLog(dataDir: string): FollowupLogRow[];
+declare function appendFollowupLog(dataDir: string, row: FollowupLogRow): void;
+/** Sends attempted on the local day of `now` (every kind counts, failed ones too). */
+declare function sentToday(log: readonly FollowupLogRow[], now: Date): number;
+/** ISO weekday of a local time: Monday = 1 … Sunday = 7. */
+declare function isoWeekday(now: Date): Weekday;
+/** ISO week of a local date, as 2026-W39. */
+declare function isoWeek(now: Date): string;
+/** Inside quiet hours; a window whose start is after its end wraps midnight (22:30–08:00). */
+declare function inQuiet(quiet: FollowupSettings['quiet'], now: Date): boolean;
+interface FollowupSend {
+  kind: FollowupKind;
+  key: string;
+  text: string;
+}
+/**
+ * What is due at `now`. Keys: checkin:<date>, retest:<marker>:<first due date> (so an overdue retest is
+ * reminded once, not every day), weekly:<ISO week>, nudge:<stage>:<date>. A kind is due at or after its
+ * time on its day and only while not in the log, so a send missed while the host was off goes out at the
+ * next tick of the same day and never for a past day. The nudge shares the check-in time. Quiet hours
+ * hold everything; a time inside them is not sent that day.
+ */
+declare function decideFollowup(input: {
+  now: Date;
+  settings: FollowupSettings;
+  state: FollowupState;
+  log: readonly FollowupLogRow[];
+}): FollowupSend[];
+/** Whether anything could be due now, from the clock, the settings and the log alone: the journey is read only then. */
+declare function followupArmed(settings: FollowupSettings, log: readonly FollowupLogRow[], now: Date): boolean;
+/** The next time each kind is planned (local ISO, no zone), or null: none while follow-up is off. */
+declare function nextTimes(settings: FollowupSettings, state: FollowupState | null, now: Date, log: readonly FollowupLogRow[]): {
+  checkin: string | null;
+  retest: string | null;
+  weekly: string | null;
+};
+/** The notification command for this platform, run without a shell; null where there is none. */
+declare function desktopCommand(platform: string, text: string): {
+  command: string;
+  args: string[];
+} | null;
+declare function desktopSupported(platform: string): boolean;
+/** The request a webhook channel sends: URL (DingTalk signs in the query) and JSON body (Feishu signs in the body). */
+declare function webhookRequest(webhook: NonNullable<FollowupSettings['webhook']>, text: string, kind: FollowupKind, now: Date): {
+  url: string;
+  body: Record<string, unknown>;
+};
+/** Whether a webhook answer means delivered: HTTP 2xx, and the service's own code when it sends one. */
+declare function webhookAnswer(kind: WebhookKind, status: number, text: string): ChannelResult;
+/** Swap the platform, the command runner or fetch (tests); returns a function that restores the previous ones. */
+declare function setFollowupDeps(partial: Partial<FollowupDeps>): () => void;
+/** Send one message through every configured channel. Each has a 10 s limit; errors are recorded, never thrown. */
+declare function sendFollowup(settings: FollowupSettings, message: string, options?: {
+  kind?: FollowupKind;
+  now?: Date;
+  deps?: FollowupDeps;
+}): Promise<SendResult>;
+/**
+ * Send a message outside the schedule (the model's own follow-up, or the page's test): never
+ * deduplicated against the scheduled kinds (key custom:<time> or test:<time>), but counted in the
+ * daily limit and logged.
+ */
+declare function sendNow(dataDir: string, text: string, kind: FollowupKind, now?: Date): Promise<SendResult & {
+  error?: string;
+}>;
+/** One tick: read the settings and the log, and only if something may be due, the journey; then send and log. */
+declare function followupTick(input: {
+  dataDir: string;
+  now: Date;
+  getState: () => Promise<FollowupState>;
+  deps?: FollowupDeps;
+}): Promise<FollowupLogRow[]>;
+interface FollowupContext {
+  dataDir: string;
+  getState: () => Promise<FollowupState>;
+}
+/**
+ * Tick every 60 s in the host's local time zone, as a Cordis effect: the interval is cleared when the
+ * plugin is disposed, is unref'd so it never keeps the process alive, and never overlaps itself. One
+ * journey read is reused for 15 minutes.
+ */
+declare function startFollowup(ctx: Context, getContext: () => FollowupContext, options?: {
+  tickMs?: number;
+  now?: () => Date;
+}): void;
+/** The GET /api/longpi/followup answer (also the POST one, after ok: true). */
+declare function followupResponse(dataDir: string, state: FollowupState | null, now?: Date): {
+  settings: PublicFollowup;
+  next: {
+    checkin: string | null;
+    retest: string | null;
+    weekly: string | null;
+  };
+  log: {
+    error?: string | undefined;
+    at: string;
+    kind: FollowupKind;
+    key: string;
+    ok: boolean;
+    channels: {
+      desktop?: boolean;
+      webhook?: boolean;
+    };
+  }[];
+  platform_desktop: boolean;
+};
+/** journey.followup: whether it is on, the channels it uses, and the next planned send. */
+declare function followupSummary(dataDir: string, state: FollowupState | null, now?: Date): {
+  enabled: boolean;
+  channels: Array<'desktop' | 'webhook'>;
+  next_at: string | null;
+};
+//#endregion
 //#region src/journey.d.ts
 type Stage = 'consent' | 'profile' | 'records' | 'first_result' | 'plan' | 'routine';
 interface Journey {
@@ -1421,14 +1650,21 @@ interface Journey {
     text_zh: string;
   }>;
   boundary_zh: string;
+  /** Follow-up reminders: on or off, the channels in use, and the next planned send (local ISO). */
+  followup: {
+    enabled: boolean;
+    channels: Array<'desktop' | 'webhook'>;
+    next_at: string | null;
+  };
 }
-declare function buildJourney(context: TrackingContext & {
+/** What a journey is built from; now (default the clock) only times the next follow-up. */
+type JourneyContext = TrackingContext & {
   mount: MountState;
-}): Promise<Journey>;
+  now?: Date;
+};
+declare function buildJourney(context: JourneyContext): Promise<Journey>;
 /** The journey and the tracking it was built from (retest dates, bands, adherence calendars). */
-declare function buildJourneyFull(context: TrackingContext & {
-  mount: MountState;
-}): Promise<{
+declare function buildJourneyFull(context: JourneyContext): Promise<{
   journey: Journey;
   tracking: Tracking;
 }>;
@@ -1454,6 +1690,8 @@ declare function retestsOf(tracking: Tracking): Array<{
 }>;
 /** Labels of the profile questions not answered yet (unknown is not an answer). */
 declare function unansweredOf(profile: Profile): string[];
+/** What the follow-up scheduler decides from: the stage, open check-ins, retest dates, this ISO week's adherence. */
+declare function followupStateOf(journey: Journey, tracking: Tracking): FollowupState;
 /**
  * Stage and next step without running anything, for the synchronous /longpi
  * command: exact up to the records step, after that the journey last built in
@@ -1483,6 +1721,10 @@ declare function retestDay(retest: {
 declare function buildCalendar(journey: Journey, tracking: Tracking, opts: {
   now: Date;
 }): string;
+//#endregion
+//#region src/tools-followup.d.ts
+/** The model's text is refused, with the reason, when it names a dose or (with minimal detail) a health value. */
+declare function followupTextProblem(text: string, detail: 'minimal' | 'full'): string;
 //#endregion
 //#region src/planner.d.ts
 declare const DRAFT_CATEGORIES: readonly ["diet", "exercise", "sleep", "weight", "behavior", "supplement"];
@@ -1617,4 +1859,4 @@ declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { CONSENT_VERSION, Config, type Consent, DRAFT_CATEGORIES, type DraftItem, EMPTY_PROFILE, FOCUS, FOCUS_ZH, type Focus, HARNESS_SKILLS, type Journey, PHENOAGE_SKILL, PRODUCT_VERSION, type PlanBrief, type PlanDraft, type Profile, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RiskFact, SELF_ALIASES, SELF_KEYS, SELF_SPEC, type SelfKey, type SelfRow, type Stage, TOOL_NAMES, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, apply, buildBoard, buildCalendar, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, cellNumber, commandExcerpt, currentPlan, daysBetween, deleteSelf, detectIntents, domainSummary, draftPlan, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expectedText, foldLine, foldName, homeBloodPressure, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, matchSkills, mentionedEntities, mergeProfile, mergeSelf, modelGoals, name, nameVariants, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, profileComplete, rcvBand, readCheckIns, readFailed, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, runReady, runSkill, runnableFrom, sameMeasure, savePlan, selfIndicators, selfSeries, seriesOf, setConsent, stageMeasurements, stageNow, suggestNext, summarizeIndicators, summarizeMedications, tableOf, unansweredOf, unitFactor, versionCheck, within, wrapGuardMessage, writeProfile, writeStats };
+export { CONSENT_VERSION, Config, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMPTY_PROFILE, FOCUS, FOCUS_ZH, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, HARNESS_SKILLS, type Journey, PHENOAGE_SKILL, PRODUCT_VERSION, type PlanBrief, type PlanDraft, type Profile, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RiskFact, SELF_ALIASES, SELF_KEYS, SELF_SPEC, type SelfKey, type SelfRow, type SendResult, type Stage, TOOL_NAMES, WEBHOOK_KINDS, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, buildBoard, buildCalendar, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, cellNumber, commandExcerpt, currentPlan, daysBetween, decideFollowup, deleteSelf, desktopCommand, desktopSupported, detectIntents, domainSummary, draftPlan, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expectedText, foldLine, foldName, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, homeBloodPressure, inQuiet, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, maskUrl, matchSkills, mentionedEntities, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, profileComplete, publicFollowup, rcvBand, readCheckIns, readFailed, readFollowup, readFollowupLog, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, runReady, runSkill, runnableFrom, sameMeasure, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, stageMeasurements, stageNow, startFollowup, suggestNext, summarizeIndicators, summarizeMedications, tableOf, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };

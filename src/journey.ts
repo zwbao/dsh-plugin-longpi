@@ -5,6 +5,7 @@
 // reminders, and the next step. It adds no number of its own: results come
 // from buildTracking (skill scripts), everything else from what is saved.
 
+import { followupSummary, readFollowup, type FollowupState } from './followup.ts'
 import { addDays, daysBetween, readCheckIns } from './interventions.ts'
 import type { MountState } from './mirobody.ts'
 import { CONSENT_VERSION, FOCUS, FOCUS_ZH, RISK_FACTS, RISK_FACT_ZH, type Focus, type Profile, type RiskFact } from './profile.ts'
@@ -41,9 +42,14 @@ export interface Journey {
   next: { stage: Stage; title_zh: string; detail_zh: string; action: 'consent' | 'profile' | 'records' | 'addons' | 'plan' | 'checkin' | 'review' | 'open' }
   suggestions: Array<{ id: string; text_zh: string }>
   boundary_zh: string
+  /** Follow-up reminders: on or off, the channels in use, and the next planned send (local ISO). */
+  followup: { enabled: boolean; channels: Array<'desktop' | 'webhook'>; next_at: string | null }
 }
 
 type Next = Journey['next']
+type Body = Omit<Journey, 'stage' | 'next' | 'suggestions' | 'followup'>
+/** What a journey is built from; now (default the clock) only times the next follow-up. */
+export type JourneyContext = TrackingContext & { mount: MountState; now?: Date }
 type Addon = Journey['addons'][number]
 
 const BOUNDARY_ZH = '模型估计，不是诊断，也不是用药建议。紧急情况请拨打 120。'
@@ -75,12 +81,12 @@ const FOCUS_PROMPT: Record<Focus | 'none', { id: string; text_zh: string }> = {
 
 let lastBuilt: { at: number; journey: Journey } | null = null
 
-export async function buildJourney(context: TrackingContext & { mount: MountState }): Promise<Journey> {
+export async function buildJourney(context: JourneyContext): Promise<Journey> {
   return (await buildJourneyFull(context)).journey
 }
 
 /** The journey and the tracking it was built from (retest dates, bands, adherence calendars). */
-export async function buildJourneyFull(context: TrackingContext & { mount: MountState }): Promise<{ journey: Journey; tracking: Tracking }> {
+export async function buildJourneyFull(context: JourneyContext): Promise<{ journey: Journey; tracking: Tracking }> {
   const tracking = await buildTracking(context)
   const journey = journeyFrom(context, tracking)
   lastBuilt = { at: Date.now(), journey }
@@ -253,7 +259,7 @@ function stageOf(journey: Pick<Journey, 'consent' | 'profile' | 'records' | 'res
   return 'routine'
 }
 
-function nextOf(stage: Stage, journey: Omit<Journey, 'stage' | 'next' | 'suggestions'>): Next {
+function nextOf(stage: Stage, journey: Body): Next {
   const step = (title: string, detail: string, action: Next['action']): Next => ({ stage, title_zh: title, detail_zh: detail, action })
   switch (stage) {
     case 'consent':
@@ -283,7 +289,7 @@ function nextOf(stage: Stage, journey: Omit<Journey, 'stage' | 'next' | 'suggest
   }
 }
 
-function suggestionsOf(stage: Stage, journey: Omit<Journey, 'stage' | 'next' | 'suggestions'>): Journey['suggestions'] {
+function suggestionsOf(stage: Stage, journey: Body, followupOn: boolean): Journey['suggestions'] {
   const picks: Journey['suggestions'] = []
   if (stage === 'consent' || stage === 'profile') {
     picks.push({ id: 'what-longpi-does', text_zh: 'LongPi 能帮我做什么？' }, { id: 'build-profile', text_zh: '帮我建立健康档案' })
@@ -295,14 +301,16 @@ function suggestionsOf(stage: Stage, journey: Omit<Journey, 'stage' | 'next' | '
   } else if (stage === 'plan') {
     picks.push(FOCUS_PROMPT[journey.profile.focus[0] ?? 'none'], { id: 'draft-plan', text_zh: '帮我制定一份改善方案' }, { id: 'save-plan', text_zh: '帮我保存我的干预方案' })
   } else {
-    picks.push({ id: 'checkin-all', text_zh: '今天的方案我都完成了' }, { id: 'plan-effect', text_zh: '我的方案有没有效果？' })
+    picks.push({ id: 'checkin-all', text_zh: '今天的方案我都完成了' })
     if (journey.reminders.some((row) => row.kind === 'retest' && row.due)) picks.push({ id: 'retest-due', text_zh: '该复测什么了？' })
+    if (!followupOn) picks.push({ id: 'followup-on', text_zh: '每天晚上提醒我打卡' })
+    picks.push({ id: 'plan-effect', text_zh: '我的方案有没有效果？' })
   }
   const seen = new Set<string>()
   return picks.filter((row) => !seen.has(row.text_zh) && seen.add(row.text_zh)).slice(0, 3)
 }
 
-function journeyFrom(context: TrackingContext & { mount: MountState }, tracking: Tracking): Journey {
+function journeyFrom(context: JourneyContext, tracking: Tracking): Journey {
   const { records, today } = context
   const profile = records.profile
   const points = tracking.bioage.points
@@ -310,7 +318,7 @@ function journeyFrom(context: TrackingContext & { mount: MountState }, tracking:
   const bioage = bioageResult(tracking.bioage)
   const risk = riskResult(tracking)
   const plan = planOf(context, tracking)
-  const body: Omit<Journey, 'stage' | 'next' | 'suggestions'> = {
+  const body: Body = {
     version: PRODUCT_VERSION,
     today,
     consent: {
@@ -352,7 +360,40 @@ function journeyFrom(context: TrackingContext & { mount: MountState }, tracking:
     boundary_zh: BOUNDARY_ZH,
   }
   const stage = stageOf(body)
-  return { ...body, stage, next: nextOf(stage, body), suggestions: suggestionsOf(stage, body) }
+  const followupOn = readFollowup(context.dataDir).enabled
+  const journey: Journey = {
+    ...body, stage, next: nextOf(stage, body), suggestions: suggestionsOf(stage, body, followupOn), followup: { enabled: followupOn, channels: [], next_at: null },
+  }
+  journey.followup = followupSummary(context.dataDir, followupStateOf(journey, tracking), context.now ?? new Date())
+  return journey
+}
+
+/** What the follow-up scheduler decides from: the stage, open check-ins, retest dates, this ISO week's adherence. */
+export function followupStateOf(journey: Journey, tracking: Tracking): FollowupState {
+  const weekday = (new Date(`${journey.today}T00:00:00Z`).getUTCDay() + 6) % 7
+  const monday = addDays(journey.today, -weekday)
+  let done = 0
+  let known = 0
+  for (const item of tracking.items) {
+    for (const day of item.adherence.calendar) {
+      if (day.date < monday || day.date > journey.today || day.status === 'unknown') continue
+      known += 1
+      if (day.status === 'done') done += 1
+    }
+  }
+  const retests = retestsOf(tracking)
+  const upcoming = retests.find((row) => row.date >= journey.today)
+  return {
+    stage: journey.stage,
+    consent_at: journey.consent.accepted ? journey.consent.accepted_at : null,
+    next_title_zh: journey.next.title_zh,
+    next_detail_zh: journey.next.detail_zh,
+    plan_exists: journey.plan.exists,
+    checkin_items: journey.plan.checkin_items.length,
+    checkin_open: journey.plan.checkin_items.filter((item) => !item.done_today).map((item) => item.title),
+    retests,
+    week: { pct: known > 0 ? Math.round((done / known) * 100) : null, streak: journey.plan.streak, next_retest: upcoming ? { marker: upcoming.marker, date: upcoming.date } : null },
+  }
 }
 
 /**
