@@ -1,0 +1,21 @@
+{
+  "settings": {
+    "enabled": true,
+    "checkin_time": "21:00",
+    "retest_time": "09:00",
+    "weekly": { "day": 7, "time": "20:00" },
+    "desktop": true,
+    "webhook": { "kind": "feishu", "url_masked": "https://open.feishu.cn/…", "secret_set": true },
+    "detail": "minimal",
+    "quiet": { "start": "22:30", "end": "08:00" }
+  },
+  "next": { "checkin": "2026-09-24T21:00:00", "retest": "2026-10-02T09:00:00", "weekly": "2026-09-27T20:00:00" },
+  "log": [
+    { "at": "2026-09-23T21:00:14", "kind": "checkin", "key": "2026-09-23", "ok": true, "channels": { "desktop": true, "webhook": true } },
+    { "at": "2026-09-22T21:05:40", "kind": "custom", "key": "2026-09-22", "ok": true, "channels": { "desktop": true, "webhook": true } },
+    { "at": "2026-09-20T20:00:09", "kind": "weekly", "key": "2026-W38", "ok": true, "channels": { "desktop": true, "webhook": true } },
+    { "at": "2026-09-19T21:00:03", "kind": "checkin", "key": "2026-09-19", "ok": false, "channels": { "desktop": true, "webhook": false }, "error": "飞书返回 19021：签名校验失败" },
+    { "at": "2026-09-19T20:41:57", "kind": "test", "key": "", "ok": true, "channels": { "desktop": true } }
+  ],
+  "platform_desktop": true
+}

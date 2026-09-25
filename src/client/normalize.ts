@@ -5,7 +5,10 @@
 
 import { BOUNDARY_FALLBACK } from './constants.ts'
 import { localToday } from './format.ts'
-import type { Addon, Focus, Journey, JourneyQuestion, NextAction, Reminder, RiskFact, SelfKey, SelfKeySpec, SelfLatest, Sex, Stage } from './types.ts'
+import type {
+  Addon, DraftCategory, DraftGoal, DraftItem, Focus, FollowupKind, FollowupLogRow, FollowupResponse, FollowupSettings, Journey, JourneyQuestion,
+  NextAction, PlanBrief, PlanDraftResponse, Reminder, RiskFact, SelfKey, SelfKeySpec, SelfLatest, Sex, Stage, WebhookKind, Weekday,
+} from './types.ts'
 
 type Raw = Record<string, unknown>
 
@@ -196,5 +199,167 @@ export function normalizeJourney(input: unknown): Journey {
     suggestions: objects(raw.suggestions)
       .filter((row) => str(row.text_zh))
       .map((row, index) => ({ id: str(row.id) || `s${index}`, text_zh: str(row.text_zh) })),
+    followup: journeyFollowupOf(obj(raw.followup)),
+  }
+}
+
+function journeyFollowupOf(raw: Raw): Journey['followup'] {
+  return {
+    enabled: raw.enabled === true,
+    channels: strings(raw.channels).filter((row): row is 'desktop' | 'webhook' => row === 'desktop' || row === 'webhook'),
+    next_at: strOrNull(raw.next_at),
+  }
+}
+
+// --- plan draft ---------------------------------------------------------------------------
+
+const CATEGORIES: readonly DraftCategory[] = ['diet', 'exercise', 'sleep', 'weight', 'behavior', 'supplement']
+const SOURCES = ['phenoage_levers', 'china_par_levers', 'focus'] as const
+
+function draftItemOf(row: Raw, index: number): DraftItem | null {
+  const title = str(row.title)
+  const category = row.category
+  // A drug never reaches a draft; anything outside the lifestyle categories is dropped, not shown.
+  if (!title || !CATEGORIES.includes(category as DraftCategory)) return null
+  const evidence = obj(row.evidence)
+  const target = obj(row.target)
+  const value = num(target.value)
+  return {
+    id: str(row.id) || `item${index}`,
+    category: category as DraftCategory,
+    category_zh: str(row.category_zh),
+    title,
+    detail: str(row.detail),
+    start: str(row.start),
+    markers: strings(row.markers),
+    target: str(target.metric) && value != null && (target.op === '>=' || target.op === '<=')
+      ? { metric: str(target.metric), op: target.op, value, unit: str(target.unit) }
+      : null,
+    evidence: {
+      effect_id: str(evidence.effect_id, str(row.id)),
+      expected_zh: str(evidence.expected_zh),
+      doi: str(evidence.doi),
+      verified: evidence.verified === true,
+      population: str(evidence.population),
+    },
+    // Supplements always need a doctor's word first, whatever the server says.
+    needs_doctor: row.needs_doctor === true || category === 'supplement',
+    cautions_zh: strings(row.cautions_zh),
+  }
+}
+
+function briefOf(raw: Raw): PlanBrief {
+  const safety = obj(raw.safety)
+  return {
+    today: str(raw.today) || localToday(),
+    focus: strings(raw.focus).filter((key): key is Focus => FOCUS.includes(key as Focus)),
+    priorities: objects(raw.priorities).filter((row) => str(row.label_zh)).map((row) => ({
+      marker_key: str(row.marker_key),
+      label_zh: str(row.label_zh),
+      value: num(row.value),
+      unit: str(row.unit),
+      date: strOrNull(row.date),
+      why_zh: str(row.why_zh),
+      source: oneOf(row.source, SOURCES, 'focus'),
+    })),
+    candidates: objects(raw.candidates).filter((row) => str(row.intervention_zh) && row.category !== 'drug').map((row) => {
+      const effect = obj(row.effect)
+      return {
+        id: str(row.id),
+        intervention_zh: str(row.intervention_zh),
+        category: str(row.category),
+        marker_key: str(row.marker_key),
+        label_zh: str(row.label_zh),
+        effect: { value: num(effect.value) ?? 0, unit: str(effect.unit), ...(typeof effect.kind === 'string' ? { kind: effect.kind } : {}) },
+        duration_weeks: num(row.duration_weeks),
+        population: str(row.population),
+        design: str(row.design),
+        doi: str(row.doi),
+        verified: row.verified === true,
+        expected_zh: str(row.expected_zh),
+        needs_doctor: row.needs_doctor === true || row.category === 'supplement',
+        cautions_zh: strings(row.cautions_zh),
+      }
+    }),
+    safety: { medications: strings(safety.medications), notes_zh: strings(safety.notes_zh) },
+    past_items: objects(raw.past_items).filter((row) => str(row.title)).map((row) => ({
+      title: str(row.title),
+      category: str(row.category),
+      verdicts: strings(row.verdicts),
+      adherence_pct: num(row.adherence_pct),
+    })),
+    boundary_zh: str(raw.boundary_zh),
+  }
+}
+
+export function normalizePlanDraft(input: unknown): PlanDraftResponse {
+  const raw = obj(input)
+  if (!('brief' in raw) && !('draft' in raw)) throw new Error('返回的不是方案草稿')
+  const draft = raw.draft == null ? null : obj(raw.draft)
+  const items = draft ? objects(draft.items).map(draftItemOf).filter((row): row is DraftItem => row != null) : []
+  const goals: DraftGoal[] = draft
+    ? objects(draft.goals)
+      .filter((row) => str(row.marker) && num(row.value) != null)
+      .map((row) => ({ marker: str(row.marker), value: num(row.value) as number, unit: str(row.unit), basis_zh: str(row.basis_zh) }))
+    : []
+  return {
+    brief: briefOf(obj(raw.brief)),
+    // A draft with no usable item is no draft: the card then explains why instead.
+    draft: draft && items.length > 0 ? { title: str(draft.title), items, goals, notes_zh: strings(draft.notes_zh) } : null,
+  }
+}
+
+// --- follow-up ----------------------------------------------------------------------------
+
+const KINDS: readonly WebhookKind[] = ['feishu', 'wecom', 'dingtalk', 'bark', 'generic']
+const LOG_KINDS: readonly FollowupKind[] = ['checkin', 'retest', 'weekly', 'nudge', 'custom', 'test']
+const HHMM = /^([01]\d|2[0-3]):[0-5]\d$/
+
+function time(value: unknown, fallback: string): string {
+  return typeof value === 'string' && HHMM.test(value) ? value : fallback
+}
+
+function settingsOf(raw: Raw): FollowupSettings {
+  const weekly = raw.weekly == null ? null : obj(raw.weekly)
+  const webhook = raw.webhook == null ? null : obj(raw.webhook)
+  const quiet = raw.quiet == null ? null : obj(raw.quiet)
+  const day = num(weekly?.day)
+  return {
+    enabled: raw.enabled === true,
+    checkin_time: time(raw.checkin_time, '21:00'),
+    retest_time: time(raw.retest_time, '09:00'),
+    weekly: weekly && day != null && day >= 1 && day <= 7 ? { day: day as Weekday, time: time(weekly.time, '20:00') } : null,
+    desktop: raw.desktop !== false,
+    webhook: webhook && KINDS.includes(webhook.kind as WebhookKind)
+      ? { kind: webhook.kind as WebhookKind, url_masked: str(webhook.url_masked), secret_set: webhook.secret_set === true }
+      : null,
+    detail: raw.detail === 'full' ? 'full' : 'minimal',
+    quiet: quiet && HHMM.test(str(quiet.start)) && HHMM.test(str(quiet.end)) ? { start: str(quiet.start), end: str(quiet.end) } : null,
+  }
+}
+
+export function normalizeFollowup(input: unknown): FollowupResponse {
+  const raw = obj(input)
+  if (!('settings' in raw)) throw new Error('返回的不是随访设置')
+  const next = obj(raw.next)
+  const log: FollowupLogRow[] = objects(raw.log).filter((row) => str(row.at)).map((row) => {
+    const channels = obj(row.channels)
+    return {
+      at: str(row.at),
+      kind: oneOf(row.kind, LOG_KINDS, 'custom'),
+      key: str(row.key),
+      ok: row.ok === true,
+      channels: {
+        ...(typeof channels.desktop === 'boolean' ? { desktop: channels.desktop } : {}),
+        ...(typeof channels.webhook === 'boolean' ? { webhook: channels.webhook } : {}),
+      },
+      ...(str(row.error) ? { error: str(row.error) } : {}),
+    }
+  })
+  return {
+    settings: settingsOf(obj(raw.settings)),
+    next: { checkin: strOrNull(next.checkin), retest: strOrNull(next.retest), weekly: strOrNull(next.weekly) },
+    log,
+    platform_desktop: raw.platform_desktop === true,
   }
 }

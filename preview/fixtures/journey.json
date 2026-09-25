@@ -69,5 +69,6 @@
     { "id": "routine-done", "text_zh": "今天的方案我都完成了" },
     { "id": "routine-effect", "text_zh": "我的方案有没有效果？" }
   ],
-  "boundary_zh": "模型估计，不是诊断，也不是用药建议。紧急情况请拨打 120。"
+  "boundary_zh": "模型估计，不是诊断，也不是用药建议。紧急情况请拨打 120。",
+  "followup": { "enabled": true, "channels": ["desktop", "webhook"], "next_at": "2026-09-24T21:00:00" }
 }

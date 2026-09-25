@@ -85,6 +85,127 @@ export interface Journey {
   next: { stage: Stage; title_zh: string; detail_zh: string; action: NextAction }
   suggestions: Array<{ id: string; text_zh: string }>
   boundary_zh: string
+  /** Round 3: proactive follow-up. Older servers leave it out; normalizeJourney fills in "off". */
+  followup: { enabled: boolean; channels: Array<'desktop' | 'webhook'>; next_at: string | null }
+}
+
+// --- plan draft (GET /api/longpi/plan-draft) ----------------------------------------------
+
+export type DraftCategory = 'diet' | 'exercise' | 'sleep' | 'weight' | 'behavior' | 'supplement'
+
+export interface PlanBrief {
+  today: string
+  focus: Focus[]
+  priorities: Array<{
+    marker_key: string
+    label_zh: string
+    value: number | null
+    unit: string
+    date: string | null
+    why_zh: string
+    source: 'phenoage_levers' | 'china_par_levers' | 'focus'
+  }>
+  candidates: Array<{
+    id: string
+    intervention_zh: string
+    category: string
+    marker_key: string
+    label_zh: string
+    effect: { value: number; unit: string; kind?: string }
+    duration_weeks: number | null
+    population: string
+    design: string
+    doi: string
+    verified: boolean
+    expected_zh: string
+    needs_doctor: boolean
+    cautions_zh: string[]
+  }>
+  safety: { medications: string[]; notes_zh: string[] }
+  past_items: Array<{ title: string; category: string; verdicts: string[]; adherence_pct: number | null }>
+  boundary_zh: string
+}
+
+export interface DraftItem {
+  id: string
+  category: DraftCategory
+  category_zh: string
+  title: string
+  detail: string
+  start: string
+  markers: string[]
+  target?: { metric: string; op: '>=' | '<='; value: number; unit: string } | null
+  evidence: { effect_id: string; expected_zh: string; doi: string; verified: boolean; population: string }
+  needs_doctor: boolean
+  cautions_zh: string[]
+}
+
+export interface DraftGoal { marker: string; value: number; unit: string; basis_zh: string }
+
+export interface PlanDraft {
+  title: string
+  items: DraftItem[]
+  goals: DraftGoal[]
+  notes_zh: string[]
+}
+
+export interface PlanDraftResponse {
+  brief: PlanBrief
+  draft: PlanDraft | null
+}
+
+export type AcceptResponse =
+  | { ok: true; plan: { version: number; title: string; items: number } }
+  | { ok: false; error: string; problems?: string[] }
+
+// --- follow-up (GET /api/longpi/followup) -------------------------------------------------
+
+export type WebhookKind = 'feishu' | 'wecom' | 'dingtalk' | 'bark' | 'generic'
+export type Weekday = 1 | 2 | 3 | 4 | 5 | 6 | 7
+export type FollowupKind = 'checkin' | 'retest' | 'weekly' | 'nudge' | 'custom' | 'test'
+
+export interface FollowupSettings {
+  enabled: boolean
+  checkin_time: string
+  retest_time: string
+  weekly: { day: Weekday; time: string } | null
+  desktop: boolean
+  webhook: { kind: WebhookKind; url_masked: string; secret_set: boolean } | null
+  detail: 'minimal' | 'full'
+  quiet: { start: string; end: string } | null
+}
+
+export interface FollowupLogRow {
+  at: string
+  kind: FollowupKind
+  key: string
+  ok: boolean
+  channels: { desktop?: boolean; webhook?: boolean }
+  error?: string
+}
+
+export interface FollowupResponse {
+  settings: FollowupSettings
+  next: { checkin: string | null; retest: string | null; weekly: string | null }
+  log: FollowupLogRow[]
+  platform_desktop: boolean
+}
+
+/** POST /api/longpi/followup body: any subset. url/secret omitted keep the stored ones; secret '' clears it. */
+export interface FollowupUpdate {
+  enabled?: boolean
+  checkin_time?: string
+  retest_time?: string
+  weekly?: { day: Weekday; time: string } | null
+  desktop?: boolean
+  detail?: 'minimal' | 'full'
+  quiet?: { start: string; end: string } | null
+  webhook?: { kind: WebhookKind; url?: string; secret?: string } | null
+}
+
+export interface FollowupTestResponse {
+  ok: boolean
+  channels: { desktop?: { ok: boolean; error?: string }; webhook?: { ok: boolean; error?: string } }
 }
 
 export interface SelfRow {

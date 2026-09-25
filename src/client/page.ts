@@ -4,6 +4,7 @@
 
 import React from 'react'
 import { BOUNDARY_FALLBACK } from './constants.ts'
+import { FollowupSection } from './followup.ts'
 import { chineseDate, goTo, greeting, localToday, weekday } from './format.ts'
 import { Goals, NextSteps } from './goals.ts'
 import { Icon } from './icons.ts'
@@ -132,6 +133,7 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
       showPlan ? h(Goals, { tracking: trackingData }) : null,
       showPlan ? h(NextSteps, { tracking: trackingData }) : null,
       h(ProfileAndSelf, { journey, profileInStepper: early && openStepOf(journey, openStep) === 'profile', onNotice: notify, onOpenProfileStep: () => { setOpenStep('profile'); goTo('lp-stepper') } }),
+      h(FollowupSection, { onNotice: notify }),
       h(MethodsSection, { board: board.data, loading: board.loading, error: board.error, onNotice: notify }))
   }
 

@@ -3,7 +3,7 @@
 // host's light and dark themes. The few colors LongPi owns (the one data
 // accent, the noise band, verdict washes) get a dark variant under
 // body[data-ds-dark-theme], the attribute DSH sets. Every LongPi root carries
-// .lp because the modal, the home card and the pill render outside the page.
+// .lp because the modal, the home greeting and the pill render outside the page.
 
 const CSS = `
 .lp {
@@ -380,6 +380,83 @@ p.lp-muted { margin: 0; }
 .lp-search > button { flex: none; white-space: nowrap; }
 .lp-run { margin-top: 12px; }
 
+/* --- plan draft ---------------------------------------------------------------------------- */
+.lp-draft { display: grid; gap: 4px; margin-bottom: 16px; }
+.lp-draft-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.lp-draft-head .lp-kicker { margin-bottom: 2px; }
+.lp-draft-title { margin-top: 0; font-size: 18px; line-height: 26px; }
+.lp-draft-head .lp-muted { margin-top: 4px; }
+.lp-draft-block .lp-subhead { margin-top: 20px; }
+.lp-priorities { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+.lp-priority { padding: 10px 12px; border-radius: 12px; background: var(--lp-well); min-width: 0; }
+.lp-priority-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.lp-draft-items { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.lp-draft-item { padding: 14px 16px; border-radius: 14px; box-shadow: inset 0 0 0 .5px var(--lp-line-3); display: grid; gap: 6px; min-width: 0; }
+.lp-draft-item-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.lp-draft-item-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; font-size: 15px; }
+.lp-draft-remove {
+  flex: none; display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px; border-radius: 14px;
+  border: 0; background: transparent; color: var(--lp-ink-3); font-size: 12px; cursor: pointer; transition: background-color .15s ease, color .15s ease;
+}
+.lp-draft-remove:hover { background: var(--lp-hover); color: var(--lp-ink); }
+.lp-draft-detail { margin: 0; color: var(--lp-ink); }
+.lp-draft-target { margin: 0; display: flex; align-items: center; gap: 4px; }
+.lp-evidence { margin: 0; display: flex; gap: 6px; align-items: flex-start; font-size: 12px; line-height: 18px; color: var(--lp-ink-2); }
+.lp-evidence .lp-icon { margin-top: 2px; color: var(--lp-ink-3); }
+.lp-evidence a { display: inline-block; max-width: 100%; color: var(--lp-accent); text-decoration: none; overflow-wrap: anywhere; }
+.lp-evidence a:hover { text-decoration: underline; }
+.lp-draft-warn { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding: 8px 10px; border-radius: 10px; background: var(--lp-warn-wash); }
+.lp-warn-tag { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 11px; background: var(--lp-warn-wash); color: var(--lp-warn-ink); font-size: 12px; font-weight: 500; white-space: nowrap; }
+.lp-draft-warn .lp-warn-tag { background: var(--lp-layer); box-shadow: inset 0 0 0 .5px var(--lp-warn); }
+.lp-warn-text { font-size: 12px; line-height: 18px; color: var(--lp-ink); }
+.lp-warn-icon { color: var(--lp-warn-ink); }
+.lp-draft-removed { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.lp-draft-removed .lp-toggle { height: 28px; font-size: 12px; color: var(--lp-ink-2); }
+.lp-draft-goals .lp-row { padding: 8px 0; }
+.lp-draft-actions { margin-top: 20px; gap: 14px; }
+.lp-draft-hint { display: inline-flex; align-items: baseline; gap: 2px; flex-wrap: wrap; }
+.lp-draft-hint .lp-row-link { font-size: 12px; }
+.lp-confirm-dialog.lp-confirm-dialog, div:has(> .lp-confirm.lp-confirm) { width: min(520px, calc(100vw - 32px)); max-width: none; padding: 0; gap: 0; }
+.lp-confirm { padding: 24px 28px 24px; display: grid; gap: 12px; max-height: calc(100vh - 48px); overflow-y: auto; }
+.lp-confirm-lead { margin: 0; }
+.lp-confirm-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.lp-confirm-list li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 12px; border-radius: 12px; background: var(--lp-well); }
+.lp-confirm-list .lp-warn-tag { margin-left: auto; }
+.lp-confirm-doctor { font-size: 13px; line-height: 20px; }
+.lp-confirm .lp-modal-actions { margin-top: 8px; }
+
+/* --- follow-up ------------------------------------------------------------------------------ */
+.lp-followup { display: grid; gap: 4px; }
+.lp-followup-head { display: flex; align-items: center; gap: 8px 16px; flex-wrap: wrap; padding-bottom: 16px; border-bottom: .5px solid var(--lp-line-2); }
+.lp-followup-grid { margin-top: 16px; gap: 20px 32px; }
+.lp-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 14px; align-content: start; }
+.lp-fieldset > legend { padding: 0; margin-bottom: 12px; }
+.lp-followup-times { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.lp-input-time { width: 128px; flex: none; font-variant-numeric: tabular-nums; }
+.lp-select-wide { min-width: 132px; padding: 0 10px; }
+.lp-followup-detail { display: grid; gap: 6px; margin-top: 20px; padding-top: 16px; border-top: .5px solid var(--lp-line-2); }
+.lp-followup-detail .lp-caption { margin: 0; }
+.lp-followup .lp-form-actions { margin-top: 16px; }
+.lp-followup-log .lp-subhead { margin-top: 20px; }
+.lp-followup-log .lp-row-main .lp-num { color: var(--lp-ink-2); }
+.lp-sent { display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; white-space: nowrap; }
+.lp-sent-ok { background: var(--lp-good-wash); color: var(--lp-good-ink); }
+.lp-sent-bad { background: var(--lp-warn-wash); color: var(--lp-warn-ink); }
+.lp-test-result { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.lp-check { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; line-height: 22px; width: fit-content; }
+.lp-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--lp-brand); cursor: pointer; }
+.lp-check-off { cursor: default; color: var(--lp-ink-3); }
+.lp-check-off input { cursor: default; }
+.lp-switch { display: inline-flex; align-items: center; gap: 10px; padding: 0; border: 0; background: transparent; color: var(--lp-ink); font-size: 15px; font-weight: 500; line-height: 22px; cursor: pointer; }
+.lp-switch:disabled { cursor: progress; }
+.lp-switch-track { position: relative; width: 36px; height: 20px; flex: none; border-radius: 10px; background: var(--lp-line-3); transition: background-color .2s ease; }
+.lp-switch-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .2); transition: transform .2s ease; }
+.lp-switch-on .lp-switch-track { background: var(--lp-good); }
+.lp-switch-on .lp-switch-thumb { transform: translateX(16px); }
+.lp-optin { display: grid; gap: 2px; margin-top: 16px; padding: 12px 14px; border-radius: 12px; background: var(--lp-well); }
+.lp-optin .lp-caption { padding-left: 24px; }
+.lp-optin .lp-check .lp-icon { color: var(--lp-ink-2); }
+
 /* --- charts ---------------------------------------------------------------------------------- */
 .lp-chart { position: relative; width: 100%; }
 .lp-chart svg { display: block; overflow: visible; }
@@ -423,43 +500,68 @@ p.lp-muted { margin: 0; }
 .lp-twin th, .lp-twin td { text-align: left; padding: 4px 8px 4px 0; border-bottom: .5px solid var(--lp-line-2); }
 .lp-twin th { color: var(--lp-ink-2); font-weight: 500; }
 
-/* --- home card (in DSH's 34 px logo seat, widened to the composer) --------------------------- */
-.lp-home {
-  container: lp-home / inline-size;
-  width: min(var(--dsh-composer-card-max-width, 720px), calc(100vw - 48px)); max-width: 100%; margin: 0 auto 4px;
-  padding: 14px 16px; border-radius: 16px; background: var(--lp-layer); box-shadow: var(--lp-card-shadow);
-  font-size: 14px; font-weight: 400; line-height: 22px; letter-spacing: 0; text-align: left; white-space: normal;
-  animation: lp-rise .45s cubic-bezier(.2, .7, .2, 1) both;
+/* --- home greeting (in DSH's 34 px logo seat, in place of the headline) ------------------------ */
+/* While the greeting shows, DSH's own title group ("探索未至之境" + Preview) is hidden. Structural on
+   purpose: DSH's class names are hashed. The slot renders in a span beside the title span, wrapped in
+   DSH's display:contents slot anchor, hence a descendant (not child) match. If DSH's markup changes and
+   this stops matching, the greeting simply sits above DSH's title. */
+div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; }
+.lp-hero {
+  width: min(620px, calc(100vw - 48px)); max-width: 100%; margin: 0 auto;
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding-bottom: 6px;
+  text-align: center; white-space: normal; letter-spacing: 0;
+  animation: lp-fade .35s ease both;
 }
-.lp-home-row { display: flex; align-items: center; gap: 14px; }
-.lp-home-mark { width: 40px; height: 40px; flex: none; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: var(--lp-hover); color: var(--lp-ink); }
-.lp-skeleton-mark { background: var(--lp-skeleton); }
-.lp-home-text { flex: 1; min-width: 0; }
-.lp-home-title { font-size: 15px; line-height: 22px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.lp-home-detail { font-size: 13px; line-height: 20px; color: var(--lp-ink-2); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.lp-home-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-.lp-home-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.lp-home-brand { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; }
-.lp-home-link { margin-left: auto; display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--lp-ink-2); font-size: 13px; line-height: 22px; cursor: pointer; }
-.lp-home-link:hover { background: var(--lp-hover); color: var(--lp-ink); }
-.lp-home-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-.lp-home-metric { padding: 10px 12px; border-radius: 12px; background: var(--lp-well); min-width: 0; }
-.lp-home-value { font-size: 22px; line-height: 30px; font-weight: 500; font-variant-numeric: tabular-nums; }
-.lp-home-unit { margin-left: 3px; font-size: 13px; font-weight: 400; color: var(--lp-ink-2); }
-.lp-home-sub { font-size: 12px; line-height: 18px; color: var(--lp-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-@container lp-home (max-width: 440px) { .lp-home-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lp-home-metric:nth-child(3) { display: none; } }
-.lp-mark { display: inline-flex; }
+.lp-hero-title {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px; max-width: 100%;
+  font-size: 26px; line-height: 32px; font-weight: 500; color: var(--lp-ink);
+}
+.lp-hero-title > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.lp-hero-mark {
+  width: 26px; height: 26px; flex: none; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center;
+  background: linear-gradient(145deg, #3b82f6, #22c55e); color: #fff;
+}
+.lp-hero-status { margin: 0; max-width: 100%; font-size: 15px; line-height: 22px; font-weight: 400; color: var(--lp-ink-2); text-wrap: balance; }
+.lp-hero-status b { color: var(--lp-ink); font-weight: 500; }
+.lp-hero-sep, .lp-row-sep { color: var(--lp-ink-3); margin: 0 8px; }
+.lp-row-sep { margin: 0 2px; }
+.lp-hero-link, .lp-row-link {
+  display: inline; padding: 0; border: 0; background: transparent; color: var(--lp-accent);
+  font: inherit; cursor: pointer; white-space: nowrap; border-radius: 4px;
+}
+.lp-hero-link:hover, .lp-row-link:hover { text-decoration: underline; text-underline-offset: 3px; }
+.lp-hero-est {
+  display: inline-block; margin-left: 8px; padding: 0 6px; border-radius: 9px; border: .5px solid var(--lp-line-3);
+  font-size: 11px; line-height: 16px; color: var(--lp-ink-3); vertical-align: 2px; white-space: nowrap;
+}
 
-/* --- composer dock ----------------------------------------------------------------------------- */
-.lp-dock { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 0 4px 6px; }
-.lp-dock-mark { display: inline-flex; align-items: center; gap: 4px; margin-right: 2px; font-size: 12px; line-height: 18px; color: var(--lp-ink-3); }
-.lp-dock-pill {
-  height: 28px; max-width: 100%; padding: 0 12px; border-radius: 14px; border: .5px solid var(--lp-line-3);
-  background: var(--lp-layer); color: var(--lp-ink); font-size: 12px; line-height: 18px; cursor: pointer;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: background-color .15s ease;
+/* --- the row under the composer (conversation.composer.dock, only with the greeting) ------------- */
+.lp-home-row {
+  width: 100%; max-width: var(--dsh-composer-card-max-width, 744px); margin: 12px auto 0; padding: 0 8px;
+  display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 6px;
+  font-size: 13px; line-height: 20px; color: var(--lp-ink-2); animation: lp-fade .35s ease both;
 }
-.lp-dock-pill:hover { background: var(--lp-hover); }
-.lp-dock-note { font-size: 12px; color: var(--lp-ink-3); }
+.lp-suggest {
+  height: 32px; max-width: 100%; padding: 0 12px; border-radius: 16px; border: 1px solid var(--lp-line-2);
+  background: var(--lp-bg); color: var(--lp-ink-2); font-size: 13px; line-height: 20px; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: background-color .15s ease, color .15s ease;
+}
+.lp-suggest:hover { background: var(--lp-hover); color: var(--lp-ink); }
+.lp-task {
+  display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 11px 0 9px; border-radius: 15px;
+  border: 1px solid var(--lp-line-1); background: var(--lp-hover); color: var(--lp-ink-2); font-size: 13px; line-height: 20px;
+  cursor: pointer; white-space: nowrap; transition: background-color .15s ease;
+}
+.lp-task:hover:not(.lp-task-done) { background: var(--lp-press); color: var(--lp-ink); }
+.lp-task:disabled { cursor: progress; }
+.lp-task-done { cursor: default; }
+.lp-task-ring {
+  width: 14px; height: 14px; flex: none; border-radius: 50%; border: 1.5px solid var(--lp-ink-3);
+  display: inline-flex; align-items: center; justify-content: center; color: #fff; transition: background-color .2s ease, border-color .2s ease;
+}
+.lp-task-done .lp-task-ring { border-color: var(--lp-good); background: var(--lp-good); animation: lp-pop .35s ease; }
+.lp-row-note { flex-basis: 100%; text-align: center; font-size: 12px; line-height: 18px; color: var(--lp-ink-3); }
+.lp-mark { display: inline-flex; }
 
 /* --- reminder pill (shell overlay: click-through layer) ---------------------------------------- */
 /* Bottom-right, but lifted clear of a chat's composer so it never covers the send button. */
@@ -493,12 +595,13 @@ p.lp-muted { margin: 0; }
 
 .lp-spin { animation: lp-spin 1s linear infinite; }
 @keyframes lp-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes lp-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes lp-pop { 0% { transform: scale(.94); } 60% { transform: scale(1.04); } 100% { transform: scale(1); } }
 @keyframes lp-pulse { 50% { opacity: .45; } }
 @keyframes lp-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) {
-  .lp-card, .lp-win, .lp-pop, .lp-skeleton, .lp-home, .lp-pill-wrap, .lp-notice, .lp-spin { animation: none; }
-  .lp-ring-fill, .lp-body, .lp-dot, .lp-dot-step { transition: none; }
+  .lp-card, .lp-win, .lp-pop, .lp-skeleton, .lp-hero, .lp-home-row, .lp-task-ring, .lp-pill-wrap, .lp-notice, .lp-spin { animation: none; }
+  .lp-ring-fill, .lp-body, .lp-dot, .lp-dot-step, .lp-switch-track, .lp-switch-thumb { transition: none; }
 }
 `
 
