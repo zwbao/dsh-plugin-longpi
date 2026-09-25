@@ -73,7 +73,7 @@ The script owns the formula; the harness owns the plumbing. Measurements go in a
 
 ## Receipts, readouts and statistics
 
-`dataDir/receipts.jsonl` records each run: skill, checkout revision, exit code, error kind, the input keys used and the input keys missing. `dataDir/history.jsonl` keeps each run's declared outputs (for example `phenoage`) so a before-and-after skill can use them. `/longpi-stats` writes a weekly count of runs, failures and missing inputs per skill — no values, no report text — for the person to share with the skill maintainers if they want to. Nothing is uploaded by the plugin.
+`dataDir/receipts.jsonl` records each run: skill, checkout revision, exit code, error kind, the input keys used and the input keys missing. It holds no report text; `GET /api/longpi/board` returns each receipt as `{ at, skill, ok, exit_code, error_kind }` only. `dataDir/history.jsonl` keeps each run's declared outputs (for example `phenoage`) so a before-and-after skill can use them. `/longpi-stats` writes a weekly count of runs, failures and missing inputs per skill — no values, no report text — for the person to share with the skill maintainers if they want to. Nothing is uploaded by the plugin.
 
 ## Layout
 

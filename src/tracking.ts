@@ -14,7 +14,7 @@ import { readHistory, type HistoryRow } from './history.ts'
 import { addDays, CATEGORY_ZH, currentPlan, daysBetween, readCheckIns, readPlans, type CheckIn, type PlanItem, type PlanVersion } from './interventions.ts'
 import { RISK_FACT_ZH, type RiskFact } from './profile.ts'
 import type { InputSpec } from './catalog.ts'
-import { aliasIndex, candidatesFor, indicatorFor, measurementInputs, resolveInput, stageMeasurements, type MeasurementIn } from './measurements.ts'
+import { aliasIndex, candidatesFor, indicatorFor, measurementInputs, notRead, resolveInput, stageMeasurements, type MeasurementIn } from './measurements.ts'
 import { loadCourses, loadDoseLog, loadSeries, recordReadable, sameMeasure, type CourseRow, type RecordSnapshot, type SeriesPoint } from './records.ts'
 import { loadReference, markerFor, rcvBand, type Reference } from './reference.ts'
 import { runSkill, type Levers } from './runner.ts'
@@ -341,9 +341,9 @@ function pairsFor(card: SkillCard, records: RecordSnapshot): Pair[] {
 
 /** The inputs the record lacks, split: truly not on file, and not read (a failed read, or a catalogue cut short). */
 function absentInputs(pairs: readonly Pair[], records: RecordSnapshot): { missing: Pair[]; unread: Pair[] } {
-  const failed = new Set(records.missing_reads)
+  const reads = { failed: records.missing_reads, catalog_truncated: records.catalog_truncated }
   const absent = pairs.filter((pair) => !pair.indicator)
-  const unread = absent.filter((pair) => pair.names.some((name) => failed.has(name)) || (pair.names.length === 0 && records.catalog_truncated))
+  const unread = absent.filter((pair) => notRead(pair.spec, records.indicators, reads))
   return { missing: absent.filter((pair) => !unread.includes(pair)), unread }
 }
 
@@ -774,15 +774,11 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
   const missingLabs: string[] = []
   // On file but not read (a failed read, or a catalogue cut short): unknown, never listed as a test to add.
   const unreadLabs: string[] = []
-  const failedReads = new Set(context.records.missing_reads)
+  const reads = { failed: context.records.missing_reads, catalog_truncated: context.records.catalog_truncated }
   for (const spec of measurementInputs(card)) {
     const row = indicatorFor(spec, context.records.indicators)
     if (row) found.push({ spec, key: spec.key, row })
-    else if (spec.required) {
-      const names = candidatesFor(spec, context.records.indicators).map((item) => item.row.name)
-      const unread = names.some((name) => failedReads.has(name)) || (names.length === 0 && context.records.catalog_truncated)
-      ;(unread ? unreadLabs : missingLabs).push(spec.label_zh)
-    }
+    else if (spec.required) (notRead(spec, context.records.indicators, reads) ? unreadLabs : missingLabs).push(spec.label_zh)
   }
   base.missing_labs = missingLabs
   base.missing_facts = missingFacts

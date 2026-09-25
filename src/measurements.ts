@@ -202,7 +202,6 @@ export function runnableFrom(
   if (card.inputsStatus === 'none' || card.inputs.length === 0 || !card.script) {
     return { status: 'unknown', have: [], missing: [], from_record: [], record: 'none', missing_from_record: [], unread: [] }
   }
-  const failed = new Set(reads.failed ?? [])
   const unread: string[] = []
   const have: string[] = []
   const missing: string[] = []
@@ -233,8 +232,7 @@ export function runnableFrom(
       missing.push(spec.label_zh)
       if (!recordBacked(spec)) continue
       // Not read is not "not measured": never a test to add.
-      const names = candidatesFor(spec, indicators).map((item) => item.row.name)
-      if (names.some((name) => failed.has(name)) || (names.length === 0 && reads.catalog_truncated)) unread.push(spec.label_zh)
+      if (notRead(spec, indicators, reads)) unread.push(spec.label_zh)
       else missingFromRecord.push(spec.label_zh)
       continue
     }
@@ -281,6 +279,20 @@ export function candidatesFor(spec: InputSpec, indicators: readonly RecordIndica
   const byName = (text: string | undefined) => Boolean(text) && nameVariants(text as string).some((variant) => names.has(variant))
   // A self row is in the list only when it is newer than the record's own row, so it is tried first.
   return preferSelf(indicators).filter((row) => byName(row.name) || byName(row.label)).map((row) => ({ row, rank: codes.length + devices.length, by: 'name' as const }))
+}
+
+/**
+ * Whether an input the record shows no value for may simply not have been read: a row that could hold it is
+ * among the reads that failed; or none is listed, and the catalogue was cut, or the input is known only by
+ * name while some rows went unread (their report names come with the value, so they cannot be matched).
+ */
+export function notRead(spec: InputSpec, indicators: readonly RecordIndicator[], reads: { failed?: readonly string[]; catalog_truncated?: boolean }): boolean {
+  const failed = new Set(reads.failed ?? [])
+  const names = candidatesFor(spec, indicators).map((item) => item.row.name)
+  if (names.some((name) => failed.has(name))) return true
+  if (names.length > 0) return false
+  const coded = (spec.loinc ?? []).length > 0 || (spec.device_codes ?? []).length > 0
+  return Boolean(reads.catalog_truncated) || (!coded && failed.size > 0)
 }
 
 function dateOf(row: RecordIndicator): string {

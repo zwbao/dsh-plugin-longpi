@@ -79,7 +79,7 @@ HTTP：`GET /api/longpi/board`、`GET /api/longpi/tracking`、`GET /api/longpi/m
 
 ## 运行记录与统计
 
-- `dataDir/receipts.jsonl` 记录每次运行：技能、检出版本、退出码、错误类型、用了哪些输入键、缺了哪些输入键。
+- `dataDir/receipts.jsonl` 记录每次运行：技能、检出版本、退出码、错误类型、用了哪些输入键、缺了哪些输入键。不存报告正文；`GET /api/longpi/board` 只返回每条收据的 `{ at, skill, ok, exit_code, error_kind }`。
 - `dataDir/history.jsonl` 保存每次运行声明过的输出（例如 `phenoage`），供前后对比的技能使用。
 - `/longpi-stats` 写出一周的计数：每个技能跑了几次、失败原因、缺了哪些输入。不含任何数值和报告文字，是否分享给技能维护者由本人决定。
 

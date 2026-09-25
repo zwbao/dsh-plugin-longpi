@@ -188,10 +188,17 @@ main() {
   row "Skills    " "方法库    " "$(pick "${skills_line% *} methods, version ${skills_line#* }" "${skills_line% *} 个方法，版本 ${skills_line#* }")"
   row "Python    " "Python    " "mirobody ${mirobody_version}"
   row "Plugin    " "插件      " "dsh-plugin-longpi ${plugin_version} (profile ${profile})"
-  case "$result" in
-    mcp=configured*) row "Mirobody  " "Mirobody  " "$(pick "connected" "已连接") ${result#*configured }" ;;
+  local mcp_line backup_line kept removed
+  mcp_line="$(printf '%s\n' "$result" | grep '^mcp=' || true)"
+  backup_line="$(printf '%s\n' "$result" | grep '^backups=' || true)"
+  case "$mcp_line" in
+    mcp=configured*) row "Mirobody  " "Mirobody  " "$(pick "connected" "已连接") ${mcp_line#*configured }" ;;
     *) row "Mirobody  " "Mirobody  " "$(pick "not connected; rerun with --mcp-url <URL> or --with-mirobody" "未连接；可加 --mcp-url <地址> 或 --with-mirobody 重新运行")" ;;
   esac
+  if [ -n "$backup_line" ]; then
+    kept="${backup_line#backups=}"; removed="${kept#* }"; kept="${kept% *}"
+    row "Backups   " "配置备份  " "$(pick "$kept kept (0600, newest 3 only; $removed older removed)" "保留 $kept 份（权限 0600，只留最新 3 份；删除了 $removed 份旧的）")"
+  fi
   row "Files     " "安装目录  " "$(pretty "$longpi_home")"
   if [ -n "${EXPOSED:-}" ]; then
     info "Linked${EXPOSED} into ~/.local/bin." "已将${EXPOSED} 链接到 ~/.local/bin。"
@@ -415,15 +422,31 @@ else:
     else:
         new_lines = lines + ([""] if lines and lines[-1].strip() else []) + block
 new_text = "\n".join(new_lines) + "\n"
+KEEP = 3
+backed = ""
 if new_text != text:
     if text:
-        with open(path + ".bak-" + time.strftime("%Y%m%d%H%M%S"), "w", encoding="utf-8") as backup:
+        # The backup can hold the MCP address and token: 0600 like the live file, created, never truncated.
+        backed = path + ".bak-" + time.strftime("%Y%m%d%H%M%S")
+        fd = os.open(backed, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as backup:
             backup.write(text)
+        os.chmod(backed, 0o600)
     tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as out:
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as out:
         out.write(new_text)
     os.chmod(tmp, 0o600)
     os.replace(tmp, path)
+# Keep the newest backups only, and only ever remove files named the way this installer names them.
+folder, base = os.path.split(path)
+own = re.compile("^" + re.escape(base) + r"\.bak-\d{14}$")
+backups = sorted(name for name in os.listdir(folder or ".") if own.match(name))
+for name in backups[:-KEEP]:
+    os.remove(os.path.join(folder, name))
+for name in backups[-KEEP:]:
+    os.chmod(os.path.join(folder, name), 0o600)
+print("backups=%d %d" % (min(len(backups), KEEP), max(0, len(backups) - KEEP)))
 url = unquote(values["mcpUrl"])
 if url:
     shown = re.sub(r"(/mcp/)[^/?#]+", r"\1…", url)

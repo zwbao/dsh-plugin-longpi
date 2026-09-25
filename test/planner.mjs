@@ -332,6 +332,36 @@ try {
   assert.equal(twice.ok, true)
   assert.equal(twice.plan.items.length, 1, 'one item per intervention')
   assert.deepEqual(mod.acceptedPlan(tool.brief, { items: [] }, TODAY).ok, false)
+  // 8f: a posted title goes through the same dose stripping; a title that was only a dose becomes the server's own
+  const dosedTitle = mod.acceptedPlan(tool.brief, { title: '鱼油 两千毫克 + 2000mg 方案', items: [got.draft.items[0]] }, TODAY)
+  assert.equal(mod.hasDose(dosedTitle.plan.title), false, dosedTitle.plan.title)
+  assert.ok(dosedTitle.plan.title.startsWith('鱼油') && dosedTitle.plan.title.endsWith('方案'))
+  assert.equal(mod.acceptedPlan(tool.brief, { title: '500mg', items: [got.draft.items[0]] }, TODAY).plan.title, `改善方案（${TODAY}）`)
+
+  // 8e: the chat read-back is what will be stored: the plan's title and note, each item with its details, and goal problems
+  const readBack = await host.tools.get('save_intervention_plan').execute({
+    title: '维生素D 2000IU 方案', note: '每天 2000 IU',
+    items: [{ category: 'diet', title: '二甲双胍', detail: '每天 500 mg，饭后', start: TODAY }],
+    goals: [{ marker: '空腹血糖', value: 5, unit: 'mmol/mol' }],
+  })
+  assert.equal(readBack.saved, false)
+  assert.equal(readBack.title, '维生素D 方案')
+  assert.equal(readBack.read_back[0], '方案：维生素D 方案；备注：每天')
+  assert.equal(readBack.read_back[1], `饮食｜二甲双胍；${TODAY} 起；说明：每天，饭后`)
+  assert.ok(readBack.warnings.some((line) => line.includes('剂量没有保存')))
+  assert.equal(readBack.goal_problems.length, 1, JSON.stringify(readBack.goal_problems))
+  assert.match(readBack.next, /goal_problems/)
+
+  // 9d: the chat check-in takes done true, false or null (take it back)
+  const checkinTool = host.tools.get('log_intervention_checkin')
+  const itemTitle = mod.currentPlan(routeDir).items[0].title
+  assert.equal((await checkinTool.execute({ entries: [{ item: itemTitle, done: false }] })).entries[0].done, false)
+  const takenBack = await checkinTool.execute({ entries: [{ item: itemTitle, done: null }] })
+  assert.equal(takenBack.ok, true)
+  assert.equal(takenBack.entries[0].undo, true)
+  const day = takenBack.entries[0].date
+  assert.equal(mod.readCheckIns(routeDir).filter((row) => row.date === day).length, 2, 'both entries are kept')
+  assert.equal(mod.checkinStatus(mod.readCheckIns(routeDir)).get(mod.currentPlan(routeDir).items[0].id)?.has(day) ?? false, false, 'unknown again')
 
   console.log(`planner ok (${brief.priorities.length} priorities, ${brief.candidates.length} candidates, draft: ${draft.items.map((item) => item.title).join('、')})`)
 } finally {

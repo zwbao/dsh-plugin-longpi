@@ -15,7 +15,7 @@ LongPi is the personal layer. Three pieces stay separate.
 | `measurements.ts` | Stage measurements exactly as `skillkit.py` does (key vs alias, `unit_required`, declared `accept` factors, ranges); decide which skills the record can already run. |
 | `units.ts` | Unit and name normalization, identical to `skillkit.py`; both pass `schema/unit_cases.json`. |
 | `match.ts` | Rank skills by intent, readiness and shared words; keep tier C out unless the organism is named. |
-| `runner.ts` | Stage files, pick the interpreter by runtime, fill profile flags, run the script in a path jail, read `out/report.md`, `out/result.json` and `out/problems.json`, write the receipt. |
+| `runner.ts` | Stage files, pick the interpreter by runtime, fill profile flags, check argument paths, run the script with a short environment, read `out/report.md`, `out/result.json` and `out/problems.json`, write the receipt (no report text). |
 | `history.ts` | Earlier readouts (declared outputs only), for before-and-after skills and the board. |
 | `stats.ts` | Weekly anonymous counts per skill: runs, failures, missing input keys. |
 | `guardrails.ts` | Emergency and medication intercepts before the model runs. |
@@ -32,7 +32,8 @@ LongPi is the personal layer. Three pieces stay separate.
 - `read_personal_situation` loads the saved age, sex, and birth year, the indicators and medications the Mirobody server returned, earlier readouts, and which methods are ready.
 - `list_longevity_intents` and `match_longevity_skills` rank skills by intent and by what the record already holds.
 - `read_longevity_skill` returns the instructions and the manifest.
-- `run_longevity_skill` takes `measurements` as recorded; the harness converts declared units, checks ranges, fills the saved profile fields, stages `measurements.csv`, and runs the script with a path jail: relative names and `out/` only, no `..`, no absolute path.
+- `run_longevity_skill` takes `measurements` as recorded; the harness converts declared units, checks ranges, fills the saved profile fields, stages `measurements.csv`, and runs the script with argument path checks: relative names and `out/` only, no `..`, no absolute path.
+- A skill script gets a short environment: `PATH`, `LANG`, `LC_ALL`, `HOME` and `TMPDIR` inside its own run directory, `PYTHONNOUSERSITE=1`, and nothing else of the harness's environment (no keys, no tokens). The Mirobody terminology bridge gets the same list plus `MIROBODY_HOME`, the real `HOME` and `PYTHONPATH`. This is not a sandbox: the script runs as the same user and can read what that user can. Skill scripts are trusted code from the skills checkout the person installed; the argument checks stop the model from pointing a script at other files, nothing more.
 - `query_longevity_evidence` runs the evidence skill with the named entities and, if asked, the medication plan.
 
 ## Interventions
