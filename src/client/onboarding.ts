@@ -19,7 +19,7 @@ const h = React.createElement
 const TITLES = ['欢迎使用 LongPi', '建立档案', '连接体检记录', '第一个结果'] as const
 const NOOP = () => {}
 /** A journey that has not arrived by then counts as failed; the page and home card still offer the notice. */
-const GIVE_UP_MS = 25_000
+const GIVE_UP_MS = 45_000
 
 export interface OnboardingProps extends Partial<Face> {
   stepId?: string
