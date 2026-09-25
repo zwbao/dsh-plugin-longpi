@@ -131,10 +131,34 @@ function weekdayOf(value: unknown): Weekday | null {
   return Number.isInteger(number) && number >= 1 && number <= 7 ? number as Weekday : null
 }
 
-const LAN_HOST = /^(localhost|127\.\d+\.\d+\.\d+|\[::1\]|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[01])\.\d+\.\d+|[a-z0-9-]+\.local)$/i
+/**
+ * A host a webhook must never reach, judged from the URL alone (nothing is resolved): this machine
+ * (localhost, 127/8, ::1), link-local (169.254/16, fe80::/10, which holds cloud metadata services),
+ * the unspecified address (0.0.0.0, ::) and metadata.google.internal. The URL parser has already turned
+ * 2130706433, 0x7f.1 or 127.1 into 127.0.0.1. Private network addresses stay allowed, for a home server.
+ */
+export function blockedWebhookHost(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase()
+  if (host === 'localhost' || host.endsWith('.localhost') || host === 'metadata.google.internal') return true
+  const v4 = /^(\d+)\.(\d+)\.\d+\.\d+$/.exec(host)
+  if (v4) return blockedV4(Number(v4[1]), Number(v4[2]))
+  if (!host.includes(':')) return false
+  if (host === '::' || host === '::1' || /^fe[89ab][0-9a-f]:/.test(host)) return true
+  // An IPv4 address written as IPv6 (::ffff:127.0.0.1 is serialized ::ffff:7f00:1).
+  const mapped = /^::ffff:([0-9a-f]{1,4}):[0-9a-f]{1,4}$/.exec(host)
+  if (mapped) {
+    const high = parseInt(mapped[1] ?? '0', 16)
+    return blockedV4(high >> 8, high & 0xff)
+  }
+  return false
+}
 
-/** https for every kind; the generic kind may also be http to this machine or the local network. */
-export function webhookUrlProblem(kind: WebhookKind, url: string): string {
+function blockedV4(first: number, second: number): boolean {
+  return first === 127 || first === 0 || (first === 169 && second === 254)
+}
+
+/** https for every kind, to a host that is not this machine, link-local, unspecified or a metadata service. */
+export function webhookUrlProblem(_kind: WebhookKind, url: string): string {
   if (!url || url.length > URL_MAX) return 'webhook.url must be a URL of at most 1000 characters'
   let parsed: URL
   try {
@@ -143,9 +167,9 @@ export function webhookUrlProblem(kind: WebhookKind, url: string): string {
     return 'webhook.url is not a URL'
   }
   if (parsed.username || parsed.password) return 'webhook.url must not carry a user name or password'
-  if (parsed.protocol === 'https:') return ''
-  if (parsed.protocol === 'http:' && kind === 'generic' && LAN_HOST.test(parsed.hostname)) return ''
-  return kind === 'generic' ? 'webhook.url must be https, or http to localhost or the local network' : 'webhook.url must be https'
+  if (parsed.protocol !== 'https:') return 'webhook 地址必须以 https:// 开头'
+  if (blockedWebhookHost(parsed.hostname)) return `webhook 地址不能指向本机、链路本地地址、未指定地址或云元数据服务（${parsed.hostname}）`
+  return ''
 }
 
 /** The saved settings, with defaults for anything missing or unreadable. */

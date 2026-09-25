@@ -72,7 +72,7 @@ try {
     [{ volume: 3 }, /unknown field volume/],
     [{ webhook: { kind: 'slack', url: 'https://hooks.slack.com/x' } }, /webhook.kind/],
     [{ webhook: { kind: 'feishu', url: 'http://open.feishu.cn/hook/x' } }, /https/],
-    [{ webhook: { kind: 'generic', url: 'http://example.com/hook' } }, /local network/],
+    [{ webhook: { kind: 'generic', url: 'http://example.com/hook' } }, /https/],
     [{ webhook: { kind: 'bark', url: 'https://user:pw@api.day.app/k' } }, /user name/],
     [{ webhook: { kind: 'feishu', url: FEISHU, secret: 'x'.repeat(201) } }, /200/],
     [{ webhook: { kind: 'wecom' } }, /url is required/],
@@ -95,8 +95,9 @@ try {
   assert.deepEqual(saved.settings.webhook, { kind: 'feishu', url: FEISHU, secret: 'sekrit' }, 'url and secret omitted keep the stored ones')
   saved = mod.writeFollowup(dir, { webhook: { kind: 'generic', secret: '' } })
   assert.deepEqual(saved.settings.webhook, { kind: 'generic', url: FEISHU, secret: '' }, "secret '' clears it; the kind can change")
-  assert.equal(mod.writeFollowup(dir, { webhook: { kind: 'generic', url: 'http://192.168.1.20:8080/longpi' } }).ok, true, 'generic may be http on the local network')
-  assert.equal(mod.writeFollowup(dir, { webhook: { kind: 'generic', url: 'http://localhost:9000/x' } }).ok, true)
+  assert.equal(mod.writeFollowup(dir, { webhook: { kind: 'generic', url: 'https://192.168.1.20:8443/longpi' } }).ok, true, 'generic may be https on the local network')
+  assert.equal(mod.writeFollowup(dir, { webhook: { kind: 'generic', url: 'http://192.168.1.20:8080/longpi' } }).ok, false, 'never plain http, even on the local network')
+  assert.equal(mod.writeFollowup(dir, { webhook: { kind: 'generic', url: 'https://localhost:9000/x' } }).ok, false, 'never this machine')
   assert.equal(mod.writeFollowup(dir, { webhook: null }).settings.webhook, null, 'null removes the channel')
   assert.equal(statSync(join(dir, 'followup.json')).mode & 0o777, 0o600, 'rewritten, still private')
   writeFileSync(join(dir, 'followup.json'), '{"enabled": true, "checkin_time": "99:99", "detail": "loud"}')
@@ -451,6 +452,7 @@ function fakeHost() {
     skills: { register: () => () => {} },
     systemPrompt: { section: () => {} },
     webServer: { register: (route) => { routes.set(route.path, route.handler); return () => {} } },
+    connection: { requestRejection: () => undefined },
     commands: { register: (command) => { commands.set(command.name, command) } },
     inject: (_names, callback) => callback(ctx),
     on: (name, listener) => {
@@ -472,6 +474,7 @@ function call(host, method, url, body) {
   const req = Readable.from(body === undefined ? [] : [Buffer.from(JSON.stringify(body))])
   req.method = method
   req.url = url
+  req.headers = { host: '127.0.0.1', 'content-type': 'application/json' }
   return new Promise((resolveCall) => {
     const headers = {}
     const res = {

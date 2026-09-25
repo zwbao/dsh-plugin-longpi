@@ -60,6 +60,8 @@ export type { FollowupSettings, FollowupState, FollowupLogRow, FollowupDeps, Sen
 export { followupTextProblem, followupApprovalReason } from './tools-followup.ts'
 export { buildPlanBrief, draftPlan, acceptedPlan, expectedText, DRAFT_CATEGORIES } from './planner.ts'
 export type { PlanBrief, PlanDraft, DraftItem } from './planner.ts'
+export { guardRoute, isJsonRequest, CONNECTION_UNAVAILABLE } from './routes.ts'
+export type { ConnectionGuard } from './routes.ts'
 export { bootstrapWorkspace, WORKSPACE_MARKER, WORKSPACE_DIR, WORKSPACE_TITLE } from './workspace.ts'
 export type { WorkspaceRegistryLike, BootstrapResult } from './workspace.ts'
 
