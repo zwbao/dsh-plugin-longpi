@@ -27,6 +27,10 @@ const ICONS: Record<string, string> = {
   lock: 'M4.5 7.3h7v5.2h-7zM5.8 7.3V5.6a2.2 2.2 0 0 1 4.4 0v1.7',
   chevron: 'M6 4l4 4-4 4',
   dot: 'M8 8.01v-.02',
+  pulse: 'M2 8.5h2.5l1.5-3 2.5 6 1.5-3H14',
+  warn: 'M8 2.9l5.4 9.4H2.6zM8 6.8v2.5M8 10.9v.1',
+  bell: 'M4.6 10.9V7.4a3.4 3.4 0 0 1 6.8 0v3.5l1 1.1H3.6zM6.9 13.4a1.2 1.2 0 0 0 2.2 0',
+  send: 'M13.3 2.7L2.7 7.1l4.4 1.8 1.8 4.4zM7.1 8.9l6.2-6.2',
 }
 
 export function Icon(props: { name: string; size?: number; className?: string; strokeWidth?: number }): React.ReactElement {

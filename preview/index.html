@@ -65,12 +65,14 @@
   .pv-overlay { position: absolute; inset: 0; z-index: 20; pointer-events: none; }
   .pv-overlay > * { pointer-events: auto; }
   .pv-hero { height: 100%; display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 0 24px; box-sizing: border-box; gap: 8px; }
-  .pv-stack { width: 100%; max-width: var(--dsh-composer-card-max-width); display: flex; flex-direction: column; gap: 12px; }
+  .pv-stack { width: 100%; max-width: var(--dsh-composer-card-max-width); display: flex; flex-direction: column; align-items: stretch; gap: 12px; }
   .pv-headline { color: var(--dsw-alias-label-primary); flex-wrap: wrap; justify-content: center; align-items: center; gap: 12px 10px; font-size: 26px; font-weight: 500; line-height: 32px; display: flex; }
   .pv-fish { flex: none; justify-content: center; align-items: center; display: inline-flex; }
-  .pv-title { display: flex; align-items: center; gap: 4px 7px; }
+  .pv-title { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 7px; min-width: 0; }
+  .pv-hero-body { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
   .pv-badge { border: .5px solid var(--dsw-alias-interactive-bg-hover); background: var(--dsw-alias-state-business-tertiary); color: var(--dsw-alias-state-business-primary); font-family: var(--ds-font-family-code); border-radius: 24px; align-self: flex-start; margin-top: 2px; padding: 1px 7px 0; font-size: 12px; font-weight: 500; line-height: 18px; }
-  .pv-composer-seat { width: min(calc(var(--dsh-composer-card-max-width) + 32px), 100%); display: flex; flex-direction: column; gap: 6px; padding: 0 16px 24px; box-sizing: border-box; }
+  .pv-composer-seat { width: min(calc(var(--dsh-composer-card-max-width) + 32px), 100%); display: flex; flex-direction: column; align-items: center; padding: 0 16px 8px; box-sizing: border-box; }
+  .pv-composer-hero { padding-bottom: 32px; }
   .pv-composer { box-sizing: border-box; width: 100%; background: var(--dsw-specific-input-major); box-shadow: 0 0 0 .5px var(--dsw-alias-border-l2), 0 4px 16px #00000008, 0 0 24px #00000008; border-radius: 22px; padding: 14px 16px 10px; min-height: 104px; display: flex; flex-direction: column; justify-content: space-between; }
   .pv-composer-text { font-size: 14px; line-height: 24px; color: var(--dsw-alias-label-primary); min-height: 24px; white-space: pre-wrap; }
   .pv-composer-text:empty::before { content: '给 DeepSeek 发送消息'; color: var(--dsw-alias-label-caption); }
@@ -113,6 +115,13 @@
     board: (DATA && DATA.board) || readSync('fixtures/board.json'),
     tracking: (DATA && DATA.tracking) || readSync('fixtures/tracking.json'),
     self: (DATA && DATA.self) || readSync('fixtures/self.json') || { rows: [] },
+    planDraft: (DATA && DATA.planDraft) || readSync('fixtures/plan-draft.json'),
+    followup: (DATA && DATA.followup) || readSync('fixtures/followup.json'),
+  }
+  // Follow-up as a fresh install has it: off, no channel, nothing sent.
+  const FOLLOWUP_OFF = {
+    settings: { enabled: false, checkin_time: '21:00', retest_time: '09:00', weekly: { day: 7, time: '20:00' }, desktop: true, webhook: null, detail: 'minimal', quiet: null },
+    next: { checkin: null, retest: null, weekly: null }, log: [], platform_desktop: true,
   }
 
   // --- ?stage=: derive a coherent journey, board and tracking for each stage ------------
@@ -121,7 +130,7 @@
     profile: [['what', 'LongPi 能帮我做什么？'], ['profile', '帮我建立健康档案']],
     records: [['import', '怎么把体检报告导入 Mirobody？'], ['start', '还没有体检记录，现在可以先做什么？']],
     first_result: [['addons', '下次体检需要加测哪些项目？'], ['now', '用我现有的记录能算出什么？'], ['self', '帮我记录腰围和家庭血压']],
-    plan: [['focus', '我的身体年龄怎么样？哪些指标影响最大？'], ['save', '帮我保存我的干预方案'], ['methods', '有哪些经过研究验证的改善方法？']],
+    plan: [['draft', '帮我制定一份改善方案'], ['focus', '我的身体年龄怎么样？哪些指标影响最大？'], ['save', '帮我保存我的干预方案']],
     routine: [['done', '今天的方案我都完成了'], ['effect', '我的方案有没有效果？']],
   }
   const NEXT = {
@@ -129,13 +138,15 @@
     profile: ['建立档案', '填写年龄和性别即可计算身体年龄；再回答 6 个问题可计算心血管风险。', 'profile'],
     records: ['连接体检记录', '在 Mirobody 中生成个人 MCP 地址，重新运行安装命令时加上 --mcp-url。', 'records'],
     first_result: ['还差 2 项检查', '下次体检加测：腰围、超敏C反应蛋白', 'addons'],
-    plan: ['选一项开始改善', '说出你的方案，或上传医生、长寿师给的方案。', 'plan'],
+    plan: ['制定改善方案', '让 LongPi 按你的检查结果和研究证据起草一份方案，你确认后才保存。', 'plan'],
   }
   function stageData(stage) {
     const journey = clone(base.journey)
     const board = clone(base.board)
     const tracking = clone(base.tracking)
-    if (!stage || stage === journey.stage) return { journey, board, tracking }
+    const planDraft = clone(base.planDraft)
+    let followup = clone(base.followup)
+    if (!stage || stage === journey.stage) return { journey, board, tracking, planDraft, followup }
     const order = ['consent', 'profile', 'records', 'first_result', 'plan', 'routine']
     const at = order.indexOf(stage)
     journey.stage = stage
@@ -180,8 +191,10 @@
       journey.reminders = []
       Object.assign(tracking, { status: 'no_plan', plan: null, versions: [], items: [], charts: [], checkins: [], suggestions: at === 4 ? [] : tracking.suggestions.filter(() => false) })
       tracking.models = at === 4 ? tracking.models.map((card) => ({ ...card, goal: null, levers: [], status: 'no_goal' })) : []
+      followup = clone(FOLLOWUP_OFF)
+      journey.followup = { enabled: false, channels: [], next_at: null }
     }
-    return { journey, board, tracking }
+    return { journey, board, tracking, planDraft, followup }
   }
   // ?variant=: the real server's edge cases. noaddons = a first result held up
   // only by profile answers (next.action 'profile', no add-ons); recerror = a
@@ -208,6 +221,7 @@
     return data
   }
   const state = variantData(stageData(STAGE), params.get('variant'))
+  if (params.get('variant') === 'nodraft') state.planDraft = { brief: { ...state.planDraft.brief, priorities: [] }, draft: null }
   state.self = clone(base.self)
   if (STAGE && ['consent', 'profile', 'records'].includes(STAGE)) state.self.rows = []
 
@@ -260,6 +274,48 @@
       j.plan.checkin_items.forEach((row) => { if (row.id === body.item) row.done_today = true })
       j.reminders = j.reminders.filter((row) => row.kind !== 'checkin' || j.plan.checkin_items.some((item) => !item.done_today))
       return json({ ok: true, saved: [{}], problems: [] })
+    }
+    if (path.endsWith('/plan-draft') && method === 'GET') return json(state.planDraft)
+    if (path.endsWith('/plan-draft/accept')) {
+      const draft = body && body.draft
+      if (!draft || !Array.isArray(draft.items) || draft.items.length === 0) return json({ ok: false, error: '方案里没有项目', problems: ['至少保留一项'] }, 400)
+      const version = (j.plan.version || 0) + 1
+      const checkins = draft.items.filter((item) => !item.target).map((item) => ({ id: item.id, title: item.title, done_today: false }))
+      j.plan = { exists: true, title: draft.title, version, items: draft.items.length, started: j.today, days: 0, checkin_items: checkins, streak: 0, adherence_pct: null }
+      j.stage = 'routine'
+      j.next = { stage: 'routine', title_zh: '今天的打卡', detail_zh: `还有 ${checkins.length} 项待完成`, action: 'checkin' }
+      j.suggestions = SUGGEST.routine.map(([id, text]) => ({ id: `routine-${id}`, text_zh: text }))
+      state.planDraft = { ...state.planDraft, draft: null }
+      return json({ ok: true, plan: { version, title: draft.title, items: draft.items.length } })
+    }
+    if (path.endsWith('/followup/test')) {
+      const f = state.followup.settings
+      const channels = {}
+      if (f.desktop && state.followup.platform_desktop) channels.desktop = { ok: true }
+      if (f.webhook) channels.webhook = f.webhook.kind === 'feishu' && f.webhook.secret_set ? { ok: true } : { ok: false, error: 'HTTP 404：地址不存在' }
+      const now = new Date(); const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000).toISOString().slice(0, 19)
+      state.followup.log = [{ at: local, kind: 'test', key: '', ok: Object.values(channels).some((row) => row.ok), channels: Object.fromEntries(Object.entries(channels).map(([key, row]) => [key, row.ok])) }, ...state.followup.log]
+      return json({ ok: Object.keys(channels).length > 0, channels })
+    }
+    if (path.endsWith('/followup') && method === 'GET') return json(state.followup)
+    if (path.endsWith('/followup')) {
+      const f = state.followup.settings
+      for (const key of ['enabled', 'checkin_time', 'retest_time', 'weekly', 'desktop', 'detail', 'quiet']) if (key in body) f[key] = body[key]
+      if ('webhook' in body) {
+        const hook = body.webhook
+        if (hook === null) f.webhook = null
+        else {
+          if (!f.webhook && !hook.url) return json({ ok: false, error: '缺少 Webhook 地址' }, 400)
+          if (hook.url && !/^https:\/\//.test(hook.url) && hook.kind !== 'generic') return json({ ok: false, error: 'Webhook 地址必须是 https://' }, 400)
+          const masked = hook.url ? `${new URL(hook.url).protocol}//${new URL(hook.url).host}/…` : f.webhook.url_masked
+          const secretSet = hook.secret === '' ? false : hook.secret ? true : (f.webhook && f.webhook.kind === hook.kind ? f.webhook.secret_set : false)
+          f.webhook = { kind: hook.kind, url_masked: masked, secret_set: secretSet }
+        }
+      }
+      const at = (time, date = j.today) => `${date}T${time}:00`
+      state.followup.next = f.enabled ? { checkin: at(f.checkin_time), retest: at(f.retest_time, '2026-10-02'), weekly: f.weekly ? at(f.weekly.time, '2026-09-27') : null } : { checkin: null, retest: null, weekly: null }
+      j.followup = { enabled: f.enabled, channels: [f.desktop ? 'desktop' : null, f.webhook ? 'webhook' : null].filter(Boolean), next_at: state.followup.next.checkin }
+      return json({ ok: true, ...state.followup })
     }
     if (path.endsWith('/run-ready')) return json({ ok: true, results: [{ skill: 'accelerated-biological-aging-risk', ok: true, excerpt: '表型年龄已按最近一次血检算出。' }] })
     if (path.endsWith('/match')) return json({ matches: (state.board.dispatch && state.board.dispatch.matches) || [], note: '' })
@@ -314,27 +370,35 @@
       ...['体检报告解读', '九月方案复盘', '睡眠数据'].map((text) => h('div', { key: text, className: 'pv-side-session' }, text)))
   }
 
+  // DSH's slot outlet: every seat renders inside a display:contents anchor.
+  function Slot(props) {
+    return h('div', { 'data-slot': props.name, style: { display: 'contents' } }, h(Seat, props))
+  }
+
+  // DSH's InputBar: the composer card, then the conversation.composer.dock list below it.
   function Composer(props) {
     const [text, setText] = React.useState(props.initial || '')
     const inputActions = {
       captureInsertion: () => ({ at: text.length }),
       insertText: (value) => { setText((current) => (current ? `${current} ${value}` : value)); return true },
     }
-    return h('div', { className: 'pv-composer-seat' },
-      h(Seat, { name: 'conversation.input.dock', owner: { inputActions, input: { draft: text }, session: {} } }),
-      h('div', { className: 'pv-composer' },
+    return h('div', { className: `pv-composer-seat ${props.hero ? 'pv-composer-hero' : ''}` },
+      h('div', { className: 'pv-composer', 'data-composer-card': '' },
         h('div', { className: 'pv-composer-text' }, text),
-        h('div', { className: 'pv-composer-bar' }, h('span', { className: 'pv-chip' }, 'DeepSeek V4'), h('span', { className: 'pv-send' }))))
+        h('div', { className: 'pv-composer-bar' }, h('span', { className: 'pv-chip' }, 'DeepSeek V4'), h('span', { className: 'pv-send' }))),
+      h(Slot, { name: 'conversation.composer.dock', owner: { inputActions, input: { draft: text }, session: {} } }))
   }
 
+  // DSH's HeroShell: headline div > span.fishHitbox (the brand-mark seat) + span.titleGroup, then the composer.
   function Hero() {
     return h('div', { className: 'pv-hero' },
       h('div', { className: 'pv-stack' },
-        h('div', { className: 'pv-headline' },
-          h('span', { className: 'pv-fish' },
-            h('div', { 'data-slot': 'conversation.hero.brand.mark', style: { display: 'contents' } }, h(Seat, { name: 'conversation.hero.brand.mark', owner: { size: 34, className: 'pv-fish-svg' } }))),
-          h('span', { className: 'pv-title' }, h('span', null, '探索未至之境'), h('span', { className: 'pv-badge' }, 'Preview')))),
-      h(Composer))
+        h('div', { className: 'pv-headline headline' },
+          h('span', { className: 'pv-fish fishHitbox' },
+            h(Slot, { name: 'conversation.hero.brand.mark', owner: { size: 34, className: 'pv-fish-svg' } })),
+          h('span', { className: 'pv-title titleGroup' }, h('span', null, '探索未至之境'), h('span', { className: 'pv-badge previewBadge' }, 'Preview'))),
+        h('div', { className: 'pv-hero-body' })),
+      h(Composer, { hero: true }))
   }
 
   function Chat() {

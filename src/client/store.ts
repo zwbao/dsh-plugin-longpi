@@ -1,24 +1,26 @@
-// One cache for every LongPi surface. The page, the home card, the composer
-// dock and the reminder pill all read the same journey, so opening DSH costs
-// one request, not four. Data is kept while it refreshes (the UI never blanks
+// One cache for every LongPi surface. The page, the home greeting, the row
+// under the composer and the reminder pill all read the same journey, so
+// opening DSH costs one request, not four. Data is kept while it refreshes (the UI never blanks
 // on a refetch), refreshed on window focus when older than a minute, every ten
 // minutes while something shows it, and right after any save.
 
 import React from 'react'
 import { errorText, getJson } from './api.ts'
-import { normalizeJourney } from './normalize.ts'
-import type { Board, Journey, SelfRow, Tracking } from './types.ts'
+import { normalizeFollowup, normalizeJourney, normalizePlanDraft } from './normalize.ts'
+import type { Board, FollowupResponse, Journey, PlanDraftResponse, SelfRow, Tracking } from './types.ts'
 
-type Key = 'journey' | 'board' | 'tracking' | 'self'
+type Key = 'journey' | 'board' | 'tracking' | 'self' | 'planDraft' | 'followup'
 
 const PATHS: Record<Key, string> = {
   journey: '/api/longpi/journey',
   board: '/api/longpi/board',
   tracking: '/api/longpi/tracking',
   self: '/api/longpi/self',
+  planDraft: '/api/longpi/plan-draft',
+  followup: '/api/longpi/followup',
 }
-/** The journey is read through one normalizer, so every surface can rely on its shape. */
-const SHAPE: Partial<Record<Key, (raw: unknown) => unknown>> = { journey: normalizeJourney }
+/** Contract shapes are read through one normalizer each, so every surface can rely on them. */
+const SHAPE: Partial<Record<Key, (raw: unknown) => unknown>> = { journey: normalizeJourney, planDraft: normalizePlanDraft, followup: normalizeFollowup }
 /** Routes that accept ?refresh=1 (drop the server's record and tracking caches first). */
 const REFRESHABLE: Key[] = ['journey', 'board']
 const STALE_MS = 60_000
@@ -38,11 +40,12 @@ function blank(): Entry {
   return { data: null, error: null, loading: false, at: 0, seq: 0, inflight: null, users: 0 }
 }
 
-const entries: Record<Key, Entry> = { journey: blank(), board: blank(), tracking: blank(), self: blank() }
+const entries: Record<Key, Entry> = { journey: blank(), board: blank(), tracking: blank(), self: blank(), planDraft: blank(), followup: blank() }
 const listeners = new Set<() => void>()
 let version = 0
 let timersOn = false
 let pageUsers = 0
+let heroShown = 0
 let pending: { text: string; at: number } | null = null
 
 function emit(): void {
@@ -159,6 +162,53 @@ export function useTracking(): Resource<Tracking> {
 
 export function useSelfRows(): Resource<{ rows: SelfRow[] }> {
   return useResource<{ rows: SelfRow[] }>('self')
+}
+
+export function usePlanDraft(): Resource<PlanDraftResponse> {
+  return useResource<PlanDraftResponse>('planDraft')
+}
+
+export function useFollowup(): Resource<FollowupResponse> {
+  return useResource<FollowupResponse>('followup')
+}
+
+/** Fetch one resource again now (a test send adds a log row, nothing else changes). */
+export function reload(key: 'followup' | 'planDraft'): Promise<void> {
+  return load(key, true)
+}
+
+/** A route that answers a save with the resource's new state: take it as is, no second request. */
+export function putFollowup(raw: unknown): void {
+  const entry = entries.followup
+  entry.seq += 1
+  entry.data = normalizeFollowup(raw)
+  entry.error = null
+  entry.loading = false
+  entry.inflight = null
+  entry.at = Date.now()
+  emit()
+}
+
+/**
+ * Whether the home greeting is on screen with content. The composer-dock row
+ * belongs to the greeting: it shows exactly when the greeting does, so it
+ * never appears under a running conversation or under DSH's own headline.
+ */
+export function useHeroShown(shown: boolean): void {
+  React.useEffect(() => {
+    if (!shown) return undefined
+    heroShown += 1
+    emit()
+    return () => {
+      heroShown -= 1
+      emit()
+    }
+  }, [shown])
+}
+
+export function useHeroShowing(): boolean {
+  React.useSyncExternalStore(subscribe, () => version, () => version)
+  return heroShown > 0
 }
 
 /**

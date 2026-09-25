@@ -7,6 +7,7 @@ import { errorText, postJson } from './api.ts'
 import { AdherenceStrip, fmt, fmtAuto, LineChart, Ring, TableTwin, Timeline } from './charts.ts'
 import { chineseDate, daysBetween, pct } from './format.ts'
 import { Icon, VerdictChip } from './icons.ts'
+import { PlanDraftCard } from './plan-draft.ts'
 import { notifyChanged } from './store.ts'
 import type { Item, Journey, PlanItemRaw, Tracking, Verdict } from './types.ts'
 import { Btn, Section, Skeleton } from './ui.ts'
@@ -74,7 +75,7 @@ function AdherenceTile(props: { journey: Journey; tracking: Tracking | null }): 
 }
 
 /** Retest dates as the reminders see them: the earliest date each verdict gives per marker. */
-function retestDates(tracking: Tracking | null): Array<{ marker: string; date: string }> {
+export function retestDates(tracking: Tracking | null): Array<{ marker: string; date: string }> {
   const earliest = new Map<string, string>()
   for (const item of tracking?.items ?? []) {
     for (const row of item.verdicts ?? []) {
@@ -176,13 +177,13 @@ function ItemCard(props: { item: Item; raw?: PlanItemRaw; today: string; onCheck
         : h('span', { className: 'lp-caption' }, source === 'wearable' ? '手环自动记录，不用打卡' : '服用情况在 Mirobody 里打卡')))
 }
 
-/** Stage plan: nothing saved yet. LongPi never proposes items; the person brings their own. */
+/** Stage plan, next to the draft: the person may bring their own plan instead. */
 function PlanStart(props: { journey: Journey; onPrompt: (text: string) => void }): React.ReactElement {
   return h('div', { className: 'lp-card lp-plan-start' },
     h('div', { className: 'lp-plan-start-text' },
-      h('h3', { className: 'lp-h3' }, '想先改善哪一项？'),
+      h('h3', { className: 'lp-h3' }, '已经有自己的方案？'),
       h('p', { className: 'lp-muted' }, '说出你的方案，或上传医生、长寿师给的方案。LongPi 会读给你确认后保存，再按每个指标安排复测日，并算出达到目标时的模型估计。'),
-      h('p', { className: 'lp-fine' }, 'LongPi 不替你制定方案，也不建议开始、停止或调整任何药物、补剂和剂量。')),
+      h('p', { className: 'lp-fine' }, 'LongPi 只起草生活方式方案；不会开始、停止或调整任何处方药，也不给药物或补剂的剂量。')),
     h('div', { className: 'lp-prompts' },
       ...props.journey.suggestions.map((row) => h('button', { key: row.id, type: 'button', className: 'lp-prompt', onClick: () => props.onPrompt(row.text_zh) },
         h('span', null, row.text_zh), h(Icon, { name: 'arrow', size: 14 })))))
@@ -199,7 +200,9 @@ export function PlanSection(props: {
   const tracking = props.tracking
   const today = props.journey.today
   if (!props.journey.plan.exists && !tracking?.plan) {
-    return h(Section, { id: 'lp-plan', title: '我的方案', kicker: '干预' }, h(PlanStart, { journey: props.journey, onPrompt: props.onPrompt }))
+    return h(Section, { id: 'lp-plan', title: '我的方案', kicker: '干预' },
+      h(PlanDraftCard, { journey: props.journey, onNotice: props.onNotice, onPrompt: props.onPrompt }),
+      h(PlanStart, { journey: props.journey, onPrompt: props.onPrompt }))
   }
   if (props.loading && !tracking) {
     return h(Section, { id: 'lp-plan', title: props.journey.plan.title || '我的方案', kicker: '我的方案' }, h(Skeleton, { height: 260 }))

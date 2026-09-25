@@ -8,6 +8,7 @@
 import React from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { errorText } from './api.ts'
+import { FollowupOptIn } from './followup.ts'
 import { acceptConsent, ConsentText, FirstResult, RecordsGuide } from './journey-steps.ts'
 import { ProfileEditor } from './profile-editor.ts'
 import { useJourney } from './store.ts'
@@ -161,6 +162,7 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
           ? h('div', { className: 'lp-onb-computing', 'aria-busy': true },
             h(Skeleton, { height: 88 }), h('p', { className: 'lp-caption' }, '正在用你的记录计算…'))
           : h(FirstResult, { journey, onNotice: notify, idPrefix: 'lp-onb-result', showResults: true }),
+        h(FollowupOptIn),
         notice,
         h('p', { className: 'lp-fine' }, journey.boundary_zh),
         h('div', { className: 'lp-modal-actions' },
