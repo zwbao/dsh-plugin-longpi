@@ -107,7 +107,8 @@ function call(host, method, url, { headers = {}, body } = {}) {
   })
 }
 
-const LONGPI = (path) => path.startsWith('/api/longpi/')
+// LongPi's own routes and the ones the Mirobody plugin it mounts registers: every /api/ path is checked.
+const LONGPI = (path) => path.startsWith('/api/')
 // The methods each route answers; every one of them is tried.
 const WRITES = new Set(['/api/longpi/plan-draft/accept', '/api/longpi/followup', '/api/longpi/followup/test', '/api/longpi/consent', '/api/longpi/self', '/api/longpi/checkin', '/api/longpi/run-ready', '/api/longpi/profile', '/api/longpi/connection', '/api/longpi/connection/test'])
 
@@ -119,11 +120,12 @@ try {
     await mod.apply(host.ctx, configFor(dataDir))
     const paths = [...host.routes.keys()].filter(LONGPI)
     assert.ok(paths.length >= 18, `all LongPi routes registered (${paths.length})`)
+    assert.ok(['/api/mirobody/status', '/api/mirobody/resolve', '/api/mirobody/version'].every((path) => paths.includes(path)), 'the mounted Mirobody routes are checked too')
     for (const path of paths) {
       for (const method of ['GET', 'POST', 'DELETE']) {
         const answer = await call(host, method, path, { headers: { ...GOOD, 'content-type': 'application/json' }, body: {} })
         assert.equal(answer.status, 503, `${method} ${path} without the connection service`)
-        assert.equal(answer.text, mod.CONNECTION_UNAVAILABLE)
+        assert.equal(answer.text, path.startsWith('/api/mirobody/') ? 'mirobody: DeepSeek Harness connection service unavailable' : mod.CONNECTION_UNAVAILABLE)
       }
     }
     assert.equal(existsSync(join(dataDir, 'profile.json')), false, 'nothing written')
@@ -284,6 +286,11 @@ async function realHarness(dshModules) {
     assert.equal((await send('GET', '/api/longpi/version', { Host: loopback })).status, 401, 'real: no cookie')
     assert.equal((await send('GET', '/api/longpi/version', { Host: loopback, Origin: 'https://evil.example', 'Sec-Fetch-Site': 'cross-site' })).status, 403, 'real: cross-site')
     assert.equal((await send('GET', '/api/longpi/version', { Host: `evil.example:${port}` })).status, 403, 'real: rebound Host')
+    assert.ok(web.match('/api/mirobody/version'), 'the Mirobody routes are mounted under Cordis')
+    for (const path of ['/api/mirobody/version', '/api/mirobody/status', '/api/mirobody/resolve?q=ldl']) {
+      assert.equal((await send('GET', path, { Host: loopback })).status, 401, `real: ${path} with no cookie`)
+      assert.equal((await send('GET', path, { Host: `evil.example:${port}`, Origin: 'https://evil.example', 'Sec-Fetch-Site': 'cross-site' })).status, 403, `real: ${path} cross-site`)
+    }
     const post = await send('POST', '/api/longpi/profile', { Host: `evil.example:${port}`, Origin: 'https://evil.example', 'Sec-Fetch-Site': 'cross-site', 'Content-Type': 'text/plain;charset=UTF-8' }, JSON.stringify({ age: 99 }))
     assert.equal(post.status, 403, 'real: a blind cross-site write')
     assert.equal(existsSync(join(dataDir, 'profile.json')), false, 'real: nothing written')

@@ -176,7 +176,12 @@ try {
     const bridge = mod.bridgeEnv('/opt/mirobody')
     assert.equal(bridge.MIROBODY_HOME, '/opt/mirobody')
     assert.equal(bridge.LONGPI_TEST_SECRET_TOKEN, undefined, 'the terminology bridge gets a short list too')
-    assert.equal(bridge.HOME, process.env.HOME, 'the bridge keeps the real home, where a --user install lives')
+    assert.equal(bridge.HOME, process.env.HOME, 'the bridge keeps the real home')
+    // The mounted Mirobody plugin runs the same script for every tool call: the same short list, so the status agrees
+    const vendored = await import(new URL('../vendor/dsh-plugin-mirobody/lib/index.js', import.meta.url).href)
+    const tools = vendored.bridgeEnv('/opt/mirobody')
+    assert.equal(tools.LONGPI_TEST_SECRET_TOKEN, undefined, 'the terminology tools get a short list too')
+    assert.deepEqual(Object.keys(bridge).sort(), Object.keys(tools).sort())
 
     // 10a: receipts keep no report text; the board shows five fields only, even for an older receipt with an excerpt
     assert.match(probed.report_excerpt, /边界/, 'the excerpt still goes to the model in the tool result')

@@ -786,9 +786,10 @@ interface BridgeStatus {
   error?: string;
 }
 /**
- * What the Mirobody terminology bridge gets: the same short list as a skill script (path, language) plus what it
- * needs to import mirobody: the real home (a --user install lives there), the Python path if one is set, and
- * MIROBODY_HOME. Never the rest of the harness's environment (API keys, tokens). Not a sandbox either.
+ * What the Mirobody terminology bridge gets for the status check: the same list the mounted Mirobody plugin gives
+ * it for every tool call (path, home, language, TMPDIR, MIROBODY_HOME; no user site-packages, no PYTHONPATH), so
+ * the status says what the tools will find. Never the rest of the harness's environment (API keys, tokens). Not a
+ * sandbox either.
  */
 declare function bridgeEnv(mirobodyHome: string): Record<string, string>;
 //#endregion
