@@ -192,7 +192,8 @@ interface ReplyCheck {
 }
 /**
  * The output check: the deterministic rules and, when the reply names a medicine or an amount, the
- * model judge. Either one finding a personal dose or a medicine change steers a correction.
+ * model judge. When the judge answered, it decides (it can tell a doctor referral or a read-back of their
+ * own prescription from advice); the rules decide alone only when it failed, timed out or is unavailable.
  */
 declare function checkReply(reply: string, options: {
   call: GuardCall | null;

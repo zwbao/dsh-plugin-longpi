@@ -34,24 +34,34 @@ function sentences(text: string): string[] {
 
 const CJK = /[㐀-鿿]/
 
-// A negation just before a Chinese term (无胸痛, 否认胸痛, 没有心梗), or anywhere before an English one in the clause.
+// A negation just before a Chinese term (无胸痛, 否认胸痛, 没有心梗), or a few words before an English one.
 const NEG_ZH = /[无没否未不非]/
 const NEG_ZH_KEEP = /不停|不断|不住|不了|不知道|不清楚|不舒服|不对劲|受不了/g
 const NEG_EN = /\b(?:no|not|without|never|denies|denied|deny|don'?t|do not|didn'?t|did not|haven'?t|have not|hasn'?t|isn'?t|wasn'?t|none|free of)\b/i
+// 「I don't know why my chest hurts」 negates nothing.
+const NEG_EN_KEEP = /\b(?:don'?t|do not|didn'?t|did not) (?:know|understand|get)\b|\bnot sure\b|\bno idea\b/gi
 
 function negatedBefore(clause: string, index: number): boolean {
   const before = clause.slice(0, index)
   if (CJK.test(clause[index] ?? '')) return NEG_ZH.test(before.replace(NEG_ZH_KEEP, '').slice(-4))
-  return NEG_EN.test(before)
+  return NEG_EN.test(before.replace(NEG_EN_KEEP, ' ').split(/\s+/).slice(-7).join(' '))
 }
 
 // Someone else: a family member (their history is not the speaker's emergency).
 const FAMILY = /父母|父亲|母亲|爸|妈|爷爷|奶奶|外公|外婆|姥姥|姥爷|祖父|祖母|兄弟|姐妹|哥哥|姐姐|弟弟|妹妹|叔叔|伯伯|姑姑|舅舅|阿姨|儿子|女儿|孩子|老公|老婆|丈夫|妻子|亲属|亲戚|家人|家里人|家族|家属|全家|家父|\b(?:family|father|mother|dad|mom|mum|parents?|brother|sister|grand(?:father|mother|pa|ma)|uncle|aunt|relatives?|husband|wife|son|daughter)\b/i
 // History, risk, a report line: not happening now.
-const HISTORY = /风险|几率|概率|可能性|预防|降低|避免|史|既往|以前|之前|曾经|去年|前年|上个?月|上周|小时候|年轻时|年前|多年前|得过|患过|有过|犯过|发生过|去世|过世|体检|报告|化验|检查结果|心电图|会不会|算的是|指的是|\b(?:risk|history|historical|chance|probability|prevent\w*|reduce|lower|avoid|used to|(?:years?|months?|weeks?|days?) ago|last (?:year|month|week)|in the past|previously|score)\b/i
+const HISTORY = /风险|几率|概率|可能性|预防|降低|避免|史|既往|以前|之前|曾经|去年|前年|上个?月|上周|小时候|年轻时|年前|多年前|得过|患过|有过|犯过|发生过|去世|过世|体检|报告|化验|检查结果|心电图|算的是|指的是|\b(?:risk|history|historical|chance|probability|prevent\w*|reduce|avoid|used to|(?:years?|months?|weeks?|days?) ago|last (?:year|month|week)|in the past|previously|score)\b/i
+// A report or a check-up named on the way to the sign (刚做完体检回家就胸口剧痛) does not make it past.
+const REPORT = /体检|报告|化验|检查结果|心电图/g
+// A question about what might happen (吃这个会不会胸痛): not now when it comes before the sign.
+const ASK_RISK = /会不会|会引起|会导致|\b(?:could|might|can|will|does|would) [^.?!]{0,30}\bcause\b/i
+// After a sign the speaker has now, only a risk or a plain past time still takes it out of the present
+// (我现在想知道胸痛的风险); a comparison or a question does not (我现在胸痛比以前厉害, 会不会是心梗).
+const LATER_NOT_NOW = /风险|几率|概率|可能性|预防|降低|避免|去年|前年|上个?月|上周|小时候|年轻时|年前|去世|过世|\b(?:risk|history|historical|chance|probability|prevent\w*|reduce|avoid|used to|(?:years?|months?|weeks?|days?) ago|last (?:year|month|week)|in the past|previously|score)\b/i
 // A general question, unless the speaker says it is happening to them now.
 const GENERIC = /是什么|什么原因|原因是|怎么回事|定义|症状有哪些|有哪些症状|\b(?:what (?:is|are|causes)|symptoms of)\b/i
-const NOW = /现在|正在|突然|刚才|刚刚|此刻|\bright now\b|\bjust now\b|\bi(?:'m| am)\b/i
+const NOW = /现在|正在|突然|刚|此刻|\bright now\b|\bjust now\b|\bi(?:'m| am)\b/i
+const NOW_ALL = new RegExp(NOW.source, 'gi')
 // Right after the term: a past event or a symptom that is gone.
 const AFTER = /^(?:过|史)|^[^，,。]{0,4}(?:不明显|已经?(?:好|缓解|消失)|好了|缓解了|消失了|没了)/
 
@@ -83,13 +93,26 @@ const SELF_HARM = new RegExp([
 ].join('|'), 'gi')
 const SELF_HARM_CONTEXT = /风险|研究|论文|统计|数据|评估|预防|以前|曾经|过去|\b(?:risk|stud(?:y|ies)|rates?|prevent\w*|research|used to|in the past)\b/i
 
+/**
+ * Whether history, risk or a question takes the sign at `index` out of the present. The speaker saying it
+ * is happening now before the sign wins over a comparison, a question or a check-up in the clause
+ * (我现在胸痛比以前厉害, 我现在胸口剧痛出冷汗会不会是心梗, 刚做完体检回家就胸口剧痛), not over a history word
+ * between the two (我现在想了解以前胸痛的原因) or a risk after the sign (我现在想知道胸痛的风险).
+ */
+function notNow(clause: string, index: number): boolean {
+  const before = clause.slice(0, index)
+  let since = -1
+  for (const hit of before.matchAll(NOW_ALL)) since = (hit.index ?? 0) + hit[0].length
+  if (since < 0) return HISTORY.test(clause) || ASK_RISK.test(before)
+  const between = before.slice(since)
+  return HISTORY.test(between.replace(REPORT, ' ')) || ASK_RISK.test(between) || LATER_NOT_NOW.test(clause.slice(index))
+}
+
 function acuteIn(clause: string): boolean {
   const lower = clause.toLowerCase()
-  const family = FAMILY.test(lower)
-  const history = HISTORY.test(lower)
-  if (history) return false
   if (GENERIC.test(lower) && !NOW.test(lower)) return false
-  if (family) {
+  if (FAMILY.test(lower)) {
+    if (HISTORY.test(lower)) return false
     const hit = BYSTANDER.exec(lower) ?? BYSTANDER_NOW.exec(lower)
     return !!hit && !negatedBefore(lower, hit.index) && !AFTER.test(lower.slice(hit.index + hit[0].length))
   }
@@ -97,6 +120,7 @@ function acuteIn(clause: string): boolean {
     const index = hit.index ?? 0
     if (negatedBefore(lower, index)) continue
     if (AFTER.test(lower.slice(index + hit[0].length))) continue
+    if (notNow(lower, index)) continue
     return true
   }
   return false
@@ -195,6 +219,8 @@ const EN_CHANGE = [
 const DOSE_ASK = /吃多少|服多少|服用多少|用多少|打多少|补多少|补充多少|多少毫克|多少mg|多少微克|多少单位|多少iu|多少粒|多少片|多少颗|多少滴|几粒|几片|几颗|几滴|吃几|一天几次|每天几次|剂量(?:是|该|应该|要|给)?(?:多少|多大|怎么定)|用量(?:是)?多少|怎么吃|吃法|怎么服用?|服用方法|什么时候吃|饭前还是饭后/i
 const EN_DOSE = /\bwhat (?:dose|dosage)\b|\bhow (?:much|many)\b[^.?!]{0,40}\b(?:should|do|can|shall|to|would) i\b|\bhow (?:much|many) (?:mg|milligrams?|pills?|capsules?|tablets?|iu|units?)\b|\b(?:right|correct|best|safe|daily) (?:dose|dosage)\b|\bdosage\b/i
 const EN_DOSE_PERSONAL = /\bwhat (?:dose|dosage) (?:do|should|can|shall) i\b|\bhow (?:much|many)\b[^.?!]{0,40}\b(?:should|do|can|shall|to|would) i\b/i
+// …of a medicine: a dose word, or 「how much should I take」 about the one just discussed. Not protein, water, steps or sleep.
+const EN_DOSE_OF_MEDICINE = /\b(?:dose|dosage|mg|milligrams?|mcg|micrograms?|iu)\b|\bhow (?:much|many)(?: of (?:it|this|that|them))? (?:should|do|can|shall|would) i (?:take|use)\b/i
 const FIRST_PERSON = /我|自己|本人|\b(?:i|me|my)\b/i
 const RESEARCH = /论文|研究|试验|文献|收录|证据|临床|荟萃|综述|\b(?:meta|stud(?:y|ies)|trials?|papers?|research|evidence|literature|published|cohort|rct)\b/i
 
@@ -228,7 +254,7 @@ export function ruleLabels(input: string): GuardLabels {
   const research = RESEARCH.test(lower)
   labels.research_question = research
   const medicine = mentionsMedicine(text)
-  const personalDoseEn = EN_DOSE_PERSONAL.test(lower)
+  const personalDoseEn = EN_DOSE_PERSONAL.test(lower) && (medicine || EN_DOSE_OF_MEDICINE.test(lower))
   if (medicine || personalDoseEn) {
     const said = sentences(text)
     labels.med_change_request = medicine && said.some(medChangeIn)
@@ -244,6 +270,8 @@ export function ruleLabels(input: string): GuardLabels {
 
 const RESEARCH_LINE = /研究|试验|论文|文献|受试者|参与者|研究中|人群|平均|\b(?:trials?|stud(?:y|ies)|participants|papers?|researchers|cohort)\b/i
 const RECORD_LINE = /记录|用药计划|处方上|医嘱|按医嘱|\b(?:record(?:ed)?|prescribed by)\b/i
+// Reading back what they already take (你目前在吃阿托伐他汀 20 mg), unless the same sentence advises.
+const READ_BACK = /目前在吃|目前服用|正在吃|正在服用|你在吃|您在吃|你说的|您说的|你提到的|\byou(?:'re| are) (?:currently |already )?(?:taking|on)\b|\byou currently take\b/i
 const DIRECTIVE = /你|您|建议|可以|每天|每日|每次|一次|早晚|睡前|饭后|饭前|起步|先从|\b(?:you|your|take|daily|per day|twice|once)\b/i
 const ADVICE = /建议你?|你可以|您可以|可以先|不妨|最好|应该|应当|试试|\b(?:you (?:can|could|should|may)|i (?:recommend|suggest)|try|go ahead)\b/i
 const CHANGE_VERB = /停掉|停用|停止|暂停|停药|停|减量|加量|减半|加倍|换成|改用|开始服用|开始吃|\b(?:start|stop|switch|increase|decrease|reduce|double|halve|come off)\b/i
@@ -257,6 +285,19 @@ export interface ReplyVerdict {
 }
 
 /**
+ * Whether a sentence gives an amount as advice: not one sent to their doctor, not a read-back of what they
+ * take, not one negated before the amount in its clause (你不要自己把阿司匹林从 1 片加到 2 片). 片, 粒 and
+ * 颗 count only when the sentence names a medicine or supplement (一颗鸡蛋 is food).
+ */
+function givesDose(lower: string, medicine: boolean): boolean {
+  if (!DIRECTIVE.test(lower) || DEFER.test(lower) || (READ_BACK.test(lower) && !ADVICE.test(lower))) return false
+  return lower.split(/[，,：:]/).some((part) => {
+    const amount = PHARMA_DOSE.exec(part) ?? (medicine ? SHARED_DOSE.exec(part) : null)
+    return !!amount && !DONT.test(part.slice(0, amount.index))
+  })
+}
+
+/**
  * The deterministic half of the output check: a sentence that gives an amount of a medicine or supplement
  * as advice (not a study's protocol, not their recorded prescription), or advises starting, stopping or
  * changing a named medicine without sending them to their doctor.
@@ -267,9 +308,7 @@ export function replyRuleCheck(reply: string): ReplyVerdict {
     const lower = line.toLowerCase()
     if (RESEARCH_LINE.test(lower) || RECORD_LINE.test(lower)) continue
     const medicine = mentionsMedicine(lower)
-    if (!verdict.personal_dose && DIRECTIVE.test(lower) && (PHARMA_DOSE.test(lower) || (medicine && SHARED_DOSE.test(lower)))) {
-      verdict.personal_dose = true
-    }
+    if (!verdict.personal_dose && givesDose(lower, medicine)) verdict.personal_dose = true
     if (!verdict.med_change_advice && medicine && !DEFER.test(lower)) {
       const advice = ADVICE.exec(lower)
       const change = advice ? CHANGE_VERB.exec(lower.slice(advice.index)) : null

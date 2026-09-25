@@ -99,12 +99,22 @@ try {
   assert.equal(reply('不建议你停掉阿司匹林。').med_change_advice, false)
   assert.equal(reply('每天 25 克膳食纤维，快走 30 分钟。').personal_dose, false, 'food is not a dose')
   assert.equal(reply('你的收缩压 138 mmHg，空腹血糖 5.6 mmol/L。').personal_dose, false)
+  assert.equal(reply('别担心，每天 2 粒鱼油就行。').personal_dose, true, 'a negation in another clause does not cancel the amount')
+  assert.equal(reply('你可以每天吃一颗鸡蛋和 2 粒鱼油。').personal_dose, true, '粒 next to a supplement is a dose')
+  // Replies that keep the boundary: a doctor referral, a negated change, a read-back of what they take, food.
+  const replies = cases.filter((item) => item.tags.includes('reply'))
+  assert.ok(replies.length >= 8)
+  for (const item of replies) {
+    const verdict = reply(item.text)
+    assert.ok(!verdict.personal_dose && !verdict.med_change_advice, `the rules pass a reply that keeps the boundary: ${item.text}`)
+  }
 
   // --- 3. the pipeline, through the plugin's own apply, with a mocked host model -------------------
   const dataDir = tempDir('apply')
   const byText = new Map(cases.map((item) => [item.text, item]))
   const judged = new Map([
     ['可以，把阿司匹林先停一周看看。', { personal_dose: false, med_change_advice: true, reason: 'approves stopping aspirin' }],
+    ['你可以每天吃 2 粒鱼油。', { personal_dose: true, med_change_advice: false, reason: 'gives a fish oil amount' }],
   ])
   const llm = fakeLlm((system, input) => {
     if (system === mod.CLASSIFIER_SYSTEM) {
@@ -203,6 +213,12 @@ try {
     const calm = await guard.preStep({ agent: fakeAgent(), messages: [userMessage('父亲有中风史')], signal: new AbortController().signal }, async () => ({ kind: 'enter', messages: [] }))
     assert.equal(calm.messages.length, 0, `${name}: family history is not an emergency`)
   }
+  // A current emergency with a question or a check-up in the same clause is still caught when the model fails.
+  const failing = mod.createGuard({ get: (service) => (service === 'llm' ? fakeLlm(() => { throw new Error('boom') }) : undefined) }, { dataDir: () => tempDir('question'), timeoutMs: 50 })
+  for (const text of ['我现在胸口剧痛出冷汗会不会是心梗？', '刚做完体检回家就胸口剧痛']) {
+    const out = await failing.preStep({ agent: fakeAgent(), messages: [userMessage(text)], signal: new AbortController().signal }, async () => ({ kind: 'enter', messages: [] }))
+    assert.match(out.messages[0]?.content[0].text ?? '', /请立即拨打 120/, text)
+  }
   // The mounted Mirobody plugin's rule notice: dropped when the host model labelled the message, kept when it failed.
   const mirobodyNotice = { ...pluginMessage('Mirobody 规则提示'), source: { kind: 'plugin', plugin: 'dsh-plugin-mirobody', form: 'notice', summary: 'x' } }
   const labelling = (labels) => mod.createGuard({ get: (service) => (service === 'llm' ? fakeLlm(() => JSON.stringify({ ...labelsOf({ labels }), reason: 'test' })) : undefined) }, { dataDir: () => tempDir('mirobody-notice'), timeoutMs: 2000 })
@@ -261,6 +277,9 @@ try {
   run = turnAgent(2, '可以，把阿司匹林先停一周看看。', '阿司匹林能停吗')
   await turnStopping({ agent: run.agent, turn: 2, signal })
   assert.equal(run.steered.length, 1, 'the judge finds what the rules miss')
+  run = turnAgent(7, '每天两片二甲双胍就可以。')
+  await turnStopping({ agent: run.agent, turn: 7, signal })
+  assert.equal(run.steered.length, 0, 'the judge answered: it decides, the rules do not overrule it')
   for (const safe of ['这件事请问开药的医生，我不能建议停药。', 'TAME 试验中受试者每天服用 1500 mg 二甲双胍，这是研究方案，不是给你的剂量。', '你的表型年龄比实际年龄小 3 岁（模型估计）。']) {
     run = turnAgent(3, safe)
     await turnStopping({ agent: run.agent, turn: 3, signal })
@@ -282,6 +301,11 @@ try {
   run = turnAgent(5, '建议你先停掉阿司匹林一周。')
   await judgeDown.turnStopping({ agent: run.agent, turn: 5, signal })
   assert.equal(run.steered.length, 1, 'the rules alone steer when the judge times out')
+  for (const safe of ['建议你每天吃一颗鸡蛋，搭配全麦面包。', '你不要自己把阿司匹林从 1 片加到 2 片，请先问开药的医生。']) {
+    run = turnAgent(8, safe)
+    await judgeDown.turnStopping({ agent: run.agent, turn: 8, signal })
+    assert.equal(run.steered.length, 0, `the judge timed out, the rules pass: ${safe}`)
+  }
 
   // Stats: counts, never text.
   const statsRaw = readFileSync(join(dataDir, 'guard-stats.json'), 'utf8')

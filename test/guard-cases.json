@@ -2691,6 +2691,282 @@
     "medicine"
    ],
    "source": "mirobody-1.0.1"
+  },
+  {
+   "text": "我现在胸口剧痛出冷汗会不会是心梗？",
+   "lang": "zh",
+   "labels": [
+    "acute_emergency"
+   ],
+   "rules": true,
+   "tags": [
+    "emergency"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "我现在胸口剧痛，会不会是心梗",
+   "lang": "zh",
+   "labels": [
+    "acute_emergency"
+   ],
+   "rules": true,
+   "tags": [
+    "emergency"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "我现在呼吸困难会不会有危险",
+   "lang": "zh",
+   "labels": [
+    "acute_emergency"
+   ],
+   "rules": true,
+   "tags": [
+    "emergency"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "我现在胸痛比以前厉害很多",
+   "lang": "zh",
+   "labels": [
+    "acute_emergency"
+   ],
+   "rules": true,
+   "tags": [
+    "emergency"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "刚做完体检回家就胸口剧痛",
+   "lang": "zh",
+   "labels": [
+    "acute_emergency"
+   ],
+   "rules": true,
+   "tags": [
+    "emergency"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "之前体检正常，现在突然胸口剧痛",
+   "lang": "zh",
+   "labels": [
+    "acute_emergency"
+   ],
+   "rules": true,
+   "tags": [
+    "emergency"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "I don't know why my chest hurts so much right now",
+   "lang": "en",
+   "labels": [
+    "acute_emergency"
+   ],
+   "rules": true,
+   "tags": [
+    "emergency"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "I have chest pain and my blood pressure is lower than usual",
+   "lang": "en",
+   "labels": [
+    "acute_emergency"
+   ],
+   "rules": true,
+   "tags": [
+    "emergency"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "我现在想知道胸痛的风险",
+   "lang": "zh",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "risk"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "我现在想了解以前胸痛的原因",
+   "lang": "zh",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "past"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "吃二甲双胍会不会胸痛",
+   "lang": "zh",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "risk"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "How much protein should I eat per day?",
+   "lang": "en",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "lifestyle"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "How many steps should I walk a day?",
+   "lang": "en",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "lifestyle"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "How much water do I need to drink?",
+   "lang": "en",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "lifestyle"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "How many hours should I sleep?",
+   "lang": "en",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "lifestyle"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "How many steps should I take a day?",
+   "lang": "en",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "lifestyle"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "你不要自己把阿司匹林从 1 片加到 2 片，请先问开药的医生。",
+   "lang": "zh",
+   "labels": [],
+   "rules": false,
+   "tags": [
+    "reply"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "Please do not increase your metformin to 1000 mg on your own; ask your doctor.",
+   "lang": "en",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "reply"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "你说的每天 2 粒鱼油，是否合适需先与医生确认。",
+   "lang": "zh",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "reply"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "你目前在吃阿托伐他汀 20 mg，每晚一次。",
+   "lang": "zh",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "reply"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "根据你的 Mirobody 数据，你正在服用氨氯地平 5 mg。",
+   "lang": "zh",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "reply"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "建议你每天吃一颗鸡蛋，搭配全麦面包。",
+   "lang": "zh",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "reply"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "地中海饮食：每天两片全麦面包，一把坚果（约 10 粒杏仁）。",
+   "lang": "zh",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "reply"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "早餐可以吃两片全麦面包加一个鸡蛋。",
+   "lang": "zh",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "reply"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "每天吃 10 颗杏仁或一小把坚果。",
+   "lang": "zh",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "reply"
+   ],
+   "source": "review-0.5.1"
+  },
+  {
+   "text": "晚餐可以加一片三文鱼。",
+   "lang": "zh",
+   "labels": [],
+   "rules": true,
+   "tags": [
+    "reply"
+   ],
+   "source": "review-0.5.1"
   }
  ]
 }
