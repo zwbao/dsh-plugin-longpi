@@ -2,7 +2,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import './host-shims.ts'
 import { Config } from './config.ts'
 import { registerCommands } from './commands.ts'
-import { extractUserText, preGuard, wrapGuardMessage } from './guardrails.ts'
+import { createGuard } from './guard-llm.ts'
+import { registerApprovals } from './tools-approval.ts'
 import { registerHarnessSkills } from './harness-skills.ts'
 import { mountMirobody } from './mirobody.ts'
 import { registerPrompt } from './prompt.ts'
@@ -22,7 +23,12 @@ import { bootstrapWorkspace, type WorkspaceRegistryLike } from './workspace.ts'
 export const name = 'dsh-plugin-longpi'
 export const inject = ['tools']
 export { Config }
-export { preGuard, wrapGuardMessage, rememberMedications } from './guardrails.ts'
+export { preGuard, wrapGuardMessage, rememberMedications, rememberedMedications, ruleLabels, replyRuleCheck, guidanceNote, correctionNote, mentionsMedicine, LABEL_KEYS, SELF_HARM_LINE_ZH, EMERGENCY_LINE_ZH } from './guardrails.ts'
+export type { GuardHit, GuardLabels, ReplyVerdict } from './guardrails.ts'
+export { createGuard, classifyMessage, checkReply, parseLabels, parseVerdict, runtimeCall, routeFor, personText, turnText, countGuard, readGuardStats, CLASSIFIER_SYSTEM, JUDGE_SYSTEM, GUARD_TIMEOUT_MS, GUARD_COUNTERS } from './guard-llm.ts'
+export type { Guard, GuardCall, LlmLike } from './guard-llm.ts'
+export { registerApprovals, planKey, planApprovalReason, resetReadBacks, NO_READ_BACK, READ_BACK_MS } from './tools-approval.ts'
+export { hasDoseAmount } from './guard-dose.ts'
 export { PRODUCT_VERSION, TOOL_NAMES, HARNESS_SKILLS } from './version.ts'
 export { parseFrontmatter, loadCatalog, parseReadme, commandExcerpt } from './catalog.ts'
 export { matchSkills, domainSummary, organismsAsked, organismOf } from './match.ts'
@@ -93,6 +99,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   registerTools(ctx, source, mount)
   registerTrackingTools(ctx, source, mount)
   registerFollowupTools(ctx, source, () => followupState(20_000).catch(() => null))
+  // The safety guard: the host model labels each new message (rules when it fails) and checks the reply
+  // before a turn closes; plan saves from chat wait for the person's approval.
+  const guard = createGuard(ctx, { dataDir: () => resolveDataDir(config.dataDir) })
+  registerApprovals(ctx, guard)
   startFollowup(ctx, () => ({ dataDir: resolveDataDir(config.dataDir), getState: () => followupState(60_000), generation: trackingGeneration }))
   registerHarnessSkills(ctx)
   registerPrompt(ctx, source, mount)
@@ -108,18 +118,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     })
   })
 
-  ctx.on('agent/pre-step', async (payload, next) => {
-    const text = payload.messages.map((message) => extractUserText(message.content)).join('\n')
-    const hit = preGuard(text)
-    if (!hit) return next()
-    const first = payload.messages[0]
-    if (!first) return { kind: 'reject' }
-    return {
-      kind: 'enter',
-      messages: [{
-        ...first,
-        content: [{ type: 'text', text: wrapGuardMessage(text, hit) }],
-      }],
-    }
-  })
+  // One guidance note after the person's words for what the guard flagged; their message is never replaced.
+  // Outermost, so it runs on every step even when a listener registered earlier ends the waterfall.
+  ctx.on('agent/pre-step', (payload, next) => guard.preStep(payload, next), { prepend: true })
+
+  // Before a turn closes: one correction when the reply gave a dose or advised a medicine change.
+  ctx.on('agent/turn-stopping', (payload) => guard.turnStopping(payload))
 }

@@ -1,5 +1,6 @@
 import Schema from "@deepseek-ai/schemastery";
 import { Context } from "@deepseek-ai/cordis";
+import { UserMessage } from "@deepseek-ai/dsh-llm";
 //#region src/host-shims.d.ts
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -70,17 +71,243 @@ interface Config {
 declare const Config: Schema<Config>;
 //#endregion
 //#region src/guardrails.d.ts
+declare const LABEL_KEYS: readonly ["acute_emergency", "self_harm", "med_change_request", "personal_dose_request", "research_question"];
+type LabelKey = typeof LABEL_KEYS[number];
+type GuardLabels = Record<LabelKey, boolean> & {
+  reason: string;
+};
+/** Names from this person's medication plan (the last Mirobody read), for the rules and as context for the classifier. */
+declare function rememberMedications(names: readonly string[]): void;
+declare function rememberedMedications(): string[];
+/** Whether the text names a medicine or supplement: a generic word (not 山药), a known name, a drug-name ending or one of the person's own. */
+declare function mentionsMedicine(text: string): boolean;
+/**
+ * The rule layer: labels from patterns alone. Used only when the classifier fails or times out.
+ * Emergencies need an acute sign that is not negated, not a family member's history, not past and not
+ * a risk question; a medicine request needs a medicine (not 山药) and a change or dose question that is
+ * not a record of what the person already did.
+ */
+declare function ruleLabels(input: string): GuardLabels;
+interface ReplyVerdict {
+  personal_dose: boolean;
+  med_change_advice: boolean;
+  reason: string;
+}
+/**
+ * The deterministic half of the output check: a sentence that gives an amount of a medicine or supplement
+ * as advice (not a study's protocol, not their recorded prescription), or advises starting, stopping or
+ * changing a named medicine without sending them to their doctor.
+ */
+declare function replyRuleCheck(reply: string): ReplyVerdict;
+/** The self-harm line. It is also in skills/longpi-boundary/SKILL.md, which is its source; the test keeps them equal. */
+declare const SELF_HARM_LINE_ZH = "有伤害自己的想法时：建议马上联系心理援助热线，或身边信任的人；如果有危险，立即拨打 120。在美国可拨打或发短信至 988。";
+declare const EMERGENCY_LINE_ZH = "请立即拨打 120（不在中国时拨打当地急救电话）。";
+interface GuidanceNote {
+  /** Model-facing text of the note. */
+  text: string;
+  /** One line for the transcript row. */
+  summary: string;
+}
+/**
+ * The one note appended to a step for what was flagged, or null. Emergencies and self-harm come first;
+ * a medicine or dose request gets the doctor; a research question about a medicine keeps its normal
+ * answer without a personal dose.
+ */
+declare function guidanceNote(labels: GuardLabels, options?: {
+  medicine?: boolean;
+}): GuidanceNote | null;
+/** The correction steered into a turn whose reply gave a dose or advised a medicine change. */
+declare function correctionNote(verdict: ReplyVerdict): GuidanceNote;
 type GuardHit = {
   code: 'emergency';
+  reply_zh: string;
+} | {
+  code: 'self_harm';
   reply_zh: string;
 } | {
   code: 'no_medication_change';
   reply_zh: string;
 };
-/** Names from this person's medication plan, so "停掉<药名>" is caught too. */
-declare function rememberMedications(names: readonly string[]): void;
+/** The rule layer as one hit (kept for callers of 5.0): emergency, self-harm, or a medicine request. */
 declare function preGuard(text: string): GuardHit | null;
-declare function wrapGuardMessage(text: string, hit: GuardHit): string;
+/** The guidance note for a 5.0-style hit. The person's words are not repeated: the note is appended, not substituted. */
+declare function wrapGuardMessage(_text: string, hit: GuardHit): string;
+//#endregion
+//#region src/guard-llm.d.ts
+declare const GUARD_TIMEOUT_MS = 4000;
+type PreStepDecision = {
+  kind: 'reject';
+} | {
+  kind: 'enter';
+  messages: UserMessage[];
+  startsRequestSeries?: true;
+};
+/** One model call: a system prompt and a user text in, the reply text out. Throws on any failure. */
+type GuardCall = (request: {
+  system: string;
+  user: string;
+  signal: AbortSignal;
+}) => Promise<string>;
+declare const CLASSIFIER_SYSTEM: string;
+declare const JUDGE_SYSTEM: string;
+/** The classifier's labels, or null when the output is not the JSON object asked for. */
+declare function parseLabels(raw: string): GuardLabels | null;
+/** The judge's verdict, or null when the output is not the JSON object asked for. */
+declare function parseVerdict(raw: string): ReplyVerdict | null;
+type ModelState = 'ok' | 'failed' | 'unavailable' | 'skipped';
+interface Classified {
+  labels: GuardLabels;
+  /** Who decided: the model, or the rules because the model was unavailable or failed. */
+  source: 'llm' | 'rules';
+  llm: ModelState;
+  error?: string;
+}
+/** Label one message: the model within the deadline, the rules when it fails. */
+declare function classifyMessage(text: string, options: {
+  call: GuardCall | null;
+  medications?: readonly string[];
+  timeoutMs?: number;
+  signal?: AbortSignal;
+}): Promise<Classified>;
+interface ReplyCheck {
+  /** Whether to steer one correction. */
+  steer: boolean;
+  verdict: ReplyVerdict;
+  rules: ReplyVerdict;
+  judge: ReplyVerdict | null;
+  llm: ModelState;
+}
+/**
+ * The output check: the deterministic rules and, when the reply names a medicine or an amount, the
+ * model judge. Either one finding a personal dose or a medicine change steers a correction.
+ */
+declare function checkReply(reply: string, options: {
+  call: GuardCall | null;
+  userText?: string;
+  timeoutMs?: number;
+  signal?: AbortSignal;
+}): Promise<ReplyCheck>;
+interface StreamChunkLike {
+  type: string;
+  text?: unknown;
+  block?: unknown;
+  reason?: unknown;
+}
+/** The parts of DSH's `llm` service the guard uses. */
+interface LlmLike {
+  stream(options: Record<string, unknown>): AsyncIterable<StreamChunkLike>;
+  resolveModelInfo?(provider: string, model: string, signal?: AbortSignal): Promise<{
+    reasoning?: {
+      efforts?: ReadonlyArray<{
+        id: string;
+        name?: string;
+      }>;
+    };
+  }>;
+}
+interface Route {
+  provider: string;
+  model: string;
+}
+interface AgentLike {
+  options?: {
+    provider?: string;
+    model?: string;
+  };
+  session?: SessionLike;
+  steer?(message: UserMessage): void;
+}
+interface SessionLike {
+  id?: string;
+  seq?: number;
+  requestHeader?(): {
+    config?: {
+      provider?: string;
+      model?: string;
+    };
+  } | undefined;
+  eventAt?(seq: number): EventLike | undefined;
+  snapshotEvents?(): readonly EventLike[];
+}
+interface EventLike {
+  type: string;
+  seq?: number;
+  data?: unknown;
+}
+/**
+ * The provider and model this agent talks with: the logged request header, then the agent's options,
+ * then DSH's default model.
+ */
+declare function routeFor(agent: AgentLike | undefined, ctx?: Context): Route | null;
+/**
+ * One classifier or judge call through DSH's LLM runtime on this route: temperature 0, a short output,
+ * and reasoning off when the model offers an "off" effort (thinking would not fit the deadline).
+ */
+declare function runtimeCall(llm: LlmLike, route: Route, efforts?: Map<string, string | null>): GuardCall;
+declare const GUARD_COUNTERS: readonly ["input_checked", "input_llm_ok", "input_llm_failed", "input_llm_unavailable", "flag_emergency", "flag_self_harm", "flag_med_change", "flag_dose", "flag_research", "note_appended", "output_checked", "output_llm_ok", "output_llm_failed", "output_llm_unavailable", "output_flag_rules", "output_flag_llm", "output_steered", "approval_asked", "approval_no_readback", "skill_blocked"];
+type GuardCounter = typeof GUARD_COUNTERS[number];
+/** Add counts for today. Never text: only how often the guard ran, fell back, flagged, noted, steered or asked. */
+declare function countGuard(dataDir: string, counts: Partial<Record<GuardCounter, number>>, now?: Date): void;
+/** Guard counts over the last `days` days. */
+declare function readGuardStats(dataDir: string, days?: number, now?: Date): {
+  since: string;
+  until: string;
+  counts: Record<GuardCounter, number>;
+};
+interface GuardOptions {
+  dataDir: () => string;
+  timeoutMs?: number;
+  /** Tests and the live evaluation: the model call for an agent instead of DSH's runtime. */
+  call?: (agent: AgentLike | undefined) => GuardCall | null;
+}
+interface PreStepPayload {
+  agent?: AgentLike;
+  messages: readonly UserMessage[];
+  turn?: number;
+  step?: number;
+  signal?: AbortSignal;
+}
+interface TurnStoppingPayload {
+  agent?: AgentLike;
+  turn: number;
+  signal?: AbortSignal;
+}
+/** What the person typed in this step: user-sourced messages only, never plugin notes or tool contexts. */
+declare function personText(messages: readonly {
+  source?: {
+    kind?: string;
+  };
+  content?: unknown;
+}[]): string;
+/** This turn's assistant text and the person's last message in it, from the session log. */
+declare function turnText(session: SessionLike, turn: number): {
+  reply: string;
+  userText: string;
+  last: number;
+};
+interface Guard {
+  preStep(payload: PreStepPayload, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>;
+  turnStopping(payload: TurnStoppingPayload): Promise<void>;
+  /** Whether this agent's current turn was flagged as an emergency or self-harm (no skill runs). */
+  inEmergency(agent: unknown): boolean;
+  count(counts: Partial<Record<GuardCounter, number>>): void;
+}
+declare function createGuard(ctx: Context, options: GuardOptions): Guard;
+//#endregion
+//#region src/tools-approval.d.ts
+declare const READ_BACK_MS: number;
+declare const NO_READ_BACK = "请先复述方案给用户确认";
+/** Same normalized plan, same key: title, source, note, each item's fields in order, and the goals. */
+declare function planKey(args: unknown): string;
+/** What the person approves in DSH: the plan's title, then each item with its category and start date. */
+declare function planApprovalReason(args: unknown): string;
+/** Tests: forget every read-back. */
+declare function resetReadBacks(): void;
+declare function registerApprovals(ctx: Context, guard: Pick<Guard, 'inEmergency' | 'count'>): void;
+//#endregion
+//#region src/guard-dose.d.ts
+/** Any amount that could be a dose. */
+declare function hasDoseAmount(text: string): boolean;
 //#endregion
 //#region src/version.d.ts
 declare const PRODUCT_VERSION = "5.0.0";
@@ -2015,4 +2242,4 @@ declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { type BootstrapResult, CHANGES_NOTE_ZH, CONSENT_VERSION, Config, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMPTY_PROFILE, FOCUS, FOCUS_ZH, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, HARNESS_SKILLS, type Journey, PHENOAGE_SKILL, PRODUCT_VERSION, type PlanBrief, type PlanDraft, type Profile, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RecordChange, type RiskFact, SELF_ALIASES, SELF_KEYS, SELF_SPEC, type SelfKey, type SelfRow, type SendResult, type Stage, TOOL_NAMES, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, bootstrapWorkspace, buildBoard, buildCalendar, buildChanges, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, cellNumber, checkupMarkerFor, commandExcerpt, currentPlan, daysBetween, decideFollowup, deleteSelf, desktopCommand, desktopSupported, detectIntents, domainSummary, draftPlan, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expectedText, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, heldUntil, homeBloodPressure, inQuiet, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, maskUrl, matchSkills, mentionedEntities, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, profileComplete, publicFollowup, rcvBand, readCheckIns, readFailed, readFollowup, readFollowupLog, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, runReady, runSkill, runnableFrom, sameMeasure, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, stageMeasurements, stageNow, startFollowup, suggestNext, summarizeIndicators, summarizeMedications, tableOf, trackingGeneration, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };
+export { type BootstrapResult, CHANGES_NOTE_ZH, CLASSIFIER_SYSTEM, CONSENT_VERSION, Config, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMERGENCY_LINE_ZH, EMPTY_PROFILE, FOCUS, FOCUS_ZH, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, GUARD_COUNTERS, GUARD_TIMEOUT_MS, type Guard, type GuardCall, type GuardHit, type GuardLabels, HARNESS_SKILLS, JUDGE_SYSTEM, type Journey, LABEL_KEYS, type LlmLike, NO_READ_BACK, PHENOAGE_SKILL, PRODUCT_VERSION, type PlanBrief, type PlanDraft, type Profile, READ_BACK_MS, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RecordChange, type ReplyVerdict, type RiskFact, SELF_ALIASES, SELF_HARM_LINE_ZH, SELF_KEYS, SELF_SPEC, type SelfKey, type SelfRow, type SendResult, type Stage, TOOL_NAMES, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, bootstrapWorkspace, buildBoard, buildCalendar, buildChanges, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, cellNumber, checkReply, checkupMarkerFor, classifyMessage, commandExcerpt, correctionNote, countGuard, createGuard, currentPlan, daysBetween, decideFollowup, deleteSelf, desktopCommand, desktopSupported, detectIntents, domainSummary, draftPlan, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expectedText, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, guidanceNote, hasDoseAmount, heldUntil, homeBloodPressure, inQuiet, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, maskUrl, matchSkills, mentionedEntities, mentionsMedicine, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseLabels, parseNumber, parseReadme, parseVerdict, personText, planApprovalReason, planKey, preGuard, profileComplete, publicFollowup, rcvBand, readCheckIns, readFailed, readFollowup, readFollowupLog, readGuardStats, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, registerApprovals, rememberMedications, rememberedMedications, replyRuleCheck, reportExcerpt, resetReadBacks, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, routeFor, ruleLabels, runReady, runSkill, runnableFrom, runtimeCall, sameMeasure, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, stageMeasurements, stageNow, startFollowup, suggestNext, summarizeIndicators, summarizeMedications, tableOf, trackingGeneration, turnText, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };

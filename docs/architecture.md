@@ -18,7 +18,10 @@ LongPi is the personal layer. Three pieces stay separate.
 | `runner.ts` | Stage files, pick the interpreter by runtime, fill profile flags, run the script in a path jail, read `out/report.md`, `out/result.json` and `out/problems.json`, write the receipt. |
 | `history.ts` | Earlier readouts (declared outputs only), for before-and-after skills and the board. |
 | `stats.ts` | Weekly anonymous counts per skill: runs, failures, missing input keys. |
-| `guardrails.ts` | Emergency and medication intercepts before the model runs. |
+| `guardrails.ts` | The guard's rule layer (used when the model call fails), its guidance notes and the deterministic reply check. |
+| `guard-llm.ts` | The guard: the host model labels each new message and judges the reply before a turn closes, through DSH's LLM runtime with a 4 s deadline; one note appended, at most one correction steered; counts in `guard-stats.json`. |
+| `guard-dose.ts` | Dose amounts for the reply check (a local copy until the shared `dose.ts` merges). |
+| `tools-approval.ts` | A plan saved from chat needs a fresh read-back of the same plan and then the person's approval; no skill runs in a turn flagged as an emergency. |
 | `compact.ts` | Parse Mirobody's compact pipe tables (hoisted constants, single-row answers, refusals, the meta line). |
 | `records.ts` | Read the record over MCP with a one-minute cache: catalogue and latest values, dated series, the dose log in windows under Mirobody's row cap, and medication courses. |
 | `reference.ts` | Read `data/biological_variation.json` and `data/effects.jsonl` from the skills checkout; reference change values (symmetric, or log-normal for skewed markers). |

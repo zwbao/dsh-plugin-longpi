@@ -344,7 +344,7 @@ try {
   assert.equal((await setTool.execute({ webhook: { kind: 'feishu', url: 'http://insecure' } })).ok, false)
 
   // turning follow-up on, full detail and a webhook address wait for the person's approval in DSH
-  assert.equal(host.preExecute.length, 1, 'one tools/pre-execute listener')
+  assert.equal(host.preExecute.length, 2, 'two tools/pre-execute listeners: set_followup first, then the plan-save approval')
   const gate = (name, args, before = { kind: 'allow' }) => host.preExecute[0]({ name, arguments: args }, async () => before)
   assert.deepEqual(await gate('set_followup', { enabled: true }), { kind: 'ask', reason: 'LongPi 要开启随访提醒。只有你本人要求过才同意。' })
   assert.match((await gate('set_followup', { detail: 'full', webhook: { kind: 'generic', url: 'https://attacker.example/x?token=1' } })).reason, /完整.*https:\/\/attacker\.example\/…/)
