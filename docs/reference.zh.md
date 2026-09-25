@@ -22,7 +22,9 @@
 | `dataDir` | 档案、回执、以前的读出、干预方案和打卡。空则是 `~/.dsh/longpi`。 |
 | `maxSkillMatches` | 一个问题最多点名几个技能，默认 `8`。 |
 | `timeoutMs` | Mirobody 桥和 MCP 请求的时限，默认 `30000`。 |
-| `bootstrapWorkspace` | DeepSeek Harness 还没有任何工作区时，创建 `<dataDir>/workspace` 并登记为工作区「健康」，只做一次，这样会话可以打开，LongPi 首页可以使用。已有工作区时不作任何改动；创建之后不再重复创建（`dataDir` 里的 `workspace-bootstrap.json` 记录了这件事，删除的工作区不会再出现）。默认 `true`。 |
+| `bootstrapWorkspace` | DeepSeek Harness 还没有任何工作区时，创建 `<dataDir>/workspace` 并登记为工作区「健康对话」，只做一次，这样会话可以打开，LongPi 首页可以使用（早期版本创建的「健康」工作区保留原名）。已有工作区时不作任何改动；创建之后不再重复创建（`dataDir` 里的 `workspace-bootstrap.json` 记录了这件事，删除的工作区不会再出现）。默认 `true`。 |
+
+**在应用里设置的连接。** 在 DeepSeek Harness 设置的 LongPi 页保存的 Mirobody 地址（需要时连同令牌）存放在 `dataDir/connection.json`（仅本人可读），在清除之前替代 `mcpUrl` 和 `mcpToken`，LongPi 的所有读取都用它，挂载的 Mirobody 工具也一样。只有通过它在 10 秒内成功读取一次记录目录后才会保存；地址须为 `https://`，或指向 `127.0.0.1`、`localhost` 的 `http://`。页面不会拿到令牌，显示的地址会隐去 `/mcp/` 之后的部分。
 
 ## 工具
 
@@ -47,7 +49,14 @@ LongPi 自己 14 个。挂上 Mirobody 之后，同一进程里还有它的 8 �
 
 命令：`/longpi`、`/longpi-skills 我的生物年龄`、`/longpi-stats`、`/longpi-version`。
 
-HTTP：`GET /api/longpi/board`、`GET /api/longpi/tracking`、`GET /api/longpi/match?q=`、`GET /api/longpi/intents`、`GET /api/longpi/stats`、`GET /api/longpi/report`、`POST /api/longpi/profile`、`POST /api/longpi/checkin`、`POST /api/longpi/run-ready`、`GET /api/longpi/version`。都要带上打开 DSH 时地址里的 `token`（查询参数或 `Authorization: Bearer`），看板会自动带上。
+HTTP 接口，供 LongPi 页面、引导流程和设置页使用：
+
+- 读取：`GET /api/longpi/journey`、`/indicators`、`/indicators/detail?id=`、`/connection`、`/board`、`/tracking`、`/plan-draft`、`/followup`、`/self`、`/calendar.ics`、`/report`、`/match?q=`、`/intents`、`/stats`、`/version`；
+- 写入：`POST /api/longpi/connection`、`/connection/test`、`/profile`、`/consent`、`/self`、`/checkin`、`/plan-draft/accept`、`/followup`、`/followup/test`、`/run-ready`；`DELETE /api/longpi/connection`、`/self?id=`。
+
+每个接口先经过 DeepSeek Harness 自身的检查：请求须发往本机地址（或 DSH 配置为可信的主机），不能来自其他网站，并带有 DSH 的登录 Cookie。浏览器打开 DSH 打印的地址（`…/?token=…`）时会获得这个 Cookie。接口不接受 `token` 参数。没有 Cookie 返回 401；来自其他网站或经由其他主机名返回 403；DSH 没有连接服务时，所有接口返回 503。写入请求须使用 `Content-Type: application/json`（可带 charset），否则返回 415。在终端中调用时，先用 token 换取 Cookie，见安装指南第 8.1 步。
+
+随访 Webhook 地址须为 `https://`，且不能指向本机（`127.0.0.0/8`、`::1`、`localhost`）、链路本地地址（`169.254.0.0/16`、`fe80::/10`）、未指定地址（`0.0.0.0`、`::`）或 `metadata.google.internal`。家庭局域网地址可以使用。不做任何 DNS 解析。
 
 ## 干预评估
 

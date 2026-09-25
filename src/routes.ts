@@ -22,6 +22,8 @@ import { buildJourney, buildJourneyFull, followupStateOf, within } from './journ
 import { followupResponse, sendNow, writeFollowup, FOLLOWUP_TEST_TEXT } from './followup.ts'
 import { buildCalendar } from './calendar.ts'
 import { addSelf, deleteSelf, readSelf } from './selfmeasure.ts'
+import { clearConnection, connectionSource, connectionTokenProblem, connectionUrlProblem, maskMcpUrl, saveConnection, testConnection, type ConnectionSource } from './connection.ts'
+import { buildIndicators, indicatorDetail, recordsSummary, type RecordsSummary } from './indicators.ts'
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   if (res.writableEnded) return
@@ -116,6 +118,23 @@ function paramOf(url: string | undefined, name: string): string {
   return new URL(url, 'http://127.0.0.1').searchParams.get(name)?.trim() ?? ''
 }
 
+/** GET /api/longpi/connection, and the answer of every connection write. */
+export interface ConnectionStatus {
+  source: ConnectionSource
+  url_masked: string
+  token_set: boolean
+  status: 'ok' | 'error' | 'none'
+  error?: string
+  summary?: RecordsSummary
+}
+
+/** How long a connection answer waits for the record summary before leaving it out. */
+const CONNECTION_SUMMARY_MS = 10_000
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
 async function readJson(req: IncomingMessage, limit?: number): Promise<{ ok: true; value: unknown } | { ok: false }> {
   const raw = await readBody(req, limit)
   try {
@@ -181,6 +200,156 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
           }
           sendJson(res, 200, await buildJourney(await journeyContext()))
         })().catch(() => sendJson(res, 500, { ok: false, error: 'journey failed' }))
+      },
+    })
+
+    const indicatorsContext = async (budgetMs?: number) => {
+      const { current, dataDir, skillsHome, records } = await context()
+      return { config: current, dataDir, skillsHome, records, today: isoDay(), ...(budgetMs ? { budgetMs } : {}) }
+    }
+
+    web.register({
+      kind: 'exact',
+      path: '/api/longpi/indicators',
+      handler: (req, res) => {
+        if (req.method !== 'GET') {
+          sendJson(res, 405, { ok: false, error: 'GET only' })
+          return
+        }
+        void (async () => {
+          if (paramOf(req.url, 'refresh')) {
+            invalidateRecords()
+            invalidateTracking()
+          }
+          sendJson(res, 200, await buildIndicators(await indicatorsContext()))
+        })().catch(() => sendJson(res, 500, { ok: false, error: 'indicators failed' }))
+      },
+    })
+
+    web.register({
+      kind: 'exact',
+      path: '/api/longpi/indicators/detail',
+      handler: (req, res) => {
+        if (req.method !== 'GET') {
+          sendJson(res, 405, { ok: false, error: 'GET only' })
+          return
+        }
+        const id = paramOf(req.url, 'id')
+        if (!id) {
+          sendJson(res, 400, { ok: false, error: 'id is required' })
+          return
+        }
+        void (async () => {
+          const detail = await indicatorDetail(await indicatorsContext(), id)
+          if (!detail) {
+            sendJson(res, 404, { ok: false, error: '没有这项指标。' })
+            return
+          }
+          sendJson(res, 200, detail)
+        })().catch(() => sendJson(res, 500, { ok: false, error: 'indicator failed' }))
+      },
+    })
+
+    // The Mirobody connection as the settings page shows it: where the address comes from (saved here, the
+    // configuration, or none), the address with its secret part hidden, whether a token is set, whether the
+    // record reads, and what it holds. The token itself is never sent back.
+    const connectionBase = () => {
+      const current = config()
+      return { source: connectionSource(current), url_masked: maskMcpUrl(current.mcpUrl), token_set: Boolean(current.mcpToken.trim()) }
+    }
+    const connectionStatus = async (): Promise<ConnectionStatus> => {
+      const base = connectionBase()
+      if (base.source === 'none') return { ...base, status: 'none' }
+      const input = await indicatorsContext(CONNECTION_SUMMARY_MS)
+      const status = input.records.record_status as string
+      if (status === 'unconfigured') return { ...base, status: 'none' }
+      if (status === 'error') return { ...base, status: 'error', error: `记录读取失败：${input.records.record_error || '原因不明'}` }
+      const summary = await within(recordsSummary(input), CONNECTION_SUMMARY_MS).catch(() => null)
+      return { ...base, status: 'ok', ...(summary && 'value' in summary && summary.value ? { summary: summary.value } : {}) }
+    }
+    const connectionChanged = () => {
+      invalidateRecords()
+      invalidateTracking()
+    }
+
+    web.register({
+      kind: 'exact',
+      path: '/api/longpi/connection',
+      handler: (req, res) => {
+        if (req.method === 'GET') {
+          void (async () => {
+            sendJson(res, 200, await connectionStatus())
+          })().catch(() => sendJson(res, 500, { ok: false, error: 'connection failed' }))
+          return
+        }
+        if (req.method === 'DELETE') {
+          void (async () => {
+            const removed = clearConnection(resolveDataDir(config().dataDir))
+            if (removed) connectionChanged()
+            sendJson(res, 200, { ok: true, removed, ...(await connectionStatus()) })
+          })().catch(() => sendJson(res, 500, { ok: false, error: 'connection failed' }))
+          return
+        }
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { ok: false, error: 'GET, POST or DELETE' })
+          return
+        }
+        void (async () => {
+          const body = await readJson(req, 16_000)
+          const value = body.ok && isObject(body.value) ? body.value : null
+          const problem = !value ? '请求格式不对：应为 {"mcp_url": "…", "mcp_token": "…"}。' : connectionUrlProblem(value.mcp_url) || connectionTokenProblem(value.mcp_token)
+          if (!value || problem) {
+            sendJson(res, 400, { ok: false, error: problem, ...connectionBase() })
+            return
+          }
+          const current = config()
+          const candidate = { mcp_url: String(value.mcp_url).trim(), mcp_token: typeof value.mcp_token === 'string' ? value.mcp_token.trim() : '' }
+          // Saved only when one catalogue read through it succeeds; otherwise nothing changes.
+          const tested = await testConnection({ ...candidate, member: current.member })
+          if (!tested.ok) {
+            sendJson(res, 400, { ok: false, error: tested.error, ...connectionBase() })
+            return
+          }
+          saveConnection(resolveDataDir(current.dataDir), candidate)
+          connectionChanged()
+          sendJson(res, 200, { ok: true, ...(await connectionStatus()) })
+        })().catch((error: unknown) => {
+          const message = error instanceof Error && error.message === 'body too large' ? '请求太大。' : '保存连接失败。'
+          sendJson(res, 400, { ok: false, error: message })
+        })
+      },
+    })
+
+    web.register({
+      kind: 'exact',
+      path: '/api/longpi/connection/test',
+      handler: (req, res) => {
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { ok: false, error: 'POST only' })
+          return
+        }
+        void (async () => {
+          const body = await readJson(req, 16_000)
+          const value = body.ok ? (isObject(body.value) ? body.value : body.value == null ? {} : null) : null
+          if (!value) {
+            sendJson(res, 400, { ok: false, error: '请求格式不对：应为 {"mcp_url": "…", "mcp_token": "…"}，都可以省略。' })
+            return
+          }
+          // Without an address, the connection in use is tested, with its own token; a new address carries its own (or none).
+          const current = config()
+          const given = typeof value.mcp_url === 'string' && value.mcp_url.trim() !== ''
+          const url = given ? String(value.mcp_url).trim() : current.mcpUrl.trim()
+          const token = given ? (typeof value.mcp_token === 'string' ? value.mcp_token.trim() : '') : current.mcpToken.trim()
+          const problem = connectionUrlProblem(url) || (given ? connectionTokenProblem(value.mcp_token) : '')
+          if (problem) {
+            sendJson(res, 200, { ok: false, error: problem, url_masked: maskMcpUrl(url) })
+            return
+          }
+          const tested = await testConnection({ mcp_url: url, mcp_token: token, member: current.member })
+          sendJson(res, 200, tested.ok
+            ? { ok: true, indicator_count: tested.indicators, url_masked: maskMcpUrl(url) }
+            : { ok: false, error: tested.error, url_masked: maskMcpUrl(url) })
+        })().catch(() => sendJson(res, 400, { ok: false, error: '测试连接失败。' }))
       },
     })
 

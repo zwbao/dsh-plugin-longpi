@@ -22,7 +22,9 @@ Configuration keys, the tools the model can call, commands and HTTP routes, and 
 | `dataDir` | Profile, receipts, earlier readouts, plans and check-ins. Empty is `~/.dsh/longpi`. |
 | `maxSkillMatches` | How many skills a question may dispatch. Default `8`. |
 | `timeoutMs` | Budget for the Mirobody bridge and MCP calls. Default `30000`. |
-| `bootstrapWorkspace` | On a DeepSeek Harness with no workspace yet, create `<dataDir>/workspace` once and register it as the workspace 「健康」, so a session can open and the LongPi home works. Never touches a registry that already has workspaces, and never creates it again after that (a marker `workspace-bootstrap.json` in `dataDir` records it, so a workspace you delete stays deleted). Default `true`. |
+| `bootstrapWorkspace` | On a DeepSeek Harness with no workspace yet, create `<dataDir>/workspace` once and register it as the workspace 「健康对话」, so a session can open and the LongPi home works (a workspace an earlier version created as 「健康」 keeps its name). Never touches a registry that already has workspaces, and never creates it again after that (a marker `workspace-bootstrap.json` in `dataDir` records it, so a workspace you delete stays deleted). Default `true`. |
+
+**A connection set in the app.** A Mirobody address, with its token if it needs one, saved on the LongPi page of DeepSeek Harness settings is kept in `dataDir/connection.json` (readable by you only) and replaces `mcpUrl` and `mcpToken` for everything LongPi reads, the mounted Mirobody tools included, until you clear it there. It is saved only after one read of the record catalogue through it succeeds within 10 seconds; the address must be `https://`, or `http://` to `127.0.0.1` or `localhost`. The page never gets the token back, and shows the address with the part after `/mcp/` hidden.
 
 ## What the model can call
 
@@ -47,7 +49,14 @@ Fourteen LongPi tools. Mounting Mirobody adds its eight tools in the same proces
 
 Commands: `/longpi`, `/longpi-skills 我的生物年龄`, `/longpi-stats`, `/longpi-version`.
 
-HTTP: `GET /api/longpi/board`, `GET /api/longpi/tracking`, `GET /api/longpi/match?q=`, `GET /api/longpi/intents`, `GET /api/longpi/stats`, `GET /api/longpi/report`, `POST /api/longpi/profile`, `POST /api/longpi/checkin`, `POST /api/longpi/run-ready`, `GET /api/longpi/version`. Each needs the DSH `token` from the address DSH printed (query parameter or `Authorization: Bearer`); the board adds it for you.
+HTTP, used by the LongPi page, onboarding and the settings page:
+
+- read: `GET /api/longpi/journey`, `/indicators`, `/indicators/detail?id=`, `/connection`, `/board`, `/tracking`, `/plan-draft`, `/followup`, `/self`, `/calendar.ics`, `/report`, `/match?q=`, `/intents`, `/stats`, `/version`;
+- write: `POST /api/longpi/connection`, `/connection/test`, `/profile`, `/consent`, `/self`, `/checkin`, `/plan-draft/accept`, `/followup`, `/followup/test`, `/run-ready`; `DELETE /api/longpi/connection`, `/self?id=`.
+
+Every route first passes DeepSeek Harness's own check: the request goes to this machine's address (or a host DSH is told to trust), not from another site, and carries DSH's login cookie, which the browser receives when it opens the address DSH printed (`…/?token=…`). A `token` on an API route is not accepted. Without the cookie the answer is 401; from another site or through another host name, 403; on a DSH without its connection service, 503 for every route. Writes must be sent as `Content-Type: application/json` (charset allowed), 415 otherwise. From a terminal, exchange the token for the cookie first, as in step 8.1 of the install guide.
+
+A follow-up webhook address must be `https://` and must not name this machine (`127.0.0.0/8`, `::1`, `localhost`), a link-local (`169.254.0.0/16`, `fe80::/10`) or unspecified (`0.0.0.0`, `::`) address, or `metadata.google.internal`. Addresses on your home network are allowed. No name is looked up in DNS.
 
 ## Plans and whether they work
 

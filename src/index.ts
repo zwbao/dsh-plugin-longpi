@@ -13,11 +13,12 @@ import { registerFollowupTools } from './tools-followup.ts'
 import { startFollowup, type FollowupState } from './followup.ts'
 import { buildJourneyFull, followupStateOf, within } from './journey.ts'
 import { loadCatalog } from './catalog.ts'
-import { loadRecords } from './records.ts'
-import { trackingGeneration } from './tracking.ts'
+import { invalidateRecords, loadRecords } from './records.ts'
+import { invalidateTracking, trackingGeneration } from './tracking.ts'
 import { isoDay } from './interventions.ts'
 import { resolveDataDir, resolveMirobodyPlugin, resolveSkillsHome } from './paths.ts'
 import { bootstrapWorkspace, type WorkspaceRegistryLike } from './workspace.ts'
+import { effectiveConfig } from './connection.ts'
 
 export const name = 'dsh-plugin-longpi'
 export const inject = ['tools']
@@ -61,6 +62,16 @@ export { followupTextProblem, followupApprovalReason } from './tools-followup.ts
 export { buildPlanBrief, draftPlan, acceptedPlan, expectedText, DRAFT_CATEGORIES } from './planner.ts'
 export type { PlanBrief, PlanDraft, DraftItem } from './planner.ts'
 export { guardRoute, isJsonRequest, CONNECTION_UNAVAILABLE } from './routes.ts'
+export {
+  readConnection, saveConnection, clearConnection, effectiveConfig, connectionSource, connectionKey, maskMcpUrl, connectionUrlProblem, connectionTokenProblem,
+  testConnection, CONNECTION_FILE, CONNECTION_TEST_MS,
+} from './connection.ts'
+export type { SavedConnection, ConnectionSource, ConnectionTest } from './connection.ts'
+export type { ConnectionStatus } from './routes.ts'
+export { buildIndicators, indicatorDetail, recordsSummary, invalidateIndicators } from './indicators.ts'
+export type { IndicatorEntry, IndicatorsResponse, IndicatorDetail, IndicatorChange, IndicatorSource, RecordsSummary } from './indicators.ts'
+export { groupOf, GROUP_KEYS, GROUP_ZH } from './groups.ts'
+export type { GroupKey } from './groups.ts'
 export type { ConnectionGuard } from './routes.ts'
 export { bootstrapWorkspace, WORKSPACE_MARKER, WORKSPACE_DIR, WORKSPACE_TITLE } from './workspace.ts'
 export type { WorkspaceRegistryLike, BootstrapResult } from './workspace.ts'
@@ -74,21 +85,28 @@ function logTo(ctx: Context, level: 'info' | 'warn', message: string): void {
 }
 
 export async function apply(ctx: Context, config: Config): Promise<void> {
+  // A reload with new settings (another token, another address) must not answer from reads made with the old ones.
+  invalidateRecords()
+  invalidateTracking()
   const pluginHome = resolveMirobodyPlugin(config.mirobodyPluginHome)
+  // Every module reads the effective configuration: a Mirobody connection saved on the settings page
+  // (connection.ts) overrides the configured mcpUrl and mcpToken.
+  const source = () => effectiveConfig(config)
   const mount = await mountMirobody(ctx, {
     pythonBin: config.pythonBin,
     mirobodyHome: config.mirobodyHome,
-    mcpUrl: config.mcpUrl,
-    mcpToken: config.mcpToken,
+    // Read on every call, so the mounted Mirobody tools follow a connection saved later.
+    get mcpUrl() { return source().mcpUrl },
+    get mcpToken() { return source().mcpToken },
     timeoutMs: config.timeoutMs,
   }, pluginHome)
-  const source = () => config
   // What the follow-up decisions read: the journey and its tracking, within a deadline so a slow skill never stacks up.
   const followupState = async (deadlineMs: number): Promise<FollowupState> => {
-    const dataDir = resolveDataDir(config.dataDir)
-    const skillsHome = resolveSkillsHome(config.skillsHome)
-    const records = await loadRecords(config, dataDir, mount.pluginHome)
-    const built = await within(buildJourneyFull({ config, dataDir, skillsHome, catalog: loadCatalog(skillsHome), records, today: isoDay(), mount }), deadlineMs)
+    const current = source()
+    const dataDir = resolveDataDir(current.dataDir)
+    const skillsHome = resolveSkillsHome(current.skillsHome)
+    const records = await loadRecords(current, dataDir, mount.pluginHome)
+    const built = await within(buildJourneyFull({ config: current, dataDir, skillsHome, catalog: loadCatalog(skillsHome), records, today: isoDay(), mount }), deadlineMs)
     if (!('value' in built)) throw new Error('journey not ready')
     return followupStateOf(built.value.journey, built.value.tracking)
   }
@@ -105,7 +123,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   ctx.inject(['workspaceRegistry'], (scoped) => {
     const registry = (scoped as unknown as { workspaceRegistry?: WorkspaceRegistryLike }).workspaceRegistry
     void bootstrapWorkspace(registry, { dataDir: resolveDataDir(config.dataDir), enabled: config.bootstrapWorkspace !== false }).then((result) => {
-      if (result.status === 'created') logTo(scoped, 'info', `created the 健康 workspace at ${result.path}`)
+      if (result.status === 'created') logTo(scoped, 'info', `created the 健康对话 workspace at ${result.path}`)
       else if (result.status === 'error') logTo(scoped, 'warn', `workspace bootstrap failed: ${result.error}`)
     })
   })

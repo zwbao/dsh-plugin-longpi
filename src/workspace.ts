@@ -1,9 +1,11 @@
 // A fresh DeepSeek Harness has no workspace, so it opens no session and the
 // composer stays inert: nothing LongPi puts next to it can show. When the
 // host's workspace registry is there and empty, register one folder under the
-// data directory as 「健康」, once. A marker file records that it was done, so a
-// workspace the person later deletes is never created again, and a registry
-// that already has workspaces is never touched.
+// data directory as 「健康对话」, once: named apart from the sidebar's 健康 page.
+// A workspace an earlier version created as 「健康」 keeps its name. A marker
+// file records that it was done, so a workspace the person later deletes is
+// never created again, and a registry that already has workspaces is never
+// touched.
 
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -16,14 +18,14 @@ export interface WorkspaceRegistryLike {
 
 export const WORKSPACE_MARKER = 'workspace-bootstrap.json'
 export const WORKSPACE_DIR = 'workspace'
-export const WORKSPACE_TITLE = '健康'
+export const WORKSPACE_TITLE = '健康对话'
 
 export type BootstrapResult =
   | { status: 'created'; path: string; workspace_id: string }
   | { status: 'disabled' | 'done_before' | 'not_empty' | 'no_registry' }
   | { status: 'error'; error: string }
 
-/** Create the 健康 workspace when the registry is empty and it was never created before. Never throws. */
+/** Create the 健康对话 workspace when the registry is empty and it was never created before. Never throws. */
 export async function bootstrapWorkspace(
   registry: WorkspaceRegistryLike | null | undefined,
   options: { dataDir: string; enabled: boolean; now?: Date },

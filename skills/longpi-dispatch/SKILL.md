@@ -11,7 +11,7 @@ description: Dispatch longevity-skills for one person. Start from the onboarding
 
 - **档案没填完**（`questions_unanswered` 不为空，不论在哪个阶段）：一条短消息里只问还没回答的：年龄和性别，六个是否项（现在吸烟、糖尿病、两周内用过降压药、住南方还是北方、城市还是农村、父母或兄弟姐妹有心梗或脑卒中），一句话说明各自解锁什么。已经保存的不要再问。“不确定”“不知道”就是未知，不存成“否”（已存的答案传 null 清掉）。用 `save_personal_profile` 保存，对方说了最关心什么就一并存 `focus`。
 - **consent**：同意只能本人在健康页点「开始」，没同意时提一次即可，不要因此反复建档。`onboarding.pending` 为 true 时结果还在计算，不要猜。
-- **records**：说明怎么连接 Mirobody：在 Mirobody 上传体检报告（PDF 或照片）或连接手环，生成个人 MCP 地址，重新运行安装命令时加上 `--mcp-url`。不要编造记录。
+- **records**：说明怎么连接 Mirobody：在 Mirobody 上传体检报告（PDF 或照片）或连接手环，生成个人 MCP 地址，粘贴到 DeepSeek Harness 设置里的 LongPi 页（也可以重新运行安装命令时加上 `--mcp-url`）。不要编造记录。
 - **first_result 及以后**：不等对方问，先给出表型年龄（有多次体检就说趋势）和 China-PAR 风险，都说“模型估计”；工具给了正常波动才带上（`band_missing` 不为空时这个范围只是下限，China-PAR 没有波动范围，不要自己估）。算不出就说卡在哪里，列出 `addons`。然后问“想先改善哪一项？”，可以和对方一起起草方案，见 `longpi-interventions`。
 
 ## 记录里的明显变化
