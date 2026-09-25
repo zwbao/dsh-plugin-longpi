@@ -328,6 +328,23 @@ try {
   assert.equal(res.json().stage, 'routine', 'tracking was invalidated')
   res = await call(host, 'POST', '/api/longpi/plan-draft/accept', { draft: got.draft })
   assert.equal(res.json().plan.version, 2, 'accepting again is a new version')
+  // a chat draft made for its own focus and markers is accepted against that same brief (the card sends them)
+  const focused = await host.tools.get('draft_intervention_plan').execute({ focus: ['glucose'], markers: ['甘油三酯'] })
+  assert.ok(focused.draft, 'a glucose draft')
+  const focusedBody = { draft: focused.draft, focus: focused.brief.focus, markers: ['甘油三酯'] }
+  const onlyFocused = focused.draft.items.filter((item) => !got.draft.items.some((row) => row.id === item.id))
+  if (onlyFocused.length > 0) {
+    res = await call(host, 'POST', '/api/longpi/plan-draft/accept', { draft: focused.draft })
+    assert.equal(res.status, 400, 'without its focus the default brief has no such item')
+  }
+  res = await call(host, 'POST', '/api/longpi/plan-draft/accept', focusedBody)
+  assert.equal(res.status, 200, res.text)
+  assert.equal(res.json().plan.version, 3)
+  const focusedSaved = mod.currentPlan(routeDir)
+  assert.deepEqual(focusedSaved.items.map((item) => item.title), focused.draft.items.map((item) => item.title))
+  assert.deepEqual(focusedSaved.goals.map((goal) => goal.marker), focused.draft.goals.map((goal) => goal.marker), 'every goal shown is saved, the asked markers\' ones too')
+  assert.deepEqual(mod.briefOptionsOf(['glucose', 'x'], [' 尿酸 ', '', 'a'.repeat(41), 1]), { focus: ['glucose'], markers: ['尿酸', '1'] })
+  assert.deepEqual(mod.briefOptionsOf('glucose', null), { markers: [] }, 'nothing usable: the saved focus')
   const twice = mod.acceptedPlan(tool.brief, { items: [got.draft.items[0], { ...got.draft.items[0] }] }, TODAY)
   assert.equal(twice.ok, true)
   assert.equal(twice.plan.items.length, 1, 'one item per intervention')
@@ -359,9 +376,14 @@ try {
   const takenBack = await checkinTool.execute({ entries: [{ item: itemTitle, done: null }] })
   assert.equal(takenBack.ok, true)
   assert.equal(takenBack.entries[0].undo, true)
+  assert.equal(takenBack.entries[0].title, itemTitle, 'the card shows the title, never the id')
   const day = takenBack.entries[0].date
   assert.equal(mod.readCheckIns(routeDir).filter((row) => row.date === day).length, 2, 'both entries are kept')
   assert.equal(mod.checkinStatus(mod.readCheckIns(routeDir)).get(mod.currentPlan(routeDir).items[0].id)?.has(day) ?? false, false, 'unknown again')
+  const tagged = await checkinTool.execute({ entries: [{ item: itemTitle, tags: ['illness'] }] })
+  assert.equal(tagged.entries[0].done, null, 'a tag alone is a note')
+  assert.equal('undo' in tagged.entries[0], false, 'a note is not an undo')
+  assert.equal(mod.readCheckIns(routeDir).some((row) => 'title' in row), false, 'the title is not written to the log')
 
   console.log(`planner ok (${brief.priorities.length} priorities, ${brief.candidates.length} candidates, draft: ${draft.items.map((item) => item.title).join('、')})`)
 } finally {

@@ -173,4 +173,19 @@ if (liveHome) {
 assert.match(readFileSync(join(root, '..', 'tsdown.config.ts'), 'utf8'), /id: "dsh-plugin-longpi"/)
 // The client entry registers its seats through DSH slots (its modules change; the entry stays).
 assert.match(readFileSync(join(root, '..', 'src', 'client', 'index.ts'), 'utf8'), /slots/)
+// Onboarding's model hint: "missing" only when the key the DeepSeek route reads (its settings' apiKeyEnv) is unset.
+{
+  const { readModelStatus } = await import('../src/client/model-status.ts')
+  const remote = (stored) => ({
+    llm: { listProviders: async () => ({ ok: true, value: [{ id: 'deepseek-official' }] }) },
+    credentials: { describe: async (refs) => ({ ok: true, value: Object.fromEntries(refs.map((ref) => [ref, { configured: stored.includes(ref) }])) }) },
+  })
+  const face = (value) => ({ ensure: async () => {}, getSnapshot: () => ({ view: { namespaces: [{ ns: 'llm-deepseek', value }] } }) })
+  assert.equal(await readModelStatus(remote(['MY_DS_KEY']), face({ apiKeyEnv: 'MY_DS_KEY' })), 'ready', 'a custom key reference is followed')
+  assert.equal(await readModelStatus(remote([]), face({ apiKeyEnv: 'MY_DS_KEY' })), 'missing')
+  assert.equal(await readModelStatus(remote([]), face({})), 'missing', 'the default reference')
+  assert.equal(await readModelStatus(remote(['DEEPSEEK_API_KEY'])), 'ready')
+  assert.equal(await readModelStatus(remote(['MY_DS_KEY'])), 'unknown', 'no settings view: an unset default could be a custom reference')
+  assert.equal(await readModelStatus(remote([]), { getSnapshot: () => { throw new Error('no mirror') } }), 'unknown')
+}
 console.log('smoke ok')

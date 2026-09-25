@@ -10,7 +10,7 @@ import { PANEL_ID } from './constants.ts'
 import { HomeHero } from './home.ts'
 import { PromptBridge } from './home-actions.ts'
 import { Icon } from './icons.ts'
-import { setModelProbe } from './model-status.ts'
+import { setModelProbe, setModelSettings, type SettingsFace } from './model-status.ts'
 import { Onboarding } from './onboarding.ts'
 import { LongPiPage } from './page.ts'
 import { ReminderPill } from './pill.ts'
@@ -30,7 +30,7 @@ export interface ClientContext {
   slots: Slots
   layout?: { selectPanel: (id: string | null) => void }
   /** Cordis: run a callback once the named services exist (never, when they do not). */
-  inject?: (deps: string[], callback: (ctx: { remote?: unknown; effect?: (run: () => () => void, label?: string) => unknown }) => void) => unknown
+  inject?: (deps: string[], callback: (ctx: { remote?: unknown; settingsScope?: unknown; effect?: (run: () => () => void, label?: string) => unknown }) => void) => unknown
 }
 
 export const inject = ['slots', 'layout']
@@ -72,6 +72,16 @@ export function apply(ctx: ClientContext): void {
     ctx.inject(['remote', 'remote.llm', 'remote.credentials'], (sub) => {
       setModelProbe(sub.remote as Parameters<typeof setModelProbe>[0])
       sub.effect?.(() => () => setModelProbe(null), 'longpi: model status')
+    })
+    // The key reference the DeepSeek route reads (a custom apiKeyEnv); without it an unset default says nothing.
+    ctx.inject(['settingsScope'], (sub) => {
+      try {
+        const scope = sub.settingsScope as { describe?: () => SettingsFace } | undefined
+        setModelSettings(scope?.describe?.() ?? null)
+      } catch {
+        setModelSettings(null)
+      }
+      sub.effect?.(() => () => setModelSettings(null), 'longpi: model settings')
     })
   }
 }

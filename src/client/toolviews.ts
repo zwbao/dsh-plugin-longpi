@@ -20,7 +20,7 @@ import { postCheckIn } from './checkin.ts'
 import { localToday, riskText, versusAge } from './format.ts'
 import { Icon } from './icons.ts'
 import { normalizePlanDraft } from './normalize.ts'
-import { acceptDraft, ConfirmModal, DraftItems, keptGoals } from './plan-draft.ts'
+import { acceptDraft, ConfirmModal, DraftItems, keptGoals, type DraftSource } from './plan-draft.ts'
 import { requestView, useCachedBoard, useJourney } from './store.ts'
 import type { CheckState, Face, PlanDraft, PlanDraftResponse } from './types.ts'
 import { Btn, readPref, writePref } from './ui.ts'
@@ -118,7 +118,7 @@ function Shell(props: { call: ParsedCall; icon: string; title: string; summary?:
 
 const ADOPTED_KEY = 'dsh-plugin-longpi.adopted.'
 
-function DraftCard(props: { callId: string; data: PlanDraftResponse; draft: PlanDraft; openPage?: () => void }): React.ReactElement {
+function DraftCard(props: { callId: string; data: PlanDraftResponse; draft: PlanDraft; source: DraftSource; openPage?: () => void }): React.ReactElement {
   const { journey } = useJourney()
   const { draft } = props
   const [removed, setRemoved] = React.useState<Set<string>>(new Set())
@@ -142,7 +142,7 @@ function DraftCard(props: { callId: string; data: PlanDraftResponse; draft: Plan
     setBusy(true)
     setError(null)
     try {
-      const result = await acceptDraft(draft, kept, remind)
+      const result = await acceptDraft(draft, kept, remind, props.source)
       if (!result.ok) {
         setError(`没有保存：${result.error}`)
         return
@@ -176,6 +176,11 @@ function DraftCard(props: { callId: string; data: PlanDraftResponse; draft: Plan
     }) : null)
 }
 
+/** The draft's focus (as the brief used it) and the markers the model asked for: the accept route rebuilds that brief. */
+function draftSource(args: Raw, data: PlanDraftResponse): DraftSource {
+  return { focus: data.brief.focus.map(String), markers: strings(args.markers) }
+}
+
 export function DraftToolView(props: ToolViewProps): React.ReactElement {
   const call = parseCall(props.block)
   if (call.state === 'running') return h(Shell, { call, icon: 'spark', title: '起草方案', summary: '正在按你的结果和试验证据起草…' })
@@ -192,7 +197,7 @@ export function DraftToolView(props: ToolViewProps): React.ReactElement {
       h('p', { className: 'lp-muted' }, data.brief.notes_zh[0] || '记录里还没有能对上研究证据的指标。'))
   }
   return h(Shell, { call, icon: 'spark', title: '方案草稿', summary: `${data.draft.items.length} 项 · 按证据起草 · 还没有保存` },
-    h(DraftCard, { callId: props.callId, data, draft: data.draft, openPage: props.openPage }))
+    h(DraftCard, { callId: props.callId, data, draft: data.draft, source: draftSource(call.args, data), openPage: props.openPage }))
 }
 
 // --- save_intervention_plan -------------------------------------------------------------
@@ -244,8 +249,11 @@ export function SaveToolView(props: ToolViewProps): React.ReactElement {
 
 interface LoggedEntry {
   item: string
+  title: string
   date: string
   done: CheckState
+  /** The entry took that day's check-in back. */
+  undo: boolean
 }
 
 const UNDONE_KEY = 'dsh-plugin-longpi.undone.'
@@ -261,13 +269,31 @@ export function CheckinToolView(props: ToolViewProps): React.ReactElement {
   const result = call.result ?? {}
   const entries: LoggedEntry[] = (Array.isArray(result.entries) ? result.entries : []).map((row) => {
     const entry = objectOf(row)
-    return { item: String(entry.item ?? ''), date: String(entry.date ?? ''), done: entry.done === true ? true : entry.done === false ? false : null }
+    return {
+      item: String(entry.item ?? ''),
+      title: typeof entry.title === 'string' ? entry.title : '',
+      date: String(entry.date ?? ''),
+      done: entry.done === true ? true : entry.done === false ? false : null,
+      undo: entry.undo === true,
+    }
   }).filter((row) => row.item)
   const problems = strings(result.problems)
-  const titleOf = (id: string) => journey?.plan.checkin_items.find((row) => row.id === id)?.title ?? id
+  // The tool names each item; an older result only has the id, which today's items may still name.
+  const titleOf = (row: LoggedEntry) => row.title || journey?.plan.checkin_items.find((item) => item.id === row.item)?.title || row.item
   const today = journey?.today ?? localToday()
-  const undoable = entries.filter((row) => row.date === today)
-  const names = entries.map((row) => `${titleOf(row.item)}${row.done === true ? '' : row.done === false ? '（没做到）' : ''}${row.date && row.date !== today ? `（${row.date.slice(5)}）` : ''}`)
+  const nameOf = (row: LoggedEntry, withState: boolean) => `${titleOf(row)}${withState && row.done === false ? '（没做到）' : ''}${row.date && row.date !== today ? `（${row.date.slice(5)}）` : ''}`
+  // Only a 完成 or 没做到 recorded for today can be taken back here; an undo or a note alone cannot.
+  const answered = entries.filter((row) => !row.undo && row.done !== null)
+  const undoable = answered.filter((row) => row.date === today)
+  const recorded = undone ? answered.filter((row) => row.date !== today) : answered
+  const taken = [...entries.filter((row) => row.undo), ...(undone ? undoable : [])]
+  const noted = entries.filter((row) => !row.undo && row.done === null)
+  const parts = [
+    recorded.length > 0 ? `已记录：${recorded.map((row) => nameOf(row, true)).join('、')}` : '',
+    taken.length > 0 ? `已撤销：${taken.map((row) => nameOf(row, false)).join('、')}` : '',
+    noted.length > 0 ? `已记下备注：${noted.map((row) => nameOf(row, false)).join('、')}` : '',
+  ].filter(Boolean)
+  const onlyTaken = recorded.length === 0 && noted.length === 0
 
   async function undo(): Promise<void> {
     setUndoing(true)
@@ -289,10 +315,10 @@ export function CheckinToolView(props: ToolViewProps): React.ReactElement {
   }
   return h(Shell, {
     call, icon: 'check', title: '打卡', quiet: true,
-    summary: h('span', { className: `lp-chip-saved ${undone ? 'lp-chip-undone' : ''}` },
-      h(Icon, { name: undone ? 'close' : 'check', size: 12, strokeWidth: 2 }), undone ? `已撤销：${names.join('、')}` : `已记录：${names.join('、')}`),
+    summary: h('span', { className: `lp-chip-saved ${onlyTaken ? 'lp-chip-undone' : ''}` },
+      h(Icon, { name: onlyTaken ? 'close' : 'check', size: 12, strokeWidth: 2 }), parts.join('；')),
     action: !undone && undoable.length > 0
-      ? h('button', { type: 'button', className: 'lp-tool-undo', disabled: undoing, onClick: () => { void undo() }, 'aria-label': `撤销今天的打卡：${names.join('、')}` }, undoing ? '撤销中' : '撤销')
+      ? h('button', { type: 'button', className: 'lp-tool-undo', disabled: undoing, onClick: () => { void undo() }, 'aria-label': `撤销今天的打卡：${undoable.map((row) => nameOf(row, true)).join('、')}` }, undoing ? '撤销中' : '撤销')
       : null,
   },
   error ? h('p', { className: 'lp-form-error' }, error) : null,
@@ -374,8 +400,7 @@ export function SituationToolView(props: ToolViewProps): React.ReactElement {
   if (call.state === 'error') return h(Shell, { call, icon: 'user', title: '读取档案与记录', quiet: true, summary: `没有读到：${call.error}`, tone: 'bad' })
   const result = call.result ?? {}
   const indicators = typeof result.indicator_count === 'number' ? result.indicator_count : null
-  const onboarding = objectOf(result.onboarding)
-  const summary = objectOf(objectOf(result.records_summary).checkups != null ? result.records_summary : objectOf(onboarding.records).summary)
+  const summary = objectOf(result.records_summary)
   const checkups = typeof summary.checkups === 'number' ? summary.checkups : null
   const counts = [checkups != null ? `${checkups} 次体检` : '', indicators != null ? `${indicators} 项指标` : ''].filter(Boolean).join('，')
   const changes = (Array.isArray(result.record_changes) ? result.record_changes : []).map(objectOf).filter((row) => row.ask_doctor === true)

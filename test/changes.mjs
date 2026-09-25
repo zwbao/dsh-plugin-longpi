@@ -327,6 +327,7 @@ try {
   assert.match(prompt, /ask_doctor true, say so early and plainly/)
   assert.match(prompt, /Never suggest a supplement \(iron included\), a drug or a dose/)
   const situation = await host.tools.get('read_personal_situation').execute({})
+  assert.ok(situation.records_summary.checkups > 0, 'the chat card says how many checkups were read')
   assert.equal(situation.record_changes[0].key, 'mcv')
   assert.equal(situation.record_changes[0].n_points, 4)
   assert.equal('points' in situation.record_changes[0], false, 'the model gets the rows without their points')

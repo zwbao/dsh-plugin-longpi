@@ -66,7 +66,7 @@ export {
 } from './followup.ts'
 export type { FollowupSettings, FollowupState, FollowupLogRow, FollowupDeps, SendResult } from './followup.ts'
 export { followupTextProblem, followupApprovalReason } from './tools-followup.ts'
-export { buildPlanBrief, draftPlan, acceptedPlan, expectedText, DRAFT_CATEGORIES } from './planner.ts'
+export { briefOptionsOf, buildPlanBrief, draftPlan, acceptedPlan, expectedText, DRAFT_CATEGORIES } from './planner.ts'
 export type { PlanBrief, PlanDraft, DraftItem } from './planner.ts'
 export { guardRoute, isJsonRequest, CONNECTION_UNAVAILABLE } from './routes.ts'
 export {

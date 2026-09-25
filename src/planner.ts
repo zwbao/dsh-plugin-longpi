@@ -12,7 +12,7 @@ import { buildTracking, type ModelCard, type TrackingContext } from './tracking.
 import { CATEGORY_ZH, currentPlan, type Category } from './interventions.ts'
 import type { MountState } from './mirobody.ts'
 import { preferSelf } from './measurements.ts'
-import { FOCUS_ZH, type Focus } from './profile.ts'
+import { FOCUS, FOCUS_ZH, type Focus } from './profile.ts'
 import { sameMeasure } from './records.ts'
 import { checkupMarkerFor, loadReference, markerFor, type Biovar, type BiovarMarker, type EffectRow } from './reference.ts'
 import { SELF_SPEC } from './selfmeasure.ts'
@@ -124,6 +124,16 @@ export interface BriefOptions {
   focus?: readonly Focus[]
   /** Markers the person asked to improve, by name or key; they come first. */
   markers?: readonly string[]
+}
+
+/**
+ * A draft's focus and markers as the tool and the accept route both read them: unknown focus values are
+ * dropped (none left, the saved focus), markers trimmed, at most 8 of 40 characters or fewer.
+ */
+export function briefOptionsOf(focus: unknown, markers: unknown): BriefOptions {
+  const kept = (Array.isArray(focus) ? focus : []).filter((item): item is Focus => (FOCUS as readonly string[]).includes(String(item)))
+  const asked = (Array.isArray(markers) ? markers : []).map((item) => String(item).trim()).filter((item) => item && item.length <= 40).slice(0, 8)
+  return { ...(kept.length > 0 ? { focus: kept } : {}), markers: asked }
 }
 
 export async function buildPlanBrief(context: TrackingContext & { mount?: MountState }, options: BriefOptions = {}): Promise<PlanBrief> {
