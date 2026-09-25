@@ -5,15 +5,19 @@
 // reminders, and the next step. It adds no number of its own: results come
 // from buildTracking (skill scripts), everything else from what is saved.
 
+import type { RecordChange } from './changes.ts'
 import { followupSummary, readFollowup, type FollowupState } from './followup.ts'
 import { addDays, daysBetween, readCheckIns } from './interventions.ts'
+import { measurementInputs } from './measurements.ts'
 import type { MountState } from './mirobody.ts'
 import { CONSENT_VERSION, FOCUS, FOCUS_ZH, RISK_FACTS, RISK_FACT_ZH, type Focus, type Profile, type RiskFact } from './profile.ts'
+import { loadReference } from './reference.ts'
 import { latestSelf, readSelf, SELF_KEYS, SELF_SPEC, type SelfKey } from './selfmeasure.ts'
-import { buildTracking, type BioAge, type Tracking, type TrackingContext } from './tracking.ts'
+import { buildTracking, PHENOAGE_SKILL, type BioAge, type Tracking, type TrackingContext } from './tracking.ts'
 import { PRODUCT_VERSION } from './version.ts'
 
 export type Stage = 'consent' | 'profile' | 'records' | 'first_result' | 'plan' | 'routine'
+export type { RecordChange } from './changes.ts'
 
 export interface Journey {
   version: string
@@ -30,11 +34,17 @@ export interface Journey {
   focus_options: Array<{ key: Focus; label_zh: string }>
   records: { status: 'unconfigured' | 'ok' | 'error'; error: string; indicator_count: number; full_checkups: number; latest_checkup: string | null; mirobody_mounted: boolean }
   results: {
-    /** band_verified and band_missing are additions for the model: with band_missing the band is a lower bound. */
-    bioage: { status: 'ok' | 'blocked'; phenoage: number | null; advance: number | null; date: string | null; checkups: number; band_years: number | null; band_verified: boolean; band_missing: string[]; blocker_zh: string; missing: string[] }
+    /**
+     * band_verified and band_missing are additions for the model: with band_missing the band is a lower bound.
+     * caveat_zh is set when a PhenoAge input changed beyond normal fluctuation in a direction to show a doctor.
+     */
+    bioage: { status: 'ok' | 'blocked'; phenoage: number | null; advance: number | null; date: string | null; checkups: number; band_years: number | null; band_verified: boolean; band_missing: string[]; blocker_zh: string; missing: string[]; caveat_zh?: string }
     risk: { status: 'ok' | 'blocked'; risk_pct: number | null; category_zh: string; date: string | null; blocker_zh: string; missing_labs: string[]; missing_facts: string[] }
   }
   addons: Array<{ item_zh: string; unlocks_zh: string; self_measurable: boolean; self_key?: SelfKey }>
+  /** Changes between checkups larger than normal fluctuation, ask_doctor first; empty when the record cannot be read. */
+  changes: RecordChange[]
+  changes_note_zh: string
   self: { latest: Array<{ key: SelfKey; label_zh: string; value: number; unit: string; date: string; n: number }>; keys: Array<{ key: SelfKey; label_zh: string; unit: string; units: string[] }> }
   plan: { exists: boolean; title: string; version: number | null; items: number; started: string | null; days: number | null; checkin_items: Array<{ id: string; title: string; done_today: boolean }>; streak: number; adherence_pct: number | null }
   reminders: Array<{ kind: 'retest' | 'checkin'; text_zh: string; date: string | null; due: boolean }>
@@ -180,6 +190,19 @@ function bioageResult(bioage: BioAge): Journey['results']['bioage'] {
   }
 }
 
+/** The caveat on phenotypic age when one of its own inputs changed beyond normal fluctuation in a direction to show a doctor. */
+function bioageCaveat(context: TrackingContext, changes: readonly RecordChange[]): string | null {
+  const card = context.catalog.cards.find((item) => item.name === PHENOAGE_SKILL)
+  if (!card) return null
+  // PhenoAge's inputs by their LOINC codes, matched to the biological-variation rows the changes come from.
+  const codes = new Set(measurementInputs(card).filter((spec) => spec.required).flatMap((spec) => spec.loinc ?? []))
+  const markers = loadReference(context.skillsHome).biovar.markers
+  const labels = changes
+    .filter((row) => row.ask_doctor && (markers.find((marker) => marker.key === row.key)?.loinc ?? []).some((code) => codes.has(code)))
+    .map((row) => row.label_zh)
+  return labels.length > 0 ? `表型年龄用到的${labels.join('、')}近期变化明显，原因可能与衰老无关，这次的身体年龄请谨慎看待。` : null
+}
+
 function riskResult(tracking: Tracking): Journey['results']['risk'] {
   const card = tracking.models.find((row) => row.model === 'china-par')
   const pct = card?.now.risk_pct
@@ -316,6 +339,8 @@ function journeyFrom(context: JourneyContext, tracking: Tracking): Journey {
   const points = tracking.bioage.points
   const latest = latestSelf(readSelf(context.dataDir))
   const bioage = bioageResult(tracking.bioage)
+  const caveat = bioage.status === 'ok' ? bioageCaveat(context, tracking.changes) : null
+  if (caveat) bioage.caveat_zh = caveat
   const risk = riskResult(tracking)
   const plan = planOf(context, tracking)
   const body: Body = {
@@ -348,6 +373,8 @@ function journeyFrom(context: JourneyContext, tracking: Tracking): Journey {
     },
     results: { bioage, risk },
     addons: addonsOf(tracking.bioage, risk),
+    changes: tracking.changes,
+    changes_note_zh: tracking.changes_note_zh,
     self: {
       latest: SELF_KEYS.flatMap((key) => {
         const row = latest[key]

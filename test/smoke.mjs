@@ -21,7 +21,7 @@ assert.equal(mod.TOOL_NAMES.length, 18)
 for (const name of ['save_self_measurement', 'draft_intervention_plan', 'set_followup', 'send_followup_message']) assert.ok(mod.TOOL_NAMES.includes(name), name)
 assert.equal(new Set(mod.TOOL_NAMES).size, mod.TOOL_NAMES.length)
 assert.ok(pkg.dsh.client.inject.includes('layout'))
-for (const name of ['planner.mjs', 'followup.mjs']) assert.match(pkg.scripts.test, new RegExp(`node test/${name.replace('.', '\\.')}`), `npm test runs ${name}`)
+for (const name of ['planner.mjs', 'followup.mjs', 'changes.mjs', 'readiness.mjs', 'workspace.mjs']) assert.match(pkg.scripts.test, new RegExp(`node test/${name.replace('.', '\\.')}`), `npm test runs ${name}`)
 assert.equal(require('../package-lock.json').version, '5.0.0')
 assert.deepEqual(mod.HARNESS_SKILLS, ['longpi-dispatch', 'longpi-board', 'longpi-boundary', 'longpi-interventions'])
 

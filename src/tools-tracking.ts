@@ -37,7 +37,7 @@ const HOW_TO_READ = [
   'suggestions are the next steps to offer for the saved plan. A change to the plan is a new draft (draft_intervention_plan), read back and confirmed like any plan. Never add a medicine or a dose.',
 ]
 
-const DRAFT_HOW_TO_USE = 'Tailor the draft with the person (their preferences, constraints, what they already do). State each item\'s evidence (trial average, population, DOI) and that individual results vary. Supplements are options to confirm with a doctor, without a dose. Never start, stop or change a prescription medicine or any dose. Read the plan back with save_intervention_plan confirm=false (pass each item\'s category, title, detail, start, markers and target, and the goals\' marker, value and unit, not the evidence fields) and save only after they agree.'
+const DRAFT_HOW_TO_USE = 'If brief.notes_zh says the record has changes beyond normal fluctuation (超出正常波动), say that first: suggest they have a doctor look at those changes before starting the plan, name no cause, and suggest no supplement or dose for them. Tailor the draft with the person (their preferences, constraints, what they already do). State each item\'s evidence (trial average, population, DOI) and that individual results vary. Supplements are options to confirm with a doctor, without a dose. Never start, stop or change a prescription medicine or any dose. Read the plan back with save_intervention_plan confirm=false (pass each item\'s category, title, detail, start, markers and target, and the goals\' marker, value and unit, not the evidence fields) and save only after they agree.'
 
 export function registerTrackingTools(ctx: Context, config: () => Config, mount: MountState): void {
   const where = () => {

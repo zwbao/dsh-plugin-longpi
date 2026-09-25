@@ -9,6 +9,10 @@ import type { RecordSnapshot } from './records.ts'
 import { runSkill } from './runner.ts'
 import type { Tracking } from './tracking.ts'
 
+/**
+ * Methods the record itself can run (runnableFrom's record field): ready needs at least one input a checkup or
+ * a device records; near and unlock name only such inputs, never a question, an argument or another method's output.
+ */
 export interface Readiness {
   ready: Array<{ name: string; blurb: string; domain: string }>
   near: Array<{ name: string; blurb: string; missing: string[] }>
@@ -28,9 +32,9 @@ export function readiness(catalog: Catalog, records: RecordSnapshot, outputs: Re
     if (!personal(card)) continue
     out.declared += 1
     const run = runnableFrom(card, records.indicators, { age: records.profile.age, sex: records.profile.sex }, outputs)
-    if (run.status === 'ready') out.ready.push({ name: card.name, blurb: card.blurb, domain: card.domain })
-    else if (run.status === 'partial') out.near.push({ name: card.name, blurb: card.blurb, missing: run.missing })
-    if (run.missing.length === 1) {
+    if (run.record === 'ready') out.ready.push({ name: card.name, blurb: card.blurb, domain: card.domain })
+    else if (run.record === 'near') out.near.push({ name: card.name, blurb: card.blurb, missing: run.missing })
+    if (run.missing.length === 1 && run.missing_from_record.length === 1) {
       const item = run.missing[0] as string
       if (!unlock.has(item)) unlock.set(item, new Set())
       unlock.get(item)?.add(card.name)
@@ -61,7 +65,7 @@ export async function runReady(
     if (results.length >= limit) break
     if (!personal(card) || !card.entry?.measurements_flag) continue
     const run = runnableFrom(card, context.records.indicators, { age: context.records.profile.age, sex: context.records.profile.sex }, context.outputs)
-    if (run.status !== 'ready' || run.from_record.length === 0) continue
+    if (run.record !== 'ready' || run.from_record.length === 0) continue
     const measurements: MeasurementIn[] = run.from_record
     const result = await runSkill({
       home: context.skillsHome, dataDir: context.dataDir, name: card.name, args: [], files: [], measurements,
@@ -95,6 +99,14 @@ export function buildReport(input: { name: string; today: string; records: Recor
   lines.push(`- 实足年龄：${profile.age ?? '未填写'}；性别：${profile.sex === 'male' ? '男' : profile.sex === 'female' ? '女' : '未填写'}`)
   lines.push(`- 记录状态：${input.records.record_status === 'ok' ? `已接入 Mirobody（${input.records.indicators.filter((row) => row.source !== 'self').length} 项指标）` : '未接入'}`, '')
   const tracking = input.tracking
+  if (tracking && tracking.changes.length > 0) {
+    lines.push('## 记录里的明显变化', '')
+    for (const row of tracking.changes) {
+      lines.push(`- ${row.text_zh}。${row.advice_zh}`)
+      if (row.caveat_zh) lines.push(`  - ${row.caveat_zh}`)
+    }
+    lines.push('', tracking.changes_note_zh, '')
+  }
   if (tracking) {
     const bio = tracking.bioage
     lines.push('## 表型年龄（PhenoAge，Levine 2018）', '')

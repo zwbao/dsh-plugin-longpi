@@ -10,7 +10,8 @@ export interface MatchHit {
   why: string[]
   has_script: boolean
   tier: string
-  runnable: { status: Runnable['status']; missing: string[] }
+  /** record is runnableFrom's answer for the record alone: ready, near (one or two tests short) or none. */
+  runnable: { status: Runnable['status']; missing: string[]; record: Runnable['record'] }
 }
 
 export interface DomainRow {
@@ -214,13 +215,12 @@ export function matchSkills(
       }
     })
     const run = runnableFrom(card, rows, profile, options.outputs)
-    if (run.status === 'ready') {
-      score += 6
-      why.push('记录里的输入已经齐了')
-    } else if (run.status === 'partial') {
-      score += 2
-      why.push(`还缺 ${run.missing.join('、')}`)
-    }
+    // A method that can run now ranks up in chat, whatever supplies its inputs; the labels, and the lists
+    // without a question below, speak for the record alone.
+    if (run.status === 'ready') score += 6
+    else if (run.status === 'partial') score += 2
+    if (run.record === 'ready') why.push('记录里的输入已经齐了')
+    else if (run.status === 'partial') why.push(`还缺 ${run.missing.join('、')}`)
     const words = lexical(card, asked)
     score += Math.min(words.score, 12) * (detected.length > 0 && !words.strong ? 0.5 : 1)
     specific += words.specific
@@ -253,12 +253,12 @@ export function matchSkills(
       why: [...new Set(why)].slice(0, 4),
       has_script: Boolean(card.script),
       tier: card.tier,
-      runnable: { status: run.status, missing: run.missing },
+      runnable: { status: run.status, missing: run.missing, record: run.record },
     }
-    if (!asked && run.status === 'partial' && card.tier !== 'C') near.push(hit)
+    if (!asked && run.record === 'near' && card.tier !== 'C') near.push(hit)
     if (asked) {
       if (specific === 0) continue
-    } else if (run.status !== 'ready' && !signal) {
+    } else if (run.record !== 'ready' && !signal) {
       continue
     }
     if (score <= 0) continue

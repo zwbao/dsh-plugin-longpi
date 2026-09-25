@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as mod from '../lib/index.js'
-import { startFakeMirobody } from '../test/fake-mirobody.mjs'
+import { loadRecord, startFakeMirobody } from '../test/fake-mirobody.mjs'
 
 const here = dirname(fileURLToPath(import.meta.url))
 const out = join(here, 'out')
@@ -20,8 +20,18 @@ const home = mod.resolveSkillsHome(process.env.LONGEVITY_SKILLS_HOME || resolve(
 if (!home) throw new Error('no longevity-skills checkout found')
 const TODAY = '2026-09-24'
 
+// The fixture record with one made-up series changed: MCV falling over the four checkups, beyond its
+// normal fluctuation, so the page shows a change to take to a doctor (and body age its caveat) next to
+// the improvements the fixture already has. test/fixtures/mirobody/record.json itself stays as Mirobody rendered it.
+const MCV_FALLING = { '2025-10-18': '90.2', '2026-01-20': '88.1', '2026-04-22': '85.7', '2026-08-26': '83.0' }
+const record = loadRecord()
+const demo = {
+  ...record,
+  observations: record.observations.map((row) => (row.indicator === 'Mean Corpuscular Volume-MCV' && MCV_FALLING[row.date] ? { ...row, value: MCV_FALLING[row.date] } : row)),
+}
+
 const dataDir = mkdtempSync(join(tmpdir(), 'longpi-preview-'))
-const server = await startFakeMirobody()
+const server = await startFakeMirobody({ record: demo })
 try {
   const config = {
     mcpUrl: server.url, mcpToken: '', member: '', timeoutMs: 10000, pythonBin: '/nonexistent/python', mirobodyHome: '',
@@ -102,7 +112,8 @@ try {
   writeFileSync(join(out, 'self.json'), `${JSON.stringify(selfRows, null, 1)}\n`)
   writeFileSync(join(out, 'plan-draft.json'), `${JSON.stringify(planDraft, null, 1)}\n`)
   writeFileSync(join(out, 'followup.json'), `${JSON.stringify(followup, null, 1)}\n`)
-  console.log(`preview written to ${out} (${tracking.items.length} items, phenotypic age at ${tracking.bioage.points.length} checkups, stage ${journey.stage}, draft ${planDraft.draft?.items.length ?? 0} items, follow-up ${followup.settings.enabled ? 'on' : 'off'})`)
+  const toDoctor = journey.changes.filter((row) => row.ask_doctor).length
+  console.log(`preview written to ${out} (${tracking.items.length} items, phenotypic age at ${tracking.bioage.points.length} checkups, stage ${journey.stage}, draft ${planDraft.draft?.items.length ?? 0} items, follow-up ${followup.settings.enabled ? 'on' : 'off'}, ${journey.changes.length} record changes, ${toDoctor} to show a doctor)`)
 } finally {
   await server.close()
   rmSync(dataDir, { recursive: true, force: true })

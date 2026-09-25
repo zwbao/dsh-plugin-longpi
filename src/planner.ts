@@ -130,6 +130,9 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
   const { profile, indicators, medications } = context.records
   const focus = [...(options.focus ?? profile.focus)]
   const notes: string[] = []
+  // A change to show a doctor comes before any plan.
+  const toDoctor = tracking.changes.filter((row) => row.ask_doctor).map((row) => row.label_zh)
+  if (toDoctor.length > 0) notes.push(`记录里有超出正常波动的变化（${toDoctor.join('、')}），建议先请医生看过再开始方案。`)
   const priorities = prioritiesOf({
     focus, asked: options.markers ?? [], models: tracking.models, biovar: reference.biovar, indicators, notes,
   })

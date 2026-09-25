@@ -100,7 +100,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
 
   ctx.tools.register(defineTool({
     name: 'read_personal_situation',
-    description: 'Read this person\'s saved profile, a summary of their Mirobody record (indicator names, latest values, units, medication plan), their own latest self measurements (waist, home blood pressure as a 7-day mean, weight), readouts earlier skill runs produced, which methods their record can already run, and onboarding: the stage they are at (consent, profile, records, first_result, plan, routine), the next step, unanswered profile questions, the first results (phenotypic age, China-PAR) or what blocks them, and the add-on tests that would unlock them. Read-only. Use this before choosing a longevity skill. Absence means not on file. Do not invent a lab, a dose, or a genotype. Genetics are not listed here; name rsIDs with query_genetic_data. An estimated age from birth year is not the age to pass to a skill unless the saved age field is set.',
+    description: 'Read this person\'s saved profile, a summary of their Mirobody record (indicator names, latest values, units, medication plan), their own latest self measurements (waist, home blood pressure as a 7-day mean, weight), readouts earlier skill runs produced, which methods their record can already run, and onboarding: the stage they are at (consent, profile, records, first_result, plan, routine), the next step, unanswered profile questions, the first results (phenotypic age, China-PAR) or what blocks them, and the add-on tests that would unlock them; and record_changes: markers whose change between checkups is larger than normal within-person fluctuation, the ones to show a doctor first. Read-only. Use this before choosing a longevity skill. Absence means not on file. Do not invent a lab, a dose, or a genotype. Genetics are not listed here; name rsIDs with query_genetic_data. An estimated age from birth year is not the age to pass to a skill unless the saved age field is set.',
     parameters: {},
     output: jsonOut,
     timeoutMs: 180000,
@@ -112,6 +112,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
       const dispatch = matchSkills(catalog.cards, '', records.indicators, clampMatches(current.maxSkillMatches), {
         intents: catalog.intents, profile, outputs,
       })
+      const read = await journeyOf(input)
       return asJson({
         profile: records.profile,
         estimated_age_from_birth_year: records.estimated_age,
@@ -125,7 +126,8 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
         record_status: records.record_status,
         record_error: records.record_error,
         mcp: records.mcp,
-        ...onboardingOf(await journeyOf(input), records.profile, input.dataDir),
+        ...onboardingOf(read, records.profile, input.dataDir),
+        ...recordChangesOf(read),
         note: 'Medication doses are what the record says. They are not an instruction to change a dose. A missing indicator was not on file. Indicators named ...（自测） are measurements the person entered themselves (source self), used only when newer than the record. earlier_readouts are outputs of skills already run for this person; cite them with their date. onboarding says where the person is, the first results or what blocks them, and what to add at the next checkup.',
       })
     },
@@ -153,10 +155,10 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
             const card = byName.get(name)
             if (!card) return { name, available: false }
             const run = runnableFrom(card, records.indicators, profile, outputs)
-            return { name, tier: card.tier, blurb: card.blurb, runnable: run.status, missing: run.missing }
+            return { name, tier: card.tier, blurb: card.blurb, runnable: run.status, from_record: run.record, missing: run.missing }
           }),
         })),
-        note: 'Pass an intent id to match_longevity_skills to rank that intent\'s skills first. intervention_evidence questions go to query_longevity_evidence.',
+        note: 'Pass an intent id to match_longevity_skills to rank that intent\'s skills first. intervention_evidence questions go to query_longevity_evidence. runnable says whether every required input is there from any source (the profile, earlier outputs, the record); from_record says whether the record itself supplies it (ready) or is one or two tests short (near). Only from_record ready or near may be called 已经能算 or 再测一项就能算.',
       })
     },
   }))
@@ -519,6 +521,24 @@ const HOW_TO_READ_RESULTS = [
   'If band_years is null, no band is available. China-PAR (results.risk) has no band at all. Never estimate or invent a band.',
   'When a result is blocked, say blocker_zh and offer addons as tests for the next checkup.',
 ].join(' ')
+
+const HOW_TO_READ_CHANGES = [
+  'record_changes are changes between checkups larger than normal within-person variation plus analytical error (the reference change value, from the biological-variation table); anything smaller is not listed.',
+  'When a row has ask_doctor true, say so early and plainly: name the marker and give its numbers and dates from text_zh, then advice_zh. Do not name a cause or a diagnosis, and never suggest a supplement (iron included), a drug or a dose for it.',
+  'Rows with verdict better are changes beyond normal fluctuation in the good direction. Quote caveat_zh when present. Differences between labs or instruments are not included: say so when the dates may come from different places (record_changes_note_zh).',
+].join(' ')
+
+/** Changes between checkups for the model: the journey's rows without their points, and how to talk about them. */
+function recordChangesOf(read: JourneyRead) {
+  if (!read.journey) {
+    return { record_changes: [], record_changes_how_to_read: 'Changes between checkups are still being read; do not guess them. Call read_personal_situation again later.' }
+  }
+  return {
+    record_changes: read.journey.changes.map(({ points, ...row }) => ({ ...row, n_points: points.length })),
+    record_changes_note_zh: read.journey.changes_note_zh,
+    record_changes_how_to_read: HOW_TO_READ_CHANGES,
+  }
+}
 
 function onboardingOf(read: JourneyRead, profile: Profile, dataDir: string) {
   const { journey, error, pending } = read

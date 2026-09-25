@@ -15,6 +15,8 @@ export interface Config {
   maxSkillMatches: number
   skillRuntimes: Record<string, string>
   skillsVersion: string
+  /** On a DSH with no workspace, register <dataDir>/workspace as 「健康」 once, so a session can open. */
+  bootstrapWorkspace: boolean
 }
 
 export const Config: Schema<Config> = Schema.object({
@@ -32,4 +34,5 @@ export const Config: Schema<Config> = Schema.object({
   maxSkillMatches: Schema.number().default(8),
   skillRuntimes: Schema.dict(Schema.string()).default({}),
   skillsVersion: Schema.string().default(''),
+  bootstrapWorkspace: Schema.boolean().default(true),
 })

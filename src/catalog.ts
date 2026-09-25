@@ -9,6 +9,8 @@ export interface InputSpec {
   label_zh: string
   aliases?: string[]
   loinc?: string[]
+  /** Mirobody device series that hold this input (a wearable metric), like BiovarMarker.device_codes. */
+  device_codes?: string[]
   unit?: string
   accept?: Record<string, number>
   range?: [number, number]

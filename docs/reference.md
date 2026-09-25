@@ -22,6 +22,7 @@ Configuration keys, the tools the model can call, commands and HTTP routes, and 
 | `dataDir` | Profile, receipts, earlier readouts, plans and check-ins. Empty is `~/.dsh/longpi`. |
 | `maxSkillMatches` | How many skills a question may dispatch. Default `8`. |
 | `timeoutMs` | Budget for the Mirobody bridge and MCP calls. Default `30000`. |
+| `bootstrapWorkspace` | On a DeepSeek Harness with no workspace yet, create `<dataDir>/workspace` once and register it as the workspace 「健康」, so a session can open and the LongPi home works. Never touches a registry that already has workspaces, and never creates it again after that (a marker `workspace-bootstrap.json` in `dataDir` records it, so a workspace you delete stays deleted). Default `true`. |
 
 ## What the model can call
 
@@ -29,7 +30,7 @@ Fourteen LongPi tools. Mounting Mirobody adds its eight tools in the same proces
 
 | Tool | What it returns |
 | --- | --- |
-| `read_personal_situation` | Saved age, sex, birth year; indicator names, values, units; the medication plan; earlier readouts; which methods the record can already run and which miss one or two inputs. |
+| `read_personal_situation` | Saved age, sex, birth year; indicator names, values, units; the medication plan; earlier readouts; which methods the record can already run and which miss one or two tests; `record_changes`, markers whose change between checkups is larger than normal fluctuation. |
 | `list_longevity_intents` | The kinds of questions the library answers and, for this person, which skills of each are ready. |
 | `match_longevity_skills` | Ranked skills for this question and this record, with the detected intents, why each matched, and what each still needs. |
 | `read_longevity_skill` | The skill's instructions plus its manifest: every input with unit, accepted units, range and whether it comes from the record or the profile. |
@@ -54,12 +55,14 @@ The plan is the person's own (or one a doctor or longevity coach gave them). The
 
 An item counts as working on a marker only when all of these hold: a baseline within 180 days before it started; a retest after the marker's minimum interval (about 3 months for HbA1c); a change beyond the reference change value built from within-person biological variation and assay imprecision (log-normal for CRP and triglycerides, 7-day means for home blood pressure); and enough adherence over the last 12 weeks (wearable threshold, the Mirobody dose log, or check-ins; a day with no record is unknown, not a miss). Within-person variation comes from `data/biological_variation.json` in longevity-skills, where every row cites a journal article and quotes the line that prints the number; a marker without a checkable source gets no band, and its verdict says it cannot be judged. When something else changed at the same time, the verdict says only the combination can be judged. There are four verdicts: 有效 (working), 波动内 (within noise), 反向 (the wrong way), 无法判断 (cannot tell). Next steps are limited to adherence, retesting on time, a missing test, changing one thing at a time, and talking to a doctor or coach; never a medicine or a dose.
 
+**Changes in the record.** Without any plan, every checkup marker that has a biological-variation row (LOINC rows only; wearable series and the person's own measurements are left out) is checked the same way: the latest result against the one before it and, with three or more checkup days, against the first of the last six. A change counts only beyond the reference change value; the larger overshoot is reported. A change in the good direction (the row's `better`) is good news; any other one, including every marker with no good direction, is one to show a doctor, and those come first. Markers compared on multi-day means (home blood pressure) are not checked from single readings. Differences between labs or instruments are not included. The journey (`changes`), `read_personal_situation` (`record_changes`), the plan draft's notes and the export report all show the same rows.
+
 Phenotypic age is recomputed by the skill at every checkup with all nine blood markers; goal estimates come from the skill too (`--targets`, `levers.json`) and are labelled model estimates. The plugin never states how many years a person will live.
 
 ## Dispatch
 
 1. **Intent.** The question is matched against `intents.json` in longevity-skills (biological age, methylation age, organ age, wearables and sleep, telomere, intervention evidence, genes, before and after, imaging, cognition, frailty, immunity, model organisms). Drugs, supplements and genes named in the evidence store count too. The model can also pass an intent id.
-2. **What the record can run.** Each skill's `skill.json` declares its inputs with LOINC codes, names as they appear on lab reports, units and ranges. A skill whose inputs are all in the record (or in earlier readouts) ranks up and is marked ready; one missing one or two inputs is listed with what is missing.
+2. **What the record can run.** Each skill's `skill.json` declares its inputs with LOINC codes, names as they appear on lab reports, units and ranges. A skill counts as ready from the record only when every required input is there and at least one input a checkup or a device records (one with a LOINC or device code) came from the record; one missing one or two such tests, and nothing else, is listed with what is missing. A method that needs only age, an answer, or another method's output is never listed as ready or near from the record; it is still matched by the question.
 3. **Ranking.** The intent's own ordering, readiness, and words the question shares with the skill. Tier C skills (animal and cell work, or inputs no person has) appear only when the question names that organism. When nothing specific matches, the list is empty rather than filled with weak guesses.
 
 `test/dispatch-cases.json` holds 50 everyday questions and `test/dispatch-heldout.json` 15 more that were not used for tuning; `npm test` fails if the top-3 hit rate drops below 90% (50 cases) or 80% (held-out), or if an animal skill reaches a question that names no organism.

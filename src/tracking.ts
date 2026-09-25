@@ -7,6 +7,7 @@
 
 import { createHash } from 'node:crypto'
 import type { Catalog, SkillCard } from './catalog.ts'
+import { buildChanges, CHANGES_NOTE_ZH, type RecordChange } from './changes.ts'
 import type { Config } from './config.ts'
 import { adherenceFor, evaluatePlan, resolveMarkers, suggestNext, type Adherence, type ItemSummary, type LeverHint, type ResolvedMarker, type Suggestion } from './evaluate.ts'
 import { readHistory, seriesOf } from './history.ts'
@@ -104,6 +105,9 @@ export interface Tracking {
   checkins: CheckIn[]
   reference: { biovar_markers: number; biovar_verified: number; effects: number; effects_verified: number; error?: string }
   errors: string[]
+  /** Changes between checkups larger than normal fluctuation (changes.ts), ask_doctor first. */
+  changes: RecordChange[]
+  changes_note_zh: string
 }
 
 const memo = new Map<string, { at: number; value: Promise<Tracking> }>()
@@ -153,14 +157,17 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
   const reference = loadReference(context.skillsHome)
   const errors: string[] = []
   const versions = readPlans(context.dataDir).map((row) => ({ version: row.version, saved_at: row.saved_at, title: row.title, items: row.items.length }))
+  // Read alongside the skill runs; a failed read shows no changes rather than taking the rest down.
+  const changesRead = buildChanges(context).catch(() => ({ changes: [], note_zh: CHANGES_NOTE_ZH }))
   const bioage = await ensureBioAge(context, reference)
   const goals = plan?.goals ?? []
   const models = await modelCards(context, reference, goals)
   const levers = models.find((card) => card.model === 'phenoage')?.levers ?? []
+  const { changes, note_zh: changesNote } = await changesRead
   if (!plan) {
     return {
       status: 'no_plan', today: context.today, plan: null, versions, items: [], suggestions: [], charts: [], bioage, models,
-      checkins: [], reference: referenceStats(reference), errors,
+      checkins: [], reference: referenceStats(reference), errors, changes, changes_note_zh: changesNote,
     }
   }
 
@@ -220,7 +227,7 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
   const charts = chartsFor(plan, resolvedList, series, reference, goals)
   return {
     status: 'ok', today: context.today, plan, versions, items, suggestions, charts, bioage, models,
-    checkins: checkins.slice(-30).reverse(), reference: referenceStats(reference), errors,
+    checkins: checkins.slice(-30).reverse(), reference: referenceStats(reference), errors, changes, changes_note_zh: changesNote,
   }
 }
 

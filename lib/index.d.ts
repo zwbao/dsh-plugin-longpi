@@ -64,6 +64,8 @@ interface Config {
   maxSkillMatches: number;
   skillRuntimes: Record<string, string>;
   skillsVersion: string;
+  /** On a DSH with no workspace, register <dataDir>/workspace as 「健康」 once, so a session can open. */
+  bootstrapWorkspace: boolean;
 }
 declare const Config: Schema<Config>;
 //#endregion
@@ -92,6 +94,8 @@ interface InputSpec {
   label_zh: string;
   aliases?: string[];
   loinc?: string[];
+  /** Mirobody device series that hold this input (a wearable metric), like BiovarMarker.device_codes. */
+  device_codes?: string[];
   unit?: string;
   accept?: Record<string, number>;
   range?: [number, number];
@@ -233,10 +237,19 @@ declare function unitFactor(spec: InputSpec, unit: string): number | null;
 /** Validate and convert measurements; build the CSV in the input's own units. */
 declare function stageMeasurements(card: SkillCard, items: readonly MeasurementIn[]): Staged;
 interface Runnable {
+  /** Whether the required inputs are all there (ready), one or two short (partial), or not; from any source. */
   status: 'ready' | 'partial' | 'none' | 'unknown';
   have: string[];
   missing: string[];
   from_record: MeasurementIn[];
+  /**
+   * The same question asked of the record alone. ready: every required input is there and at least one
+   * record-backed input (a LOINC or device code) came from the record. near: only record-backed inputs are
+   * missing, one or two of them. A method with no record-backed input is never ready or near from the record.
+   */
+  record: 'ready' | 'near' | 'none';
+  /** Missing required inputs a checkup or a device could supply. */
+  missing_from_record: string[];
 }
 /** Which of this skill's required inputs the record, the profile and past outputs already supply. */
 declare function runnableFrom(card: SkillCard, indicators: readonly RecordIndicator[], profile: {
@@ -253,9 +266,11 @@ interface MatchHit {
   why: string[];
   has_script: boolean;
   tier: string;
+  /** record is runnableFrom's answer for the record alone: ready, near (one or two tests short) or none. */
   runnable: {
     status: Runnable['status'];
     missing: string[];
+    record: Runnable['record'];
   };
 }
 interface DomainRow {
@@ -801,6 +816,63 @@ declare function buildBoard(input: {
   boundary: string;
 };
 //#endregion
+//#region src/changes.d.ts
+interface RecordChange {
+  /** Biological-variation key, e.g. 'mcv'. */
+  key: string;
+  label_zh: string;
+  /** The biological-variation row's unit; every point is converted to it. */
+  unit: string;
+  points: Array<{
+    date: string;
+    value: number;
+  }>;
+  /** pct is rounded to 1 decimal. */
+  compare: {
+    from_date: string;
+    from: number;
+    to_date: string;
+    to: number;
+    pct: number;
+  };
+  /** The reference change value in percent, 1 decimal, e.g. { up: 8.4, down: -8.4 }. */
+  band_pct: {
+    up: number;
+    down: number;
+  };
+  direction: 'up' | 'down';
+  verdict: 'better' | 'worse' | 'unclear';
+  ask_doctor: boolean;
+  text_zh: string;
+  advice_zh: string;
+  /** The row's own caveat, when it has one. */
+  caveat_zh?: string;
+  /** Where the within-person variation comes from (the row's cvi_source). */
+  source: {
+    title: string;
+    url: string;
+    doi?: string;
+  };
+  verified: boolean;
+}
+interface ChangesContext {
+  config: Config;
+  skillsHome: string;
+  records: RecordSnapshot;
+  today: string;
+}
+declare const CHANGES_NOTE_ZH = "判断依据：两次结果之差超过同一个人正常波动与检测误差合成的参考变化值（RCV，z=1.96）才算真实变化；变异数据来自 longevity-skills 的 data/biological_variation.json，每一行注明期刊出处。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。";
+/**
+ * Changes between checkups larger than the reference change value, ask_doctor
+ * first, then the furthest past its band; at most six. Checkup rows only
+ * (Mirobody rows with a LOINC code): wearable series and the person's own
+ * measurements are left out. An unread record gives no changes.
+ */
+declare function buildChanges(context: ChangesContext): Promise<{
+  changes: RecordChange[];
+  note_zh: string;
+}>;
+//#endregion
 //#region src/interventions.d.ts
 declare const CATEGORIES: readonly ["diet", "exercise", "sleep", "supplement", "drug", "behavior", "weight", "other"];
 type Category = typeof CATEGORIES[number];
@@ -922,6 +994,8 @@ interface BiovarMarker {
   /** Compare means over this many days, because the CVI was measured on such means (home blood pressure). */
   average_days?: number;
   population?: string;
+  /** What the reader should know about this row's band (a very small CVI, results excluded from the study). */
+  caveat_zh?: string;
   verified: boolean;
 }
 interface Biovar {
@@ -1232,6 +1306,9 @@ interface Tracking {
     error?: string;
   };
   errors: string[];
+  /** Changes between checkups larger than normal fluctuation (changes.ts), ask_doctor first. */
+  changes: RecordChange[];
+  changes_note_zh: string;
 }
 declare function invalidateTracking(): void;
 /** Bumped by every invalidateTracking (a check-in, a self measurement, a plan or profile save): readers keeping their own copy refresh on a change. */
@@ -1258,6 +1335,10 @@ declare function modelGoals(context: TrackingContext, goals: PlanVersion['goals'
 }>;
 //#endregion
 //#region src/overview.d.ts
+/**
+ * Methods the record itself can run (runnableFrom's record field): ready needs at least one input a checkup or
+ * a device records; near and unlock name only such inputs, never a question, an argument or another method's output.
+ */
 interface Readiness {
   ready: Array<{
     name: string;
@@ -1577,7 +1658,10 @@ interface Journey {
     mirobody_mounted: boolean;
   };
   results: {
-    /** band_verified and band_missing are additions for the model: with band_missing the band is a lower bound. */
+    /**
+     * band_verified and band_missing are additions for the model: with band_missing the band is a lower bound.
+     * caveat_zh is set when a PhenoAge input changed beyond normal fluctuation in a direction to show a doctor.
+     */
     bioage: {
       status: 'ok' | 'blocked';
       phenoage: number | null;
@@ -1589,6 +1673,7 @@ interface Journey {
       band_missing: string[];
       blocker_zh: string;
       missing: string[];
+      caveat_zh?: string;
     };
     risk: {
       status: 'ok' | 'blocked';
@@ -1606,6 +1691,9 @@ interface Journey {
     self_measurable: boolean;
     self_key?: SelfKey;
   }>;
+  /** Changes between checkups larger than normal fluctuation, ask_doctor first; empty when the record cannot be read. */
+  changes: RecordChange[];
+  changes_note_zh: string;
   self: {
     latest: Array<{
       key: SelfKey;
@@ -1859,9 +1947,41 @@ declare function acceptedPlan(brief: PlanBrief, posted: unknown, today: string):
   problems: string[];
 };
 //#endregion
+//#region src/workspace.d.ts
+/** The part of DSH's workspaceRegistry service (@deepseek-ai/dsh-workspace) this uses. */
+interface WorkspaceRegistryLike {
+  list(): ReadonlyArray<{
+    id: string;
+    path: string;
+  }>;
+  create(path: string, title?: string): Promise<{
+    id: string;
+    path: string;
+  }>;
+}
+declare const WORKSPACE_MARKER = "workspace-bootstrap.json";
+declare const WORKSPACE_DIR = "workspace";
+declare const WORKSPACE_TITLE = "健康";
+type BootstrapResult = {
+  status: 'created';
+  path: string;
+  workspace_id: string;
+} | {
+  status: 'disabled' | 'done_before' | 'not_empty' | 'no_registry';
+} | {
+  status: 'error';
+  error: string;
+};
+/** Create the 健康 workspace when the registry is empty and it was never created before. Never throws. */
+declare function bootstrapWorkspace(registry: WorkspaceRegistryLike | null | undefined, options: {
+  dataDir: string;
+  enabled: boolean;
+  now?: Date;
+}): Promise<BootstrapResult>;
+//#endregion
 //#region src/index.d.ts
 declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { CONSENT_VERSION, Config, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMPTY_PROFILE, FOCUS, FOCUS_ZH, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, HARNESS_SKILLS, type Journey, PHENOAGE_SKILL, PRODUCT_VERSION, type PlanBrief, type PlanDraft, type Profile, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RiskFact, SELF_ALIASES, SELF_KEYS, SELF_SPEC, type SelfKey, type SelfRow, type SendResult, type Stage, TOOL_NAMES, WEBHOOK_KINDS, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, buildBoard, buildCalendar, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, cellNumber, commandExcerpt, currentPlan, daysBetween, decideFollowup, deleteSelf, desktopCommand, desktopSupported, detectIntents, domainSummary, draftPlan, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expectedText, foldLine, foldName, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, homeBloodPressure, inQuiet, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, maskUrl, matchSkills, mentionedEntities, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, profileComplete, publicFollowup, rcvBand, readCheckIns, readFailed, readFollowup, readFollowupLog, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, runReady, runSkill, runnableFrom, sameMeasure, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, stageMeasurements, stageNow, startFollowup, suggestNext, summarizeIndicators, summarizeMedications, tableOf, trackingGeneration, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };
+export { type BootstrapResult, CHANGES_NOTE_ZH, CONSENT_VERSION, Config, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMPTY_PROFILE, FOCUS, FOCUS_ZH, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, HARNESS_SKILLS, type Journey, PHENOAGE_SKILL, PRODUCT_VERSION, type PlanBrief, type PlanDraft, type Profile, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RecordChange, type RiskFact, SELF_ALIASES, SELF_KEYS, SELF_SPEC, type SelfKey, type SelfRow, type SendResult, type Stage, TOOL_NAMES, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, bootstrapWorkspace, buildBoard, buildCalendar, buildChanges, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, cellNumber, commandExcerpt, currentPlan, daysBetween, decideFollowup, deleteSelf, desktopCommand, desktopSupported, detectIntents, domainSummary, draftPlan, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expectedText, foldLine, foldName, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, homeBloodPressure, inQuiet, indicatorsFromTable, inject, invalidateRecords, invalidateTracking, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, maskUrl, matchSkills, mentionedEntities, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseNumber, parseReadme, preGuard, profileComplete, publicFollowup, rcvBand, readCheckIns, readFailed, readFollowup, readFollowupLog, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, rememberMedications, reportExcerpt, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, runReady, runSkill, runnableFrom, sameMeasure, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, stageMeasurements, stageNow, startFollowup, suggestNext, summarizeIndicators, summarizeMedications, tableOf, trackingGeneration, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };

@@ -29,6 +29,8 @@ export interface BiovarMarker {
   /** Compare means over this many days, because the CVI was measured on such means (home blood pressure). */
   average_days?: number
   population?: string
+  /** What the reader should know about this row's band (a very small CVI, results excluded from the study). */
+  caveat_zh?: string
   verified: boolean
 }
 

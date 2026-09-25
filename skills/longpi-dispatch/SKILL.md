@@ -14,6 +14,10 @@ description: Dispatch longevity-skills for one person. Start from the onboarding
 - **records**：说明怎么连接 Mirobody：在 Mirobody 上传体检报告（PDF 或照片）或连接手环，生成个人 MCP 地址，重新运行安装命令时加上 `--mcp-url`。不要编造记录。
 - **first_result 及以后**：不等对方问，先给出表型年龄（有多次体检就说趋势）和 China-PAR 风险，都说“模型估计”；工具给了正常波动才带上（`band_missing` 不为空时这个范围只是下限，China-PAR 没有波动范围，不要自己估）。算不出就说卡在哪里，列出 `addons`。然后问“想先改善哪一项？”，可以和对方一起起草方案，见 `longpi-interventions`。
 
+## 记录里的明显变化
+
+`record_changes` 列出两次体检之间超出个体正常波动（参考变化值）的指标。其中有 `ask_doctor` 为 true 的行时，先说这件事，放在其他结果之前：照 `text_zh` 说出指标、数值和日期，再转述 `advice_zh`，建议带着这几次体检报告咨询医生。不推测原因，不下诊断，也不建议任何补剂（包括铁剂）、药物或剂量。`verdict` 为 better 的行可以作为好消息提及；有 `caveat_zh` 时一并说明。
+
 对方报出自己量的腰围、家庭血压或体重时，用 `save_self_measurement`，单位照对方说的传（斤、尺、寸、英寸会换算），不要替对方估一个值。
 
 ## 三类问题

@@ -2,7 +2,8 @@
 // same rules as skillkit.py in the skill: key names carry their unit, aliases
 // are read in the input's unit unless unit_required, units convert only with
 // the factors skill.json declares, and ranges are checked after conversion.
-// Also decides which skills this person's record can already run.
+// Also decides which skills this person's record can already run, and which
+// are ready (or one or two tests short) from the record itself.
 
 import type { InputSpec, SkillCard } from './catalog.ts'
 import { foldName, nameVariants, normalizeUnit, parseNumber } from './units.ts'
@@ -167,10 +168,24 @@ export function stageMeasurements(card: SkillCard, items: readonly MeasurementIn
 }
 
 export interface Runnable {
+  /** Whether the required inputs are all there (ready), one or two short (partial), or not; from any source. */
   status: 'ready' | 'partial' | 'none' | 'unknown'
   have: string[]
   missing: string[]
   from_record: MeasurementIn[]
+  /**
+   * The same question asked of the record alone. ready: every required input is there and at least one
+   * record-backed input (a LOINC or device code) came from the record. near: only record-backed inputs are
+   * missing, one or two of them. A method with no record-backed input is never ready or near from the record.
+   */
+  record: 'ready' | 'near' | 'none'
+  /** Missing required inputs a checkup or a device could supply. */
+  missing_from_record: string[]
+}
+
+/** An input a checkup or a device records: a measurement with a LOINC or device code. */
+export function recordBacked(spec: InputSpec): boolean {
+  return (spec.from ?? 'measurements') === 'measurements' && ((spec.loinc ?? []).length > 0 || (spec.device_codes ?? []).length > 0)
 }
 
 /** Which of this skill's required inputs the record, the profile and past outputs already supply. */
@@ -181,13 +196,16 @@ export function runnableFrom(
   outputs: Record<string, unknown> = {},
 ): Runnable {
   if (card.inputsStatus === 'none' || card.inputs.length === 0 || !card.script) {
-    return { status: 'unknown', have: [], missing: [], from_record: [] }
+    return { status: 'unknown', have: [], missing: [], from_record: [], record: 'none', missing_from_record: [] }
   }
   const have: string[] = []
   const missing: string[] = []
   const fromRecord: MeasurementIn[] = []
   const byLoinc = new Map<string, RecordIndicator>()
   for (const row of indicators) if (row.loinc) byLoinc.set(row.loinc, row)
+  // Optional inputs count too: a method that reads routine labs when present is ready from the record once one is.
+  const recordHas = card.inputs.some((spec) => recordBacked(spec) && matchIndicator(spec, indicators, byLoinc) != null)
+  const missingFromRecord: string[] = []
   for (const spec of card.inputs) {
     if (!spec.required) continue
     const source = spec.from ?? 'measurements'
@@ -209,6 +227,7 @@ export function runnableFrom(
         continue
       }
       missing.push(spec.label_zh)
+      if (recordBacked(spec)) missingFromRecord.push(spec.label_zh)
       continue
     }
     if (source === 'output' && spec.output_of?.some((key) => key in outputs)) {
@@ -218,7 +237,9 @@ export function runnableFrom(
     missing.push(spec.label_zh)
   }
   const status = missing.length === 0 ? 'ready' : (have.length > 0 && missing.length <= 2 ? 'partial' : 'none')
-  return { status, have, missing, from_record: fromRecord }
+  const record = missing.length === 0 ? (recordHas ? 'ready' : 'none')
+    : status === 'partial' && missingFromRecord.length === missing.length ? 'near' : 'none'
+  return { status, have, missing, from_record: fromRecord, record, missing_from_record: missingFromRecord }
 }
 
 /** The record indicator that holds one declared input, by LOINC code first, then by name. */
@@ -232,6 +253,10 @@ function matchIndicator(spec: InputSpec, indicators: readonly RecordIndicator[],
   for (const code of spec.loinc ?? []) {
     const row = byLoinc.get(code)
     if (row && parseNumber(row.value) != null) return row
+  }
+  for (const code of spec.device_codes ?? []) {
+    const row = indicators.find((item) => item.source !== 'self' && item.name === code && parseNumber(item.value) != null)
+    if (row) return row
   }
   const names = new Set([spec.key, spec.label_zh, ...(spec.aliases ?? [])].map((name) => foldName(name)).filter(Boolean))
   // A self row is in the list only when it is newer than the record's own row, so it is tried first.

@@ -308,6 +308,10 @@ try {
   assert.deepEqual(journey.addons, [])
   assert.equal(journey.plan.exists, false)
   assert.deepEqual(journey.reminders, [])
+  // the fixture's changes beyond normal fluctuation are all improvements (test/changes.mjs covers the rest)
+  assert.deepEqual(journey.changes.map((row) => [row.key, row.verdict, row.ask_doctor]), [['hba1c', 'better', false], ['crp', 'better', false], ['tg', 'better', false]])
+  assert.equal(journey.changes_note_zh, mod.CHANGES_NOTE_ZH)
+  assert.equal(journey.results.bioage.caveat_zh, undefined)
   // the older self waist (2026-09-20) is newer than the checkup's (2026-08-26), so it joins; an older one would not
   assert.equal(step.records.indicators.at(-1).name, '腰围（自测）')
 
@@ -449,6 +453,8 @@ try {
   assert.match(prompt, /需先与医生确认/)
   assert.match(prompt, /Never start, stop or change a prescription medicine/)
   assert.match(prompt, /set_followup only after they agree/)
+  assert.match(prompt, /record_changes/)
+  assert.match(prompt, /Never suggest a supplement \(iron included\), a drug or a dose/)
   assert.match(prompt, /schedule_create/)
   assert.match(prompt, /send_followup_message/)
   const dispatch = readFileSync(join(root, '..', 'skills', 'longpi-dispatch', 'SKILL.md'), 'utf8')
@@ -524,6 +530,8 @@ try {
   assert.deepEqual(situation.self_measurements.map((row) => row.key), ['waist', 'weight'])
   assert.match(situation.onboarding.how_to_read, /lower bound/)
   assert.match(situation.onboarding.how_to_read, /China-PAR \(results.risk\) has no band/)
+  assert.deepEqual(situation.record_changes, [], 'no record, no changes')
+  assert.match(situation.record_changes_how_to_read, /ask_doctor/)
   const status = await host.tools.get('longpi_status').execute({})
   assert.equal(status.stage, 'records')
   assert.equal(status.next, '连接体检记录')
@@ -603,6 +611,7 @@ try {
   assert.match(brokenStep.journey.results.risk.blocker_zh, /^记录读取失败：/)
   assert.doesNotMatch(JSON.stringify(brokenStep.journey.results), /还没有连接/)
   assert.deepEqual(brokenStep.journey.addons, [], 'no add-on tests while the record cannot be read')
+  assert.deepEqual(brokenStep.journey.changes, [], 'nor changes')
   assert.match(brokenStep.journey.next.detail_zh, /^记录读取失败：/)
 
   // (5) the report and the board count Mirobody indicators only
