@@ -7,7 +7,7 @@
 
 import type { RecordChange } from './changes.ts'
 import { followupSummary, readFollowup, type FollowupState } from './followup.ts'
-import { addDays, daysBetween, readCheckIns } from './interventions.ts'
+import { addDays, checkinStatus, daysBetween, readCheckIns } from './interventions.ts'
 import { measurementInputs } from './measurements.ts'
 import type { MountState } from './mirobody.ts'
 import { CONSENT_VERSION, FOCUS, FOCUS_ZH, RISK_FACTS, RISK_FACT_ZH, type Focus, type Profile, type RiskFact } from './profile.ts'
@@ -32,7 +32,8 @@ export interface Journey {
     questions: Array<{ key: 'age' | 'sex' | RiskFact; label_zh: string; unlocks_zh: string; answered: boolean; men_only?: boolean }>
   }
   focus_options: Array<{ key: Focus; label_zh: string }>
-  records: { status: 'unconfigured' | 'ok' | 'error'; error: string; indicator_count: number; full_checkups: number; latest_checkup: string | null; mirobody_mounted: boolean }
+  /** partial: read, but some reads failed or came back cut; read_errors says which, and missing_reads names indicators not read (unknown, never "not measured"). */
+  records: { status: 'unconfigured' | 'ok' | 'partial' | 'error'; error: string; read_errors: string[]; missing_reads: string[]; indicator_count: number; full_checkups: number; latest_checkup: string | null; mirobody_mounted: boolean }
   results: {
     /**
      * band_verified and band_missing are additions for the model: with band_missing the band is a lower bound.
@@ -45,8 +46,10 @@ export interface Journey {
   /** Changes between checkups larger than normal fluctuation, ask_doctor first; empty when the record cannot be read. */
   changes: RecordChange[]
   changes_note_zh: string
+  /** Markers not judged because their series read failed or came back cut: unknown, never "no change". */
+  changes_unjudged: Array<{ label_zh: string; reason_zh: string }>
   self: { latest: Array<{ key: SelfKey; label_zh: string; value: number; unit: string; date: string; n: number }>; keys: Array<{ key: SelfKey; label_zh: string; unit: string; units: string[] }> }
-  plan: { exists: boolean; title: string; version: number | null; items: number; started: string | null; days: number | null; checkin_items: Array<{ id: string; title: string; done_today: boolean }>; streak: number; adherence_pct: number | null }
+  plan: { exists: boolean; title: string; version: number | null; items: number; started: string | null; days: number | null; checkin_items: Array<{ id: string; title: string; done_today: boolean | null }>; streak: number; adherence_pct: number | null }
   reminders: Array<{ kind: 'retest' | 'checkin'; text_zh: string; date: string | null; due: boolean }>
   stage: Stage
   next: { stage: Stage; title_zh: string; detail_zh: string; action: 'consent' | 'profile' | 'records' | 'addons' | 'plan' | 'checkin' | 'review' | 'open' }
@@ -244,11 +247,12 @@ function planOf(context: TrackingContext, tracking: Tracking): Journey['plan'] {
   const plan = tracking.plan
   if (!plan) return { exists: false, title: '', version: null, items: 0, started: null, days: null, checkin_items: [], streak: 0, adherence_pct: null }
   const today = context.today
-  const done = new Set(readCheckIns(context.dataDir).filter((row) => row.date === today && row.done === true).map((row) => row.item))
+  // The latest check-in of the day wins: true done, false 没做到, null not checked in (or taken back).
+  const status = checkinStatus(readCheckIns(context.dataDir))
   // Wearable items count themselves and medicines are logged in Mirobody; only the rest need a tap.
   const checkinItems = plan.items
     .filter((item) => !item.target && !item.mirobody && item.start <= today && (!item.end || item.end >= today))
-    .map((item) => ({ id: item.id, title: item.title, done_today: done.has(item.id) }))
+    .map((item) => ({ id: item.id, title: item.title, done_today: status.get(item.id)?.get(today) ?? null }))
   const started = plan.items.map((item) => item.start).sort()[0] ?? null
   const rates = tracking.items.map((item) => item.adherence.rate).filter((rate): rate is number => rate != null)
   return {
@@ -268,7 +272,7 @@ function remindersOf(today: string, tracking: Tracking, plan: Journey['plan']): 
   const out: Journey['reminders'] = retestsOf(tracking)
     .filter((row) => row.date <= addDays(today, REMIND_AHEAD_DAYS))
     .map((row) => ({ kind: 'retest', text_zh: `复测${row.marker}`, date: row.date, due: row.date <= today }))
-  const open = plan.checkin_items.filter((item) => !item.done_today).length
+  const open = plan.checkin_items.filter((item) => item.done_today == null).length
   if (open > 0) out.push({ kind: 'checkin', text_zh: `今天还有 ${open} 项待打卡`, date: today, due: true })
   return out
 }
@@ -278,7 +282,7 @@ function stageOf(journey: Pick<Journey, 'consent' | 'profile' | 'records' | 'res
   if (!journey.profile.complete) return 'profile'
   // A saved plan is lived day by day even while the record is unreachable or no first result can be computed yet.
   if (journey.plan.exists) return 'routine'
-  if (journey.records.status !== 'ok') return 'records'
+  if (journey.records.status !== 'ok' && journey.records.status !== 'partial') return 'records'
   if (journey.results.bioage.status !== 'ok' && journey.results.risk.status !== 'ok') return 'first_result'
   return 'plan'
 }
@@ -304,7 +308,7 @@ function nextOf(stage: Stage, journey: Body): Next {
     case 'plan':
       return step('制定改善方案', '让 LongPi 按你的检查结果和研究证据起草一份方案，你确认后才保存。', 'plan')
     case 'routine': {
-      const open = journey.plan.checkin_items.filter((item) => !item.done_today).length
+      const open = journey.plan.checkin_items.filter((item) => item.done_today == null).length
       if (open > 0) return step('今天的打卡', `还有 ${open} 项待完成`, 'checkin')
       const due = journey.reminders.filter((row) => row.kind === 'retest' && row.due).map((row) => row.text_zh.replace(/^复测/, ''))
       if (due.length > 0) return step('该复测了', `可以复测${due.slice(0, 3).join('、')}`, 'review')
@@ -372,6 +376,8 @@ function journeyFrom(context: JourneyContext, tracking: Tracking): Journey {
     records: {
       status: records.record_status,
       error: records.record_error,
+      read_errors: [...records.read_errors],
+      missing_reads: [...records.missing_reads],
       indicator_count: records.indicators.filter((row) => row.source !== 'self').length,
       full_checkups: points.length,
       latest_checkup: points.at(-1)?.date ?? null,
@@ -381,6 +387,7 @@ function journeyFrom(context: JourneyContext, tracking: Tracking): Journey {
     addons: addonsOf(tracking.bioage, risk),
     changes: tracking.changes,
     changes_note_zh: tracking.changes_note_zh,
+    changes_unjudged: tracking.changes_unjudged,
     self: {
       latest: SELF_KEYS.flatMap((key) => {
         const row = latest[key]
@@ -423,7 +430,7 @@ export function followupStateOf(journey: Journey, tracking: Tracking): FollowupS
     next_detail_zh: journey.next.detail_zh,
     plan_exists: journey.plan.exists,
     checkin_items: journey.plan.checkin_items.length,
-    checkin_open: journey.plan.checkin_items.filter((item) => !item.done_today).map((item) => item.title),
+    checkin_open: journey.plan.checkin_items.filter((item) => item.done_today == null).map((item) => item.title),
     retests,
     week: { pct: known > 0 ? Math.round((done / known) * 100) : null, streak: journey.plan.streak, next_retest: upcoming ? { marker: upcoming.marker, date: upcoming.date } : null },
   }

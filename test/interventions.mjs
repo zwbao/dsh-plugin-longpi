@@ -84,7 +84,12 @@ try {
   const crp = verdict('地中海饮食', 'C反应蛋白')
   assert.equal(crp.baseline.value, 4.2)
   assert.equal(crp.followup.value, 1.2)
-  assert.equal(crp.verdict, '有效', crp.reason_zh)
+  // Beyond the band toward the goal, but two check-ins in twelve weeks say nothing about the plan (7a).
+  assert.equal(crp.verdict, '无法判断', crp.reason_zh)
+  assert.equal(crp.direction, 'improved')
+  assert.match(crp.reason_zh, /^执行记录太少/)
+  assert.match(crp.reason_zh, /朝目标变化，超出正常波动/)
+  assert.doesNotMatch(crp.reason_zh, /真实的改善/)
   // Log-normal band from the table's own CRP row (CVA defaults to half of CVI).
   const crpRow = JSON.parse(readFileSync(join(home, 'data', 'biological_variation.json'), 'utf8')).markers.find((row) => row.key === 'crp')
   const cvi = crpRow.cvi_pct / 100
@@ -105,8 +110,11 @@ try {
   assert.equal(hba1c.baseline.date, '2025-10-18')
   assert.ok(hba1c.followup.date >= '2026-04-05', 'HbA1c is retested at least 90 days after the start')
 
+  // Home BP is judged only on means over seven days at each end (6d); the cuff here reads every third day.
   const sbp = verdict('快走', '收缩压')
-  assert.ok(sbp.baseline && sbp.followup, 'home BP is averaged over a week at both ends')
+  assert.equal(sbp.verdict, '无法判断', sbp.reason_zh)
+  assert.match(sbp.reason_zh, /需要连续 7 天的家庭血压/)
+  assert.equal(sbp.followup, null, 'no follow-up mean from three days of readings')
 
   const early = verdict('早睡', 'C反应蛋白')
   assert.equal(early.verdict, '无法判断')

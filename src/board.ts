@@ -47,6 +47,8 @@ export function buildBoard(input: {
     records: {
       status: input.records.record_status,
       error: input.records.record_error,
+      read_errors: input.records.read_errors,
+      missing_reads: input.records.missing_reads,
       // Self measurements merged into the list are not Mirobody indicators.
       indicator_count: input.records.indicators.filter((row) => row.source !== 'self').length,
       indicators: input.records.indicators.slice(0, 20),
@@ -55,7 +57,8 @@ export function buildBoard(input: {
     dispatch: { matches: dispatch.matches, note: dispatch.note },
     near: dispatch.near,
     readouts: Object.entries(outputs).map(([key, item]) => ({ key, ...item })).slice(0, 12),
-    receipts: input.receipts,
+    // Which skill ran and how it ended; never report text (receipts from before 5.1 may still carry an excerpt).
+    receipts: input.receipts.map((row) => ({ at: row.at, skill: row.skill, ok: row.ok, exit_code: row.exit_code, error_kind: row.error_kind ?? null })),
     boundary: '这不是诊断，也不能改处方。技能没写出的数字不要补。紧急情况请拨打 120。',
   }
 }

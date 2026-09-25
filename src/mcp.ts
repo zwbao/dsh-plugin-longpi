@@ -44,7 +44,7 @@ function unwrap(message: unknown): McpCallResult {
   }
   const body = message as {
     error?: { code?: number; message?: string }
-    result?: { content?: Array<{ type?: string; text?: string }>; structuredContent?: unknown }
+    result?: { content?: Array<{ type?: string; text?: string }>; structuredContent?: unknown; isError?: boolean }
   }
   if (body.error) {
     const denied = body.error.code === -32000 || /auth/i.test(body.error.message ?? '')
@@ -56,6 +56,16 @@ function unwrap(message: unknown): McpCallResult {
       hint: denied
         ? 'Mirobody refused this call. Set mcpToken to the account JWT, or paste the personal MCP URL.'
         : 'The Mirobody MCP server returned an error. Do not invent the missing record.',
+    }
+  }
+  // A tool that ran and failed answers with isError: a failed read, never an empty one.
+  if (body.result?.isError === true) {
+    const text = (body.result.content ?? []).filter((block) => block.type === 'text').map((block) => block.text ?? '').join('\n').trim()
+    return {
+      success: false,
+      error_kind: 'internal',
+      error: text.slice(0, 300) || 'MCP tool error',
+      hint: 'The Mirobody tool reported an error. Do not invent the missing record.',
     }
   }
   const structured = body.result?.structuredContent

@@ -36,6 +36,7 @@ export interface RecordIndicator {
   loinc?: string
   label?: string
   date?: string
+  last_date?: string
   source?: 'self'
 }
 
@@ -181,6 +182,8 @@ export interface Runnable {
   record: 'ready' | 'near' | 'none'
   /** Missing required inputs a checkup or a device could supply. */
   missing_from_record: string[]
+  /** Required inputs on file whose value was not read (a failed read, or a catalogue cut short): in missing, never in missing_from_record. */
+  unread: string[]
 }
 
 /** An input a checkup or a device records: a measurement with a LOINC or device code. */
@@ -194,17 +197,18 @@ export function runnableFrom(
   indicators: readonly RecordIndicator[],
   profile: { age: number | null; sex: string },
   outputs: Record<string, unknown> = {},
+  reads: { failed?: readonly string[]; catalog_truncated?: boolean } = {},
 ): Runnable {
   if (card.inputsStatus === 'none' || card.inputs.length === 0 || !card.script) {
-    return { status: 'unknown', have: [], missing: [], from_record: [], record: 'none', missing_from_record: [] }
+    return { status: 'unknown', have: [], missing: [], from_record: [], record: 'none', missing_from_record: [], unread: [] }
   }
+  const failed = new Set(reads.failed ?? [])
+  const unread: string[] = []
   const have: string[] = []
   const missing: string[] = []
   const fromRecord: MeasurementIn[] = []
-  const byLoinc = new Map<string, RecordIndicator>()
-  for (const row of indicators) if (row.loinc) byLoinc.set(row.loinc, row)
   // Optional inputs count too: a method that reads routine labs when present is ready from the record once one is.
-  const recordHas = card.inputs.some((spec) => recordBacked(spec) && matchIndicator(spec, indicators, byLoinc) != null)
+  const recordHas = card.inputs.some((spec) => recordBacked(spec) && indicatorFor(spec, indicators) != null)
   const missingFromRecord: string[] = []
   for (const spec of card.inputs) {
     if (!spec.required) continue
@@ -216,7 +220,7 @@ export function runnableFrom(
       continue
     }
     if (source === 'measurements') {
-      const found = matchIndicator(spec, indicators, byLoinc)
+      const found = indicatorFor(spec, indicators)
       if (found) {
         have.push(spec.label_zh)
         fromRecord.push({ key: spec.key, value: found.value, unit: found.unit })
@@ -227,7 +231,11 @@ export function runnableFrom(
         continue
       }
       missing.push(spec.label_zh)
-      if (recordBacked(spec)) missingFromRecord.push(spec.label_zh)
+      if (!recordBacked(spec)) continue
+      // Not read is not "not measured": never a test to add.
+      const names = candidatesFor(spec, indicators).map((item) => item.row.name)
+      if (names.some((name) => failed.has(name)) || (names.length === 0 && reads.catalog_truncated)) unread.push(spec.label_zh)
+      else missingFromRecord.push(spec.label_zh)
       continue
     }
     if (source === 'output' && spec.output_of?.some((key) => key in outputs)) {
@@ -239,33 +247,58 @@ export function runnableFrom(
   const status = missing.length === 0 ? 'ready' : (have.length > 0 && missing.length <= 2 ? 'partial' : 'none')
   const record = missing.length === 0 ? (recordHas ? 'ready' : 'none')
     : status === 'partial' && missingFromRecord.length === missing.length ? 'near' : 'none'
-  return { status, have, missing, from_record: fromRecord, record, missing_from_record: missingFromRecord }
+  return { status, have, missing, from_record: fromRecord, record, missing_from_record: missingFromRecord, unread }
 }
 
-/** The record indicator that holds one declared input, by LOINC code first, then by name. */
-export function indicatorFor(spec: InputSpec, indicators: readonly RecordIndicator[]): RecordIndicator | null {
-  const byLoinc = new Map<string, RecordIndicator>()
-  for (const row of indicators) if (row.loinc) byLoinc.set(row.loinc, row)
-  return matchIndicator(spec, indicators, byLoinc)
+/** A record row that could hold one declared input, and its place: the order of the input's codes in skill.json. */
+export interface Candidate {
+  row: RecordIndicator
+  /** 0… for its LOINC codes in skill.json order, then its device codes; name matches come after every code. */
+  rank: number
+  by: 'code' | 'name'
 }
 
-function matchIndicator(spec: InputSpec, indicators: readonly RecordIndicator[], byLoinc: Map<string, RecordIndicator>): RecordIndicator | null {
-  for (const code of spec.loinc ?? []) {
-    const row = byLoinc.get(code)
-    if (row && parseNumber(row.value) != null) return row
+/**
+ * Every record row that could hold one input, numeric or not: rows carrying one of its LOINC or device codes,
+ * best code first; or, only when no row carries a code, rows named like it (its key, label or aliases, a self
+ * measurement first).
+ */
+export function candidatesFor(spec: InputSpec, indicators: readonly RecordIndicator[]): Candidate[] {
+  const codes = [...(spec.loinc ?? [])]
+  const devices = spec.device_codes ?? []
+  const out: Candidate[] = []
+  for (const row of indicators) {
+    const loinc = row.loinc ? codes.indexOf(row.loinc) : -1
+    if (loinc >= 0) {
+      out.push({ row, rank: loinc, by: 'code' })
+      continue
+    }
+    const device = row.source !== 'self' ? devices.indexOf(row.name) : -1
+    if (device >= 0) out.push({ row, rank: codes.length + device, by: 'code' })
   }
-  for (const code of spec.device_codes ?? []) {
-    const row = indicators.find((item) => item.source !== 'self' && item.name === code && parseNumber(item.value) != null)
-    if (row) return row
-  }
+  if (out.length > 0) return out.sort((a, b) => a.rank - b.rank)
   const names = new Set([spec.key, spec.label_zh, ...(spec.aliases ?? [])].map((name) => foldName(name)).filter(Boolean))
+  const byName = (text: string | undefined) => Boolean(text) && nameVariants(text as string).some((variant) => names.has(variant))
   // A self row is in the list only when it is newer than the record's own row, so it is tried first.
-  for (const row of preferSelf(indicators)) {
-    if (parseNumber(row.value) == null) continue
-    if (nameVariants(row.name).some((variant) => names.has(variant))) return row
-    if (row.label && nameVariants(row.label).some((variant) => names.has(variant))) return row
+  return preferSelf(indicators).filter((row) => byName(row.name) || byName(row.label)).map((row) => ({ row, rank: codes.length + devices.length, by: 'name' as const }))
+}
+
+function dateOf(row: RecordIndicator): string {
+  return row.date || row.last_date || ''
+}
+
+/**
+ * The record indicator that holds one declared input: of the rows with a number, the newest across all of the
+ * input's codes; on the same date the earlier code in skill.json order. Rows matched only by name are the
+ * fallback when no row carries a code.
+ */
+export function indicatorFor(spec: InputSpec, indicators: readonly RecordIndicator[]): RecordIndicator | null {
+  let best: Candidate | null = null
+  for (const item of candidatesFor(spec, indicators)) {
+    if (parseNumber(item.row.value) == null) continue
+    if (!best || dateOf(item.row) > dateOf(best.row) || (dateOf(item.row) === dateOf(best.row) && item.rank < best.rank)) best = item
   }
-  return null
+  return best?.row ?? null
 }
 
 /** Self measurements first: records.ts merges one only when it is the newest reading of its kind. */

@@ -380,7 +380,7 @@ try {
   assert.equal(journey.plan.started, '2026-03-01')
   assert.equal(journey.plan.days, 207)
   const diet = step.tracking.plan.items.find((item) => item.title === '地中海饮食')
-  assert.deepEqual(journey.plan.checkin_items, [{ id: diet.id, title: '地中海饮食', done_today: false }], 'wearable, Mirobody and not-yet-started items need no tap')
+  assert.deepEqual(journey.plan.checkin_items, [{ id: diet.id, title: '地中海饮食', done_today: null }], 'wearable, Mirobody and not-yet-started items need no tap; not checked in yet is null')
   assert.deepEqual(journey.reminders, [
     { kind: 'retest', text_zh: '复测甘油三酯', date: TODAY, due: true },
     { kind: 'retest', text_zh: '复测超敏C反应蛋白', date: '2026-09-29', due: false },
@@ -398,6 +398,28 @@ try {
   assert.deepEqual(journey.next, { stage: 'routine', title_zh: '该复测了', detail_zh: '可以复测甘油三酯', action: 'review' })
   assert.ok(journey.plan.streak >= 2)
   assert.ok(journey.plan.adherence_pct >= 0 && journey.plan.adherence_pct <= 100)
+
+  // 9d: three states, the latest entry of the day wins. 没做到 is an answer (no reminder); an undo makes the day unknown again.
+  mod.addCheckIns(dataDir, [{ item: '地中海饮食', date: TODAY, done: false }], { today: TODAY, source: 'board' })
+  mod.invalidateTracking()
+  step = await journeyOf(fullConfig)
+  assert.equal(step.journey.plan.checkin_items[0].done_today, false, 'a later 没做到 replaces an earlier 完成')
+  assert.equal(step.journey.reminders.some((row) => row.kind === 'checkin'), false, '没做到 is not an open check-in')
+  const missedDay = step.tracking.items.find((item) => item.title === '地中海饮食').adherence.calendar.find((day) => day.date === TODAY)
+  assert.equal(missedDay.status, 'missed', 'adherence counts false as a miss')
+  const undo = mod.addCheckIns(dataDir, [{ item: '地中海饮食', date: TODAY, done: null }], { today: TODAY, source: 'board' })
+  assert.equal(undo.saved[0].undo, true)
+  mod.invalidateTracking()
+  step = await journeyOf(fullConfig)
+  assert.equal(step.journey.plan.checkin_items[0].done_today, null, 'undo: unknown again')
+  assert.ok(step.journey.reminders.some((row) => row.kind === 'checkin'), 'an undone day is open again')
+  assert.equal(step.tracking.items.find((item) => item.title === '地中海饮食').adherence.calendar.find((day) => day.date === TODAY).status, 'unknown', 'absence is unknown, never a miss')
+  // a note or tag alone says nothing about the day
+  mod.addCheckIns(dataDir, [{ item: '地中海饮食', date: TODAY, done: true }, { item: '地中海饮食', date: TODAY, tags: ['travel'] }], { today: TODAY, source: 'board' })
+  mod.invalidateTracking()
+  step = await journeyOf(fullConfig)
+  journey = step.journey
+  assert.equal(journey.plan.checkin_items[0].done_today, true, 'a tag-only entry does not undo the day')
 
   // --- 4. calendar -------------------------------------------------------------
   const ics = mod.buildCalendar(journey, step.tracking, { now: NOW })
@@ -582,7 +604,9 @@ try {
   const sbpBefore = verdictOf(hist, '收缩压')
   assert.equal(sbpBefore.indicator, 'systolicPressures')
   assert.ok(sbpBefore.baseline, 'the wearable cuff gives a baseline')
-  assert.notEqual(sbpBefore.verdict, '无法判断')
+  // ...but a cuff read every third day never gives the seven-day mean the band was measured on (6d)
+  assert.equal(sbpBefore.verdict, '无法判断')
+  assert.match(sbpBefore.reason_zh, /需要连续 7 天的家庭血压/)
   const sbpPoints = chartOf(hist, 'sbp').points.length
   const weightBefore = verdictOf(hist, '体重')
   assert.equal(weightBefore.indicator, 'bodyMasss')

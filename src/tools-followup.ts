@@ -8,6 +8,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Config } from './config.ts'
+import { CN_NUMBER, hasDose } from './dose.ts'
 import { followupResponse, inQuiet, maskUrl, readFollowup, sendNow, writeFollowup, WEBHOOK_KINDS, type FollowupState } from './followup.ts'
 import { currentPlan } from './interventions.ts'
 import { asJson } from './json.ts'
@@ -23,14 +24,6 @@ const jsonOut = {
 }
 
 const TEXT_MAX = 300
-const CN_NUMBER = '[零〇一二两三四五六七八九十百千万半]+'
-// An amount of a medicine or supplement (mg, 粒, 片, 单位…), in digits or Chinese numerals; a concentration
-// such as mmol/L is not one, and neither is a weight in 千克.
-const DOSE = new RegExp(
-  '\\d+(?:\\.\\d+)?\\s*(?:mg|mcg|µg|μg|ug|iu|g|ml|毫克|微克|国际单位|单位|克|毫升|粒|片|颗|支|滴|袋|勺|胶囊|丸|tablets?|capsules?)(?!\\s*\\/\\s*(?:d?l|ml)\\b)'
-  + `|${CN_NUMBER}\\s*(?:毫克|微克|国际单位|单位|(?<!千)克|毫升|粒|片|颗|支|滴|袋|勺|胶囊|丸)|剂量`,
-  'i',
-)
 // A health value: a number with a clinical unit (mmHg, mmol/L, kg, cm, %, 岁…), in digits or Chinese numerals.
 const HEALTH_VALUE = new RegExp(
   '\\d+(?:\\.\\d+)?\\s*(?:mmhg|mmol|umol|μmol|mg\\/|g\\/l|kg|公斤|千克|斤|cm|厘米|毫米汞柱|毫摩尔|微摩尔|%|个?百分点|岁|bpm|次\\s*[/每]\\s*分)'
@@ -46,6 +39,17 @@ const ALLOWED_NUMBERS = [
 ]
 // A marker abbreviation followed by a number (LDL-C3.8, HbA1c 6.5): the lookbehind below lets HbA1c itself through.
 const MARKER_NUMBER = /\b(?:ldl|hdl|tg|tc|crp|hs-?crp|sbp|dbp|bmi|hba1c|a1c|glu|fbg|fpg)(?:-?c)?\s*[:：=]?\s*\d/i
+// A value in Chinese numerals: a decimal (六点八), or a number of tens or more (一百五, 七十五). A lone 一 or 两 is a
+// word as often as a number (一直, 两次) and is not read as one.
+const CN_VALUE = '(?:[零〇一二两三四五六七八九十百千万]+点[零〇一二两三四五六七八九]+|[零〇一二两三四五六七八九]*[十百千万][零〇一二两三四五六七八九十百千万]*)'
+// Words a health value follows (steps are not one). Up to eight more characters may name the marker in full
+// (糖化血红蛋白, 空腹血糖, 低密度脂蛋白) before the number; a count (一百天, 十次) is not a value.
+const HEALTH_WORD = '(?:血压|收缩压|舒张压|高压|低压|血糖|体重|腰围|心率|脉搏|胆固醇|甘油三酯|血脂|脂蛋白|糖化|血红蛋白|尿酸|肌酐|反应蛋白|ldl|hdl|hba1c|a1c|crp|bmi)'
+// The whole number, never a part of it: 一百五十天 is a count, not 一百五 followed by 十天.
+const COUNT_AFTER = '(?![零〇一二两三四五六七八九十百千万点])(?!\\s*(?:个)?(?:天|次|项|条|周|星期|个月|月|年|分钟|小时|点钟|步|遍|岁))'
+const HEALTH_CN = new RegExp(`${HEALTH_WORD}[^，,。.！!？?；;、\\n]{0,8}?${CN_VALUE}${COUNT_AFTER}`, 'i')
+// Blood pressure as a/b in Chinese numerals: 一百五十/九十, 一百四比九十.
+const CN_PRESSURE = new RegExp(`${CN_NUMBER}\\s*[/／比]\\s*${CN_NUMBER}`)
 
 /**
  * The model's text is refused, with the reason, when it names a dose or, with minimal detail, a health
@@ -56,16 +60,25 @@ export function followupTextProblem(text: string, detail: 'minimal' | 'full', na
   if (!text) return '没有内容。'
   if ([...text].length > TEXT_MAX) return `超过 ${TEXT_MAX} 字。`
   const plain = text.normalize('NFKC')
-  if (DOSE.test(plain)) return '随访消息不能包含剂量。'
+  if (hasDose(plain) || plain.includes('剂量')) return '随访消息不能包含剂量。'
   if (detail === 'full') return ''
   const numbers = ALLOWED_NUMBERS.reduce((rest, pattern) => rest.replace(pattern, ' '), plain)
-  if (HEALTH_VALUE.test(plain) || MARKER_NUMBER.test(plain) || /(?<![A-Za-z])\d/.test(numbers)) {
+  if (HEALTH_VALUE.test(plain) || MARKER_NUMBER.test(plain) || /(?<![A-Za-z])\d/.test(numbers) || HEALTH_CN.test(plain) || cnPressure(plain)) {
     return '随访设置为“简要”，消息里不能有健康数值（血压、血糖、血脂、体重、百分比等）；数字只能是日期、时间或天数、项数。'
   }
   const folded = plain.toLowerCase()
   const named = names.map((name) => name.normalize('NFKC').trim()).find((name) => [...name].length >= 2 && folded.includes(name.toLowerCase()))
   if (named) return `随访设置为“简要”，消息里不能出现方案项目或指标的名称（这次是「${named}」）；改成不含细节的提醒，例如“打开健康页查看”。`
   return ''
+}
+
+/** An a/b pair in Chinese numerals where both halves read as values (一百五十/九十), not a ratio of small counts (三比二). */
+function cnPressure(text: string): boolean {
+  const match = CN_PRESSURE.exec(text)
+  if (!match) return false
+  const [left, right] = match[0].split(/\s*[/／比]\s*/)
+  const value = new RegExp(`^${CN_VALUE}$`)
+  return value.test(left ?? '') || value.test(right ?? '')
 }
 
 /** Item titles and marker names of the current plan: what minimal detail keeps on this machine. */

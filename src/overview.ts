@@ -31,7 +31,7 @@ export function readiness(catalog: Catalog, records: RecordSnapshot, outputs: Re
   for (const card of catalog.cards) {
     if (!personal(card)) continue
     out.declared += 1
-    const run = runnableFrom(card, records.indicators, { age: records.profile.age, sex: records.profile.sex }, outputs)
+    const run = runnableFrom(card, records.indicators, { age: records.profile.age, sex: records.profile.sex }, outputs, { failed: records.missing_reads, catalog_truncated: records.catalog_truncated })
     if (run.record === 'ready') out.ready.push({ name: card.name, blurb: card.blurb, domain: card.domain })
     else if (run.record === 'near') out.near.push({ name: card.name, blurb: card.blurb, missing: run.missing })
     if (run.missing.length === 1 && run.missing_from_record.length === 1) {
@@ -97,7 +97,9 @@ export function buildReport(input: { name: string; today: string; records: Recor
   lines.push(`生成日期：${input.today}。数据来自本人的 Mirobody 记录、本人确认过的干预方案和打卡，以及 longevity-skills 技能脚本。本报告不是诊断，也不包含用药建议。`, '')
   lines.push('## 基本信息', '')
   lines.push(`- 实足年龄：${profile.age ?? '未填写'}；性别：${profile.sex === 'male' ? '男' : profile.sex === 'female' ? '女' : '未填写'}`)
-  lines.push(`- 记录状态：${input.records.record_status === 'ok' ? `已接入 Mirobody（${input.records.indicators.filter((row) => row.source !== 'self').length} 项指标）` : '未接入'}`, '')
+  const count = input.records.indicators.filter((row) => row.source !== 'self').length
+  const status = { ok: `已接入 Mirobody（${count} 项指标）`, partial: `已接入 Mirobody（${count} 项指标），部分读取失败：${input.records.read_errors.join('；')}`, error: `读取失败：${input.records.record_error}`, unconfigured: '未接入' }[input.records.record_status]
+  lines.push(`- 记录状态：${status}`, '')
   const tracking = input.tracking
   if (tracking && tracking.changes.length > 0) {
     lines.push('## 记录里的明显变化', '')

@@ -231,6 +231,7 @@ interface RecordIndicator {
   loinc?: string;
   label?: string;
   date?: string;
+  last_date?: string;
   source?: 'self';
 }
 declare function unitFactor(spec: InputSpec, unit: string): number | null;
@@ -250,12 +251,17 @@ interface Runnable {
   record: 'ready' | 'near' | 'none';
   /** Missing required inputs a checkup or a device could supply. */
   missing_from_record: string[];
+  /** Required inputs on file whose value was not read (a failed read, or a catalogue cut short): in missing, never in missing_from_record. */
+  unread: string[];
 }
 /** Which of this skill's required inputs the record, the profile and past outputs already supply. */
 declare function runnableFrom(card: SkillCard, indicators: readonly RecordIndicator[], profile: {
   age: number | null;
   sex: string;
-}, outputs?: Record<string, unknown>): Runnable;
+}, outputs?: Record<string, unknown>, reads?: {
+  failed?: readonly string[];
+  catalog_truncated?: boolean;
+}): Runnable;
 //#endregion
 //#region src/match.d.ts
 interface MatchHit {
@@ -318,6 +324,8 @@ interface HistoryRow {
   outputs: Record<string, OutputValue>;
   /** Local date of the measurements the run read, when it read an earlier checkup. */
   measured_at?: string;
+  /** A hash of what the run read (the inputs, the age, the skill version): a row whose hash is not today's is stale. */
+  inputs_key?: string;
 }
 interface LatestOutput extends OutputValue {
   at: string;
@@ -581,8 +589,15 @@ interface RecordSnapshot {
   };
   indicators: IndicatorRow[];
   medications: MedicationRow[];
-  record_status: 'unconfigured' | 'ok' | 'error';
+  /** partial: the record was read, but some reads failed or came back cut (read_errors says which). */
+  record_status: 'unconfigured' | 'ok' | 'partial' | 'error';
   record_error: string;
+  /** Each read that failed or was cut, in Chinese; empty when every read succeeded. */
+  read_errors: string[];
+  /** Catalogue names whose latest value was not read because the read failed: unknown, never "not measured". */
+  missing_reads: string[];
+  /** The catalogue itself was cut, so an indicator missing from it may simply not have been read. */
+  catalog_truncated: boolean;
 }
 /** Forget cached record reads, after a change the next read must see. */
 declare function invalidateRecords(): void;
@@ -613,13 +628,20 @@ interface Series {
 }
 interface SeriesResult {
   series: Record<string, Series>;
+  /** The first failure, redacted; set whenever any name was not read. */
   error?: string;
   truncated: boolean;
+  /** Names whose read failed: their series is unknown, never empty. */
+  failed: string[];
+  /** Names whose readings came back cut (a series that filled the row limit, or a table Mirobody marked cut). */
+  cut: string[];
 }
 /**
  * Dated values of named indicators, oldest first. resolution raw returns every
  * reading (labs); day returns one daily mean per indicator (wearables). Values
- * that are not numbers ("Positive", "<0.5") are left out, never guessed.
+ * that are not numbers ("Positive", "<0.5") are left out, never guessed. A
+ * batch that fails does not stop the others (unless Mirobody is down or refuses
+ * the account); its names are listed in failed.
  */
 declare function loadSeries(config: Config, names: readonly string[], options: {
   start: string;
@@ -674,6 +696,8 @@ interface RunRequest {
   reportLimit?: number;
   /** Local date the measurements were taken, when the run reads an earlier checkup. */
   measuredAt?: string;
+  /** Kept with the outputs in history.jsonl, so a caller can tell a result for today's inputs from a stale one. */
+  inputsKey?: string;
 }
 interface Conversion {
   key: string;
@@ -730,13 +754,18 @@ interface Levers {
   targets?: Record<string, unknown>;
   note_zh?: string;
 }
+/**
+ * What each run leaves in receipts.jsonl: which skill ran on which revision, how it ended, and which inputs it
+ * used or missed. No report text: the report stays in the run directory, the outputs in history.jsonl.
+ */
 interface Receipt {
   at: string;
   skill: string;
   revision: string;
   exit_code: number | null;
   ok: boolean;
-  excerpt: string;
+  /** Written by versions before 5.1 only; never shown. */
+  excerpt?: string;
   error_kind?: string;
   input_keys?: string[];
   problem_kinds?: string[];
@@ -792,8 +821,10 @@ declare function buildBoard(input: {
     };
   };
   records: {
-    status: "unconfigured" | "ok" | "error";
+    status: "unconfigured" | "ok" | "partial" | "error";
     error: string;
+    read_errors: string[];
+    missing_reads: string[];
     indicator_count: number;
     indicators: IndicatorRow[];
     medications: MedicationRow[];
@@ -812,156 +843,15 @@ declare function buildBoard(input: {
     label_zh: string;
     key: string;
   }[];
-  receipts: Receipt[];
+  receipts: {
+    at: string;
+    skill: string;
+    ok: boolean;
+    exit_code: number | null;
+    error_kind: string | null;
+  }[];
   boundary: string;
 };
-//#endregion
-//#region src/changes.d.ts
-interface RecordChange {
-  /** Biological-variation key, e.g. 'mcv'. */
-  key: string;
-  label_zh: string;
-  /** The biological-variation row's unit; every point is converted to it. */
-  unit: string;
-  points: Array<{
-    date: string;
-    value: number;
-  }>;
-  /** pct is rounded to 1 decimal. */
-  compare: {
-    from_date: string;
-    from: number;
-    to_date: string;
-    to: number;
-    pct: number;
-  };
-  /** The reference change value in percent, 1 decimal, e.g. { up: 8.4, down: -8.4 }. */
-  band_pct: {
-    up: number;
-    down: number;
-  };
-  direction: 'up' | 'down';
-  verdict: 'better' | 'worse' | 'unclear';
-  ask_doctor: boolean;
-  text_zh: string;
-  advice_zh: string;
-  /** The row's own caveat, when it has one. */
-  caveat_zh?: string;
-  /** Where the within-person variation comes from (the row's cvi_source). */
-  source: {
-    title: string;
-    url: string;
-    doi?: string;
-  };
-  verified: boolean;
-}
-interface ChangesContext {
-  config: Config;
-  skillsHome: string;
-  records: RecordSnapshot;
-  today: string;
-}
-declare const CHANGES_NOTE_ZH = "判断依据：两次结果之差超过同一个人正常波动与检测误差合成的参考变化值（RCV，z=1.96）才算真实变化；变异数据来自 longevity-skills 的 data/biological_variation.json，每一行注明期刊出处。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。";
-/**
- * Changes between checkups larger than the reference change value, ask_doctor
- * first, then the furthest past its band; at most six. Checkup rows only
- * (Mirobody rows with a LOINC code): wearable series and the person's own
- * measurements are left out. An unread record gives no changes.
- */
-declare function buildChanges(context: ChangesContext): Promise<{
-  changes: RecordChange[];
-  note_zh: string;
-}>;
-//#endregion
-//#region src/interventions.d.ts
-declare const CATEGORIES: readonly ["diet", "exercise", "sleep", "supplement", "drug", "behavior", "weight", "other"];
-type Category = typeof CATEGORIES[number];
-interface Target {
-  /** A Mirobody indicator measured daily, such as dailySteps or dailyTotalSleepTime. */
-  metric: string;
-  op: '>=' | '<=';
-  value: number;
-  unit: string;
-}
-interface PlanItem {
-  id: string;
-  category: Category;
-  title: string;
-  detail: string;
-  start: string;
-  end: string | null;
-  frequency: {
-    times: number;
-    per: 'day' | 'week';
-  } | null;
-  target: Target | null;
-  markers: string[];
-  mirobody: {
-    medication: string;
-    plan_id?: string;
-  } | null;
-}
-interface PlanGoal {
-  marker: string;
-  value: number;
-  unit: string;
-}
-interface PlanVersion {
-  schema: 'longpi-plan/1';
-  version: number;
-  saved_at: string;
-  title: string;
-  source: 'chat' | 'file' | 'board';
-  note: string;
-  items: PlanItem[];
-  goals: PlanGoal[];
-}
-interface CheckIn {
-  at: string;
-  date: string;
-  item: string;
-  done: boolean | null;
-  amount: number | null;
-  unit: string;
-  note: string;
-  tags: string[];
-  source: 'chat' | 'board';
-}
-declare function readPlans(dataDir: string): PlanVersion[];
-declare function currentPlan(dataDir: string): PlanVersion | null;
-declare function readCheckIns(dataDir: string): CheckIn[];
-declare function isoDay(at?: Date): string;
-declare function addDays(iso: string, days: number): string;
-declare function daysBetween(from: string, to: string): number;
-interface NormalizeContext {
-  today: string;
-  /** Names on the person's Mirobody medication plan, with plan ids. */
-  medications: Array<{
-    name: string;
-    plan_id?: string;
-  }>;
-  previous: PlanVersion | null;
-}
-interface Normalized {
-  plan: Omit<PlanVersion, 'version' | 'saved_at'>;
-  warnings: string[];
-  errors: string[];
-}
-/**
- * Check a plan the person described or uploaded and put it in the stored shape.
- * Returns errors that stop saving and warnings to read back before confirming.
- */
-declare function normalizePlan(raw: unknown, context: NormalizeContext): Normalized;
-declare function savePlan(dataDir: string, plan: Normalized['plan']): PlanVersion;
-interface CheckInResult {
-  saved: CheckIn[];
-  problems: string[];
-}
-/** Record check-ins against items of the current plan. `item` may be an id or a title. */
-declare function addCheckIns(dataDir: string, entries: unknown[], context: {
-  today: string;
-  source: 'chat' | 'board';
-}): CheckInResult;
 //#endregion
 //#region src/reference.d.ts
 interface BiovarMarker {
@@ -1072,6 +962,164 @@ declare function effectsFor(effects: readonly EffectRow[], item: {
   title: string;
   detail?: string;
 }, marker: BiovarMarker | null, loinc?: string): EffectRow[];
+//#endregion
+//#region src/changes.d.ts
+interface RecordChange {
+  /** Biological-variation key, e.g. 'mcv'. */
+  key: string;
+  label_zh: string;
+  /** The biological-variation row's unit; every point is converted to it. */
+  unit: string;
+  points: Array<{
+    date: string;
+    value: number;
+  }>;
+  /** pct is rounded to 1 decimal. */
+  compare: {
+    from_date: string;
+    from: number;
+    to_date: string;
+    to: number;
+    pct: number;
+  };
+  /** The reference change value in percent, 1 decimal, e.g. { up: 8.4, down: -8.4 }. */
+  band_pct: {
+    up: number;
+    down: number;
+  };
+  direction: 'up' | 'down';
+  verdict: 'better' | 'worse' | 'unclear';
+  ask_doctor: boolean;
+  text_zh: string;
+  advice_zh: string;
+  /** The row's own caveat, when it has one. */
+  caveat_zh?: string;
+  /** Where the within-person variation comes from (the row's cvi_source). */
+  source: {
+    title: string;
+    url: string;
+    doi?: string;
+  };
+  verified: boolean;
+}
+/** A marker the changes could not judge: its readings did not come back whole. Unknown, never "no change". */
+interface UnjudgedChange {
+  label_zh: string;
+  reason_zh: string;
+}
+interface ChangesContext {
+  config: Config;
+  skillsHome: string;
+  records: RecordSnapshot;
+  today: string;
+}
+declare const CHANGES_NOTE_ZH = "判断依据：两次结果之差超过同一个人正常波动与检测误差合成的参考变化值（RCV，z=1.96）才算真实变化；变异数据来自 longevity-skills 的 data/biological_variation.json，每一行注明期刊出处。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。";
+/**
+ * Changes between checkups larger than the reference change value, ask_doctor
+ * first, then the furthest past its band; at most six. Checkup rows only
+ * (Mirobody rows with a LOINC code): wearable series and the person's own
+ * measurements are left out. An unread record gives no changes. A marker whose
+ * readings failed to read, or came back cut, is not judged at all: it is listed
+ * in unjudged with the reason, so a failed read never reads as "no change".
+ */
+declare function buildChanges(context: ChangesContext): Promise<{
+  changes: RecordChange[];
+  note_zh: string;
+  unjudged: UnjudgedChange[];
+}>;
+//#endregion
+//#region src/interventions.d.ts
+declare const CATEGORIES: readonly ["diet", "exercise", "sleep", "supplement", "drug", "behavior", "weight", "other"];
+type Category = typeof CATEGORIES[number];
+interface Target {
+  /** A Mirobody indicator measured daily, such as dailySteps or dailyTotalSleepTime. */
+  metric: string;
+  op: '>=' | '<=';
+  value: number;
+  unit: string;
+}
+interface PlanItem {
+  id: string;
+  category: Category;
+  title: string;
+  detail: string;
+  start: string;
+  end: string | null;
+  frequency: {
+    times: number;
+    per: 'day' | 'week';
+  } | null;
+  target: Target | null;
+  markers: string[];
+  mirobody: {
+    medication: string;
+    plan_id?: string;
+  } | null;
+}
+interface PlanGoal {
+  marker: string;
+  value: number;
+  unit: string;
+}
+interface PlanVersion {
+  schema: 'longpi-plan/1';
+  version: number;
+  saved_at: string;
+  title: string;
+  source: 'chat' | 'file' | 'board';
+  note: string;
+  items: PlanItem[];
+  goals: PlanGoal[];
+}
+interface CheckIn {
+  at: string;
+  date: string;
+  item: string;
+  /** true done, false an explicit miss (没做到), null a note or tag alone, or an undo. */
+  done: boolean | null;
+  amount: number | null;
+  unit: string;
+  note: string;
+  tags: string[];
+  source: 'chat' | 'board';
+  /** Set on the row that takes back that day's check-in: the day is unknown again. */
+  undo?: true;
+}
+declare function readPlans(dataDir: string): PlanVersion[];
+declare function currentPlan(dataDir: string): PlanVersion | null;
+declare function readCheckIns(dataDir: string): CheckIn[];
+declare function isoDay(at?: Date): string;
+declare function addDays(iso: string, days: number): string;
+declare function daysBetween(from: string, to: string): number;
+interface NormalizeContext {
+  today: string;
+  /** Names on the person's Mirobody medication plan, with plan ids. */
+  medications: Array<{
+    name: string;
+    plan_id?: string;
+  }>;
+  previous: PlanVersion | null;
+}
+interface Normalized {
+  plan: Omit<PlanVersion, 'version' | 'saved_at'>;
+  warnings: string[];
+  errors: string[];
+}
+/**
+ * Check a plan the person described or uploaded and put it in the stored shape.
+ * Returns errors that stop saving and warnings to read back before confirming.
+ */
+declare function normalizePlan(raw: unknown, context: NormalizeContext): Normalized;
+declare function savePlan(dataDir: string, plan: Normalized['plan']): PlanVersion;
+interface CheckInResult {
+  saved: CheckIn[];
+  problems: string[];
+}
+/** Record check-ins against items of the current plan. `item` may be an id or a title. */
+declare function addCheckIns(dataDir: string, entries: unknown[], context: {
+  today: string;
+  source: 'chat' | 'board';
+}): CheckInResult;
 //#endregion
 //#region src/evaluate.d.ts
 type Verdict = '有效' | '波动内' | '反向' | '无法判断';
@@ -1191,6 +1239,8 @@ interface EvaluateInput {
   checkins: CheckIn[];
   biovar: Biovar;
   effects: EffectRow[];
+  /** Indicator names whose readings failed to read or came back cut: judged from nothing, never from what is left. */
+  unread?: readonly string[];
 }
 declare function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: EvaluateInput): MarkerVerdict;
 declare function evaluatePlan(input: EvaluateInput): ItemSummary[];
@@ -1259,6 +1309,15 @@ interface ModelCard {
   /** Stated facts the profile does not hold yet (age, sex, the yes/no facts); unknown is never no. */
   missing_facts?: string[];
   levers: LeverHint[];
+  /** Goals the model could not use (a unit it does not accept, a value out of range), with why. Then no goal value is shown. */
+  goal_problems_zh?: string[];
+  /** The date each input was measured on, as used: a checkup, the home blood-pressure week, a self measurement. */
+  input_dates?: Array<{
+    key: string;
+    label_zh: string;
+    date: string | null;
+    source: 'checkup' | 'device' | 'self' | 'home';
+  }>;
   /**
    * How far one within-person step of each input moves the model, largest first: years of phenotypic age,
    * or for china-par percentage points of 10-year risk. key is the biological-variation key (or waist).
@@ -1319,6 +1378,8 @@ interface Tracking {
   /** Changes between checkups larger than normal fluctuation (changes.ts), ask_doctor first. */
   changes: RecordChange[];
   changes_note_zh: string;
+  /** Markers not judged because their readings did not come back whole: unknown, never "no change". */
+  changes_unjudged: UnjudgedChange[];
 }
 declare function invalidateTracking(): void;
 /** Bumped by every invalidateTracking (a check-in, a self measurement, a plan or profile save): readers keeping their own copy refresh on a change. */
@@ -1668,9 +1729,12 @@ interface Journey {
     key: Focus;
     label_zh: string;
   }>;
+  /** partial: read, but some reads failed or came back cut; read_errors says which, and missing_reads names indicators not read (unknown, never "not measured"). */
   records: {
-    status: 'unconfigured' | 'ok' | 'error';
+    status: 'unconfigured' | 'ok' | 'partial' | 'error';
     error: string;
+    read_errors: string[];
+    missing_reads: string[];
     indicator_count: number;
     full_checkups: number;
     latest_checkup: string | null;
@@ -1713,6 +1777,11 @@ interface Journey {
   /** Changes between checkups larger than normal fluctuation, ask_doctor first; empty when the record cannot be read. */
   changes: RecordChange[];
   changes_note_zh: string;
+  /** Markers not judged because their series read failed or came back cut: unknown, never "no change". */
+  changes_unjudged: Array<{
+    label_zh: string;
+    reason_zh: string;
+  }>;
   self: {
     latest: Array<{
       key: SelfKey;
@@ -1739,7 +1808,7 @@ interface Journey {
     checkin_items: Array<{
       id: string;
       title: string;
-      done_today: boolean;
+      done_today: boolean | null;
     }>;
     streak: number;
     adherence_pct: number | null;
