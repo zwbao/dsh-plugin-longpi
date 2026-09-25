@@ -121,9 +121,11 @@ try {
   assert.equal(early.verdict, '无法判断')
   assert.equal(early.next_retest, '2026-10-02')
 
+  // 腰围 has no variation row: it is found under its report name, compared, and not judged against a band
   const waist = byItem['减少久坐'].verdicts[0]
   assert.equal(waist.verdict, '无法判断')
-  assert.equal(waist.indicator, null)
+  assert.equal(waist.indicator, 'Waist Circumference-WC')
+  assert.match(waist.reason_zh, /缺少腰围的个体内变异数据/)
 
   assert.equal(byItem['快走'].adherence.source, 'wearable')
   assert.ok(byItem['快走'].adherence.rate > 0.3 && byItem['快走'].adherence.rate < 1)
@@ -131,7 +133,7 @@ try {
   assert.equal(byItem['鱼油'].adherence.level, 'good')
   assert.equal(byItem['地中海饮食'].adherence.source, 'check_in')
 
-  assert.ok(tracking.suggestions.some((row) => row.kind === 'missing_marker'), 'the missing waist measurement is a next step')
+  assert.equal(tracking.suggestions.some((row) => row.kind === 'missing_marker'), false, 'waist is on file: no test to add')
   assert.ok(tracking.suggestions.some((row) => row.kind === 'retest'))
   for (const row of tracking.suggestions) assert.doesNotMatch(row.text_zh, /\d+\s*(mg|毫克|粒|片)/, 'no dose in a suggestion')
 
@@ -306,6 +308,8 @@ try {
     assert.match(rows[0].verdicts[0].reason_zh, reason)
     assert.equal(mod.suggestNext(rows, { today: TODAY }).some((row) => row.kind === 'missing_marker'), false, recordUnread)
   }
+  // A marker with no variation row is found under its report name (腰围 is Waist Circumference-WC in the record)
+  assert.equal(mod.resolveMarkers(['腰围'], records.indicators, bv)[0].indicator, 'Waist Circumference-WC')
   const readWhole = mod.evaluatePlan(unreadInput(undefined))
   assert.match(readWhole[0].verdicts[0].reason_zh, /^记录里还没有超敏C反应蛋白。下次检查时加测/)
   assert.equal(mod.suggestNext(readWhole, { today: TODAY }).filter((row) => row.kind === 'missing_marker').length, 1)
@@ -340,6 +344,18 @@ try {
   }
   assert.equal(plan([{ category: 'diet', title: '控糖', detail: '空腹血糖 5.6 mmol/L，甘油三酯 42.6 mg/dL', start: TODAY }]).plan.items[0].detail, '空腹血糖 5.6 mmol/L，甘油三酯 42.6 mg/dL', 'a concentration is not a dose')
   assert.equal(plan([{ category: 'weight', title: '减重', detail: '目标 70 千克', start: TODAY }]).plan.items[0].detail, '目标 70 千克', '千克 is a weight')
+  // A number that is part of a product's name stays; the item links to that product, never to a neighbour
+  for (const title of ['维生素B12片', '辅酶Q10胶囊', 'Omega-3 胶囊', '维生素K2 片', '维生素D3滴剂']) {
+    const kept = plan([{ category: 'supplement', title, start: TODAY }])
+    assert.equal(kept.plan.items[0].title, title)
+    assert.equal(kept.warnings.some((line) => line.includes('剂量没有保存')), false, title)
+  }
+  assert.equal(plan([{ category: 'supplement', title: '维生素D2000IU', start: TODAY }]).plan.items[0].title, '维生素D', 'glued to a Latin unit it is an amount')
+  const b12 = mod.normalizePlan({ items: [{ category: 'supplement', title: '维生素B12片', start: TODAY }] }, { today: TODAY, medications: [{ name: '维生素B6' }], previous: null })
+  assert.equal(b12.plan.items[0].mirobody.medication, '维生素B12片', 'not linked to 维生素B6')
+  const d3 = mod.normalizePlan({ items: [{ category: 'supplement', title: '维生素D3 2000IU', start: TODAY }] }, { today: TODAY, medications: [{ name: '维生素D3' }, { name: '维生素D' }], previous: null })
+  assert.equal(d3.plan.items[0].title, '维生素D3')
+  assert.equal(d3.plan.items[0].mirobody.medication, '维生素D3')
   const medName = plan([{ category: 'drug', title: '二甲双胍', medication: '二甲双胍 500mg 每日两次', start: TODAY }])
   assert.equal(medName.plan.items[0].mirobody.medication, '二甲双胍 每日两次')
   const titled = plan([{ category: 'exercise', title: '快走', detail: '每天 30 分钟，饭后', start: TODAY }], { title: '维生素D 2000IU 方案', note: '每天 2000 IU' })
@@ -404,6 +420,11 @@ try {
     const older = await mod.buildTracking({ config: run.config, dataDir: run.dir, skillsHome: home, catalog, records: { ...run.records, profile: mod.readProfile(run.dir) }, today: TODAY })
     assert.equal(older.bioage.runs, 4, 'all four checkups are computed again')
     assert.ok(older.bioage.points.every((row, i) => row.phenoage !== run.tracking.bioage.points[i].phenoage))
+    // weeks later, with the same saved age, the past checkups are not computed again at a lower age
+    mod.invalidateTracking()
+    const later = await mod.buildTracking({ config: run.config, dataDir: run.dir, skillsHome: home, catalog, records: { ...run.records, profile: mod.readProfile(run.dir) }, today: '2026-11-15' })
+    assert.equal(later.bioage.runs, 0, 'nothing computed again as the calendar moves')
+    assert.deepEqual(later.bioage.points.map((row) => row.phenoage), older.bioage.points.map((row) => row.phenoage))
   } finally {
     await run.close()
   }

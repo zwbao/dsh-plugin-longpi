@@ -201,11 +201,11 @@ export function normalizePlan(raw: unknown, context: NormalizeContext): Normaliz
       const medication = stripDoses(text(row.medication, 60))
       if (medication.stripped && !cleanedTitle.stripped && !cleanedDetail.stripped) warnings.push(`${where}的剂量没有保存：${DOSE_NOT_SAVED}`)
       const name = medication.text || title
-      const folded = foldName(name)
-      const hit = context.medications.find((med) => {
+      // Linked by the name as written first (a dose stripped out may have taken part of it), then as stored.
+      const hit = [...new Set([text(row.medication, 60) || titleIn, name])].map(foldName).map((folded) => context.medications.find((med) => {
         const other = foldName(med.name)
         return other && folded && (other.includes(folded) || folded.includes(other))
-      })
+      })).find(Boolean)
       if (hit) mirobody = { medication: hit.name, ...(hit.plan_id ? { plan_id: hit.plan_id } : {}) }
       else {
         mirobody = { medication: name }

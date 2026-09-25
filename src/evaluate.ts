@@ -13,6 +13,7 @@ import type { CheckIn, PlanItem, PlanVersion } from './interventions.ts'
 import { addDays, CATEGORY_ZH, checkinStatus, daysBetween, TAG_ZH } from './interventions.ts'
 import type { CourseRow, DoseRow, SeriesPoint } from './records.ts'
 import { preferSelf } from './measurements.ts'
+import { foldName, nameVariants } from './units.ts'
 import { effectsFor, markerFor, rcvBand, type Biovar, type BiovarMarker, type EffectRow } from './reference.ts'
 
 export type Verdict = '有效' | '波动内' | '反向' | '无法判断'
@@ -119,6 +120,8 @@ export function resolveMarkers(
     const record = rows.find((row) => row.name === asked || (row.source === 'self' && row.label === asked))
       ?? (direct ? rows.find((row) => (row.loinc && direct.loinc.includes(row.loinc)) || (direct.device_codes ?? []).includes(row.name)) : undefined)
       ?? rows.find((row) => markerFor(biovar, row) === direct && direct != null)
+      // A marker with no variation row (腰围) is still found under its report name, as candidatesFor finds it.
+      ?? rows.find((row) => [row.name, row.label].some((text) => Boolean(text) && nameVariants(text as string).includes(foldName(asked))))
     const row = direct ?? (record ? markerFor(biovar, record) : null)
     return {
       asked,
