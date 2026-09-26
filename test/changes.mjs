@@ -288,7 +288,7 @@ try {
   assert.equal(journey.changes[0].ask_doctor, true)
   assert.equal(journey.changes[0].points.length, 4)
   assert.equal(journey.results.bioage.status, 'ok')
-  assert.equal(journey.results.bioage.caveat_zh, '表型年龄用到的平均红细胞体积近期变化明显，原因可能与衰老无关，这次的身体年龄请谨慎看待。')
+  assert.equal(journey.results.bioage.caveat_zh, '身体年龄用到的平均红细胞体积近期变化明显，原因可能与衰老无关，这次的结果请谨慎看待。')
   assert.deepEqual(step.tracking.changes, journey.changes, 'the tracking carries the same rows')
 
   // HbA1c rising beyond its band is one to show a doctor, but not a PhenoAge input

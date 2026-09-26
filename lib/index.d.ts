@@ -1152,7 +1152,7 @@ declare function buildBoard(input: {
     };
   };
   records: {
-    status: "unconfigured" | "ok" | "partial" | "error";
+    status: "error" | "unconfigured" | "ok" | "partial";
     error: string;
     read_errors: string[];
     missing_reads: string[];

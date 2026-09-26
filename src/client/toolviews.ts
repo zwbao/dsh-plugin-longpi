@@ -16,14 +16,16 @@
 import React from 'react'
 import { errorText } from './api.ts'
 import { fmt } from './charts.ts'
+import { adoptedVersion, isUndone, setAdopted, setUndone, useCallState } from './call-state.ts'
 import { postCheckIn } from './checkin.ts'
 import { localToday, riskText, versusAge } from './format.ts'
 import { Icon } from './icons.ts'
 import { normalizePlanDraft } from './normalize.ts'
 import { acceptDraft, ConfirmModal, DraftItems, keptGoals, type DraftSource } from './plan-draft.ts'
 import { requestView, useCachedBoard, useJourney } from './store.ts'
+import { BIOAGE_INFO, BIOAGE_LABEL, RISK_INFO, RISK_LABEL } from './terms.ts'
 import type { CheckState, Face, PlanDraft, PlanDraftResponse } from './types.ts'
-import { Btn, readPref, writePref } from './ui.ts'
+import { Btn, Info } from './ui.ts'
 
 const h = React.createElement
 
@@ -116,17 +118,9 @@ function Shell(props: { call: ParsedCall; icon: string; title: string; summary?:
 
 // --- draft_intervention_plan --------------------------------------------------------------
 
-const ADOPTED_KEY = 'dsh-plugin-longpi.adopted.'
-
 interface Adopted {
   version: number
   reminder: string | null
-}
-
-/** The plan version this call's draft was adopted as, remembered per call so the card says so after a reload. */
-function adoptedOf(callId: string): Adopted | null {
-  const version = Number(readPref(`${ADOPTED_KEY}${callId}`))
-  return Number.isFinite(version) && version > 0 ? { version, reminder: null } : null
 }
 
 function DraftCard(props: { callId: string; data: PlanDraftResponse; draft: PlanDraft; source: DraftSource; saved: Adopted | null; onSaved: (saved: Adopted) => void; openPage?: () => void }): React.ReactElement {
@@ -154,7 +148,7 @@ function DraftCard(props: { callId: string; data: PlanDraftResponse; draft: Plan
         setError(`没有保存：${result.error}`)
         return
       }
-      writePref(`${ADOPTED_KEY}${props.callId}`, String(result.version))
+      setAdopted(props.callId, result.version)
       props.onSaved({ version: result.version, reminder: result.reminder })
       setConfirming(false)
     } catch (err) {
@@ -190,8 +184,11 @@ function draftSource(args: Raw, data: PlanDraftResponse): DraftSource {
 
 export function DraftToolView(props: ToolViewProps): React.ReactElement {
   const call = parseCall(props.block)
-  // Held here, not in the card: the head says whether the draft was adopted.
-  const [saved, setSaved] = React.useState<Adopted | null>(() => adoptedOf(props.callId))
+  // Held here, not in the card: the head says whether the draft was adopted, here or from the turn's quick actions.
+  useCallState()
+  const [local, setSaved] = React.useState<Adopted | null>(null)
+  const adopted = adoptedVersion(props.callId)
+  const saved = local ?? (adopted != null ? { version: adopted, reminder: null } : null)
   if (call.state === 'running') return h(Shell, { call, icon: 'spark', title: '起草方案', summary: '正在按你的结果和试验证据起草…' })
   if (call.state === 'error') return h(Shell, { call, icon: 'spark', title: '起草方案', summary: `没有完成：${call.error}`, tone: 'bad' })
   let data: PlanDraftResponse | null = null
@@ -265,13 +262,12 @@ interface LoggedEntry {
   undo: boolean
 }
 
-const UNDONE_KEY = 'dsh-plugin-longpi.undone.'
-
 export function CheckinToolView(props: ToolViewProps): React.ReactElement {
   const call = parseCall(props.block)
   const { journey } = useJourney()
   const [undoing, setUndoing] = React.useState(false)
-  const [undone, setUndone] = React.useState(() => readPref(`${UNDONE_KEY}${props.callId}`) === '1')
+  useCallState()
+  const undone = isUndone(props.callId)
   const [error, setError] = React.useState<string | null>(null)
   if (call.state === 'running') return h(Shell, { call, icon: 'check', title: '打卡', summary: '正在记录…' })
   if (call.state === 'error') return h(Shell, { call, icon: 'check', title: '打卡', summary: `没有记下：${call.error}`, tone: 'bad' })
@@ -309,8 +305,7 @@ export function CheckinToolView(props: ToolViewProps): React.ReactElement {
     setError(null)
     try {
       for (const row of undoable) await postCheckIn(today, row.item, null)
-      writePref(`${UNDONE_KEY}${props.callId}`, '1')
-      setUndone(true)
+      setUndone(props.callId)
     } catch (err) {
       setError(`没有撤销：${errorText(err, '请稍后再试')}`)
     } finally {
@@ -359,10 +354,11 @@ function skillName(board: ReturnType<typeof useCachedBoard>, name: string, resul
   return typeof outputs === 'string' ? outputs : name
 }
 
-function ResultFigure(props: { figure: string; unit: string; lines: string[] }): React.ReactElement {
+function ResultFigure(props: { figure: string; unit: string; lines: string[]; label: string; info: string }): React.ReactElement {
   return h('div', { className: 'lp-tool-result' },
     h('span', { className: 'lp-tool-figure' }, props.figure, h('span', { className: 'lp-bignum-unit' }, props.unit)),
     h('span', { className: 'lp-tag', title: '模型根据你的记录计算的估计值，不是诊断' }, '模型估计'),
+    h(Info, { label: props.label }, props.info),
     ...props.lines.filter(Boolean).map((line) => h('span', { key: line, className: 'lp-caption' }, line)))
 }
 
@@ -371,7 +367,7 @@ export function SkillToolView(props: ToolViewProps): React.ReactElement {
   const board = useCachedBoard()
   const { journey } = useJourney()
   const name = typeof call.args.name === 'string' ? call.args.name : ''
-  const plain = name === PHENOAGE_SKILL ? '身体年龄' : name === RISK_SKILL ? '10 年心血管风险' : skillName(board, name, call.result)
+  const plain = name === PHENOAGE_SKILL ? BIOAGE_LABEL : name === RISK_SKILL ? RISK_LABEL : skillName(board, name, call.result)
   if (call.state === 'running') return h(Shell, { call, icon: 'play', title: `计算${plain}`, summary: '正在运行方法…' })
   if (call.state === 'error') return h(Shell, { call, icon: 'play', title: plain, summary: `没有算完：${call.error}`, tone: 'bad' })
   const result = call.result ?? {}
@@ -384,16 +380,16 @@ export function SkillToolView(props: ToolViewProps): React.ReactElement {
     const advance = numberOf(outputValue(result, 'phenoage_advance'))
     const band = journey?.results.bioage.band_years
     if (phenoage != null) {
-      return h(Shell, { call, icon: 'play', title: '身体年龄', summary: typeof result.measured_at === 'string' ? `按 ${result.measured_at} 的血检` : undefined },
-        h(ResultFigure, { figure: fmt(phenoage), unit: '岁', lines: [versusAge(advance), band != null ? `正常波动 ±${fmt(band)} 岁` : ''] }))
+      return h(Shell, { call, icon: 'play', title: BIOAGE_LABEL, summary: typeof result.measured_at === 'string' ? `按 ${result.measured_at} 的血检` : undefined },
+        h(ResultFigure, { figure: fmt(phenoage), unit: '岁', lines: [versusAge(advance), band != null ? `正常波动 ±${fmt(band)} 岁` : ''], label: BIOAGE_LABEL, info: BIOAGE_INFO }))
     }
   }
   if (name === RISK_SKILL) {
     const risk = numberOf(outputValue(result, 'risk_10y_pct'))
     const category = outputValue(result, 'risk_category')
     if (risk != null) {
-      return h(Shell, { call, icon: 'play', title: '10 年心血管风险', summary: typeof result.measured_at === 'string' ? `按 ${result.measured_at} 的记录` : undefined },
-        h(ResultFigure, { figure: riskText(risk), unit: '%', lines: [typeof category === 'string' ? category : '', 'China-PAR，同类人群的平均风险'] }))
+      return h(Shell, { call, icon: 'play', title: RISK_LABEL, summary: typeof result.measured_at === 'string' ? `按 ${result.measured_at} 的记录` : undefined },
+        h(ResultFigure, { figure: riskText(risk), unit: '%', lines: [typeof category === 'string' ? category : '', '同类人群的平均风险'], label: RISK_LABEL, info: RISK_INFO }))
     }
   }
   const excerpt = typeof result.report_excerpt === 'string' ? result.report_excerpt.trim() : ''

@@ -396,28 +396,28 @@ async function ensureBioAge(context: TrackingContext, reference: Reference): Pro
     status, note_zh: note, missing, points: [], band_years: null, band_verified: false, band_missing: [], runs: 0,
   })
   const card = context.catalog.cards.find((item) => item.name === PHENOAGE_SKILL)
-  if (!card || !card.script) return empty('no_skill', '技能库里没有表型年龄方法。')
+  if (!card || !card.script) return empty('no_skill', '技能库里没有身体年龄（表型年龄）方法。')
   // A record that is configured but failed to read is not 'not connected': name the failure.
   if (context.records.record_status === 'error') return empty('error', readFailed(context.records))
-  if (!recordReadable(context.records)) return empty('no_record', '还没有接上 Mirobody 记录，无法回算历次体检的表型年龄。')
+  if (!recordReadable(context.records)) return empty('no_record', '还没有接上 Mirobody 记录，无法回算历次体检的身体年龄。')
   const pairs = pairsFor(card, context.records)
   const { missing, unread } = absentInputs(pairs, context.records)
   if (missing.length > 0) {
     const also = unread.length > 0 ? `另外${unread.map((pair) => pair.spec.label_zh).join('、')}没有读到。` : ''
-    return empty('missing_inputs', `记录里还缺${missing.map((pair) => pair.spec.label_zh).join('、')}，凑齐九项血检才能算表型年龄。${also}`, missing.map((pair) => pair.spec.label_zh))
+    return empty('missing_inputs', `记录里还缺${missing.map((pair) => pair.spec.label_zh).join('、')}，凑齐九项血检才能算身体年龄。${also}`, missing.map((pair) => pair.spec.label_zh))
   }
   // Not read is not "not measured": the series may still be readable, so the checkups are read either way.
   if (unread.some((pair) => pair.names.length === 0)) {
-    return empty('error', `指标目录没有读全，${unread.map((pair) => pair.spec.label_zh).join('、')}可能在没有读到的部分，暂时算不出表型年龄。`)
+    return empty('error', `指标目录没有读全，${unread.map((pair) => pair.spec.label_zh).join('、')}可能在没有读到的部分，暂时算不出身体年龄。`)
   }
   const ageNow = context.records.profile.age
-  if (ageNow == null) return empty('no_age', '档案里还没有实足年龄。保存年龄后才能回算表型年龄。')
+  if (ageNow == null) return empty('no_age', '档案里还没有实足年龄。保存年龄后才能回算身体年龄。')
 
   const days = await checkupDays(context, pairs)
   if (days.error) return empty('error', `读取历次血检失败：${days.error}`)
   // Only dates where all nine were measured the same day; a missing marker is never carried over from another date.
   const checkups = days.complete.slice(-BIOAGE_CHECKUPS)
-  if (checkups.length === 0) return empty('no_checkup', '没有一次检查同时测齐九项血检，还不能算表型年龄。')
+  if (checkups.length === 0) return empty('no_checkup', '没有一次检查同时测齐九项血检，还不能算身体年龄。')
   // Each checkup's inputs, its age then and the skill version; a stored result for other inputs is recomputed.
   const wanted = new Map(checkups.map((date) => {
     const measurements = latestMeasurements(pairs, days.byDate, date)
@@ -454,7 +454,7 @@ async function ensureBioAge(context: TrackingContext, reference: Reference): Pro
     status: current ? 'ok' : 'error',
     note_zh: current
       ? `按 ${points.length} 次同时测齐九项血检的检查回算。`
-      : `${latest} 这次血检的表型年龄没有算出来${lastError ? `：${lastError}` : ''}。请在对话里运行表型年龄方法查看原因。`,
+      : `${latest} 这次血检的身体年龄没有算出来${lastError ? `：${lastError}` : ''}。请在对话里运行身体年龄（表型年龄）方法查看原因。`,
     missing: [], points, band_years: band?.years ?? null, band_verified: band?.verified ?? false, band_missing: band?.missing ?? [], runs,
   }
 }
@@ -687,10 +687,10 @@ async function modelCards(context: TrackingContext, reference: Reference, goals:
           }).filter((row) => Number.isFinite(row.years_per_step)).sort((a, b) => Math.abs(b.years_per_step) - Math.abs(a.years_per_step)).slice(0, 5)
           cards.push({
             model: 'phenoage',
-            title_zh: '表型年龄',
+            title_zh: '身体年龄',
             status: target ? 'ok' : 'no_goal',
             note_zh: target
-              ? `按 ${date} 的血检，达到方案目标时表型年龄 ${target.phenoage_delta != null && target.phenoage_delta <= 0 ? '年轻' : '变化'} ${fmt(Math.abs(target.phenoage_delta ?? 0))} 岁。`
+              ? `按 ${date} 的血检，达到方案目标时身体年龄 ${target.phenoage_delta != null && target.phenoage_delta <= 0 ? '年轻' : '变化'} ${fmt(Math.abs(target.phenoage_delta ?? 0))} 岁。`
               : problems.length > 0
                 ? `方案目标没有用于计算：${problems.join(' ')}`
                 : '方案里还没有和九项血检对应的目标值。设定目标（如空腹血糖、超敏 CRP）后，这里会算出达到目标时的表型年龄。',

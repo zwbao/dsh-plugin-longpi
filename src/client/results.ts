@@ -10,6 +10,7 @@ import { chineseDate, chineseMonth, riskText, versusAge } from './format.ts'
 import { Icon } from './icons.ts'
 import { recordConnected } from './normalize.ts'
 import { InlineSelf } from './self-measure.ts'
+import { BIOAGE_INFO, RISK_INFO } from './terms.ts'
 import type { Addon, Journey, ModelCard, Tracking } from './types.ts'
 import { Btn, Info, Skeleton } from './ui.ts'
 
@@ -30,8 +31,6 @@ function CardHead(props: { label: string; info: React.ReactNode }): React.ReactE
     h(EstimateTag))
 }
 
-const BIOAGE_INFO = '表型年龄（Levine 2018）：用九项常规血检和实足年龄估计的“身体年龄”。它是人群模型的估计，不是诊断。'
-const RISK_INFO = 'China-PAR：按中国成人队列建立的 10 年动脉粥样硬化性心血管病（心梗、脑卒中等）风险模型。它给出的是和你条件相同的人群的平均风险，不是对你个人的预言；这个模型没有公开的个体波动范围。'
 
 function bioageAction(journey: Journey): { label: string; target: ResultTarget } | null {
   const bio = journey.results.bioage

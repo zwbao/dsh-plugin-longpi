@@ -3,9 +3,9 @@
     "today": "2026-09-24",
     "focus": ["bioage", "cardio"],
     "priorities": [
-      { "marker_key": "sbp", "label_zh": "收缩压", "value": 126.4, "unit": "mmHg", "date": "2026-09-23", "why_zh": "China-PAR 风险的主要来源（模型估计）", "source": "china_par_levers" },
-      { "marker_key": "crp", "label_zh": "超敏C反应蛋白", "value": 1.2, "unit": "mg/L", "date": "2026-08-26", "why_zh": "对你的表型年龄影响较大的指标之一（模型估计）", "source": "phenoage_levers" },
-      { "marker_key": "glucose", "label_zh": "空腹血糖", "value": 5.4, "unit": "mmol/L", "date": "2026-08-26", "why_zh": "对你的表型年龄影响最大的指标之一（模型估计）；方法库里还没有以空腹血糖为终点的试验", "source": "phenoage_levers" },
+      { "marker_key": "sbp", "label_zh": "收缩压", "value": 126.4, "unit": "mmHg", "date": "2026-09-23", "why_zh": "10 年心血管风险的主要来源（模型估计）", "source": "china_par_levers" },
+      { "marker_key": "crp", "label_zh": "超敏C反应蛋白", "value": 1.2, "unit": "mg/L", "date": "2026-08-26", "why_zh": "对你的身体年龄影响较大的指标之一（模型估计）", "source": "phenoage_levers" },
+      { "marker_key": "glucose", "label_zh": "空腹血糖", "value": 5.4, "unit": "mmol/L", "date": "2026-08-26", "why_zh": "对你的身体年龄影响最大的指标之一（模型估计）；方法库里还没有以空腹血糖为终点的试验", "source": "phenoage_levers" },
       { "marker_key": "tg", "label_zh": "甘油三酯", "value": 1.2, "unit": "mmol/L", "date": "2026-08-26", "why_zh": "你最关心心血管", "source": "focus" }
     ],
     "candidates": [
@@ -66,6 +66,6 @@
       { "marker": "超敏C反应蛋白", "value": 0.22, "unit": "mg/L", "basis_zh": "按试验平均效应估算，不是个人预测" },
       { "marker": "甘油三酯", "value": 0.72, "unit": "mmol/L", "basis_zh": "按试验平均效应估算，不是个人预测" }
     ],
-    "notes_zh": ["空腹血糖是你的表型年龄最大的杠杆，但方法库里还没有以它为终点的试验，所以草稿里没有针对它的项目。"]
+    "notes_zh": ["空腹血糖是你的身体年龄最大的杠杆，但方法库里还没有以它为终点的试验，所以草稿里没有针对它的项目。"]
   }
 }

@@ -2,8 +2,9 @@
 // sidebar, a greeting in place of the blank-session headline (which also
 // places one row under the composer), an invisible prompt bridge in the input
 // dock, a step in first-run onboarding, a LongPi page in settings, cards for
-// five of its tools in the chat, and a reminder pill in the shell overlay.
-// Nothing visible sits above the composer.
+// five of its tools in the chat, quick actions under a turn that left
+// something to do, a 健康 tab for DSH's right column, and a reminder pill in
+// the shell overlay. Nothing visible sits above the composer.
 
 import React from 'react'
 import { PANEL_ID } from './constants.ts'
@@ -13,10 +14,13 @@ import { Icon } from './icons.ts'
 import { setModelProbe, setModelSettings, type SettingsFace } from './model-status.ts'
 import { Onboarding } from './onboarding.ts'
 import { LongPiPage } from './page.ts'
+import { HealthPane, PANE_ID, PANE_KIND, paneDefinition, setPaneOpener } from './pane.ts'
 import { ReminderPill } from './pill.ts'
 import { LongPiSettings } from './settings-page.ts'
 import { injectStyles } from './styles.ts'
 import { TOOL_VIEWS } from './toolviews.ts'
+import { longPiTurnDefinition, selectLongPiTail } from './turn-data.ts'
+import { LongPiTurnTail } from './turn-tail.ts'
 import type { Face } from './types.ts'
 
 const h = React.createElement
@@ -26,11 +30,24 @@ interface Slots {
   register: (options: Record<string, unknown>, component: unknown) => unknown
 }
 
+/** The optional DSH services LongPi uses when they exist, as a callback of ctx.inject sees them. */
+interface Optional {
+  remote?: unknown
+  settingsScope?: unknown
+  /** The right column's tab-type registry (dsh-client-ui-sidebar-right). */
+  sidebarRightTabs?: { register: (definition: unknown) => () => void }
+  /** The right column's navigation face. */
+  sidebarRight?: { openTab: (kind: string) => void }
+  /** The conversation engine's Definition registry (dsh-client-ui-conversation). */
+  uiConversation?: { events?: { register: (definition: unknown) => () => void } }
+  effect?: (run: () => () => void, label?: string) => unknown
+}
+
 export interface ClientContext {
   slots: Slots
   layout?: { selectPanel: (id: string | null) => void }
   /** Cordis: run a callback once the named services exist (never, when they do not). */
-  inject?: (deps: string[], callback: (ctx: { remote?: unknown; settingsScope?: unknown; effect?: (run: () => () => void, label?: string) => unknown }) => void) => unknown
+  inject?: (deps: string[], callback: (ctx: Optional) => void) => unknown
 }
 
 export const inject = ['slots', 'layout']
@@ -66,9 +83,35 @@ export function apply(ctx: ClientContext): void {
     ctx.slots.inject('tool.call.toolview', () => ctx.slots.register({ name: 'tool.call.toolview', key, inject: face }, view))
   }
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'longpi-reminders', order: 50, inject: face }, ReminderPill))
+  // Under a finished turn that left something to do: DSH folds the turn's cards, so their actions come back here.
+  // Tried after the chain's shipped entries (produced files keep their row).
+  ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({ name: 'conversation.chat.turnTail', select: selectLongPiTail, inject: face }, LongPiTurnTail))
+  // The 健康 tab's body in DSH's right column; its type registers below when the column is there.
+  ctx.slots.inject('sidebar.right.pane.tab', () => ctx.slots.register({ name: 'sidebar.right.pane.tab', key: PANE_ID, inject: face }, HealthPane))
   // Whether a model key is set, for onboarding step 1: only when DSH exposes the Remote services
   // its Models page reads. Absent services leave the status unknown, and step 1 says nothing.
   if (typeof ctx.inject === 'function') {
+    // Each turn's LongPi calls, published as the turn's data for the quick actions.
+    ctx.inject(['uiConversation'], (sub) => {
+      const events = sub.uiConversation?.events
+      if (events) sub.effect?.(() => events.register(longPiTurnDefinition), 'longpi: turn data')
+    })
+    ctx.inject(['sidebarRightTabs'], (sub) => {
+      const tabs = sub.sidebarRightTabs
+      if (tabs) sub.effect?.(() => tabs.register(paneDefinition(PanelIcon)), 'longpi: 健康 tab type')
+    })
+    ctx.inject(['sidebarRight'], (sub) => {
+      const column = sub.sidebarRight
+      if (!column) return
+      setPaneOpener(() => {
+        try {
+          column.openTab(PANE_KIND)
+        } catch {
+          // No seat mounted (no session on screen): nothing to open into.
+        }
+      })
+      sub.effect?.(() => () => setPaneOpener(null), 'longpi: 健康 tab opener')
+    })
     ctx.inject(['remote', 'remote.llm', 'remote.credentials'], (sub) => {
       setModelProbe(sub.remote as Parameters<typeof setModelProbe>[0])
       sub.effect?.(() => () => setModelProbe(null), 'longpi: model status')

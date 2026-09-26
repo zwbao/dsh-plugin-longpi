@@ -440,7 +440,7 @@ try {
   run = await variant('refused', (record) => { record.observations = record.observations.map((row) => (row.indicator === 'Albumin-ALB' && row.date === '2026-08-26' ? { ...row, value: '5' } : row)) })
   try {
     assert.equal(run.tracking.bioage.status, 'error')
-    assert.match(run.tracking.bioage.note_zh, /^2026-08-26 这次血检的表型年龄没有算出来/)
+    assert.match(run.tracking.bioage.note_zh, /^2026-08-26 这次血检的身体年龄没有算出来/)
     assert.equal(run.tracking.bioage.points.at(-1).date, '2026-04-22', 'the older checkups are still drawn')
   } finally {
     await run.close()

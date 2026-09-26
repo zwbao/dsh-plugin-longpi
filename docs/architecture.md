@@ -31,6 +31,16 @@ LongPi is the personal layer. Three pieces stay separate.
 | `tracking.ts` | Put it together for tools and the board: series, adherence data, phenotypic age at every checkup (by the skill), noise bands, model cards from `levers.json`. |
 | `overview.ts` | What the record can run now, run-everything-ready, the Markdown report. |
 
+In the client (`src/client/`), besides the page, onboarding, settings and the chat cards:
+
+| Module | Job |
+| --- | --- |
+| `turn-data.ts` | A conversation Definition that collects each turn's LongPi calls (draft, read-back, save, check-in) from the session log and publishes them as the turn's `longpi` data; the `conversation.chat.turnTail` selector claims a turn that left something to do. Pure, tested in Node. |
+| `turn-tail.ts` | The quick actions under such a turn: adopt the draft, confirm or adjust a read-back, take back today's check-ins, open the 健康 tab or the page. |
+| `pane.ts` | The 健康 tab in DSH's right column (`sidebar.right.pane.tab`, a page type in `sidebarRightTabs`): the 概览 tab laid out for the column. |
+| `call-state.ts` | Per-call outcomes the chat card and the quick actions share: the plan version a draft was adopted as, a check-in taken back. |
+| `terms.ts` | The results' plain names (身体年龄, 10 年心血管风险) and what their ⓘ says about the model behind them. |
+
 ## Dispatch is a tool, not a prompt guess
 
 - `read_personal_situation` loads the saved age, sex, and birth year, the indicators and medications the Mirobody server returned, earlier readouts, and which methods are ready.

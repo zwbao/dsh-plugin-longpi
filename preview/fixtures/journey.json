@@ -34,7 +34,7 @@
     "summary": { "checkups": 4, "first_date": "2025-10-18", "last_date": "2026-08-26", "categories_zh": ["血脂", "血常规", "血糖", "肝功能", "肾功能", "炎症"], "wearable_days": 355 } },
   "results": {
     "bioage": { "status": "ok", "phenoage": 44.76, "advance": -8.14, "date": "2026-08-26", "checkups": 4, "band_years": 2.94, "blocker_zh": "", "missing": [],
-      "caveat_zh": "表型年龄用到的平均红细胞体积近期变化明显，原因可能与衰老无关，这次的身体年龄请谨慎看待。" },
+      "caveat_zh": "身体年龄用到的平均红细胞体积近期变化明显，原因可能与衰老无关，这次的结果请谨慎看待。" },
     "risk": { "status": "ok", "risk_pct": 4.0, "category_zh": "低危", "date": "2026-08-26", "blocker_zh": "", "missing_labs": [], "missing_facts": [] }
   },
   "addons": [],

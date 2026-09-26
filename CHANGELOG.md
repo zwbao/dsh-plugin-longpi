@@ -49,6 +49,10 @@ Fixes from an external review of 0.5.0, checked claim by claim against the code,
 - **Chat cards.** The chat shows cards for a plan draft (adopt or remove items), a plan read-back, a check-in (with 撤销) and a result.
   - A draft item shows what to do once: its category, title and evidence are no longer repeated in the text (no more 证据：，DOI).
   - An adopted draft's card says 已采用 in its head.
+- **While chatting.**
+  - DSH's right column has a 健康 tab (offered on its guide page): today's check-ins, the two results, the next step and what changed, next to the chat.
+  - DSH folds a finished turn's tool cards. A turn that drafted a plan, read one back, saved it or recorded a check-in gets one row of quick actions under it: 采用这份方案, 确认保存 or 还要调整, 撤销, and links to the 健康 tab and the page.
+- **Plain names.** The two results are called 身体年龄 and 10 年心血管风险 on every surface: the 方案 tab's model cards, the chat cards and the notes. The model names (表型年龄, Levine 2018; China-PAR) are behind ⓘ; the export for a doctor keeps them.
 - **Workspace name.** A new workspace is named 健康对话.
 
 **Versions** stay below 1.0 until declared stable:

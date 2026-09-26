@@ -865,6 +865,29 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
 .lp-tool-doctor .lp-icon { margin-top: 2px; flex: none; }
 .lp-tool .lp-caption { margin: 0; }
 
+/* Quick actions under a finished turn: one quiet row, wrapping in a narrow chat. */
+.lp-turn-tail { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 4px 0 2px; font-size: 13px; line-height: 20px; }
+.lp-tail-group { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.lp-tail-btn {
+  display: inline-flex; align-items: center; gap: 4px; height: 26px; padding: 0 10px; border-radius: 13px;
+  border: .5px solid var(--lp-line-2); background: var(--lp-layer); color: var(--lp-ink); font: inherit; font-size: 12px; cursor: pointer;
+}
+.lp-tail-btn:hover:not(:disabled) { background: var(--lp-hover); }
+.lp-tail-btn:disabled { color: var(--lp-ink-3); cursor: progress; }
+.lp-tail-primary { border-color: transparent; background: var(--lp-accent); color: #fff; }
+.lp-tail-primary:hover:not(:disabled) { background: var(--lp-accent); filter: brightness(1.08); }
+.lp-tail-links { display: inline-flex; gap: 12px; margin-left: auto; font-size: 12px; }
+.lp-turn-tail .lp-form-error { margin: 0; font-size: 12px; }
+
+/* The 健康 tab in DSH's right column: the 概览 tab, laid out for a narrow column by the lp-root queries. */
+.lp-pane { container: lp-root / inline-size; display: grid; gap: 12px; padding: 12px 14px 24px; }
+.lp-pane-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lp-pane-head .lp-label { display: inline-flex; align-items: center; gap: 6px; }
+.lp-pane .lp-card { padding: 14px 16px; }
+.lp-pane .lp-overview { gap: 12px; }
+.lp-pane-loading { display: grid; gap: 12px; }
+.lp-pane-foot { margin: 4px 0 0; }
+
 .lp-spin { animation: lp-spin 1s linear infinite; }
 @keyframes lp-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes lp-fade { from { opacity: 0; } to { opacity: 1; } }

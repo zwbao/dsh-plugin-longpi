@@ -608,7 +608,7 @@ export function suggestNext(summaries: readonly ItemSummary[], context: { today:
     if (lever.years >= -0.2) continue
     out.push({
       kind: 'lever', priority: 4,
-      text_zh: `按表型年龄模型，${lever.label}从 ${lever.from} 到 ${lever.to}，表型年龄约 ${lever.years.toFixed(1)} 岁（模型估计）。它是你当前最大的杠杆。`,
+      text_zh: `按身体年龄模型，${lever.label}从 ${lever.from} 到 ${lever.to}，身体年龄约 ${lever.years.toFixed(1)} 岁（模型估计）。它是你当前最大的杠杆。`,
     })
   }
   const unique = new Map<string, Suggestion>()

@@ -188,4 +188,46 @@ assert.match(readFileSync(join(root, '..', 'src', 'client', 'index.ts'), 'utf8')
   assert.equal(await readModelStatus(remote(['MY_DS_KEY'])), 'unknown', 'no settings view: an unset default could be a custom reference')
   assert.equal(await readModelStatus(remote([]), { getSnapshot: () => { throw new Error('no mirror') } }), 'unknown')
 }
+// The turn's quick actions: which LongPi calls a turn left behind, read from its session events.
+{
+  const { longPiTurnDefinition: def, tailMatchOf, selectLongPiTail, LONGPI_TURN_KEY } = await import('../src/client/turn-data.ts')
+  const call = (seq, callId, name, args) => ({ type: 'tool/call', seq, data: { turn: 3, step: 1, callId, name, arguments: JSON.stringify(args) } })
+  const result = (seq, callId, value, isError = false) => ({
+    type: 'tool/result', seq, surfaceOp: 'append',
+    data: { turn: 3, step: 1, message: { role: 'user', source: { kind: 'tool', callId }, content: [{ type: 'tool-result', toolCallId: callId, isError, content: [{ type: 'text', text: JSON.stringify(value) }] }] } },
+  })
+  const run = (events) => {
+    let state
+    for (const event of events) {
+      const matched = def.match(event)
+      if (!matched) continue
+      state = matched.role === 'start' ? def.start({}, { event }) : def.update({ state }, { event })
+    }
+    return def.buildLocationData({ state }, 'turn', null)?.value
+  }
+  const start = { type: 'turn/start', seq: 1, data: { turn: 3 } }
+  assert.equal(def.match({ type: 'tool/call', data: { turn: 3, name: 'read_personal_situation', callId: 'x' } }), null, 'other tools are not tracked')
+  assert.equal(def.match({ type: 'assistant/message', data: { turn: 3 } }), null)
+  assert.equal(def.match({ ...result(9, 'c', {}), surfaceOp: 'replace' }), null, 'a replacement copy is not a new result')
+  const draftTurn = run([start, call(2, 'd1', 'draft_intervention_plan', { focus: ['cardio'], markers: ['血压'] }), result(3, 'd1', { brief: {}, draft: { items: [] } }), result(4, 'other', { ok: true })])
+  assert.equal(draftTurn.calls.length, 1, 'a result without its tracked call is ignored')
+  assert.deepEqual(draftTurn.calls[0].args.markers, ['血压'])
+  assert.equal(tailMatchOf(draftTurn).draft.callId, 'd1')
+  assert.equal(selectLongPiTail({ turn: { data: { get: (key) => (key === LONGPI_TURN_KEY ? draftTurn : undefined) } } }).draft.callId, 'd1')
+  const plan = { title: '方案', items: [{ category: 'diet', title: '减盐', start: '2026-03-01' }] }
+  const readBack = run([start, call(2, 's1', 'save_intervention_plan', { ...plan, confirm: false }), result(3, 's1', { ok: true, saved: false, read_back: ['饮食｜减盐'], errors: [] })])
+  assert.equal(tailMatchOf(readBack).readBack.callId, 's1', 'a read-back waits for a yes')
+  const withErrors = run([start, call(2, 's1', 'save_intervention_plan', { ...plan, confirm: false }), result(3, 's1', { ok: false, saved: false, errors: ['缺开始日期'] })])
+  assert.equal(tailMatchOf(withErrors), null, 'a read-back with errors offers nothing to confirm')
+  const saved = run([start, call(2, 's1', 'save_intervention_plan', { ...plan, confirm: false }), result(3, 's1', { ok: true, saved: false, errors: [] }), call(4, 's2', 'save_intervention_plan', { ...plan, confirm: true }), result(5, 's2', { ok: true, saved: true, version: 2 })])
+  const savedMatch = tailMatchOf(saved)
+  assert.equal(savedMatch.readBack, null, 'saved: nothing waits')
+  assert.equal(savedMatch.saved.result.version, 2)
+  const checkin = run([start, call(2, 'k1', 'log_intervention_checkin', { entries: [{ item: '减盐', done: true }] }), result(3, 'k1', { ok: true, saved: 1, entries: [{ item: 'i1', title: '减盐', date: '2026-09-26', done: true }] })])
+  assert.equal(tailMatchOf(checkin).checkin.callId, 'k1')
+  const failed = run([start, call(2, 'd1', 'draft_intervention_plan', {}), result(3, 'd1', { error: 'x' }, true)])
+  assert.equal(tailMatchOf(failed), null, 'a failed call leaves nothing to do')
+  assert.equal(run([start]), undefined, 'a turn without LongPi calls publishes nothing')
+  assert.equal(selectLongPiTail({}), null)
+}
 console.log('smoke ok')

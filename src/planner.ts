@@ -102,8 +102,8 @@ const DETAIL_MAX = 300
 const PRIORITY_MAX = 8
 const LEVERS_PER_MODEL = 3
 const WHY: Record<Priority['source'], string> = {
-  phenoage_levers: '对你的表型年龄影响最大的指标之一（模型估计）',
-  china_par_levers: 'China-PAR 风险的主要来源之一（模型估计）',
+  phenoage_levers: '对你的身体年龄影响最大的指标之一（模型估计）',
+  china_par_levers: '10 年心血管风险的主要来源之一（模型估计）',
   focus: '',
 }
 /** Markers each focus points at; bioage takes PhenoAge's own top levers instead, sleep and plan none. */

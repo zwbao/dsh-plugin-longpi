@@ -86,7 +86,7 @@ const DETAIL_MAX = 40
 const JOURNEY_TTL_MS = 10 * 60_000
 
 const BIOAGE_BLOCKER: Partial<Record<BioAge['status'], string>> = {
-  no_skill: '方法库里没有表型年龄方法，请更新 longevity-skills。',
+  no_skill: '方法库里没有身体年龄（表型年龄）方法，请更新 longevity-skills。',
   no_record: '还没有连接 Mirobody 记录。',
   no_age: '档案里还没有实足年龄。',
   no_checkup: '九项血检还没有在同一天测齐。',
@@ -214,7 +214,7 @@ function bioageCaveat(context: TrackingContext, changes: readonly RecordChange[]
   const labels = changes
     .filter((row) => row.ask_doctor && (markers.find((marker) => marker.key === row.key)?.loinc ?? []).some((code) => codes.has(code)))
     .map((row) => row.label_zh)
-  return labels.length > 0 ? `表型年龄用到的${labels.join('、')}近期变化明显，原因可能与衰老无关，这次的身体年龄请谨慎看待。` : null
+  return labels.length > 0 ? `身体年龄用到的${labels.join('、')}近期变化明显，原因可能与衰老无关，这次的结果请谨慎看待。` : null
 }
 
 function riskResult(tracking: Tracking): Journey['results']['risk'] {

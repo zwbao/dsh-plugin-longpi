@@ -53,24 +53,29 @@ Checks done here:
   - "stop fish oil / vitamin D dose" → refused;
   - saving a plan → read-back, question, DSH approval, 第 1 版.
 
+## Second round (2026-09-26)
+
+Done on this branch, each in its own commit:
+
+- **Regression in DeepSeek Harness 0.1.5-rc.3.** `api.deepseek.com` was not in the cloud session's network allowlist, so the chat checks ran against a local scripted model (see How to test); no-key onboarding and the 401s ran as they are.
+  - Fixed: a plan item aimed at 血压 got no verdict and a draft asked for 血压 said it had no evidence marker (血压 now means 收缩压 and 舒张压); draft items repeated their category and showed 证据：，DOI; an adopted draft's card still said 还没有保存.
+  - Passed: focused draft adopted from the card; food advice gets no correction when the rules decide (and a supplement amount gets one); a 710-reading twice-daily series gets a verdict for each pressure; 撤销 on the check-in card says 已撤销 and survives a reload; step 1 without a key shows the hint and 去设置 opens 模型; every `/api/longpi/*` and `/api/mirobody/*` route answers 401 without the cookie.
+- **README screenshots** of the home and the 概览 and 指标 tabs (1280 px, demo record).
+- **`scripts/eval-guard.mjs`** leaves the 10 `reply` cases out of the input scores.
+- **Guard scope** (`guardScope`, default `health`): the model labels every message in LongPi's workspace, and elsewhere messages that touch health and the rest of their session.
+- **UI:** the 健康 tab in DSH's right column, quick actions under a turn, plain names with ⓘ.
+
 ## Left to do, in order
 
-1. **Real-DSH regression on this branch.** The last review fixes landed after the end-to-end pass. Recheck:
-   - a draft made for a focus (e.g. 血压) is adopted from the chat card;
-   - ordinary diet advice (一颗鸡蛋, 两片面包) triggers no correction;
-   - a twice-daily home blood-pressure series (over 500 readings) gets a verdict;
-   - the check-in card after 撤销 says what happened;
-   - onboarding step 1 when no model key is configured.
-2. **README screenshots.** `docs/images/home.png` and `health-page.png` still show the 0.5.0 single-page health page. Retake them with the demo record, showing 概览 and 指标 at 1280 px.
-3. **`scripts/eval-guard.mjs`** scores the 10 cases tagged `reply` (output-check negatives) as input messages. Skip that tag in the live evaluation.
-4. **Guard latency.** The classifier runs before every user message in every DSH session, not only health chats: about 1.2 s and one model call each. Consider limiting it to sessions in the LongPi workspace, or to messages that touch health, without weakening emergency detection.
-5. **Remaining UX items** from the UI review:
-   - a right-side 健康 tab while chatting (`sidebar.right.pane.tab`);
-   - quick actions at the end of a turn (`conversation.chat.turnTail`);
-   - plain-language labels with ⓘ for model names everywhere.
-   - The composer placeholder ("描述你想要构建的内容") and hiding 工作区内修改 in the health workspace need DSH support.
-6. **Release**, when the owner asks:
-   - merge zwbao/longevity-skills#5 (fasting glucose and hs-CRP codes first), zwbao/dsh-plugin-mirobody#2, then this branch's PR;
+1. **Checks with the real model**, which the cloud session could not reach:
+   - the focused-draft adoption, food advice judged by the real model (no correction), and check-in 撤销, in a real chat;
+   - `scripts/eval-guard.mjs` live, per-label precision and recall into the PR.
+2. **The new UI in real DSH**, not yet opened there: the 健康 tab (open it from the right column's guide page), the quick actions under a turn (draft, read-back, saved plan, check-in), and the ⓘ on the 方案 tab's model cards.
+3. **Needs DeepSeek Harness support** (recorded, not worked around):
+   - the composer's placeholder 「描述你想要构建的内容, / 调用指令, @ 文件或对话」 has no plugin seat;
+   - 「工作区内修改」 (the access mode) cannot be hidden per workspace, so the health workspace shows it too.
+4. **Release**, when the owner confirms after checking locally:
+   - merge zwbao/longevity-skills#5, then zwbao/dsh-plugin-mirobody#2, then this branch's PR;
    - tag `v0.5.1` and write the GitHub release notes from CHANGELOG.
 
 ## How to test
@@ -88,6 +93,7 @@ Checks done here:
   - The printed `/?token=` URL logs in once and sets a cookie; API calls need that cookie.
   - Drive the UI with headless Chrome over CDP: click by text, type with `Input.insertText`, press Enter.
   - Never type a key into DSH's API-key dialog; pass it through the environment.
+  - Without network access to the model, the chat plumbing (cards, quick actions, approvals, the guard's hooks) can still be driven by a local scripted model: in a scratch profile only, add `- id: llm-deepseek` with `config: {baseURL: 'http://127.0.0.1:<port>'}` to its patch, give DSH a dummy `DEEPSEEK_API_KEY`, and serve OpenAI-style SSE on `/chat/completions`. This checks the plumbing, not the model's judgement.
 
 ## Rules that hold
 
