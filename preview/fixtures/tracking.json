@@ -1846,7 +1846,7 @@
   {
    "kind": "lever",
    "priority": 4,
-   "text_zh": "按表型年龄模型，血糖从 5.4 mmol/L 到 5 mmol/L，表型年龄约 -0.9 岁（模型估计）。它是你当前最大的杠杆。"
+   "text_zh": "按身体年龄模型，血糖从 5.4 mmol/L 到 5 mmol/L，身体年龄约 -0.9 岁（模型估计）。它是你当前最大的杠杆。"
   },
   {
    "kind": "retest",
@@ -2268,7 +2268,7 @@
  "models": [
   {
    "model": "phenoage",
-   "title_zh": "表型年龄",
+   "title_zh": "身体年龄",
    "status": "ok",
    "note_zh": "按 2026-08-26 的血检，达到方案目标时表型年龄 年轻 1.06 岁。",
    "measured_on": "2026-08-26",

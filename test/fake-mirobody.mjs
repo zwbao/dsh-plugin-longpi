@@ -277,6 +277,8 @@ export function loadRecord(path = RECORD_PATH) {
 /**
  * Start the fake server. Returns {url, calls, close}. calls counts tools/call
  * requests by tool name, so a test can check the harness reads the record once.
+ * Options: record (instead of the fixture), token (Bearer required), sse,
+ * port, failSeries (indicator names whose series reads fail).
  */
 export async function startFakeMirobody(options = {}) {
   const record = options.record ?? loadRecord()
@@ -314,7 +316,11 @@ export async function startFakeMirobody(options = {}) {
         const args = body.params?.arguments ?? {}
         calls.push({ name, args })
         let result
-        if (name === 'query_health_indicators') result = queryIndicators(record, args)
+        // options.failSeries: a series read (not the catalogue, latest or stats) that names one of these fails.
+        const failing = Array.isArray(options.failSeries) && name === 'query_health_indicators' && !['latest', 'stats'].includes(args.aggregate)
+          && (args.indicators ?? []).some((indicator) => options.failSeries.includes(indicator))
+        if (failing) result = payload({ status: 'error', errorKind: 'unavailable', assumptions: ['upstream store did not answer'], meta: meta(record) })
+        else if (name === 'query_health_indicators') result = queryIndicators(record, args)
         else if (name === 'query_medications') result = queryMedications(record, args)
         else {
           res.setHeader('content-type', 'application/json')

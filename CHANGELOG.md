@@ -1,6 +1,66 @@
 # Changelog
 
-## 5.0.0
+## 0.5.1
+
+Fixes from an external review of 0.5.0, checked claim by claim against the code, plus a safety judgement made by the model and a reorganised health page. Tested end to end in DeepSeek Harness 0.1.5-rc.3 with real chats.
+
+**Security**
+- **Login check on every route.** Every `/api/longpi/*` route now runs DeepSeek Harness's own Host/Origin and login-cookie check (`ctx.connection.requestRejection`). Until now any local program or web page could read and change the profile, plans and follow-up settings without logging in.
+  - A route answers 503 when that service is missing; it never falls open.
+  - Writes must be `application/json` (415 otherwise).
+  - Webhook addresses must be `https` and may not point at this machine, a link-local or metadata address.
+- **Mirobody 0.1.1.** The bundled plugin gets the same route check. Its Python bridge now receives a minimal environment instead of every variable, API keys included.
+
+**Safety judgement**
+- **Input side.**
+  - For each message the person types, the configured model labels it: a current emergency, self-harm, a request to start or stop a medicine, a request for their own dose, or a question about research findings.
+  - LongPi appends one note for the model. It never replaces the person's words: the old keyword match turned 无胸痛, 父亲有中风史 or "stroke risk" into "only answer 120".
+  - A narrow, negation-aware rule layer is used only when the model call fails.
+  - Only where it matters: in LongPi's workspace (健康对话) every message is labelled; in other workspaces only a message that touches health, and the rest of that conversation, so a coding chat pays no extra model call or delay. A recall-first word list decides, holding every word the rule layer acts on: all 124 emergency, self-harm, medicine and dose test sentences pass it, and 20 everyday coding requests do not. `guardScope: all` labels every message, as before.
+  - Live results on 266 test sentences with deepseek-v4-flash: emergencies 36/36 with no false alarm, medicine requests 66/66; median 1.2 s.
+- **Output side.** Before a turn ends, a reply that gave a dose or told the person to change a prescription gets one correction. The model judge decides; the rules decide alone only when the judge fails. Food amounts (一颗鸡蛋, 两片面包) are not doses unless a medicine is named in the same sentence.
+- **Saving a plan.**
+  - The person approves the save in DeepSeek Harness.
+  - The save only goes through after the plan was read back to them.
+
+**Numbers and records**
+- **Failed reads stay visible.** A failed or cut record read is reported as such, never as "not measured" or "no change".
+- **Newest value across codes.** Each input takes its newest value across all its LOINC codes. On the same day, the skill's order decides, so fasting glucose and hs-CRP now come first in longevity-skills.
+- **China-PAR blood pressure.** Systolic pressure uses the newer of the clinic reading and the home 7-day mean.
+- **Phenotypic-age history.** Stored points are recomputed when their inputs change.
+- **Plan verdicts.**
+  - Values are converted to one unit before comparing.
+  - An item aimed at 血压 is judged on systolic and diastolic pressure; before, it had no verdict at all. A draft asked for 血压 aims at both.
+  - A zero baseline, a single home reading, or no adherence data at all gives 无法判断.
+  - The wording no longer credits a change to a plan item.
+- **Doses.** Removed from plan items of every category, including amounts written in Chinese numerals.
+- **Check-ins.** A check-in can be ✓, 没做到 or undone.
+- **Dense series.** A home blood-pressure or wearable series that fills Mirobody's 500-row page is read again for its older readings, so twice-daily readings get a verdict.
+- **Tool results DeepSeek Harness accepts.** A wearable indicator without a LOINC code made `read_personal_situation` fail in real chats; the bug was there since 0.4. Every tool result is now lossless JSON, checked with DSH's own function.
+
+**Health page and chat**
+- **Four tabs.** The health page has 概览, 指标, 方案 and 档案.
+  - 指标 is new: every checkup and wearable value by group, with its trend and whether it moved beyond normal fluctuation.
+- **A LongPi page in DSH settings.** It holds follow-up reminders (one switch, the rest under 更多设置), the Mirobody connection (paste an address, test, save) and privacy.
+- **One onboarding.**
+  - Step 3 shows what the record holds.
+  - Step 4 offers what can be done now.
+  - The reminder question moves to plan adoption.
+- **Chat cards.** The chat shows cards for a plan draft (adopt or remove items), a plan read-back, a check-in (with 撤销) and a result.
+  - A draft item shows what to do once: its category, title and evidence are no longer repeated in the text (no more 证据：，DOI).
+  - An adopted draft's card says 已采用 in its head.
+- **While chatting.**
+  - DSH's right column has a 健康 tab (offered on its guide page): today's check-ins, the two results, the next step and what changed, next to the chat.
+  - DSH folds a finished turn's tool cards. A turn that drafted a plan, read one back, saved it or recorded a check-in gets one row of quick actions under it: 采用这份方案, 确认保存 or 还要调整, 撤销, and links to the 健康 tab and the page.
+- **Plain names.** The two results are called 身体年龄 and 10 年心血管风险 on every surface: the 方案 tab's model cards, the chat cards and the notes. The model names (表型年龄, Levine 2018; China-PAR) are behind ⓘ; the export for a doctor keeps them.
+- **Workspace name.** A new workspace is named 健康对话.
+
+**Versions** stay below 1.0 until declared stable:
+- releases 2.0.0–5.0.0 are listed below as 0.2.0–0.5.0;
+- the old tags v1.1.0 and v4.2.0 are now v0.1.1 and v0.4.2;
+- dsh-plugin-mirobody 1.0.0 is now 0.1.0.
+
+## 0.5.0 (published as 5.0.0)
 
 LongPi becomes a guided journey in the DeepSeek Harness web UI, drafts plans, follows up by itself, and points out real changes in the record.
 
@@ -19,19 +79,19 @@ LongPi becomes a guided journey in the DeepSeek Harness web UI, drafts plans, fo
 - **One-line installer.** `install.sh` installs the DeepSeek Harness CLI and pnpm when missing, clones longevity-skills, creates `~/longpi/.venv` with the Mirobody engine, adds the plugin to the `web` profile and writes its configuration between markers in the profile patch (keeping values set earlier and other rows). `--mcp-url` connects an existing Mirobody; `--with-mirobody` deploys one with Docker and connects its demo account. Runs again to update. Written for macOS bash 3.2 and `curl | bash`.
 - **README** rewritten: an introduction, the one-line installation, usage, how it works, privacy (including DeepSeek Harness's session-log upload and how to turn it off). The step-by-step installation moved to `docs/install.md`, and configuration, tools, routes and review rules to `docs/reference.md` (both with Chinese versions).
 
-## 4.2.0
+## 0.4.2 (published as 4.2.0)
 
 - **One install.** A tagged release of [dsh-plugin-mirobody](https://github.com/zwbao/dsh-plugin-mirobody) (now public) ships in `vendor/dsh-plugin-mirobody`, so `dsh plugin --profile web add github:zwbao/dsh-plugin-longpi` installs both. The copy sits inside the DSH profile, where the host's `@deepseek-ai` packages resolve for it; a checkout outside the profile could not load them (`Cannot find package '@deepseek-ai/schemastery'`), which a real DSH 0.1.5-rc.3 install showed. `npm run vendor:mirobody` refreshes it from a release tag. `mirobodyPluginHome` now defaults to the bundled copy; the `~/Projects/dsh-plugin-mirobody` fallback is gone.
 - **Install guide.** README and README.zh rewritten as a from-scratch install: Mirobody server, the personal MCP address, the Python environment, the skill library, `dsh plugin add`, the profile patch, first start, and checks from the command line, the web page and the chat, with a troubleshooting table.
 - **longevity-skills is public.** CI checks it out without a token. Its `data/biological_variation.json` now takes every lab value from a journal article (EuBIVAS and the EFLM working group's published meta-analyses) with the quoted line; the report footer says so.
 - Test: the CRP noise-band check derives its expectation from the table's own CRP row.
 
-## 4.1.0
+## 0.4.1 (published as 4.1.0)
 
 - **China-PAR for men and women on the board.** With longevity-skills' verified China-PAR (constants derived from the paper's own printed numbers, Table 2 reproduced within 1%), the model card shows the 10-year ASCVD risk now and at the plan's blood-pressure, cholesterol or waist goals, with the guideline category and each goal's contribution in percentage points. Home blood pressure enters as the mean of the last week of readings.
 - **Stated yes/no facts in the profile.** China-PAR needs six facts no record holds: current smoking, diabetes, blood-pressure medicine in the last two weeks, northern China, urban, and (men) family history of heart attack or stroke. The person states them in conversation (`save_personal_profile`) or in the board's profile form; absent means not stated, never "no", and the card names what is still missing. Profile saves from the board now update only the fields sent.
 
-## 4.0.0
+## 0.4.0 (published as 4.0.0)
 
 Track the person's own intervention plan against their record, and a board built around progress.
 
@@ -45,7 +105,7 @@ Track the person's own intervention plan against their record, and a board built
 - Runs report the unit conversions the harness applied (`conversions`), and `POST /api/longpi/run-ready` runs every method the record already supplies. `GET /api/longpi/report` exports a Markdown summary for a doctor or coach.
 - The medication intercept lets plain records through (an uploaded plan that lists a supplement dose, "鱼油停了两天") and still blocks advice-seeking and change intents.
 
-## 3.0.0
+## 0.3.0 (published as 3.0.0)
 
 Dispatch by intent and by what the record can run, instead of word overlap.
 
@@ -59,6 +119,6 @@ Dispatch by intent and by what the record can run, instead of word overlap.
 - `skillsVersion` pins a longevity-skills release; `longpi_status` reports the match.
 - Record reading keeps LOINC codes and all indicators (not the first 40) and fetches latest values in chunks.
 
-## 2.0.0
+## 0.2.0 (published as 2.0.0)
 
 Personal longevity harness. Longevity skills stay in their checkout and are dispatched from one person's question and Mirobody record. The health board reads that same snapshot. Phenotypic age and the other formulas stay inside the skill scripts.

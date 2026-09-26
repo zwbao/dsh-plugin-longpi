@@ -237,6 +237,22 @@ try {
   assert.deepEqual([asked.priorities[0].marker_key, asked.priorities[0].source, asked.priorities[0].why_zh], ['ldl', 'focus', '你指定要改善的指标'])
   assert.ok(asked.notes_zh.some((line) => line.includes('谷丙转氨酶')))
   assert.ok(asked.notes_zh.some((line) => line.startsWith('睡眠：')))
+  // a word for several markers asks for each of them: 血压 is 收缩压 and 舒张压, never "no evidence marker"
+  const bp = await mod.buildPlanBrief(await contextOf(configFor(cardioDir, noMeds.url)), { markers: ['血压'], focus: ['cardio'] })
+  assert.deepEqual(bp.priorities.slice(0, 2).map((row) => [row.marker_key, row.why_zh]), [['sbp', '你指定要改善的指标'], ['dbp', '你指定要改善的指标']])
+  assert.equal(bp.notes_zh.some((line) => line.includes('「血压」')), false, bp.notes_zh.join(' / '))
+  const bpDraft = mod.draftPlan(bp, { today: TODAY })
+  assert.ok(bpDraft.items[0].markers.some((label) => label === '收缩压' || label === '舒张压'), 'the first item aims at blood pressure')
+  assert.deepEqual(mod.expandMarkerNames(reference.biovar, ['血压', '收缩压', 'LDL-C', 'Blood Pressure']), ['收缩压', '舒张压', 'LDL-C'])
+  assert.deepEqual(mod.markerGroupKeys(reference.biovar, '高压'), [], 'one marker is not a group')
+  // the card shows what to do, not the category, title and evidence it shows elsewhere (no 证据：，DOI)
+  const { behaviorOf } = await import('../src/client/format.ts')
+  for (const item of bpDraft.items) {
+    const text = behaviorOf(item)
+    assert.doesNotMatch(text, /证据[:：]|DOI|个人效果因人而异/, text)
+    assert.equal(text.startsWith(`${item.category_zh}：`), false, text)
+  }
+  assert.equal(behaviorOf({ detail: '选一种能坚持的有氧运动。证据：试验中平均使收缩压下降 3.5 mmHg', title: '有氧运动', category_zh: '运动', evidence: { expected_zh: '试验中平均使收缩压下降 3.5 mmHg' } }), '选一种能坚持的有氧运动。', 'an older detail')
 
   // nothing to propose: no record and no focus
   const emptyDir = tempDir('empty')
@@ -328,10 +344,68 @@ try {
   assert.equal(res.json().stage, 'routine', 'tracking was invalidated')
   res = await call(host, 'POST', '/api/longpi/plan-draft/accept', { draft: got.draft })
   assert.equal(res.json().plan.version, 2, 'accepting again is a new version')
+  // a chat draft made for its own focus and markers is accepted against that same brief (the card sends them)
+  const focused = await host.tools.get('draft_intervention_plan').execute({ focus: ['glucose'], markers: ['甘油三酯'] })
+  assert.ok(focused.draft, 'a glucose draft')
+  const focusedBody = { draft: focused.draft, focus: focused.brief.focus, markers: ['甘油三酯'] }
+  const onlyFocused = focused.draft.items.filter((item) => !got.draft.items.some((row) => row.id === item.id))
+  if (onlyFocused.length > 0) {
+    res = await call(host, 'POST', '/api/longpi/plan-draft/accept', { draft: focused.draft })
+    assert.equal(res.status, 400, 'without its focus the default brief has no such item')
+  }
+  res = await call(host, 'POST', '/api/longpi/plan-draft/accept', focusedBody)
+  assert.equal(res.status, 200, res.text)
+  assert.equal(res.json().plan.version, 3)
+  const focusedSaved = mod.currentPlan(routeDir)
+  assert.deepEqual(focusedSaved.items.map((item) => item.title), focused.draft.items.map((item) => item.title))
+  assert.deepEqual(focusedSaved.goals.map((goal) => goal.marker), focused.draft.goals.map((goal) => goal.marker), 'every goal shown is saved, the asked markers\' ones too')
+  // a chat draft asked for 血压 is accepted the same way (both pressures are in the brief the route rebuilds)
+  const bpChat = await host.tools.get('draft_intervention_plan').execute({ focus: ['cardio'], markers: ['血压'] })
+  assert.equal(bpChat.brief.notes_zh.some((line) => line.includes('「血压」')), false)
+  res = await call(host, 'POST', '/api/longpi/plan-draft/accept', { draft: bpChat.draft, focus: bpChat.brief.focus, markers: ['血压'] })
+  assert.equal(res.status, 200, res.text)
+  assert.deepEqual(mod.currentPlan(routeDir).items.map((item) => item.title), bpChat.draft.items.map((item) => item.title))
+  assert.deepEqual(mod.briefOptionsOf(['glucose', 'x'], [' 尿酸 ', '', 'a'.repeat(41), 1]), { focus: ['glucose'], markers: ['尿酸', '1'] })
+  assert.deepEqual(mod.briefOptionsOf('glucose', null), { markers: [] }, 'nothing usable: the saved focus')
   const twice = mod.acceptedPlan(tool.brief, { items: [got.draft.items[0], { ...got.draft.items[0] }] }, TODAY)
   assert.equal(twice.ok, true)
   assert.equal(twice.plan.items.length, 1, 'one item per intervention')
   assert.deepEqual(mod.acceptedPlan(tool.brief, { items: [] }, TODAY).ok, false)
+  // 8f: a posted title goes through the same dose stripping; a title that was only a dose becomes the server's own
+  const dosedTitle = mod.acceptedPlan(tool.brief, { title: '鱼油 两千毫克 + 2000mg 方案', items: [got.draft.items[0]] }, TODAY)
+  assert.equal(mod.hasDose(dosedTitle.plan.title), false, dosedTitle.plan.title)
+  assert.ok(dosedTitle.plan.title.startsWith('鱼油') && dosedTitle.plan.title.endsWith('方案'))
+  assert.equal(mod.acceptedPlan(tool.brief, { title: '500mg', items: [got.draft.items[0]] }, TODAY).plan.title, `改善方案（${TODAY}）`)
+
+  // 8e: the chat read-back is what will be stored: the plan's title and note, each item with its details, and goal problems
+  const readBack = await host.tools.get('save_intervention_plan').execute({
+    title: '维生素D 2000IU 方案', note: '每天 2000 IU',
+    items: [{ category: 'diet', title: '二甲双胍', detail: '每天 500 mg，饭后', start: TODAY }],
+    goals: [{ marker: '空腹血糖', value: 5, unit: 'mmol/mol' }],
+  })
+  assert.equal(readBack.saved, false)
+  assert.equal(readBack.title, '维生素D 方案')
+  assert.equal(readBack.read_back[0], '方案：维生素D 方案；备注：每天')
+  assert.equal(readBack.read_back[1], `饮食｜二甲双胍；${TODAY} 起；说明：每天，饭后`)
+  assert.ok(readBack.warnings.some((line) => line.includes('剂量没有保存')))
+  assert.equal(readBack.goal_problems.length, 1, JSON.stringify(readBack.goal_problems))
+  assert.match(readBack.next, /goal_problems/)
+
+  // 9d: the chat check-in takes done true, false or null (take it back)
+  const checkinTool = host.tools.get('log_intervention_checkin')
+  const itemTitle = mod.currentPlan(routeDir).items[0].title
+  assert.equal((await checkinTool.execute({ entries: [{ item: itemTitle, done: false }] })).entries[0].done, false)
+  const takenBack = await checkinTool.execute({ entries: [{ item: itemTitle, done: null }] })
+  assert.equal(takenBack.ok, true)
+  assert.equal(takenBack.entries[0].undo, true)
+  assert.equal(takenBack.entries[0].title, itemTitle, 'the card shows the title, never the id')
+  const day = takenBack.entries[0].date
+  assert.equal(mod.readCheckIns(routeDir).filter((row) => row.date === day).length, 2, 'both entries are kept')
+  assert.equal(mod.checkinStatus(mod.readCheckIns(routeDir)).get(mod.currentPlan(routeDir).items[0].id)?.has(day) ?? false, false, 'unknown again')
+  const tagged = await checkinTool.execute({ entries: [{ item: itemTitle, tags: ['illness'] }] })
+  assert.equal(tagged.entries[0].done, null, 'a tag alone is a note')
+  assert.equal('undo' in tagged.entries[0], false, 'a note is not an undo')
+  assert.equal(mod.readCheckIns(routeDir).some((row) => 'title' in row), false, 'the title is not written to the log')
 
   console.log(`planner ok (${brief.priorities.length} priorities, ${brief.candidates.length} candidates, draft: ${draft.items.map((item) => item.title).join('、')})`)
 } finally {
@@ -350,6 +424,7 @@ function fakeHost() {
     skills: { register: () => () => {} },
     systemPrompt: { section: (section) => { prompts.push(section) } },
     webServer: { register: (route) => { routes.set(route.path, route.handler); return () => {} } },
+    connection: { requestRejection: () => undefined },
     commands: { register: (command) => { commands.set(command.name, command) } },
     inject: (_names, callback) => callback(ctx),
     on: () => () => {},
@@ -368,6 +443,7 @@ function call(host, method, url, body) {
   const req = Readable.from(body === undefined ? [] : [Buffer.from(JSON.stringify(body))])
   req.method = method
   req.url = url
+  req.headers = { host: '127.0.0.1', 'content-type': 'application/json' }
   return new Promise((resolveCall) => {
     const headers = {}
     const res = {

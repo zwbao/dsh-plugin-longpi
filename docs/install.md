@@ -140,6 +140,7 @@ cat > "$P" <<EOF
     dataDir: ''
     maxSkillMatches: 8
     bootstrapWorkspace: true
+    guardScope: health
 EOF
 chmod 600 "$P"
 
@@ -164,26 +165,28 @@ It prints `dsh web: http://127.0.0.1:3080/?token=…` and opens the browser (`--
 
 ## 8. Check that the plugin works
 
-**8.1 From the command line (no model needed).** `TOKEN` is the part after `token=` in the address from step 7.
+**8.1 From the command line (no model needed).** `TOKEN` is the part after `token=` in the address from step 7. The API routes accept only DeepSeek Harness's login cookie, so the first `curl` exchanges the token for it, as the browser does.
 
 ```bash
 TOKEN='paste the part after token='
-curl -s "http://127.0.0.1:3080/api/longpi/version?token=$TOKEN"; echo
-curl -s "http://127.0.0.1:3080/api/longpi/board?token=$TOKEN" | python3 -c '
+JAR="$(mktemp)"
+curl -s -o /dev/null -c "$JAR" "http://127.0.0.1:3080/?token=$TOKEN"
+curl -s -b "$JAR" "http://127.0.0.1:3080/api/longpi/version"; echo
+curl -s -b "$JAR" "http://127.0.0.1:3080/api/longpi/board" | python3 -c '
 import json, sys
 d = json.load(sys.stdin); s, m, r = d["skills"], d["mirobody"], d["records"]
 print("skills  ", s["count"], "version", s["version"], s["error"] or "")
 print("mirobody", "mounted" if m["mounted"] else "not mounted: " + m["error"])
 e = m["engine"]; print("engine  ", ("ok " + str(e.get("version"))) if e.get("ok") else ("failed: " + str(e.get("error"))))
 print("record  ", r["status"], r["indicator_count"], "indicators", r["error"] or "")'
-curl -s "http://127.0.0.1:3080/api/mirobody/resolve?q=%E8%A1%80%E7%BA%A2%E8%9B%8B%E7%99%BD&token=$TOKEN" \
+curl -s -b "$JAR" "http://127.0.0.1:3080/api/mirobody/resolve?q=%E8%A1%80%E7%BA%A2%E8%9B%8B%E7%99%BD" \
   | python3 -c 'import json, sys; x = json.load(sys.stdin)["results"][0]; print(x["term"], "→", x["loinc"])'
 ```
 
 Expected output, with your own numbers:
 
 ```text
-{"product":"dsh-plugin-longpi","version":"4.2.0"}
+{"product":"dsh-plugin-longpi","version":"0.5.1"}
 skills   171 version 2026.39.0
 mirobody mounted
 engine   ok 1.5.0
@@ -197,7 +200,7 @@ record   ok 21 indicators
 - Type `/longpi` and press Enter. You should see:
 
   ```text
-  dsh-plugin-longpi 4.2.0
+  dsh-plugin-longpi 0.5.1
   skills 171 (personal 98)  version 2026.39.0  revision …  from catalog.json
   profile age unset  sex unknown  birth unset
   mirobody mounted
@@ -246,7 +249,7 @@ git -C "$LONGPI_HOME/longevity-skills" pull          # new skills, no restart ne
 dsh plugin --profile web remove dsh-plugin-longpi   # uninstall; then delete the LongPi row from cordis.patch.yml
 ```
 
-To pin a version, install `github:zwbao/dsh-plugin-longpi#v4.2.0` (or another tag). Uninstalling keeps the profile, plans and check-ins in `~/.dsh/longpi`.
+To pin a version, install `github:zwbao/dsh-plugin-longpi#v0.5.1` (or another tag). Uninstalling keeps the profile, plans and check-ins in `~/.dsh/longpi`.
 
 ## Without DSH (developers)
 

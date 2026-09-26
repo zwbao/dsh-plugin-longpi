@@ -7,9 +7,11 @@
 
 import type { RecordChange } from './changes.ts'
 import { followupSummary, readFollowup, type FollowupState } from './followup.ts'
-import { addDays, daysBetween, readCheckIns } from './interventions.ts'
+import { recordsSummary, type RecordsSummary } from './indicators.ts'
+import { addDays, checkinStatus, daysBetween, readCheckIns } from './interventions.ts'
 import { measurementInputs } from './measurements.ts'
 import type { MountState } from './mirobody.ts'
+import type { RecordStatus } from './records.ts'
 import { CONSENT_VERSION, FOCUS, FOCUS_ZH, RISK_FACTS, RISK_FACT_ZH, type Focus, type Profile, type RiskFact } from './profile.ts'
 import { loadReference } from './reference.ts'
 import { latestSelf, readSelf, SELF_KEYS, SELF_SPEC, type SelfKey } from './selfmeasure.ts'
@@ -32,7 +34,17 @@ export interface Journey {
     questions: Array<{ key: 'age' | 'sex' | RiskFact; label_zh: string; unlocks_zh: string; answered: boolean; men_only?: boolean }>
   }
   focus_options: Array<{ key: Focus; label_zh: string }>
-  records: { status: 'unconfigured' | 'ok' | 'error'; error: string; indicator_count: number; full_checkups: number; latest_checkup: string | null; mirobody_mounted: boolean }
+  /**
+   * status partial: read, but some reads failed or came back cut; read_errors says which, and missing_reads names
+   * indicators not read (unknown, never "not measured"). summary: what the record holds, for onboarding (checkup days
+   * and their span, the groups present, wearable days in the last year); null when the record is not connected, or a
+   * read failed or timed out (a count would then be too small).
+   */
+  records: {
+    status: RecordStatus; error: string; read_errors: string[]; missing_reads: string[]
+    indicator_count: number; full_checkups: number; latest_checkup: string | null; mirobody_mounted: boolean
+    summary: RecordsSummary | null
+  }
   results: {
     /**
      * band_verified and band_missing are additions for the model: with band_missing the band is a lower bound.
@@ -45,8 +57,10 @@ export interface Journey {
   /** Changes between checkups larger than normal fluctuation, ask_doctor first; empty when the record cannot be read. */
   changes: RecordChange[]
   changes_note_zh: string
+  /** Markers not judged because their series read failed or came back cut: unknown, never "no change". */
+  changes_unjudged: Array<{ label_zh: string; reason_zh: string }>
   self: { latest: Array<{ key: SelfKey; label_zh: string; value: number; unit: string; date: string; n: number }>; keys: Array<{ key: SelfKey; label_zh: string; unit: string; units: string[] }> }
-  plan: { exists: boolean; title: string; version: number | null; items: number; started: string | null; days: number | null; checkin_items: Array<{ id: string; title: string; done_today: boolean }>; streak: number; adherence_pct: number | null }
+  plan: { exists: boolean; title: string; version: number | null; items: number; started: string | null; days: number | null; checkin_items: Array<{ id: string; title: string; done_today: boolean | null }>; streak: number; adherence_pct: number | null }
   reminders: Array<{ kind: 'retest' | 'checkin'; text_zh: string; date: string | null; due: boolean }>
   stage: Stage
   next: { stage: Stage; title_zh: string; detail_zh: string; action: 'consent' | 'profile' | 'records' | 'addons' | 'plan' | 'checkin' | 'review' | 'open' }
@@ -73,7 +87,7 @@ const DETAIL_MAX = 40
 const JOURNEY_TTL_MS = 10 * 60_000
 
 const BIOAGE_BLOCKER: Partial<Record<BioAge['status'], string>> = {
-  no_skill: '方法库里没有表型年龄方法，请更新 longevity-skills。',
+  no_skill: '方法库里没有身体年龄（表型年龄）方法，请更新 longevity-skills。',
   no_record: '还没有连接 Mirobody 记录。',
   no_age: '档案里还没有实足年龄。',
   no_checkup: '九项血检还没有在同一天测齐。',
@@ -97,8 +111,9 @@ export async function buildJourney(context: JourneyContext): Promise<Journey> {
 
 /** The journey and the tracking it was built from (retest dates, bands, adherence calendars). */
 export async function buildJourneyFull(context: JourneyContext): Promise<{ journey: Journey; tracking: Tracking }> {
-  const tracking = await buildTracking(context)
-  const journey = journeyFrom(context, tracking)
+  // The summary's reads run beside the skill runs and have their own deadline; a failure leaves it null.
+  const [tracking, summary] = await Promise.all([buildTracking(context), recordsSummary(context).catch(() => null)])
+  const journey = journeyFrom(context, tracking, summary)
   lastBuilt = { at: Date.now(), journey }
   return { journey, tracking }
 }
@@ -200,7 +215,7 @@ function bioageCaveat(context: TrackingContext, changes: readonly RecordChange[]
   const labels = changes
     .filter((row) => row.ask_doctor && (markers.find((marker) => marker.key === row.key)?.loinc ?? []).some((code) => codes.has(code)))
     .map((row) => row.label_zh)
-  return labels.length > 0 ? `表型年龄用到的${labels.join('、')}近期变化明显，原因可能与衰老无关，这次的身体年龄请谨慎看待。` : null
+  return labels.length > 0 ? `身体年龄用到的${labels.join('、')}近期变化明显，原因可能与衰老无关，这次的结果请谨慎看待。` : null
 }
 
 function riskResult(tracking: Tracking): Journey['results']['risk'] {
@@ -244,11 +259,12 @@ function planOf(context: TrackingContext, tracking: Tracking): Journey['plan'] {
   const plan = tracking.plan
   if (!plan) return { exists: false, title: '', version: null, items: 0, started: null, days: null, checkin_items: [], streak: 0, adherence_pct: null }
   const today = context.today
-  const done = new Set(readCheckIns(context.dataDir).filter((row) => row.date === today && row.done === true).map((row) => row.item))
+  // The latest check-in of the day wins: true done, false 没做到, null not checked in (or taken back).
+  const status = checkinStatus(readCheckIns(context.dataDir))
   // Wearable items count themselves and medicines are logged in Mirobody; only the rest need a tap.
   const checkinItems = plan.items
     .filter((item) => !item.target && !item.mirobody && item.start <= today && (!item.end || item.end >= today))
-    .map((item) => ({ id: item.id, title: item.title, done_today: done.has(item.id) }))
+    .map((item) => ({ id: item.id, title: item.title, done_today: status.get(item.id)?.get(today) ?? null }))
   const started = plan.items.map((item) => item.start).sort()[0] ?? null
   const rates = tracking.items.map((item) => item.adherence.rate).filter((rate): rate is number => rate != null)
   return {
@@ -268,7 +284,7 @@ function remindersOf(today: string, tracking: Tracking, plan: Journey['plan']): 
   const out: Journey['reminders'] = retestsOf(tracking)
     .filter((row) => row.date <= addDays(today, REMIND_AHEAD_DAYS))
     .map((row) => ({ kind: 'retest', text_zh: `复测${row.marker}`, date: row.date, due: row.date <= today }))
-  const open = plan.checkin_items.filter((item) => !item.done_today).length
+  const open = plan.checkin_items.filter((item) => item.done_today == null).length
   if (open > 0) out.push({ kind: 'checkin', text_zh: `今天还有 ${open} 项待打卡`, date: today, due: true })
   return out
 }
@@ -278,7 +294,8 @@ function stageOf(journey: Pick<Journey, 'consent' | 'profile' | 'records' | 'res
   if (!journey.profile.complete) return 'profile'
   // A saved plan is lived day by day even while the record is unreachable or no first result can be computed yet.
   if (journey.plan.exists) return 'routine'
-  if (journey.records.status !== 'ok') return 'records'
+  // A record read in part is connected: the rows that failed say so where they are shown.
+  if (journey.records.status !== 'ok' && journey.records.status !== 'partial') return 'records'
   if (journey.results.bioage.status !== 'ok' && journey.results.risk.status !== 'ok') return 'first_result'
   return 'plan'
 }
@@ -293,7 +310,7 @@ function nextOf(stage: Stage, journey: Body): Next {
     case 'records':
       return journey.records.status === 'error'
         ? step('连接体检记录', clip(`记录读取失败：${journey.records.error}`), 'records')
-        : step('连接体检记录', '在 Mirobody 中生成个人 MCP 地址，重新运行安装命令时加上 --mcp-url。', 'records')
+        : step('连接体检记录', '在 Mirobody 中生成个人 MCP 地址，粘贴到设置里的 LongPi 页。', 'records')
     case 'first_result': {
       const n = journey.addons.length
       if (n > 0) return step(`还差 ${n} 项检查`, `下次体检加测：${journey.addons.slice(0, 3).map((row) => row.item_zh).join('、')}`, 'addons')
@@ -304,7 +321,7 @@ function nextOf(stage: Stage, journey: Body): Next {
     case 'plan':
       return step('制定改善方案', '让 LongPi 按你的检查结果和研究证据起草一份方案，你确认后才保存。', 'plan')
     case 'routine': {
-      const open = journey.plan.checkin_items.filter((item) => !item.done_today).length
+      const open = journey.plan.checkin_items.filter((item) => item.done_today == null).length
       if (open > 0) return step('今天的打卡', `还有 ${open} 项待完成`, 'checkin')
       const due = journey.reminders.filter((row) => row.kind === 'retest' && row.due).map((row) => row.text_zh.replace(/^复测/, ''))
       if (due.length > 0) return step('该复测了', `可以复测${due.slice(0, 3).join('、')}`, 'review')
@@ -339,7 +356,7 @@ function suggestionsOf(stage: Stage, journey: Body, followupOn: boolean): Journe
   return picks.filter((row) => !seen.has(row.text_zh) && seen.add(row.text_zh)).slice(0, 3)
 }
 
-function journeyFrom(context: JourneyContext, tracking: Tracking): Journey {
+function journeyFrom(context: JourneyContext, tracking: Tracking, summary: RecordsSummary | null = null): Journey {
   const { records, today } = context
   const profile = records.profile
   const points = tracking.bioage.points
@@ -372,15 +389,19 @@ function journeyFrom(context: JourneyContext, tracking: Tracking): Journey {
     records: {
       status: records.record_status,
       error: records.record_error,
+      read_errors: [...records.read_errors],
+      missing_reads: [...records.missing_reads],
       indicator_count: records.indicators.filter((row) => row.source !== 'self').length,
       full_checkups: points.length,
       latest_checkup: points.at(-1)?.date ?? null,
       mirobody_mounted: context.mount.mounted,
+      summary,
     },
     results: { bioage, risk },
     addons: addonsOf(tracking.bioage, risk),
     changes: tracking.changes,
     changes_note_zh: tracking.changes_note_zh,
+    changes_unjudged: tracking.changes_unjudged,
     self: {
       latest: SELF_KEYS.flatMap((key) => {
         const row = latest[key]
@@ -423,7 +444,7 @@ export function followupStateOf(journey: Journey, tracking: Tracking): FollowupS
     next_detail_zh: journey.next.detail_zh,
     plan_exists: journey.plan.exists,
     checkin_items: journey.plan.checkin_items.length,
-    checkin_open: journey.plan.checkin_items.filter((item) => !item.done_today).map((item) => item.title),
+    checkin_open: journey.plan.checkin_items.filter((item) => item.done_today == null).map((item) => item.title),
     retests,
     week: { pct: known > 0 ? Math.round((done / known) * 100) : null, streak: journey.plan.streak, next_retest: upcoming ? { marker: upcoming.marker, date: upcoming.date } : null },
   }

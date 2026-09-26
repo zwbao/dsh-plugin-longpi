@@ -1,4 +1,5 @@
 import { fmt } from './charts.ts'
+import type { DraftItem } from './types.ts'
 
 const WEEKDAYS = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六']
 
@@ -35,8 +36,16 @@ export function localToday(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
 }
 
+/**
+ * A fraction as a signed percentage: one decimal below 10 % (+0.4%, −3.2%),
+ * none above (+18%). A change that rounds to nothing is 0%, never +0% or -0%.
+ */
 export function pct(value: number): string {
-  return `${value > 0 ? '+' : ''}${fmt(value * 100, 0)}%`
+  const percent = value * 100
+  const text = fmt(percent, Math.abs(percent) < 10 ? 1 : 0)
+  if (text === '—') return text
+  if (Number(text) === 0) return '0%'
+  return `${percent > 0 ? '+' : ''}${text}%`
 }
 
 /** How the body age compares with the calendar age, in words. */
@@ -57,4 +66,20 @@ export function goTo(id: string): void {
   node.scrollIntoView({ behavior: 'smooth', block: 'start' })
   const field = node.querySelector<HTMLElement>('input:not([type=hidden]), select, textarea, button')
   window.setTimeout(() => field?.focus({ preventScroll: true }), 350)
+}
+
+/**
+ * What to do, without what the card already shows: the server starts a detail with the category and title
+ * (饮食：减盐。) and ends it with the evidence (证据：<trial average>，DOI ….个人效果因人而异。), which the card
+ * shows on its own line, under 证据 and in its caption.
+ */
+export function behaviorOf(item: Pick<DraftItem, 'detail' | 'title' | 'category_zh' | 'evidence'>): string {
+  const evidence = item.evidence.expected_zh
+  let text = item.detail
+  const tail = evidence ? text.lastIndexOf(`证据：${evidence}`) : -1
+  if (tail >= 0) text = text.slice(0, tail)
+  else if (evidence && text.includes(evidence)) text = text.replace(evidence, '')
+  const head = item.category_zh ? `${item.category_zh}：${item.title}` : ''
+  if (head && text.startsWith(head)) text = text.slice(head.length).replace(/^[，,。；;\s]+/, '')
+  return text.replace(/\s*(证据|依据)[:：]\s*$/, '').replace(/[\s，,；;]+$/, '').trim()
 }

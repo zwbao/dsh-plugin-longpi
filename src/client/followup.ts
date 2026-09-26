@@ -1,8 +1,11 @@
 // 随访提醒: LongPi's own follow-up, sent from the plugin process while DSH
-// runs (DSH itself cannot push). Off until the person turns it on. Webhook
-// addresses and secrets never come back from the server in full: the URL shows
-// masked, a stored secret shows as 已设置, and an empty field keeps what is
-// stored. Minimal detail keeps health values and item names on this machine.
+// runs (DSH itself cannot push). Off until the person turns it on. On the
+// settings page most people need one switch, 每晚提醒我打卡, and its time;
+// everything else (retest, weekly, quiet hours, channels, detail) waits under
+// 更多设置. Webhook addresses and secrets never come back from the server in
+// full: the URL shows masked, a stored secret shows as 已设置, and an empty
+// field keeps what is stored. Minimal detail keeps health values and item
+// names on this machine.
 
 import React from 'react'
 import { errorText, postJson } from './api.ts'
@@ -10,7 +13,7 @@ import { chineseDate, localToday } from './format.ts'
 import { Icon } from './icons.ts'
 import { notifyChanged, putFollowup, reload, useFollowup } from './store.ts'
 import type { FollowupKind, FollowupLogRow, FollowupResponse, FollowupSettings, FollowupTestResponse, FollowupUpdate, WebhookKind, Weekday } from './types.ts'
-import { Btn, Section, Segmented, Skeleton, Switch } from './ui.ts'
+import { Btn, LoadError, Segmented, Skeleton, Switch } from './ui.ts'
 
 const h = React.createElement
 
@@ -198,7 +201,7 @@ function TestResult(props: { result: FollowupTestResponse; kind: WebhookKind | n
       `${row.name}：${row.ok ? '已发送' : `失败${row.error ? `（${row.error}）` : ''}`}`)))
 }
 
-function Settings(props: { data: FollowupResponse; onNotice: Notify }): React.ReactElement {
+function Settings(props: { data: FollowupResponse; onNotice: Notify; hideSwitch?: boolean }): React.ReactElement {
   const { data } = props
   const settings = data.settings
   // The switch is not part of the form: flipping it must not throw away edits not yet saved.
@@ -273,8 +276,8 @@ function Settings(props: { data: FollowupResponse; onNotice: Notify }): React.Re
 
   const kind = form.kind === '' ? null : form.kind
   const storedSame = kind != null && settings.webhook?.kind === kind
-  return h('div', { className: 'lp-card lp-followup' },
-    h('div', { className: 'lp-followup-head' },
+  return h('div', { className: `lp-followup ${props.hideSwitch ? '' : 'lp-card'}` },
+    props.hideSwitch ? null : h('div', { className: 'lp-followup-head' },
       h(Switch, { id: 'lp-followup-on', checked: settings.enabled, busy: switching, disabled: switching, label: '开启随访提醒', onChange: (next) => { void toggle(next) } }),
       h('span', { className: 'lp-caption' }, settings.enabled
         ? hasChannel ? nextLine(data) : '已开启，但还没有可用的渠道：打开桌面通知或填写 Webhook。'
@@ -348,43 +351,67 @@ function Settings(props: { data: FollowupResponse; onNotice: Notify }): React.Re
     h(Log, { rows: data.log }))
 }
 
-export function FollowupSection(props: { onNotice: Notify }): React.ReactElement {
-  const { data, loading, error } = useFollowup()
-  let body: React.ReactNode
-  if (!data && loading) body = h(Skeleton, { height: 220, className: 'lp-card-skeleton' })
-  else if (!data) body = h('div', { className: 'lp-card' }, h('p', { className: 'lp-muted' }, `随访设置没有读到：${error ?? '没有返回'}。LongPi 插件可能需要更新。`))
-  else body = h(Settings, { data, onNotice: props.onNotice })
-  return h(Section, { id: 'lp-followup-section', title: '随访提醒', kicker: '默认关闭 · 只在 DSH 运行时发送' }, body)
+/** "还有没打的卡时，21:00 发桌面通知；不含健康数值": what the switch does, from what is stored. */
+function switchCaption(data: FollowupResponse): string {
+  const settings = data.settings
+  const channels = [settings.desktop && data.platform_desktop ? '桌面通知' : '', settings.webhook ? '手机（Webhook）' : ''].filter(Boolean)
+  const where = channels.length > 0 ? channels.join('和') : data.platform_desktop ? '桌面通知' : '（还没有可用的渠道，在“更多设置”里填写 Webhook）'
+  const what = settings.detail === 'minimal' ? '不含健康数值' : '含方案项目名称和执行率'
+  return `还有没打的卡时，${settings.checkin_time} 发${where}；${what}。`
 }
 
-/** Onboarding step 4: one opt-in row. Nothing is sent unless the person ticks it. */
-export function FollowupOptIn(): React.ReactElement | null {
-  const { data } = useFollowup()
+/**
+ * The one switch: 每晚提醒我打卡, with its time. Turning it on adds desktop
+ * notifications when no channel is set; the detail level stays as chosen.
+ */
+function ReminderSwitch(props: { data: FollowupResponse; onNotice: Notify }): React.ReactElement {
+  const { data } = props
+  const settings = data.settings
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
-  if (!data) return null
-  const settings = data.settings
-  const checked = settings.enabled && settings.desktop
-  async function change(next: boolean): Promise<void> {
+  const [time, setTime] = React.useState(settings.checkin_time)
+  React.useEffect(() => { setTime(settings.checkin_time) }, [settings.checkin_time])
+  const hasChannel = (settings.desktop && data.platform_desktop) || settings.webhook != null
+
+  async function post(body: FollowupUpdate, done: string): Promise<void> {
     setBusy(true)
     setError(null)
     try {
-      const body: FollowupUpdate = next ? { enabled: true, desktop: true } : { enabled: false }
       const result = await postJson<{ ok: boolean; error?: string } & Partial<FollowupResponse>>('/api/longpi/followup', body)
       if (!result.ok) throw new Error(result.error || '没有保存')
       if (result.settings) putFollowup(result)
       notifyChanged()
+      props.onNotice(done, 'good')
     } catch (err) {
       setError(`没有保存：${errorText(err, '请稍后再试')}`)
     } finally {
       setBusy(false)
     }
   }
-  return h('div', { className: 'lp-optin' },
-    h(Check, { id: 'lp-onb-followup', checked: checked && data.platform_desktop, disabled: busy || !data.platform_desktop, onChange: (next) => { void change(next) } },
-      `每天${Number(settings.checkin_time.slice(0, 2)) >= 17 ? '晚上' : ''} ${settings.checkin_time} 提醒我打卡（桌面通知）`),
-    h('span', { className: 'lp-caption' }, data.platform_desktop
-      ? '只在 DSH 运行时提醒，不含健康数值；随时可以在健康页的“随访提醒”里关闭或改时间。'
-      : '这台电脑的系统不支持桌面通知；可以在健康页的“随访提醒”里设置 Webhook。'),
-    error ? h('span', { className: 'lp-form-error', role: 'alert' }, error) : null)
+
+  return h('div', { className: 'lp-remind' },
+    h('div', { className: 'lp-remind-row' },
+      h(Switch, {
+        id: 'lp-remind-on', checked: settings.enabled, busy, disabled: busy, label: '每晚提醒我打卡',
+        onChange: (next) => { void post(next ? { enabled: true, ...(hasChannel ? {} : { desktop: true }) } : { enabled: false }, next ? '打卡提醒已开启。' : '提醒已关闭。') },
+      }),
+      h('input', {
+        type: 'time', className: 'lp-input lp-input-time', value: time, 'aria-label': '提醒时间', disabled: busy,
+        onChange: (event: React.ChangeEvent<HTMLInputElement>) => { if (event.target.value) setTime(event.target.value) },
+        onBlur: () => { if (time !== settings.checkin_time) void post({ checkin_time: time }, `提醒时间改为 ${time}。`) },
+      })),
+    h('p', { className: 'lp-caption' }, settings.enabled ? `${switchCaption(data)}${hasChannel ? ` ${nextLine(data)}` : ''}` : `关闭时不会发送任何提醒。开启后：${switchCaption(data)}`),
+    error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null)
+}
+
+/** 随访提醒 on the settings page: the switch, then 更多设置 with the whole form and the log. */
+export function FollowupPanel(props: { onNotice: Notify }): React.ReactElement {
+  const { data, loading, error } = useFollowup()
+  if (!data && loading) return h(Skeleton, { height: 88 })
+  if (!data) return h(LoadError, { what: '随访设置', error, onRetry: () => reload('followup') })
+  return h('div', { className: 'lp-followup-panel' },
+    h(ReminderSwitch, { data, onNotice: props.onNotice }),
+    h('details', { className: 'lp-more' },
+      h('summary', null, '更多设置', h('span', { className: 'lp-optional' }, '复测提醒、每周小结、免打扰、发到飞书或手机、内容详略')),
+      h(Settings, { data, onNotice: props.onNotice, hideSwitch: true })))
 }

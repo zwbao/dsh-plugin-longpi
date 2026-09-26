@@ -1,5 +1,5 @@
 // A fresh DeepSeek Harness has no workspace: LongPi registers <dataDir>/workspace
-// as 「健康」 once, through DSH's workspace registry when it is there. A fake
+// as 「健康对话」 once, through DSH's workspace registry when it is there. A fake
 // registry stands in for @deepseek-ai/dsh-workspace (create(path, title), list()).
 
 import assert from 'node:assert/strict'
@@ -84,8 +84,8 @@ try {
   const made = await mod.bootstrapWorkspace(registry, { dataDir, enabled: true, now: NOW })
   const expected = realpathSync(join(dataDir, mod.WORKSPACE_DIR))
   assert.deepEqual(made, { status: 'created', path: expected, workspace_id: 'ws-1' })
-  assert.deepEqual(registry.created, [{ path: expected, title: '健康' }], 'the canonical path, titled 健康')
-  assert.equal(mod.WORKSPACE_TITLE, '健康')
+  assert.deepEqual(registry.created, [{ path: expected, title: '健康对话' }], 'the canonical path, titled 健康对话')
+  assert.equal(mod.WORKSPACE_TITLE, '健康对话')
   const markerPath = join(dataDir, mod.WORKSPACE_MARKER)
   assert.equal(mod.WORKSPACE_MARKER, 'workspace-bootstrap.json')
   assert.deepEqual(JSON.parse(readFileSync(markerPath, 'utf8')), { created_at: NOW.toISOString(), path: expected, workspace_id: 'ws-1' })
@@ -129,8 +129,8 @@ try {
   await mod.apply(host.ctx, configFor(appDir))
   assert.ok(await until(() => existsSync(join(appDir, mod.WORKSPACE_MARKER))), 'apply creates the workspace')
   assert.equal(appRegistry.created.length, 1)
-  assert.equal(appRegistry.created[0].title, '健康')
-  assert.ok(logs.some(([level, name, message]) => level === 'info' && name === 'longpi' && message.includes('健康')))
+  assert.equal(appRegistry.created[0].title, '健康对话')
+  assert.ok(logs.some(([level, name, message]) => level === 'info' && name === 'longpi' && message.includes('健康对话')))
   host.dispose()
 
   // a restart (the registry now lists it) creates nothing more
@@ -161,7 +161,7 @@ try {
   assert.ok(await until(() => logs.some(([level, , message]) => level === 'warn' && message.includes('disk full'))), 'the failure is logged')
   warnHost.dispose()
 
-  console.log('workspace ok (created once as 健康, marker kept, busy registry untouched, failures logged)')
+  console.log('workspace ok (created once as 健康对话, marker kept, busy registry untouched, failures logged)')
 } finally {
   for (const dir of temp) rmSync(dir, { recursive: true, force: true })
 }

@@ -22,7 +22,10 @@
 | `dataDir` | 档案、回执、以前的读出、干预方案和打卡。空则是 `~/.dsh/longpi`。 |
 | `maxSkillMatches` | 一个问题最多点名几个技能，默认 `8`。 |
 | `timeoutMs` | Mirobody 桥和 MCP 请求的时限，默认 `30000`。 |
-| `bootstrapWorkspace` | DeepSeek Harness 还没有任何工作区时，创建 `<dataDir>/workspace` 并登记为工作区「健康」，只做一次，这样会话可以打开，LongPi 首页可以使用。已有工作区时不作任何改动；创建之后不再重复创建（`dataDir` 里的 `workspace-bootstrap.json` 记录了这件事，删除的工作区不会再出现）。默认 `true`。 |
+| `guardScope` | 安全判断在哪里调用模型。`health`（默认）：LongPi 工作区（它创建的那个，或标题为「健康对话」「健康」的工作区）里的每条消息，以及其他工作区里涉及健康的消息，之后该对话的其余消息也一样；其余消息只经本地规则检查，不调模型、不增加延迟。`all`：所有工作区的每条消息都调模型，每条约 1.2 秒。 |
+| `bootstrapWorkspace` | DeepSeek Harness 还没有任何工作区时，创建 `<dataDir>/workspace` 并登记为工作区「健康对话」，只做一次，这样会话可以打开，LongPi 首页可以使用（早期版本创建的「健康」工作区保留原名）。已有工作区时不作任何改动；创建之后不再重复创建（`dataDir` 里的 `workspace-bootstrap.json` 记录了这件事，删除的工作区不会再出现）。默认 `true`。 |
+
+**在应用里设置的连接。** 在 DeepSeek Harness 设置的 LongPi 页保存的 Mirobody 地址（需要时连同令牌）存放在 `dataDir/connection.json`（仅本人可读），在清除之前替代 `mcpUrl` 和 `mcpToken`，LongPi 的所有读取都用它，挂载的 Mirobody 工具也一样。只有通过它在 10 秒内成功读取一次记录目录后才会保存；地址须为 `https://`，或指向 `127.0.0.1`、`localhost` 的 `http://`。页面不会拿到令牌，显示的地址会隐去 `/mcp/` 之后的部分。
 
 ## 工具
 
@@ -47,13 +50,20 @@ LongPi 自己 14 个。挂上 Mirobody 之后，同一进程里还有它的 8 �
 
 命令：`/longpi`、`/longpi-skills 我的生物年龄`、`/longpi-stats`、`/longpi-version`。
 
-HTTP：`GET /api/longpi/board`、`GET /api/longpi/tracking`、`GET /api/longpi/match?q=`、`GET /api/longpi/intents`、`GET /api/longpi/stats`、`GET /api/longpi/report`、`POST /api/longpi/profile`、`POST /api/longpi/checkin`、`POST /api/longpi/run-ready`、`GET /api/longpi/version`。都要带上打开 DSH 时地址里的 `token`（查询参数或 `Authorization: Bearer`），看板会自动带上。
+HTTP 接口，供 LongPi 页面、引导流程和设置页使用：
+
+- 读取：`GET /api/longpi/journey`、`/indicators`、`/indicators/detail?id=`、`/connection`、`/board`、`/tracking`、`/plan-draft`、`/followup`、`/self`、`/calendar.ics`、`/report`、`/match?q=`、`/intents`、`/stats`、`/version`；
+- 写入：`POST /api/longpi/connection`、`/connection/test`、`/profile`、`/consent`、`/self`、`/checkin`、`/plan-draft/accept`、`/followup`、`/followup/test`、`/run-ready`；`DELETE /api/longpi/connection`、`/self?id=`。
+
+每个接口先经过 DeepSeek Harness 自身的检查：请求须发往本机地址（或 DSH 配置为可信的主机），不能来自其他网站，并带有 DSH 的登录 Cookie。浏览器打开 DSH 打印的地址（`…/?token=…`）时会获得这个 Cookie。接口不接受 `token` 参数。没有 Cookie 返回 401；来自其他网站或经由其他主机名返回 403；DSH 没有连接服务时，所有接口返回 503。写入请求须使用 `Content-Type: application/json`（可带 charset），否则返回 415。在终端中调用时，先用 token 换取 Cookie，见安装指南第 8.1 步。
+
+随访 Webhook 地址须为 `https://`，且不能指向本机（`127.0.0.0/8`、`::1`、`localhost`）、链路本地地址（`169.254.0.0/16`、`fe80::/10`）、未指定地址（`0.0.0.0`、`::`）或 `metadata.google.internal`。家庭局域网地址可以使用。不做任何 DNS 解析。
 
 ## 干预评估
 
 方案是这个人自己的（或医生、长寿师给的）。插件整理成条目读给对方确认后才保存，每次保存都留一个版本，放在本机 `dataDir/interventions/`，不上传。
 
-判断一项干预对某个指标有没有用，要同时满足：开始前 180 天内有基线；复测晚于该指标的最短间隔（如 HbA1c 约 3 个月）；变化超出个体生物变异加检测误差合成的参考变化值（CRP、甘油三酯按对数正态计算，家庭血压按 7 天平均）；近 12 周执行率够（手环阈值、Mirobody 服用记录或打卡，没有记录的天算未知，不算没做）。个体变异来自 longevity-skills 的 `data/biological_variation.json`，每一行都注明期刊出处；没有可核对来源的指标不给噪声带，结论写「无法判断」。同期还有别的干预或用药变化时照实说明只能评价组合。结论只有四种：有效、波动内、反向、无法判断。下一步只包括补执行、按时复测、补测、一次只改一项、和医生或长寿师讨论，不涉及任何药物和剂量。
+判断一项干预对某个指标有没有用，要同时满足：开始前 180 天内有基线；复测晚于该指标的最短间隔（如 HbA1c 约 3 个月）；变化超出个体生物变异加检测误差合成的参考变化值（CRP、甘油三酯按对数正态计算，家庭血压按 7 天平均）；近 12 周执行率够（手环阈值、Mirobody 服用记录或打卡，没有记录的天算未知，不算没做）。个体变异来自 longevity-skills 的 `data/biological_variation.json`，每一行都注明期刊出处；没有可核对来源的指标不给噪声带，结论写「无法判断」。同期还有别的干预或用药变化时照实说明只能评价组合。目标写「血压」的条目分别按收缩压和舒张压判断；要求针对血压起草时，两者都算。结论只有四种：有效、波动内、反向、无法判断。下一步只包括补执行、按时复测、补测、一次只改一项、和医生或长寿师讨论，不涉及任何药物和剂量。
 
 **记录里的明显变化**：不需要方案。每个有生物变异数据的体检指标（只看带 LOINC 的检查行，手环数据和本人自测不算）用同一个标准判断：最新一次对比前一次；有三次及以上时，再对比最近六次里的第一次。变化超出参考变化值才算，两种对比都超出时报超出更多的那一个。方向是好的（按该行的 `better`）算好消息；方向不好的，以及要结合参考范围判断的指标（血红蛋白、平均红细胞体积、白细胞等）无论升降，都建议请医生看，排在前面。没有好坏方向的指标（体重）只说明变化。空腹血糖下降也只说明变化；有糖尿病或用药计划里有降糖药时，空腹血糖或糖化血红蛋白明显下降也建议请医生看。只比较 LOINC 编码在该行之列的检查行，尿液结果不会被当成同名的血液指标。按多日平均判断的指标（家庭血压）不用单次读数判断。不同医院、不同仪器之间的差异没有算进去。旅程（`changes`）、`read_personal_situation`（`record_changes`）、方案草稿的说明和导出报告显示的是同一批结果。
 
@@ -79,7 +89,7 @@ HTTP：`GET /api/longpi/board`、`GET /api/longpi/tracking`、`GET /api/longpi/m
 
 ## 运行记录与统计
 
-- `dataDir/receipts.jsonl` 记录每次运行：技能、检出版本、退出码、错误类型、用了哪些输入键、缺了哪些输入键。
+- `dataDir/receipts.jsonl` 记录每次运行：技能、检出版本、退出码、错误类型、用了哪些输入键、缺了哪些输入键。不存报告正文；`GET /api/longpi/board` 只返回每条收据的 `{ at, skill, ok, exit_code, error_kind }`。
 - `dataDir/history.jsonl` 保存每次运行声明过的输出（例如 `phenoage`），供前后对比的技能使用。
 - `/longpi-stats` 写出一周的计数：每个技能跑了几次、失败原因、缺了哪些输入。不含任何数值和报告文字，是否分享给技能维护者由本人决定。
 

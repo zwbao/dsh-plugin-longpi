@@ -140,6 +140,7 @@ cat > "$P" <<EOF
     dataDir: ''
     maxSkillMatches: 8
     bootstrapWorkspace: true
+    guardScope: health
 EOF
 chmod 600 "$P"
 
@@ -164,26 +165,28 @@ cd "$LONGPI_HOME" && dsh web
 
 ## 8. 确认插件在正常工作
 
-**8.1 命令行检查（不需要模型）。** `TOKEN` 是第 7 步打印的地址里 `token=` 后面那一段。
+**8.1 命令行检查（不需要模型）。** `TOKEN` 是第 7 步打印的地址里 `token=` 后面那一段。接口只接受 DeepSeek Harness 的登录 Cookie，所以第一条 `curl` 先像浏览器一样用 token 换取 Cookie。
 
 ```bash
 TOKEN='粘贴 token= 后面的内容'
-curl -s "http://127.0.0.1:3080/api/longpi/version?token=$TOKEN"; echo
-curl -s "http://127.0.0.1:3080/api/longpi/board?token=$TOKEN" | python3 -c '
+JAR="$(mktemp)"
+curl -s -o /dev/null -c "$JAR" "http://127.0.0.1:3080/?token=$TOKEN"
+curl -s -b "$JAR" "http://127.0.0.1:3080/api/longpi/version"; echo
+curl -s -b "$JAR" "http://127.0.0.1:3080/api/longpi/board" | python3 -c '
 import json, sys
 d = json.load(sys.stdin); s, m, r = d["skills"], d["mirobody"], d["records"]
 print("技能库  ", s["count"], "个，版本", s["version"], s["error"] or "")
 print("Mirobody", "已挂载" if m["mounted"] else "未挂载：" + m["error"])
 e = m["engine"]; print("术语引擎", ("正常 " + str(e.get("version"))) if e.get("ok") else ("异常：" + str(e.get("error"))))
 print("病历    ", r["status"], r["indicator_count"], "项指标", r["error"] or "")'
-curl -s "http://127.0.0.1:3080/api/mirobody/resolve?q=%E8%A1%80%E7%BA%A2%E8%9B%8B%E7%99%BD&token=$TOKEN" \
+curl -s -b "$JAR" "http://127.0.0.1:3080/api/mirobody/resolve?q=%E8%A1%80%E7%BA%A2%E8%9B%8B%E7%99%BD" \
   | python3 -c 'import json, sys; x = json.load(sys.stdin)["results"][0]; print(x["term"], "→", x["loinc"])'
 ```
 
 应看到类似下面的输出（数字以你的为准）：
 
 ```text
-{"product":"dsh-plugin-longpi","version":"4.2.0"}
+{"product":"dsh-plugin-longpi","version":"0.5.1"}
 技能库   171 个，版本 2026.39.0
 Mirobody 已挂载
 术语引擎 正常 1.5.0
@@ -197,7 +200,7 @@ Mirobody 已挂载
 - 在输入框输入 `/longpi` 回车，应看到：
 
   ```text
-  dsh-plugin-longpi 4.2.0
+  dsh-plugin-longpi 0.5.1
   skills 171 (personal 98)  version 2026.39.0  revision …  from catalog.json
   profile age unset  sex unknown  birth unset
   mirobody mounted
@@ -246,7 +249,7 @@ git -C "$LONGPI_HOME/longevity-skills" pull          # 更新技能库，不用�
 dsh plugin --profile web remove dsh-plugin-longpi   # 卸载；再删掉 cordis.patch.yml 里 LongPi 那一行
 ```
 
-要固定版本，安装时用 `github:zwbao/dsh-plugin-longpi#v4.2.0` 这样的标签。卸载不会删除 `~/.dsh/longpi` 里的档案、方案和打卡记录。
+要固定版本，安装时用 `github:zwbao/dsh-plugin-longpi#v0.5.1` 这样的标签。卸载不会删除 `~/.dsh/longpi` 里的档案、方案和打卡记录。
 
 ## 不装 DSH，先看一眼（开发者）
 

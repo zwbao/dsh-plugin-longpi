@@ -25,6 +25,28 @@ export function discoverPython(configured: string, pluginHome: string): string {
   return 'python3'
 }
 
+/**
+ * What the Mirobody terminology bridge gets for the status check: the same list the mounted Mirobody plugin gives
+ * it for every tool call (path, home, language, TMPDIR, MIROBODY_HOME; no user site-packages, no PYTHONPATH), so
+ * the status says what the tools will find. Never the rest of the harness's environment (API keys, tokens). Not a
+ * sandbox either.
+ */
+export function bridgeEnv(mirobodyHome: string): Record<string, string> {
+  const env: Record<string, string> = {
+    PATH: process.env.PATH ?? '',
+    LANG: process.env.LANG || 'C.UTF-8',
+    HOME: process.env.HOME ?? '',
+    MIROBODY_HOME: mirobodyHome.trim(),
+    PYTHONNOUSERSITE: '1',
+    PYTHONDONTWRITEBYTECODE: '1',
+  }
+  for (const name of ['LC_ALL', 'TMPDIR'] as const) {
+    const value = process.env[name]
+    if (value) env[name] = value
+  }
+  return env
+}
+
 export function runBridgeStatus(
   pluginHome: string,
   python: string,
@@ -38,11 +60,7 @@ export function runBridgeStatus(
     input: JSON.stringify({ op: 'status' }),
     encoding: 'utf8',
     timeout: timeoutMs,
-    env: {
-      ...process.env,
-      MIROBODY_HOME: mirobodyHome.trim(),
-      PYTHONDONTWRITEBYTECODE: '1',
-    },
+    env: bridgeEnv(mirobodyHome),
   })
   if (result.error) return { ok: false, python, error: result.error.message }
   const text = (result.stdout ?? '').trim()

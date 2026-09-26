@@ -32,6 +32,8 @@ export interface RunRequest {
   reportLimit?: number
   /** Local date the measurements were taken, when the run reads an earlier checkup. */
   measuredAt?: string
+  /** Kept with the outputs in history.jsonl, so a caller can tell a result for today's inputs from a stale one. */
+  inputsKey?: string
 }
 
 export interface Conversion {
@@ -87,13 +89,18 @@ function readLevers(runDir: string): Levers | null {
   }
 }
 
+/**
+ * What each run leaves in receipts.jsonl: which skill ran on which revision, how it ended, and which inputs it
+ * used or missed. No report text: the report stays in the run directory, the outputs in history.jsonl.
+ */
 export interface Receipt {
   at: string
   skill: string
   revision: string
   exit_code: number | null
   ok: boolean
-  excerpt: string
+  /** Written by versions before 5.1 only; never shown. */
+  excerpt?: string
   error_kind?: string
   input_keys?: string[]
   problem_kinds?: string[]
@@ -140,6 +147,24 @@ export function reportExcerpt(text: string): string {
   const picked = lines.filter((line) => /年龄|age|边界|boundary|差|未计算|没有|不在合理范围|单位/.test(line)).slice(0, 5)
   const chosen = picked.length > 0 ? picked : lines.slice(0, 3)
   return chosen.join('\n').slice(0, 600)
+}
+
+/**
+ * The environment a skill script gets: a path, a language, and a home and temp directory inside its own run
+ * directory; no user site-packages and nothing else of the harness's environment (no keys, no tokens). This keeps
+ * the script's writes and caches in the run directory. It is not a sandbox: the script runs as the same user and
+ * can read whatever that user can.
+ */
+export function skillEnv(runDir: string): Record<string, string> {
+  return {
+    PATH: process.env.PATH ?? '',
+    LANG: process.env.LANG || 'C.UTF-8',
+    ...(process.env.LC_ALL ? { LC_ALL: process.env.LC_ALL } : {}),
+    HOME: runDir,
+    TMPDIR: join(runDir, 'tmp'),
+    PYTHONDONTWRITEBYTECODE: '1',
+    PYTHONNOUSERSITE: '1',
+  }
 }
 
 function remember(dataDir: string, receipt: Receipt): void {
@@ -265,7 +290,7 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
       const kinds = [...new Set(staged.problems.map((item) => item.kind))]
       const onlyMissing = kinds.every((kind) => kind === 'missing')
       remember(request.dataDir, {
-        at: new Date().toISOString(), skill: request.name, revision: catalog.revision, exit_code: null, ok: false, excerpt: '',
+        at: new Date().toISOString(), skill: request.name, revision: catalog.revision, exit_code: null, ok: false,
         error_kind: onlyMissing ? 'missing_inputs' : 'invalid_inputs', input_keys: Object.keys(staged.values),
         problem_kinds: kinds, missing: staged.problems.filter((item) => item.kind === 'missing').map((item) => item.key),
       })
@@ -296,7 +321,7 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
   const filled = autofill(card, args, request)
   if (filled.problems.length > 0) {
     remember(request.dataDir, {
-      at: new Date().toISOString(), skill: request.name, revision: catalog.revision, exit_code: null, ok: false, excerpt: '',
+      at: new Date().toISOString(), skill: request.name, revision: catalog.revision, exit_code: null, ok: false,
       error_kind: 'missing_inputs', input_keys: inputKeys, problem_kinds: ['missing'], missing: filled.problems.map((item) => item.key),
     })
     return fail(request.name, catalog.revision, 'missing_inputs', filled.problems.map((item) => item.message_zh).join(' '), 'Ask the person for the missing profile field.', { problems: filled.problems })
@@ -310,19 +335,14 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
     writeFileSync(join(runDir, file.name), file.text, { mode: 0o600 })
   }
   mkdirSync(join(runDir, 'out'), { recursive: true, mode: 0o700 })
+  mkdirSync(join(runDir, 'tmp'), { recursive: true, mode: 0o700 })
 
   const timeoutMs = Math.max(1000, Math.min(180_000, request.timeoutMs))
   const result = await new Promise<{ code: number | null; stdout: string; stderr: string; error?: string }>((resolve) => {
     const child = spawn(python, [card.script as string, ...args], {
       cwd: runDir,
       shell: false,
-      env: {
-        PATH: process.env.PATH ?? '',
-        HOME: process.env.HOME ?? '',
-        LANG: process.env.LANG ?? 'C.UTF-8',
-        PYTHONDONTWRITEBYTECODE: '1',
-        PYTHONNOUSERSITE: '1',
-      },
+      env: skillEnv(runDir),
     })
     const stdout: Buffer[] = []
     const stderr: Buffer[] = []
@@ -391,7 +411,6 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
     revision: catalog.revision,
     exit_code: result.code,
     ok,
-    excerpt,
     ...(errorKind ? { error_kind: errorKind } : {}),
     input_keys: inputKeys,
     ...(problems.length > 0 ? { problem_kinds: [...new Set(problems.map((item) => item.kind))], missing: problems.filter((item) => item.kind === 'missing').map((item) => item.key) } : {}),
@@ -403,6 +422,7 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
       revision: catalog.revision,
       outputs,
       ...(request.measuredAt ? { measured_at: request.measuredAt } : {}),
+      ...(request.inputsKey ? { inputs_key: request.inputsKey } : {}),
     })
   }
   pruneRuns(runs)

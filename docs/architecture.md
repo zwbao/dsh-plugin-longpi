@@ -15,10 +15,14 @@ LongPi is the personal layer. Three pieces stay separate.
 | `measurements.ts` | Stage measurements exactly as `skillkit.py` does (key vs alias, `unit_required`, declared `accept` factors, ranges); decide which skills the record can already run. |
 | `units.ts` | Unit and name normalization, identical to `skillkit.py`; both pass `schema/unit_cases.json`. |
 | `match.ts` | Rank skills by intent, readiness and shared words; keep tier C out unless the organism is named. |
-| `runner.ts` | Stage files, pick the interpreter by runtime, fill profile flags, run the script in a path jail, read `out/report.md`, `out/result.json` and `out/problems.json`, write the receipt. |
+| `runner.ts` | Stage files, pick the interpreter by runtime, fill profile flags, check argument paths, run the script with a short environment, read `out/report.md`, `out/result.json` and `out/problems.json`, write the receipt (no report text). |
 | `history.ts` | Earlier readouts (declared outputs only), for before-and-after skills and the board. |
 | `stats.ts` | Weekly anonymous counts per skill: runs, failures, missing input keys. |
-| `guardrails.ts` | Emergency and medication intercepts before the model runs. |
+| `guardrails.ts` | The guard's rule layer (used when the model call fails), its guidance notes and the deterministic reply check. |
+| `guard-llm.ts` | The guard: the host model labels each new message and judges the reply before a turn closes, through DSH's LLM runtime with a 4 s deadline; one note appended, at most one correction steered; counts in `guard-stats.json`. |
+| `guard-scope.ts` | Where the guard asks the model: LongPi's workspace, and elsewhere messages that touch health (a recall-first word list holding the rule layer's words) and the rest of their session. |
+| `guard-dose.ts` | Dose amounts for the reply check (a local copy until the shared `dose.ts` merges). |
+| `tools-approval.ts` | A plan saved from chat needs a fresh read-back of the same plan and then the person's approval; no skill runs in a turn flagged as an emergency. |
 | `compact.ts` | Parse Mirobody's compact pipe tables (hoisted constants, single-row answers, refusals, the meta line). |
 | `records.ts` | Read the record over MCP with a one-minute cache: catalogue and latest values, dated series, the dose log in windows under Mirobody's row cap, and medication courses. |
 | `reference.ts` | Read `data/biological_variation.json` and `data/effects.jsonl` from the skills checkout; reference change values (symmetric, or log-normal for skewed markers). |
@@ -27,12 +31,23 @@ LongPi is the personal layer. Three pieces stay separate.
 | `tracking.ts` | Put it together for tools and the board: series, adherence data, phenotypic age at every checkup (by the skill), noise bands, model cards from `levers.json`. |
 | `overview.ts` | What the record can run now, run-everything-ready, the Markdown report. |
 
+In the client (`src/client/`), besides the page, onboarding, settings and the chat cards:
+
+| Module | Job |
+| --- | --- |
+| `turn-data.ts` | A conversation Definition that collects each turn's LongPi calls (draft, read-back, save, check-in) from the session log and publishes them as the turn's `longpi` data; the `conversation.chat.turnTail` selector claims a turn that left something to do. Pure, tested in Node. |
+| `turn-tail.ts` | The quick actions under such a turn: adopt the draft, confirm or adjust a read-back, take back today's check-ins, open the 健康 tab or the page. |
+| `pane.ts` | The 健康 tab in DSH's right column (`sidebar.right.pane.tab`, a page type in `sidebarRightTabs`): the 概览 tab laid out for the column. |
+| `call-state.ts` | Per-call outcomes the chat card and the quick actions share: the plan version a draft was adopted as, a check-in taken back. |
+| `terms.ts` | The results' plain names (身体年龄, 10 年心血管风险) and what their ⓘ says about the model behind them. |
+
 ## Dispatch is a tool, not a prompt guess
 
 - `read_personal_situation` loads the saved age, sex, and birth year, the indicators and medications the Mirobody server returned, earlier readouts, and which methods are ready.
 - `list_longevity_intents` and `match_longevity_skills` rank skills by intent and by what the record already holds.
 - `read_longevity_skill` returns the instructions and the manifest.
-- `run_longevity_skill` takes `measurements` as recorded; the harness converts declared units, checks ranges, fills the saved profile fields, stages `measurements.csv`, and runs the script with a path jail: relative names and `out/` only, no `..`, no absolute path.
+- `run_longevity_skill` takes `measurements` as recorded; the harness converts declared units, checks ranges, fills the saved profile fields, stages `measurements.csv`, and runs the script with argument path checks: relative names and `out/` only, no `..`, no absolute path.
+- A skill script gets a short environment: `PATH`, `LANG`, `LC_ALL`, `HOME` and `TMPDIR` inside its own run directory, `PYTHONNOUSERSITE=1`, and nothing else of the harness's environment (no keys, no tokens). The Mirobody terminology bridge gets the same list plus `MIROBODY_HOME`, the real `HOME` and `PYTHONPATH`. This is not a sandbox: the script runs as the same user and can read what that user can. Skill scripts are trusted code from the skills checkout the person installed; the argument checks stop the model from pointing a script at other files, nothing more.
 - `query_longevity_evidence` runs the evidence skill with the named entities and, if asked, the medication plan.
 
 ## Interventions

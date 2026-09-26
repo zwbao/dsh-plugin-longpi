@@ -12,7 +12,7 @@
 
 import type { Config } from './config.ts'
 import { addDays } from './interventions.ts'
-import { loadSeries, type RecordSnapshot, type SeriesPoint } from './records.ts'
+import { loadSeries, recordReadable, type RecordSnapshot, type SeriesPoint } from './records.ts'
 import { checkupMarkerFor, loadReference, rcvBand, type BiovarMarker } from './reference.ts'
 import { currentMedications, GLUCOSE_LOWERING } from './situation.ts'
 import { normalizeUnit } from './units.ts'
@@ -38,6 +38,12 @@ export interface RecordChange {
   /** Where the within-person variation comes from (the row's cvi_source). */
   source: { title: string; url: string; doi?: string }
   verified: boolean
+}
+
+/** A marker the changes could not judge: its readings did not come back whole. Unknown, never "no change". */
+export interface UnjudgedChange {
+  label_zh: string
+  reason_zh: string
 }
 
 export interface ChangesContext {
@@ -67,8 +73,8 @@ const READ_CHUNK = 6
 
 type Point = { date: string; value: number }
 
-/** The factor that brings a point's unit to the row's unit, from the row's own convert table; null when it cannot. */
-function factorFor(marker: BiovarMarker, unit: string): number | null {
+/** The factor that brings a point's unit to the row's unit, from the row's own convert table; null when it cannot. The plan verdicts (evaluate.ts) use it too. */
+export function factorFor(marker: BiovarMarker, unit: string): number | null {
   const given = normalizeUnit(unit)
   // A point without a unit cannot be checked against the row's unit, so it is left out.
   if (!given) return null
@@ -165,11 +171,13 @@ function changeOf(marker: BiovarMarker, points: Point[], z: number, glucoseTreat
  * Changes between checkups larger than the reference change value, ask_doctor
  * first, then the furthest past its band; at most six. Checkup rows only
  * (Mirobody rows with a LOINC code): wearable series and the person's own
- * measurements are left out. An unread record gives no changes.
+ * measurements are left out. An unread record gives no changes. A marker whose
+ * readings failed to read, or came back cut, is not judged at all: it is listed
+ * in unjudged with the reason, so a failed read never reads as "no change".
  */
-export async function buildChanges(context: ChangesContext): Promise<{ changes: RecordChange[]; note_zh: string }> {
-  const empty = { changes: [], note_zh: CHANGES_NOTE_ZH }
-  if (context.records.record_status !== 'ok') return empty
+export async function buildChanges(context: ChangesContext): Promise<{ changes: RecordChange[]; note_zh: string; unjudged: UnjudgedChange[] }> {
+  const empty = { changes: [], note_zh: CHANGES_NOTE_ZH, unjudged: [] }
+  if (!recordReadable(context.records)) return empty
   const { biovar } = loadReference(context.skillsHome)
   // Rows measuring the same thing under different codes (two glucose LOINCs) are one marker.
   const byKey = new Map<string, { marker: BiovarMarker; names: string[] }>()
@@ -190,14 +198,31 @@ export async function buildChanges(context: ChangesContext): Promise<{ changes: 
   for (let start = 0; start < names.length; start += READ_CHUNK) chunks.push(names.slice(start, start + READ_CHUNK))
   const reads = await Promise.all(chunks.map((chunk) => loadSeries(context.config, chunk, window)))
   const series: Record<string, SeriesPoint[]> = {}
-  for (const read of reads) for (const [name, row] of Object.entries(read.series)) series[name] = row.points
+  const failed = new Map<string, string>()
+  const cut = new Set<string>()
+  for (const read of reads) {
+    for (const [name, row] of Object.entries(read.series)) series[name] = row.points
+    for (const name of read.failed) failed.set(name, read.error ?? '')
+    for (const name of read.cut) cut.add(name)
+  }
   const { profile, medications } = context.records
   const glucoseTreated = profile.risk.diabetes === true || currentMedications(medications).some((name) => GLUCOSE_LOWERING.test(name))
   const found: Array<RecordChange & { ratio: number }> = []
+  const unjudged: UnjudgedChange[] = []
   for (const { marker, names: rows } of byKey.values()) {
+    const broken = rows.find((name) => failed.has(name))
+    if (broken != null) {
+      const error = failed.get(broken)
+      unjudged.push({ label_zh: marker.label_zh, reason_zh: `历次结果读取失败${error ? `：${error}` : ''}，这次没有判断它的变化。` })
+      continue
+    }
+    if (rows.some((name) => cut.has(name))) {
+      unjudged.push({ label_zh: marker.label_zh, reason_zh: '历次结果太多，读取时被截断，没有读全，这次没有判断它的变化。' })
+      continue
+    }
     const change = changeOf(marker, dailyPoints(marker, rows.flatMap((name) => series[name] ?? [])), biovar.z, glucoseTreated)
     if (change) found.push(change)
   }
   found.sort((a, b) => Number(b.ask_doctor) - Number(a.ask_doctor) || b.ratio - a.ratio)
-  return { changes: found.slice(0, MAX_CHANGES).map(({ ratio: _ratio, ...row }) => row), note_zh: CHANGES_NOTE_ZH }
+  return { changes: found.slice(0, MAX_CHANGES).map(({ ratio: _ratio, ...row }) => row), note_zh: CHANGES_NOTE_ZH, unjudged }
 }

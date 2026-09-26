@@ -26,6 +26,8 @@ export interface MatchOptions {
   profile?: { age: number | null; sex: string }
   outputs?: Record<string, unknown>
   lexicon?: EvidenceLexicon
+  /** Reads that failed (records.missing_reads) or a cut catalogue: such inputs are not read, never "missing". */
+  reads?: { failed?: readonly string[]; catalog_truncated?: boolean }
 }
 
 export interface MatchResult {
@@ -214,13 +216,17 @@ export function matchSkills(
         why.push(`对上意图「${hit.label_zh}」`)
       }
     })
-    const run = runnableFrom(card, rows, profile, options.outputs)
+    const run = runnableFrom(card, rows, profile, options.outputs, options.reads)
     // A method that can run now ranks up in chat, whatever supplies its inputs; the labels, and the lists
     // without a question below, speak for the record alone.
     if (run.status === 'ready') score += 6
     else if (run.status === 'partial') score += 2
     if (run.record === 'ready') why.push('记录里的输入已经齐了')
-    else if (run.status === 'partial') why.push(`还缺 ${run.missing.join('、')}`)
+    else if (run.status === 'partial') {
+      const absent = run.missing.filter((label) => !run.unread.includes(label))
+      if (absent.length > 0) why.push(`还缺 ${absent.join('、')}`)
+      if (run.unread.length > 0) why.push(`${run.unread.join('、')}没有读到`)
+    }
     const words = lexical(card, asked)
     score += Math.min(words.score, 12) * (detected.length > 0 && !words.strong ? 0.5 : 1)
     specific += words.specific

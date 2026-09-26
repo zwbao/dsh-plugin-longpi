@@ -13,9 +13,9 @@ import type { MountState } from './mirobody.ts'
 import { resolveDataDir, resolveSkillsHome } from './paths.ts'
 import { invalidateRecords, loadRecords } from './records.ts'
 import { addSelf, SELF_KEYS, SELF_SPEC } from './selfmeasure.ts'
-import { buildTracking, describeItem, invalidateTracking, modelGoals } from './tracking.ts'
-import { buildPlanBrief, draftPlan } from './planner.ts'
-import { FOCUS, type Focus } from './profile.ts'
+import { buildTracking, describeItem, describePlan, goalProblems, invalidateTracking, modelGoals } from './tracking.ts'
+import { briefOptionsOf, buildPlanBrief, draftPlan } from './planner.ts'
+import { FOCUS } from './profile.ts'
 
 function jsonText(value: unknown): [{ type: 'text'; text: string }] {
   return [{ type: 'text', text: JSON.stringify(value, null, 2) }]
@@ -27,11 +27,13 @@ const jsonOut = {
 }
 
 const HOW_TO_READ = [
-  '有效 = the change is larger than within-person noise (reference change value) in the good direction, the retest came late enough, and the plan was followed.',
+  '有效 = the marker moved beyond within-person noise (reference change value) in the direction the plan aims (toward its goal when it has one), both results in one unit, the retest came late enough, and adherence is on record at 50% or more. It says the marker moved that way, not that the item caused it: never call it proof the item worked.',
   '波动内 = the change is inside normal within-person variation; do not call it an improvement or a failure.',
-  '反向 = larger than noise in the bad direction; suggest a recheck and talking to their doctor.',
-  '无法判断 = no baseline, too early to retest, too little adherence, acute inflammation, or no variation data. Say which.',
-  'combined_with and confounders mean the change cannot be credited to one item. Say so.',
+  '反向 = beyond noise, away from the aim (偏离目标); suggest a recheck and talking to their doctor.',
+  '无法判断 = no baseline, too early to retest, no or too few check-ins (没有执行记录), too little adherence, units that do not convert, a zero baseline, too few days of home blood pressure, a failed read, acute inflammation, or no variation data. Say which, from reason_zh.',
+  'For markers judged by a reference range (haemoglobin, MCV…), reason_zh says 是否合适要结合参考范围: say it too.',
+  'combined_with means other items ran on the same marker at the same time; their separate effects cannot be told apart. confounders are other changes in the window. Never credit a change to one item or to the combination.',
+  'goal_problems_zh on a model card: those goals could not be modelled (unit or range); no goal value is shown. Tell the person what to fix.',
   'expected rows are trial averages for a population, not a prediction for this person.',
   'Model cards (phenoage, china-par) are model estimates. Say 模型估计 and quote boundary_zh. Never turn them into "you will live X more years".',
   'suggestions are the next steps to offer for the saved plan. A change to the plan is a new draft (draft_intervention_plan), read back and confirmed like any plan. Never add a medicine or a dose.',
@@ -121,7 +123,9 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
         medications: records.medications.map((row) => ({ name: row.name, ...(row.plan_id ? { plan_id: row.plan_id } : {}) })),
         previous: currentPlan(dataDir),
       })
-      const readBack = normalized.plan.items.map(describeItem)
+      // What is stored, as stored: the plan's title and note, and each item with its details (after dose stripping).
+      const readBack = [describePlan(normalized.plan), ...normalized.plan.items.map(describeItem)]
+      const goalIssues = goalProblems(loadCatalog(where().skillsHome), normalized.plan.goals, where().skillsHome)
       if (normalized.errors.length > 0) {
         return asJson({ ok: false, saved: false, errors: normalized.errors, warnings: normalized.warnings, read_back: readBack, hint: 'Ask the person for what is missing. Do not fill a date or a marker yourself.' })
       }
@@ -129,10 +133,13 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
         return asJson({
           ok: true,
           saved: false,
+          title: normalized.plan.title,
+          note: normalized.plan.note,
           read_back: readBack,
           goals: normalized.plan.goals,
           warnings: normalized.warnings,
-          next: 'Read the read_back and warnings to the person. Save only after they confirm, by calling again with confirm=true.',
+          ...(goalIssues.length > 0 ? { goal_problems: goalIssues } : {}),
+          next: 'Read all of read_back (the plan line and every item with its 说明), the warnings and any goal_problems to the person. Save only after they confirm, by calling again with confirm=true.',
         })
       }
       const saved = savePlan(dataDir, normalized.plan)
@@ -143,6 +150,7 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
         version: saved.version,
         read_back: readBack,
         warnings: normalized.warnings,
+        ...(goalIssues.length > 0 ? { goal_problems: goalIssues } : {}),
         note: 'Saved locally in this harness (interventions/plan.jsonl). Not written to Mirobody. Check-ins go through log_intervention_checkin; medicine and supplement doses are logged in Mirobody.',
       })
     },
@@ -169,11 +177,7 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
       const catalog = loadCatalog(skillsHome)
       const records = await loadRecords(current, dataDir, mount.pluginHome)
       const today = isoDay()
-      const focus = (Array.isArray(args.focus) ? args.focus : []).filter((item): item is Focus => (FOCUS as readonly string[]).includes(String(item)))
-      const markers = (Array.isArray(args.markers) ? args.markers : []).map((item) => String(item).trim()).filter((item) => item && item.length <= 40).slice(0, 8)
-      const brief = await buildPlanBrief({ config: current, dataDir, skillsHome, catalog, records, today, mount }, {
-        ...(focus.length > 0 ? { focus } : {}), markers,
-      })
+      const brief = await buildPlanBrief({ config: current, dataDir, skillsHome, catalog, records, today, mount }, briefOptionsOf(args.focus, args.markers))
       const constraints = typeof args.constraints === 'string' ? args.constraints.trim().slice(0, 500) : ''
       return asJson({
         brief,
@@ -186,7 +190,7 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
 
   ctx.tools.register(defineTool({
     name: 'log_intervention_checkin',
-    description: 'Record that the person did (or did not do) an item of their saved plan on a day, when they tell you. item is the item title or id. done true/false; amount and unit when they give one (40 分钟). Tag a day that could disturb a lab result: illness, travel, lab_change (a different lab or hospital), stress. Medicine and supplement doses are logged in Mirobody, not here. Never log something the person did not say.',
+    description: 'Record that the person did (or did not do) an item of their saved plan on a day, when they tell you. item is the item title or id. done true (做到了), false (没做到), or null to take back that day\'s check-in when they say it was a mistake (the day is unknown again); the latest entry for an item and day counts. amount and unit when they give one (40 分钟). Tag a day that could disturb a lab result: illness, travel, lab_change (a different lab or hospital), stress. Medicine and supplement doses are logged in Mirobody, not here. Never log something the person did not say.',
     parameters: {
       entries: {
         type: 'array',
@@ -197,7 +201,10 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
           properties: {
             item: { type: 'string', required: true, description: 'Item title or id from the saved plan.' },
             date: { type: 'string', description: 'YYYY-MM-DD; default today.' },
-            done: { type: 'boolean', description: 'Whether they did it that day.' },
+            done: {
+              oneOf: [{ type: 'boolean' }, { type: 'null' }],
+              description: 'true: they did it that day; false: they did not; null: take back that day\'s check-in.',
+            },
             amount: { type: 'number', description: 'How much, when they said (minutes, steps, hours).' },
             unit: { type: 'string' },
             note: { type: 'string', description: 'Their words, short.' },
@@ -213,7 +220,10 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
       const { dataDir } = where()
       const result = addCheckIns(dataDir, Array.isArray(args.entries) ? args.entries : [], { today: isoDay(), source: 'chat' })
       if (result.saved.length > 0) invalidateTracking()
-      return asJson({ ok: result.saved.length > 0, saved: result.saved.length, entries: result.saved, problems: result.problems })
+      // Each entry with its item's title, so the chat card never shows an id.
+      const items = currentPlan(dataDir)?.items ?? []
+      const entries = result.saved.map((row) => ({ ...row, title: items.find((item) => item.id === row.item)?.title ?? row.item }))
+      return asJson({ ok: result.saved.length > 0, saved: result.saved.length, entries, problems: result.problems })
     },
   }))
 
@@ -266,7 +276,7 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
       const { dataDir } = where()
       const plan = currentPlan(dataDir)
       return asJson({
-        plan: plan ? { ...plan, read_back: plan.items.map(describeItem) } : null,
+        plan: plan ? { ...plan, read_back: [describePlan(plan), ...plan.items.map(describeItem)] } : null,
         versions: readPlans(dataDir).map((row) => ({ version: row.version, saved_at: row.saved_at, title: row.title, items: row.items.length })),
         recent_checkins: readCheckIns(dataDir).slice(-20).reverse(),
         ...(plan ? {} : { hint: 'No plan yet. Offer to save one with save_intervention_plan when the person shares theirs.' }),

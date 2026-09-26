@@ -135,6 +135,32 @@ export function markerFor(biovar: Biovar, indicator: { name?: string; loinc?: st
 }
 
 /**
+ * Words people use for several markers at once, and the markers they mean. A verdict, a chart or a draft
+ * priority is about one measured marker, so an item aimed at 血压 is judged on 收缩压 and on 舒张压.
+ */
+const MARKER_GROUPS: ReadonlyArray<{ names: readonly string[]; keys: readonly string[] }> = [
+  { names: ['血压', '家庭血压', '家测血压', '居家血压', '自测血压', 'blood pressure', 'home blood pressure', 'bp'], keys: ['sbp', 'dbp'] },
+]
+
+/** The marker keys a word for several markers names (血压 → sbp, dbp); empty for one marker or anything else. */
+export function markerGroupKeys(biovar: Biovar, name: string): string[] {
+  if (markerFor(biovar, { name, label: name })) return []
+  const folded = foldName(name)
+  const group = MARKER_GROUPS.find((row) => row.names.some((word) => foldName(word) === folded))
+  return group ? group.keys.filter((key) => biovar.markers.some((row) => row.key === key)) : []
+}
+
+/** The names with each word for several markers replaced by those markers' names, in order and once each. */
+export function expandMarkerNames(biovar: Biovar, names: readonly string[]): string[] {
+  const out: string[] = []
+  for (const name of names) {
+    const group = markerGroupKeys(biovar, name).map((key) => biovar.markers.find((row) => row.key === key)?.label_zh ?? key)
+    for (const one of group.length > 0 ? group : [name]) if (!out.includes(one)) out.push(one)
+  }
+  return out
+}
+
+/**
  * markerFor for a row that carries a LOINC code. A code the matched row does not list is a different
  * measurement, often another specimen (urine creatinine is 2161-8, serum 2160-0; a report may print it as
  * 肌酐(尿) or 尿肌酐(Cr)), so the name match only stands for a row with no codes of its own.

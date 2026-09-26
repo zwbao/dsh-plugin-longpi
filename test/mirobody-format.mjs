@@ -8,6 +8,7 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import * as mod from '../lib/index.js'
 import { loadRecord, queryIndicators, queryMedications, startFakeMirobody } from './fake-mirobody.mjs'
+import { startFlakyMirobody } from './flaky-mirobody.mjs'
 
 const dir = new URL('./fixtures/mirobody/cases/', import.meta.url).pathname
 const record = loadRecord()
@@ -127,4 +128,101 @@ try {
   await sse.close()
 }
 
-console.log('mirobody format: fake server matches Mirobody rendering; parser and record reads pass')
+// 4. a read that fails is named, never taken for "not measured" (5.1: 3a, 3b, 3d, 3e)
+const configOf = (url, token = '') => ({ mcpUrl: url, mcpToken: token, member: '', timeoutMs: 5000, pythonBin: '/nonexistent/python', mirobodyHome: '', dataDir: '' })
+const scratch = join(new URL('.', import.meta.url).pathname, '..', 'node_modules', '.cache', 'longpi-reads-test')
+const latestCall = (name, args) => name === 'query_health_indicators' && args.aggregate === 'latest'
+for (const how of ['http500', 'rpc', 'isError', 'refuse', 'text']) {
+  const flaky = await startFlakyMirobody({ fail: (name, args) => latestCall(name, args) ? how : null })
+  try {
+    mod.invalidateRecords()
+    const snap = await mod.loadRecords(configOf(flaky.url), scratch, '/nonexistent/plugin')
+    assert.equal(snap.record_status, 'partial', `${how}: a failed latest batch is a partial read, not ok`)
+    assert.equal(mod.recordReadable(snap), true)
+    assert.match(snap.read_errors[0], /21 项指标的最新值读取失败/, how)
+    assert.equal(snap.missing_reads.length, 21, `${how}: every name of the batch is listed as not read`)
+    assert.ok(snap.missing_reads.includes('Albumin-ALB'))
+    assert.equal(snap.indicators.find((row) => row.name === 'Albumin-ALB').value, '', 'the row stays, without a value')
+    assert.ok(snap.record_error, 'record_error carries the reads that failed')
+    assert.equal(snap.medications.length, 2, 'the medication plan is still read')
+  } finally {
+    await flaky.close()
+  }
+}
+{
+  // the medication plan failing is partial too; a catalogue that fails is an error; an isError catalogue is not an empty record
+  const meds = await startFlakyMirobody({ fail: (name) => name === 'query_medications' ? 'rpc' : null })
+  const deadCatalogue = await startFlakyMirobody({ fail: (name, args) => name === 'query_health_indicators' && !args.indicators ? 'isError' : null })
+  try {
+    mod.invalidateRecords()
+    const snap = await mod.loadRecords(configOf(meds.url), scratch, '/nonexistent/plugin')
+    assert.equal(snap.record_status, 'partial')
+    assert.match(snap.read_errors.join(' '), /用药计划读取失败：database timeout/)
+    assert.equal(snap.indicators.find((row) => row.name === 'Albumin-ALB').value, '45.6', 'the indicators are read')
+    const dead = await mod.loadRecords(configOf(deadCatalogue.url), scratch, '/nonexistent/plugin')
+    assert.equal(dead.record_status, 'error')
+    assert.match(dead.record_error, /database timeout/)
+  } finally {
+    await meds.close()
+    await deadCatalogue.close()
+  }
+}
+{
+  // a catalogue Mirobody cut (it cannot page) is read as far as it goes and said so
+  const cut = await startFlakyMirobody({ fail: (name, args) => name === 'query_health_indicators' && !args.indicators ? { cut: true, total: 260 } : null })
+  try {
+    mod.invalidateRecords()
+    const snap = await mod.loadRecords(configOf(cut.url), scratch, '/nonexistent/plugin')
+    assert.equal(snap.record_status, 'partial')
+    assert.equal(snap.catalog_truncated, true)
+    assert.match(snap.read_errors[0], /指标目录被截断：Mirobody 只返回了 21 项（共 260 项）/)
+    assert.equal(snap.indicators.find((row) => row.name === 'Albumin-ALB').value, '45.6', 'what was listed is still filled')
+    // a failed read is kept only briefly, and the same address with another token is another account
+    const calls = cut.calls.length
+    await mod.loadRecords(configOf(cut.url), scratch, '/nonexistent/plugin')
+    assert.equal(cut.calls.length, calls, 'within one turn the partial read is not repeated')
+    await mod.loadRecords(configOf(cut.url, 'another-account'), scratch, '/nonexistent/plugin')
+    assert.ok(cut.calls.length > calls, 'another token is never answered from the first account\'s cache')
+    assert.equal(cut.calls.at(-1).token, 'Bearer another-account')
+    assert.notEqual(mod.tokenKey({ mcpToken: 'a' }), mod.tokenKey({ mcpToken: 'b' }))
+    assert.equal(mod.tokenKey({ mcpToken: 'secret-token' }).includes('secret'), false, 'the key never holds the token')
+  } finally {
+    await cut.close()
+  }
+}
+{
+  // series: a failed batch names its series and does not stop the others; a cut table names its series as cut
+  const names = record.observations.map((row) => row.indicator).filter((name, i, all) => all.indexOf(name) === i)
+  assert.ok(names.length > 12, 'more than one batch')
+  const withCrp = (args) => (args.indicators ?? []).includes('hs-CRP')
+  for (const how of ['http500', 'isError', 'refuse', 'text']) {
+    const flaky = await startFlakyMirobody({ fail: (name, args) => args.aggregate === 'none' && withCrp(args) ? how : null })
+    try {
+      mod.invalidateRecords()
+      const read = await mod.loadSeries(configOf(flaky.url), names, { start: '2025-01-01', end: '2026-09-24', resolution: 'raw' })
+      assert.ok(read.failed.includes('hs-CRP'), how)
+      assert.ok(read.error, how)
+      assert.equal(read.series['hs-CRP'], undefined)
+      const other = names.find((name) => !read.failed.includes(name) && read.series[name])
+      assert.ok(other, `${how}: the other batch is still read`)
+    } finally {
+      await flaky.close()
+    }
+  }
+  const down = await startFlakyMirobody({ fail: (_name, args) => args.aggregate === 'none' ? 'http500' : null })
+  const cutSeries = await startFlakyMirobody({ fail: (_name, args) => args.aggregate === 'none' && withCrp(args) ? { cut: true } : null })
+  try {
+    mod.invalidateRecords()
+    const failedAll = await mod.loadSeries(configOf(down.url), names, { start: '2025-01-01', end: '2026-09-24', resolution: 'raw' })
+    assert.deepEqual([...failedAll.failed].sort(), [...names].sort(), 'every series is unknown, none is empty')
+    const cutRead = await mod.loadSeries(configOf(cutSeries.url), names, { start: '2025-01-01', end: '2026-09-24', resolution: 'raw' })
+    assert.equal(cutRead.truncated, true)
+    assert.ok(cutRead.cut.includes('hs-CRP'))
+    assert.deepEqual(cutRead.failed, [])
+  } finally {
+    await down.close()
+    await cutSeries.close()
+  }
+}
+
+console.log('mirobody format: fake server matches Mirobody rendering; parser, record reads and failed reads pass')

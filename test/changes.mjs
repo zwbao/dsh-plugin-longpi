@@ -16,6 +16,7 @@ import { Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import * as mod from '../lib/index.js'
 import { loadRecord, startFakeMirobody } from './fake-mirobody.mjs'
+import { startFlakyMirobody } from './flaky-mirobody.mjs'
 
 const root = dirname(fileURLToPath(import.meta.url))
 const sibling = resolve(root, '..', '..', 'longevity-skills')
@@ -245,6 +246,25 @@ try {
   profileIn(brokenDir)
   assert.deepEqual((await mod.buildChanges(await contextOf(configFor(brokenDir, 'http://127.0.0.1:1/mcp')))).changes, [])
   assert.deepEqual((await mod.buildChanges(await contextOf(configFor(brokenDir)))).changes, [], 'nor does no record')
+  assert.deepEqual(built.unjudged, [], 'every series read whole: nothing left unjudged')
+
+  // 3c: a marker whose readings fail to read, or come back cut, is not judged, and says so (never "no change")
+  const syntheticRecord = { tz: 'Asia/Shanghai', today: TODAY, observations, medications: { plans: [], log: [], history: [] } }
+  const withMcv = (args) => args.aggregate === 'none' && (args.indicators ?? []).includes(MCV)
+  for (const [how, reason] of [['http500', /历次结果读取失败/], ['isError', /历次结果读取失败：query failed: database timeout/], [{ cut: true }, /读取时被截断/]]) {
+    const flaky = await startFlakyMirobody({ record: syntheticRecord, fail: (_name, args) => withMcv(args) ? how : null })
+    servers.push(flaky)
+    const read = await mod.buildChanges(await contextOf(configFor(synthDir, flaky.url)))
+    const unjudged = read.unjudged.find((row) => row.label_zh === markerOf('mcv').label_zh)
+    assert.ok(unjudged, `${JSON.stringify(how)}: MCV is listed as not judged`)
+    assert.match(unjudged.reason_zh, reason)
+    assert.equal(read.changes.some((row) => row.key === 'mcv'), false, 'and never judged from what was left')
+    assert.ok(read.changes.length + read.unjudged.length >= 3, 'the markers read whole are still judged')
+    if (how === 'http500') {
+      const flakyJourney = await mod.buildJourney({ ...(await contextOf(configFor(synthDir, flaky.url))), mount: MOUNT })
+      assert.ok(flakyJourney.changes_unjudged.some((row) => row.label_zh === markerOf('mcv').label_zh), 'journey.changes_unjudged carries it')
+    }
+  }
 
   // --- 2. the journey and phenotypic age --------------------------------------------
   const plain = await serve(loadRecord())
@@ -268,7 +288,7 @@ try {
   assert.equal(journey.changes[0].ask_doctor, true)
   assert.equal(journey.changes[0].points.length, 4)
   assert.equal(journey.results.bioage.status, 'ok')
-  assert.equal(journey.results.bioage.caveat_zh, '表型年龄用到的平均红细胞体积近期变化明显，原因可能与衰老无关，这次的身体年龄请谨慎看待。')
+  assert.equal(journey.results.bioage.caveat_zh, '身体年龄用到的平均红细胞体积近期变化明显，原因可能与衰老无关，这次的结果请谨慎看待。')
   assert.deepEqual(step.tracking.changes, journey.changes, 'the tracking carries the same rows')
 
   // HbA1c rising beyond its band is one to show a doctor, but not a PhenoAge input
@@ -307,6 +327,7 @@ try {
   assert.match(prompt, /ask_doctor true, say so early and plainly/)
   assert.match(prompt, /Never suggest a supplement \(iron included\), a drug or a dose/)
   const situation = await host.tools.get('read_personal_situation').execute({})
+  assert.ok(situation.records_summary.checkups > 0, 'the chat card says how many checkups were read')
   assert.equal(situation.record_changes[0].key, 'mcv')
   assert.equal(situation.record_changes[0].n_points, 4)
   assert.equal('points' in situation.record_changes[0], false, 'the model gets the rows without their points')
@@ -341,6 +362,7 @@ function fakeHost() {
     skills: { register: () => () => {} },
     systemPrompt: { section: (section) => { prompts.push(section) } },
     webServer: { register: (route) => { routes.set(route.path, route.handler); return () => {} } },
+    connection: { requestRejection: () => undefined },
     commands: { register: (command) => { commands.set(command.name, command) } },
     inject: (_names, callback) => callback(ctx),
     on: () => () => {},
@@ -359,6 +381,7 @@ function call(host, method, url, body) {
   const req = Readable.from(body === undefined ? [] : [Buffer.from(JSON.stringify(body))])
   req.method = method
   req.url = url
+  req.headers = { host: '127.0.0.1', 'content-type': 'application/json' }
   return new Promise((resolveCall) => {
     const headers = {}
     const res = {

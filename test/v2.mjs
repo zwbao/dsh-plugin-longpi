@@ -143,4 +143,93 @@ try {
   rmSync(home, { recursive: true, force: true })
 }
 
+// --- 5.1 local boundary: a short environment for scripts, receipts without report text, 0600 config backups ---
+{
+  const { chmodSync, existsSync, mkdirSync, readdirSync, realpathSync, statSync } = await import('node:fs')
+  const { spawnSync } = await import('node:child_process')
+  const probeHome = mkdtempSync(join(tmpdir(), 'longpi-v2-probe-'))
+  const probeData = mkdtempSync(join(tmpdir(), 'longpi-v2-probe-data-'))
+  process.env.LONGPI_TEST_SECRET_TOKEN = 'must-not-leak'
+  try {
+    mkdirSync(join(probeHome, 'skills', 'env-probe', 'scripts'), { recursive: true })
+    writeFileSync(join(probeHome, 'skills', 'env-probe', 'SKILL.md'), '---\nname: env-probe\ndescription: Prints its environment.\n---\n# env-probe\n')
+    writeFileSync(join(probeHome, 'skills', 'env-probe', 'scripts', 'probe.py'), [
+      'import json, os, sys, tempfile',
+      "out = sys.argv[sys.argv.index('--out') + 1]",
+      "open(os.path.join(out, 'report.md'), 'w').write('探针报告\\n实足年龄 50 岁\\n边界：不是诊断\\n')",
+      "print(json.dumps({'env': sorted(os.environ), 'HOME': os.environ.get('HOME'), 'TMPDIR': os.environ.get('TMPDIR'), 'cwd': os.getcwd(), 'tmp': tempfile.gettempdir(), 'nousersite': os.environ.get('PYTHONNOUSERSITE')}))",
+    ].join('\n'))
+    writeFileSync(join(probeHome, 'catalog.json'), JSON.stringify({
+      schema: 'longevity-catalog/1', version: '2026.39.0', intents: [],
+      skills: [{ name: 'env-probe', kind: 'tool', tier: 'tool', species: ['human'], evidence: 'method', domains: ['工具与证据库'], blurb_zh: '探针。', description: 'Probe.', intents: [], has_script: true, entry: { script: 'scripts/probe.py', out_flag: '--out' } }],
+    }))
+    const probed = await mod.runSkill({ home: probeHome, dataDir: probeData, name: 'env-probe', args: [], files: [], python: 'python3', timeoutMs: 15000, revision: 'fixture' })
+    assert.equal(probed.ok, true, JSON.stringify(probed))
+    const seen = JSON.parse(probed.stdout_tail.trim().split('\n').at(-1))
+    assert.equal(realpathSync(seen.HOME), realpathSync(seen.cwd), 'HOME is the run directory')
+    assert.equal(realpathSync(seen.TMPDIR), realpathSync(join(seen.cwd, 'tmp')), 'TMPDIR is the run directory\'s tmp/')
+    assert.equal(realpathSync(seen.tmp), realpathSync(join(seen.cwd, 'tmp')))
+    assert.equal(seen.nousersite, '1')
+    assert.equal(seen.env.includes('LONGPI_TEST_SECRET_TOKEN'), false, 'nothing else of the harness environment')
+    for (const name of ['PATH', 'LANG', 'HOME', 'TMPDIR', 'PYTHONNOUSERSITE']) assert.ok(seen.env.includes(name), name)
+    assert.deepEqual(Object.keys(mod.skillEnv('/run/x')).sort(), ['HOME', 'LANG', 'PATH', 'PYTHONDONTWRITEBYTECODE', 'PYTHONNOUSERSITE', 'TMPDIR', ...(process.env.LC_ALL ? ['LC_ALL'] : [])].sort())
+    const bridge = mod.bridgeEnv('/opt/mirobody')
+    assert.equal(bridge.MIROBODY_HOME, '/opt/mirobody')
+    assert.equal(bridge.LONGPI_TEST_SECRET_TOKEN, undefined, 'the terminology bridge gets a short list too')
+    assert.equal(bridge.HOME, process.env.HOME, 'the bridge keeps the real home')
+    // The mounted Mirobody plugin runs the same script for every tool call: the same short list, so the status agrees
+    const vendored = await import(new URL('../vendor/dsh-plugin-mirobody/lib/index.js', import.meta.url).href)
+    const tools = vendored.bridgeEnv('/opt/mirobody')
+    assert.equal(tools.LONGPI_TEST_SECRET_TOKEN, undefined, 'the terminology tools get a short list too')
+    assert.deepEqual(Object.keys(bridge).sort(), Object.keys(tools).sort())
+
+    // 10a: receipts keep no report text; the board shows five fields only, even for an older receipt with an excerpt
+    assert.match(probed.report_excerpt, /边界/, 'the excerpt still goes to the model in the tool result')
+    const lines = readFileSync(join(probeData, 'receipts.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line))
+    assert.ok(lines.length >= 1 && lines.every((row) => !('excerpt' in row)), 'no excerpt stored')
+    const { appendFileSync } = await import('node:fs')
+    appendFileSync(join(probeData, 'receipts.jsonl'), `${JSON.stringify({ at: '2026-09-01T00:00:00Z', skill: 'old', revision: 'r', exit_code: 0, ok: true, excerpt: '表型年龄 37.82 岁' })}\n`)
+    const records = {
+      profile: mod.readProfile(probeData), estimated_age: null, engine: { ok: false }, mcp: { configured: false, host: '', token_set: false },
+      indicators: [], medications: [], record_status: 'unconfigured', record_error: '', read_errors: [], missing_reads: [], catalog_truncated: false,
+    }
+    const board = mod.buildBoard({ catalog: mod.loadCatalog(probeHome), records, mount: { mounted: false, peer: false, error: '', pluginHome: '' }, receipts: mod.readReceipts(probeData, 5), limit: 4, outputs: {} })
+    assert.ok(board.receipts.length >= 2)
+    for (const row of board.receipts) assert.deepEqual(Object.keys(row).sort(), ['at', 'error_kind', 'exit_code', 'ok', 'skill'])
+    assert.equal(JSON.stringify(board.receipts).includes('37.82'), false)
+
+    // 10b: the installer's config writer keeps its backups 0600 and only the newest three of its own
+    const installer = readFileSync(join(root, '..', 'install.sh'), 'utf8')
+    const writer = installer.slice(installer.indexOf("WRITE_CONFIG='") + "WRITE_CONFIG='".length, installer.indexOf("'\n\nmain \"$@\""))
+    const profileDir = mkdtempSync(join(tmpdir(), 'longpi-v2-install-'))
+    try {
+      const patch = join(profileDir, 'cordis.patch.yml')
+      writeFileSync(patch, '- id: other-plugin\n  config: {}\n', { mode: 0o600 })
+      for (let i = 1; i <= 5; i += 1) writeFileSync(`${patch}.bak-2026010100000${i}`, 'old\n', { mode: 0o644 })
+      writeFileSync(`${patch}.bak-manual`, 'mine\n', { mode: 0o644 })
+      writeFileSync(`${patch}.bak-2026010100000`, 'thirteen digits\n', { mode: 0o644 })
+      const script = join(profileDir, 'write_config.py')
+      writeFileSync(script, writer)
+      const ran = spawnSync('python3', [script, patch, '/skills', '/venv/bin/python', '1', 'https://example.test/mcp/secret-path', 'tok-123'], { encoding: 'utf8', timeout: 20000 })
+      assert.equal(ran.status, 0, ran.stderr)
+      assert.match(ran.stdout, /^backups=3 3$/m, ran.stdout)
+      assert.match(ran.stdout, /^mcp=configured https:\/\/example\.test\/mcp\/…$/m)
+      const own = readdirSync(profileDir).filter((name) => /^cordis\.patch\.yml\.bak-\d{14}$/.test(name)).sort()
+      assert.equal(own.length, 3)
+      assert.ok(own.at(-1) > 'cordis.patch.yml.bak-20260101000005', 'the new backup is kept')
+      for (const name of own) assert.equal(statSync(join(profileDir, name)).mode & 0o777, 0o600, name)
+      assert.equal(statSync(patch).mode & 0o777, 0o600)
+      assert.ok(existsSync(`${patch}.bak-manual`) && existsSync(`${patch}.bak-2026010100000`), 'files not named by the installer are never removed')
+      assert.match(installer, /配置备份/, 'the summary says so')
+      chmodSync(patch, 0o600)
+    } finally {
+      rmSync(profileDir, { recursive: true, force: true })
+    }
+  } finally {
+    delete process.env.LONGPI_TEST_SECRET_TOKEN
+    rmSync(probeHome, { recursive: true, force: true })
+    rmSync(probeData, { recursive: true, force: true })
+  }
+}
+
 console.log('v2 ok')

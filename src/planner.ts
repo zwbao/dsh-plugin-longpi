@@ -7,13 +7,14 @@
 // is the latest value plus a trial average, labelled as such. Nothing here is
 // saved: the person tailors the draft in chat or accepts it on the page.
 
+import { hasDose, stripDoses } from './dose.ts'
 import { buildTracking, type ModelCard, type TrackingContext } from './tracking.ts'
 import { CATEGORY_ZH, currentPlan, type Category } from './interventions.ts'
 import type { MountState } from './mirobody.ts'
 import { preferSelf } from './measurements.ts'
-import { FOCUS_ZH, type Focus } from './profile.ts'
+import { FOCUS, FOCUS_ZH, type Focus } from './profile.ts'
 import { sameMeasure } from './records.ts'
-import { checkupMarkerFor, loadReference, markerFor, type Biovar, type BiovarMarker, type EffectRow } from './reference.ts'
+import { checkupMarkerFor, loadReference, markerFor, markerGroupKeys, type Biovar, type BiovarMarker, type EffectRow } from './reference.ts'
 import { SELF_SPEC } from './selfmeasure.ts'
 import { currentMedications, GLUCOSE_LOWERING, type IndicatorRow, type MedicationRow } from './situation.ts'
 import { foldName, parseNumber } from './units.ts'
@@ -101,8 +102,8 @@ const DETAIL_MAX = 300
 const PRIORITY_MAX = 8
 const LEVERS_PER_MODEL = 3
 const WHY: Record<Priority['source'], string> = {
-  phenoage_levers: '对你的表型年龄影响最大的指标之一（模型估计）',
-  china_par_levers: 'China-PAR 风险的主要来源之一（模型估计）',
+  phenoage_levers: '对你的身体年龄影响最大的指标之一（模型估计）',
+  china_par_levers: '10 年心血管风险的主要来源之一（模型估计）',
   focus: '',
 }
 /** Markers each focus points at; bioage takes PhenoAge's own top levers instead, sleep and plan none. */
@@ -123,6 +124,16 @@ export interface BriefOptions {
   focus?: readonly Focus[]
   /** Markers the person asked to improve, by name or key; they come first. */
   markers?: readonly string[]
+}
+
+/**
+ * A draft's focus and markers as the tool and the accept route both read them: unknown focus values are
+ * dropped (none left, the saved focus), markers trimmed, at most 8 of 40 characters or fewer.
+ */
+export function briefOptionsOf(focus: unknown, markers: unknown): BriefOptions {
+  const kept = (Array.isArray(focus) ? focus : []).filter((item): item is Focus => (FOCUS as readonly string[]).includes(String(item)))
+  const asked = (Array.isArray(markers) ? markers : []).map((item) => String(item).trim()).filter((item) => item && item.length <= 40).slice(0, 8)
+  return { ...(kept.length > 0 ? { focus: kept } : {}), markers: asked }
 }
 
 export async function buildPlanBrief(context: TrackingContext & { mount?: MountState }, options: BriefOptions = {}): Promise<PlanBrief> {
@@ -202,9 +213,11 @@ function prioritiesOf(input: {
   const pheno = topKeys('phenoage')
   const par = topKeys('china-par')
   for (const name of input.asked) {
+    // A word for several markers (血压) asks for each of them.
     const key = keyOf(name, input.biovar)
-    if (key) add(key, 'focus', '你指定要改善的指标')
-    else input.notes.push(`「${name}」没有对应的研究证据指标，这份草稿没有针对它。`)
+    const keys = key ? [key] : markerGroupKeys(input.biovar, name)
+    for (const one of keys) add(one, 'focus', '你指定要改善的指标')
+    if (keys.length === 0) input.notes.push(`「${name}」没有对应的研究证据指标，这份草稿没有针对它。`)
   }
   for (const item of input.focus) {
     const cares = `你最关心${FOCUS_ZH[item]}`
@@ -439,13 +452,23 @@ function targetFor(row: Candidate, brief: PlanBrief): DraftItem['target'] {
   return null
 }
 
+/**
+ * A research note without the parts that name an amount (6 g 盐, 2 粒): a saved plan keeps no amount in any
+ * item (interventions.ts), so the draft shows none either, and what is saved is what was shown.
+ */
+function noteWithoutAmounts(note: string): string {
+  const kept = note.replace(/[。.]\s*$/, '').split(/[；;]/).map((part) => part.trim()).filter((part) => part && !hasDose(part))
+  return kept.length > 0 ? `${kept.join('；')}。` : ''
+}
+
 function detailFor(group: Group, primary: Candidate): string {
   const evidence = `证据：${primary.expected_zh}，DOI ${primary.doi}。个人效果因人而异。`
   if (group.category === 'supplement') return clipText(`${SUPPLEMENT_DETAIL}${evidence}`, DETAIL_MAX)
   const examples = primary.examples_zh.length > 0 ? `，形式可选${primary.examples_zh.join('、')}` : ''
   const behavior = `${CATEGORY_ZH[group.category as Category]}：${primary.intervention_zh}${examples}。`
   const room = DETAIL_MAX - [...behavior].length - [...evidence].length
-  const note = primary.note_zh && room > 12 ? clipText(`研究备注：${primary.note_zh}`, room) : ''
+  const research = noteWithoutAmounts(primary.note_zh ?? '')
+  const note = research && room > 12 ? clipText(`研究备注：${research}`, room) : ''
   return clipText(`${behavior}${note}${evidence}`, DETAIL_MAX)
 }
 
@@ -578,7 +601,8 @@ export function acceptedPlan(brief: PlanBrief, posted: unknown, today: string): 
   if (problems.length > 0) return { ok: false, error: problems[0] as string, problems }
   const wanted = new Set((Array.isArray(draft.goals) ? draft.goals : []).map((goal) => (goal && typeof goal === 'object' ? String((goal as Record<string, unknown>).marker ?? '') : '')))
   const goals = goalsFor(brief, kept).filter((goal) => wanted.has(goal.marker))
-  const title = typeof draft.title === 'string' && draft.title.trim() ? draft.title.trim().slice(0, 60) : `改善方案（${today}）`
+  // The posted title goes through the same dose stripping as any plan; nothing left, the server's own title.
+  const title = stripDoses(typeof draft.title === 'string' ? draft.title.trim().slice(0, 60) : '').text || `改善方案（${today}）`
   return {
     ok: true,
     plan: {

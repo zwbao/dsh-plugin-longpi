@@ -1,10 +1,9 @@
-// Record changes beyond normal fluctuation (spec A.2), the card right under the
-// journey card. Each row is one checkup marker whose latest value moved further
-// than its reference change value (RCV) from the biological-variation table.
-// The server decides which rows qualify and writes every sentence; the card
-// only lays them out with the trend, the band that was used and the source.
-// No model estimate is involved, so there is no 模型估计 tag, and nothing here
-// names a cause.
+// Record changes beyond normal fluctuation: each row is one checkup marker
+// whose latest value moved further than its reference change value (RCV) from
+// the biological-variation table. The server decides which rows qualify and
+// writes every sentence; the card lays them out with the trend, and the band,
+// caveats and sources wait behind 判断依据. No model estimate is involved, so
+// there is no 模型估计 tag, and nothing here names a cause.
 
 import React from 'react'
 import { LineChart } from './charts.ts'
@@ -29,7 +28,7 @@ function Spark(props: { row: RecordChange }): React.ReactElement | null {
 const SUPERSCRIPT: Record<string, string> = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' }
 
 /** Count units as labs print them: 10^12/L → ×10¹²/L. */
-function prettyUnits(text: string): string {
+export function prettyUnits(text: string): string {
   return text.replace(/(×)?10\^(\d+)\/L/g, (_, _times: string | undefined, power: string) => `×10${[...power].map((digit) => SUPERSCRIPT[digit] ?? digit).join('')}/L`)
 }
 
@@ -41,15 +40,6 @@ function withoutLabel(row: RecordChange): string {
 
 function toneOf(row: RecordChange): 'warn' | 'good' | 'neutral' {
   return row.ask_doctor ? 'warn' : row.verdict === 'better' ? 'good' : 'neutral'
-}
-
-function ChangeRow(props: { row: RecordChange }): React.ReactElement {
-  const { row } = props
-  return h('li', { className: 'lp-change' },
-    h('div', { className: 'lp-change-main' },
-      h('div', { className: 'lp-strong' }, row.label_zh),
-      h('p', { className: 'lp-change-text' }, withoutLabel(row))),
-    h(Spark, { row }))
 }
 
 /** Rows that share one piece of advice, under that advice said once. */
@@ -95,20 +85,50 @@ function mergedCaveats(rows: readonly RecordChange[]): string[] {
     members.length > 1 && members.every((member) => member.head) ? `${members.map((member) => member.head).join('、')} ${rest}` : (members[0] as { text: string }).text)
 }
 
-export function ChangesCard(props: { journey: Journey }): React.ReactElement | null {
-  const rows = props.journey.changes
-  if (rows.length === 0) return null
+/** Rows shown on 概览; the rest are one tap away on 指标. */
+const NOTABLE = 3
+
+const VERDICT_ZH: Record<RecordChange['verdict'], string> = { better: '变好', worse: '变差', unclear: '需结合参考范围' }
+
+export function ChangeChip(props: { verdict: RecordChange['verdict']; askDoctor?: boolean }): React.ReactElement {
+  const tone = props.verdict === 'better' && !props.askDoctor ? 'good' : props.verdict === 'worse' || props.askDoctor ? 'warn' : 'neutral'
+  return h('span', { className: `lp-chip-c lp-chip-c-${tone}` },
+    h(Icon, { name: tone === 'good' ? 'check' : tone === 'warn' ? 'warn' : 'info', size: 12 }), VERDICT_ZH[props.verdict])
+}
+
+function decimals(value: number): number {
+  return (String(value).split('.')[1] ?? '').length
+}
+
+/** Both ends with the same decimals, as a lab prints them: 4.2 → 3.0, not 4.2 → 3. */
+export function pairText(from: number, to: number): string {
+  const digits = Math.min(2, Math.max(decimals(from), decimals(to)))
+  return `${from.toFixed(digits)} → ${to.toFixed(digits)}`
+}
+
+function NotableRow(props: { row: RecordChange }): React.ReactElement {
+  const { row } = props
+  return h('li', { className: 'lp-notable-row' },
+    h(ChangeChip, { verdict: row.verdict, askDoctor: row.ask_doctor }),
+    h('span', { className: 'lp-strong' }, row.label_zh),
+    h('span', { className: 'lp-num lp-notable-values' }, `${pairText(row.compare.from, row.compare.to)} ${prettyUnits(row.unit)}`.trim()),
+    h(Spark, { row }))
+}
+
+/** How a change is judged, the caveats and the sources: behind 判断依据, never in the way. */
+export function Basis(props: { journey: Journey; rows: readonly RecordChange[] }): React.ReactElement | null {
+  const { rows } = props
+  const unjudged = props.journey.changes_unjudged
+  if (rows.length === 0 && unjudged.length === 0) return null
   const caveats = mergedCaveats(rows)
   const sources = distinct(rows.map((row) => ({ ...row.source, verified: row.verified })), (source) => source.url || source.title)
-  return h('section', { className: 'lp-card lp-changes', id: 'lp-changes', 'aria-labelledby': 'lp-changes-title' },
-    h('div', { className: 'lp-label', id: 'lp-changes-title' }, '记录里的明显变化', h('span', { className: 'lp-optional' }, `${rows.length} 项`)),
-    ...groupsOf(rows).map((group) => h('div', { key: `${group.tone}:${group.advice}`, className: 'lp-change-group' },
-      group.advice ? h('p', { className: `lp-change-advice lp-change-${group.tone}` },
-        h(Icon, { name: group.tone === 'warn' ? 'warn' : group.tone === 'good' ? 'check' : 'info', size: 14 }), h('span', null, group.advice)) : null,
-      h('ul', { className: 'lp-change-list' }, ...group.rows.map((row) => h(ChangeRow, { key: row.key, row }))))),
+  return h('details', { className: 'lp-basis' },
+    h('summary', null, '判断依据'),
     h('div', { className: 'lp-change-notes' },
-      h('p', { className: 'lp-caption' }, '趋势图里的浅色带：以比较起点那次结果为基线的正常波动范围，落在带外就是真实变化。'),
+      h('p', { className: 'lp-caption' }, '“超出正常波动”指两次结果之差大于个体正常波动（参考变化值，RCV）。趋势图里的浅色带以比较起点那次结果为基线，落在带外就是真实变化。'),
+      ...rows.map((row) => h('p', { key: `text:${row.key}`, className: 'lp-caption' }, h('span', { className: 'lp-strong' }, row.label_zh), `：${withoutLabel(row)}`)),
       ...caveats.map((text) => h('p', { key: `caveat:${text}`, className: 'lp-caption' }, text)),
+      unjudged.length > 0 ? h('p', { className: 'lp-caption' }, `没有判断：${unjudged.map((row) => `${row.label_zh}（${row.reason_zh || '读取没有完成'}）`).join('、')}`) : null,
       sources.length > 0 ? h('p', { className: 'lp-caption lp-change-source' },
         '波动数据来源：',
         ...sources.flatMap((source, index) => [
@@ -117,4 +137,26 @@ export function ChangesCard(props: { journey: Journey }): React.ReactElement | n
           source.verified ? null : '（引用尚未逐字核对）',
         ])) : null,
       props.journey.changes_note_zh ? h('p', { className: 'lp-fine' }, props.journey.changes_note_zh) : null))
+}
+
+/**
+ * 值得注意的变化 on 概览: at most three rows (a doctor's first), the advice
+ * said once per group, and a link to 指标 for the rest. The server decides
+ * which rows qualify and writes every sentence; nothing here names a cause.
+ */
+export function NotableChanges(props: { journey: Journey; onOpenIndicators: () => void }): React.ReactElement | null {
+  const rows = props.journey.changes
+  if (rows.length === 0 && props.journey.changes_unjudged.length === 0) return null
+  const shown = rows.slice(0, NOTABLE)
+  const advice = groupsOf(shown).filter((group) => group.advice && group.tone === 'warn')
+  return h('section', { className: 'lp-card lp-notable', id: 'lp-changes', 'aria-labelledby': 'lp-changes-title' },
+    h('div', { className: 'lp-card-head' },
+      h('div', { className: 'lp-label', id: 'lp-changes-title' }, '值得注意的变化', rows.length > 0 ? h('span', { className: 'lp-optional' }, `${rows.length} 项超出正常波动`) : null),
+      h('button', { type: 'button', className: 'lp-row-link', onClick: props.onOpenIndicators }, '在“指标”里看全部 →')),
+    ...advice.map((group) => h('p', { key: group.advice, className: 'lp-change-advice lp-change-warn' },
+      h(Icon, { name: 'warn', size: 14 }), h('span', null, group.advice))),
+    shown.length > 0
+      ? h('ul', { className: 'lp-notable-list' }, ...shown.map((row) => h(NotableRow, { key: row.key, row })))
+      : h('p', { className: 'lp-muted' }, '没有超出正常波动的变化。'),
+    h(Basis, { journey: props.journey, rows }))
 }

@@ -69,6 +69,25 @@ export interface RecordChange {
   verified: boolean
 }
 
+/** A1 §J: what the record holds, for onboarding step 3. Older servers leave it out: null. */
+export interface RecordsSummary {
+  checkups: number
+  first_date: string | null
+  last_date: string | null
+  categories_zh: string[]
+  wearable_days: number
+}
+
+/**
+ * The record's read state. partial (A2 §R): some reads failed; read_errors says
+ * which and missing_reads names the indicators not read, so a missing value is
+ * never shown as "not measured".
+ */
+export type RecordStatus = 'unconfigured' | 'ok' | 'partial' | 'error'
+
+/** A check-in for one day: true done, false an explicit miss (没做到), null no record yet. */
+export type CheckState = boolean | null
+
 export interface Journey {
   version: string
   today: string
@@ -84,7 +103,17 @@ export interface Journey {
     questions: JourneyQuestion[]
   }
   focus_options: Array<{ key: Focus; label_zh: string }>
-  records: { status: 'unconfigured' | 'ok' | 'error'; error: string; indicator_count: number; full_checkups: number; latest_checkup: string | null; mirobody_mounted: boolean }
+  records: {
+    status: RecordStatus
+    error: string
+    indicator_count: number
+    full_checkups: number
+    latest_checkup: string | null
+    mirobody_mounted: boolean
+    read_errors: string[]
+    missing_reads: string[]
+    summary: RecordsSummary | null
+  }
   results: {
     /** caveat_zh (round 4): set when a PhenoAge input changed beyond its normal fluctuation and a doctor should look first. */
     bioage: { status: 'ok' | 'blocked'; phenoage: number | null; advance: number | null; date: string | null; checkups: number; band_years: number | null; blocker_zh: string; missing: string[]; caveat_zh?: string }
@@ -99,7 +128,7 @@ export interface Journey {
     items: number
     started: string | null
     days: number | null
-    checkin_items: Array<{ id: string; title: string; done_today: boolean }>
+    checkin_items: Array<{ id: string; title: string; done_today: CheckState }>
     streak: number
     adherence_pct: number | null
   }
@@ -114,6 +143,65 @@ export interface Journey {
   changes: RecordChange[]
   /** How a change is judged (RCV, source, limits); shown under the changes card. */
   changes_note_zh: string
+  /** A2 §R 3c: markers not judged because their series read failed or was cut short. */
+  changes_unjudged: Array<{ label_zh: string; reason_zh: string }>
+}
+
+// --- connection (A1 §C: GET/POST/DELETE /api/longpi/connection) ---------------------------------
+
+export interface Connection {
+  source: 'saved' | 'config' | 'none'
+  url_masked: string
+  token_set: boolean
+  status: 'ok' | 'error' | 'none'
+  error: string
+  summary: RecordsSummary | null
+}
+
+/** POST answers: the same shape plus ok; a failure carries a Chinese error and saved nothing. */
+export interface ConnectionResult {
+  ok: boolean
+  error: string
+  connection: Connection | null
+}
+
+// --- indicators (A1 §I: GET /api/longpi/indicators) -------------------------------------------
+
+export type GroupKey = 'lipids' | 'glucose' | 'inflammation' | 'blood' | 'liver' | 'kidney' | 'thyroid' | 'body' | 'wearable' | 'other'
+export type IndicatorSource = 'checkup' | 'device' | 'self'
+export type Judged = 'changed' | 'within' | 'unjudged'
+
+export interface IndicatorChange {
+  verdict: 'better' | 'worse' | 'unclear'
+  ask_doctor: boolean
+  pct: number
+  band_pct: { up: number; down: number }
+  text_zh: string
+}
+
+export interface IndicatorRow {
+  id: string
+  label_zh: string
+  unit: string
+  source: IndicatorSource
+  latest: { date: string; value: number | null; text?: string } | null
+  points: Array<{ date: string; value: number }>
+  change: IndicatorChange | null
+  judged: Judged
+  plan_marker: boolean
+  read_error?: string
+}
+
+export interface IndicatorsResponse {
+  record: { status: 'ok' | 'partial' | 'error' | 'none'; error: string }
+  updated_at: string
+  groups: Array<{ key: GroupKey; label_zh: string; indicators: IndicatorRow[] }>
+}
+
+export interface IndicatorDetail {
+  row: IndicatorRow
+  all_points: Array<{ date: string; value: number | null; text?: string; file?: string; unit: string }>
+  biovar: { cvi_pct: number; band_pct: { up: number; down: number }; source: { title: string; url: string; doi?: string }; caveat_zh?: string } | null
 }
 
 // --- plan draft (GET /api/longpi/plan-draft) ----------------------------------------------
@@ -250,7 +338,7 @@ export interface SelfRow {
 
 // --- board -------------------------------------------------------------------------------
 
-export interface IndicatorRow { name?: string; value?: string; unit?: string; label?: string; date?: string; source?: 'self' }
+export interface BoardIndicator { name?: string; value?: string; unit?: string; label?: string; date?: string; source?: 'self' }
 export interface MedicationRow { name?: string; status?: string }
 export interface MatchHit { name: string; blurb?: string; why?: string[]; has_script?: boolean; runnable?: { status?: string; missing?: string[] } }
 export interface Readout { key: string; label_zh?: string; value?: number | string | null; unit?: string; at?: string; measured_at?: string; skill?: string }
@@ -269,7 +357,7 @@ export interface Board {
   estimated_age?: number | null
   skills?: { count?: number; personal?: number; version?: string; revision?: string; error?: string; domains?: Array<{ domain: string; count: number }> }
   mirobody?: { mounted?: boolean; error?: string; engine?: { ok?: boolean; version?: string; error?: string }; mcp?: { configured?: boolean; host?: string } }
-  records?: { status?: string; error?: string; indicator_count?: number; indicators?: IndicatorRow[]; medications?: MedicationRow[] }
+  records?: { status?: string; error?: string; indicator_count?: number; indicators?: BoardIndicator[]; medications?: MedicationRow[] }
   dispatch?: { matches?: MatchHit[]; note?: string }
   near?: MatchHit[]
   readouts?: Readout[]

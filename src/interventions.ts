@@ -7,6 +7,7 @@
 
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { stripDoses } from './dose.ts'
 import { foldName } from './units.ts'
 
 export const CATEGORIES = ['diet', 'exercise', 'sleep', 'supplement', 'drug', 'behavior', 'weight', 'other'] as const
@@ -59,18 +60,18 @@ export interface CheckIn {
   at: string
   date: string
   item: string
+  /** true done, false an explicit miss (没做到), null a note or tag alone, or an undo. */
   done: boolean | null
   amount: number | null
   unit: string
   note: string
   tags: string[]
   source: 'chat' | 'board'
+  /** Set on the row that takes back that day's check-in: the day is unknown again. */
+  undo?: true
 }
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/
-// Amounts of a medicine or supplement. The plan keeps the name; the dose lives in Mirobody.
-// A concentration (42.6 mg/dL, 1 g/L) is a lab or trial value, not an amount taken, and stays.
-const DOSE = /\d+(?:\.\d+)?\s*(?:mg|mcg|µg|μg|ug|iu|g|ml|毫克|微克|国际单位|单位|克|毫升|粒|片|颗|支|滴|袋|勺)(?!\s*\/\s*(?:d?l|ml)\b)|[一二两三四五六七八九十半]+\s*(?:粒|片|颗|支|滴|袋|勺)/gi
 
 function dir(dataDir: string): string {
   return join(dataDir, 'interventions')
@@ -109,6 +110,23 @@ export function readCheckIns(dataDir: string): CheckIn[] {
   return readLines<CheckIn>(join(dir(dataDir), 'adherence.jsonl'), (row) => typeof row.item === 'string' && DATE.test(row.date))
 }
 
+/**
+ * Whether each item was done on each day: the latest check-in that says done (true), not done (false) or
+ * takes the day back (undo) wins, in the order they were recorded. A day with no such row, or whose latest
+ * is an undo, is absent: unknown, never a miss. A note or tag alone says nothing about it.
+ */
+export function checkinStatus(rows: readonly CheckIn[]): Map<string, Map<string, boolean>> {
+  const out = new Map<string, Map<string, boolean>>()
+  for (const row of rows) {
+    if (typeof row.done !== 'boolean' && !row.undo) continue
+    const days = out.get(row.item) ?? new Map<string, boolean>()
+    if (typeof row.done === 'boolean') days.set(row.date, row.done)
+    else days.delete(row.date)
+    out.set(row.item, days)
+  }
+  return out
+}
+
 export function isoDay(at: Date = new Date()): string {
   const local = new Date(at.getTime() - at.getTimezoneOffset() * 60_000)
   return local.toISOString().slice(0, 10)
@@ -128,10 +146,7 @@ function text(value: unknown, max: number): string {
   return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, max) : ''
 }
 
-function stripDoses(value: string): { text: string; stripped: boolean } {
-  const cleaned = value.replace(DOSE, '').replace(/[，,]\s*(?=[，,]|$)/g, '').replace(/\s{2,}/g, ' ').trim()
-  return { text: cleaned, stripped: cleaned !== value.trim() }
-}
+const DOSE_NOT_SAVED = '方案只记做什么，不记剂量；药物和补剂的剂量与服用记录在 Mirobody 的用药计划里。'
 
 export interface NormalizeContext {
   today: string
@@ -162,12 +177,18 @@ export function normalizePlan(raw: unknown, context: NormalizeContext): Normaliz
   const items: PlanItem[] = []
   itemsIn.slice(0, 30).forEach((value, index) => {
     const row = (value && typeof value === 'object' ? value : {}) as Record<string, unknown>
-    let title = text(row.title, 60)
+    // A dose is never saved, whatever the category: the plan keeps what to do, Mirobody keeps doses.
+    const titleIn = text(row.title, 60)
+    const cleanedTitle = stripDoses(titleIn)
+    const cleanedDetail = stripDoses(text(row.detail, 300))
+    const title = cleanedTitle.text
     const where = title || `第 ${index + 1} 项`
-    if (!title) errors.push(`${where}没有名称。`)
+    if (!titleIn) errors.push(`${where}没有名称。`)
+    else if (!title) errors.push(`${where}：标题只有剂量，请写做什么。`)
+    if (cleanedTitle.stripped || cleanedDetail.stripped) warnings.push(`${where}的剂量没有保存：${DOSE_NOT_SAVED}`)
     const category = (CATEGORIES as readonly string[]).includes(String(row.category)) ? row.category as Category : 'other'
     if (category === 'other' && row.category && row.category !== 'other') warnings.push(`${where}的类别「${String(row.category)}」不认识，记为「其他」。`)
-    let detail = text(row.detail, 300)
+    const detail = cleanedDetail.text
     const start = text(row.start, 10)
     if (!DATE.test(start)) errors.push(`${where}缺少开始日期（YYYY-MM-DD）。判断效果要靠它找基线。`)
     const endText = text(row.end, 10)
@@ -176,20 +197,15 @@ export function normalizePlan(raw: unknown, context: NormalizeContext): Normaliz
     if (DATE.test(start) && start > addDays(context.today, 60)) warnings.push(`${where}的开始日期在两个月以后。`)
 
     let mirobody: PlanItem['mirobody'] = null
-    if (category === 'drug' || category === 'supplement') {
-      const cleanedTitle = stripDoses(title)
-      const cleanedDetail = stripDoses(detail)
-      if (cleanedTitle.stripped || cleanedDetail.stripped) {
-        warnings.push(`${where}的剂量没有保存：药物和补剂的剂量与服用记录在 Mirobody 的用药计划里。`)
-      }
-      title = cleanedTitle.text || title
-      detail = cleanedDetail.text
-      const name = text(row.medication, 60) || title
-      const folded = foldName(name)
-      const hit = context.medications.find((med) => {
+    if ((category === 'drug' || category === 'supplement') && title) {
+      const medication = stripDoses(text(row.medication, 60))
+      if (medication.stripped && !cleanedTitle.stripped && !cleanedDetail.stripped) warnings.push(`${where}的剂量没有保存：${DOSE_NOT_SAVED}`)
+      const name = medication.text || title
+      // Linked by the name as written first (a dose stripped out may have taken part of it), then as stored.
+      const hit = [...new Set([text(row.medication, 60) || titleIn, name])].map(foldName).map((folded) => context.medications.find((med) => {
         const other = foldName(med.name)
         return other && folded && (other.includes(folded) || folded.includes(other))
-      })
+      })).find(Boolean)
       if (hit) mirobody = { medication: hit.name, ...(hit.plan_id ? { plan_id: hit.plan_id } : {}) }
       else {
         mirobody = { medication: name }
@@ -230,8 +246,11 @@ export function normalizePlan(raw: unknown, context: NormalizeContext): Normaliz
   }
 
   const source = input.source === 'file' || input.source === 'board' ? input.source : 'chat'
+  const planTitle = stripDoses(text(input.title, 60))
+  const note = stripDoses(text(input.note, 500))
+  if (planTitle.stripped || note.stripped) warnings.push(`方案${planTitle.stripped ? '标题' : '备注'}里的剂量没有保存：${DOSE_NOT_SAVED}`)
   return {
-    plan: { schema: 'longpi-plan/1', title: text(input.title, 60) || '我的干预方案', source, note: text(input.note, 500), items, goals },
+    plan: { schema: 'longpi-plan/1', title: planTitle.text || '我的干预方案', source, note: note.text, items, goals },
     warnings,
     errors,
   }
@@ -275,18 +294,21 @@ export function addCheckIns(dataDir: string, entries: unknown[], context: { toda
       problems.push(`「${item.title}」的打卡日期 ${date} 在未来。`)
       continue
     }
-    const amount = Number.isFinite(Number(row.amount)) && row.amount !== null && row.amount !== '' ? Number(row.amount) : null
-    const tags = (Array.isArray(row.tags) ? row.tags : []).map((tag) => String(tag)).filter((tag) => (CHECKIN_TAGS as readonly string[]).includes(tag))
+    // done null, given as such, takes that day's check-in back; left out, a note or tag says nothing about it.
+    const undo = 'done' in row && row.done === null
+    const amount = !undo && Number.isFinite(Number(row.amount)) && row.amount !== null && row.amount !== '' ? Number(row.amount) : null
+    const tags = undo ? [] : (Array.isArray(row.tags) ? row.tags : []).map((tag) => String(tag)).filter((tag) => (CHECKIN_TAGS as readonly string[]).includes(tag))
     const checkIn: CheckIn = {
       at: new Date().toISOString(),
       date,
       item: item.id,
       done: typeof row.done === 'boolean' ? row.done : (amount != null ? true : null),
       amount,
-      unit: text(row.unit, 20),
-      note: text(row.note, 200),
+      unit: undo ? '' : text(row.unit, 20),
+      note: undo ? '' : text(row.note, 200),
       tags,
       source: context.source,
+      ...(undo ? { undo: true as const } : {}),
     }
     append(dataDir, 'adherence.jsonl', checkIn)
     saved.push(checkIn)

@@ -72,7 +72,7 @@ try {
     [{ volume: 3 }, /unknown field volume/],
     [{ webhook: { kind: 'slack', url: 'https://hooks.slack.com/x' } }, /webhook.kind/],
     [{ webhook: { kind: 'feishu', url: 'http://open.feishu.cn/hook/x' } }, /https/],
-    [{ webhook: { kind: 'generic', url: 'http://example.com/hook' } }, /local network/],
+    [{ webhook: { kind: 'generic', url: 'http://example.com/hook' } }, /https/],
     [{ webhook: { kind: 'bark', url: 'https://user:pw@api.day.app/k' } }, /user name/],
     [{ webhook: { kind: 'feishu', url: FEISHU, secret: 'x'.repeat(201) } }, /200/],
     [{ webhook: { kind: 'wecom' } }, /url is required/],
@@ -95,8 +95,9 @@ try {
   assert.deepEqual(saved.settings.webhook, { kind: 'feishu', url: FEISHU, secret: 'sekrit' }, 'url and secret omitted keep the stored ones')
   saved = mod.writeFollowup(dir, { webhook: { kind: 'generic', secret: '' } })
   assert.deepEqual(saved.settings.webhook, { kind: 'generic', url: FEISHU, secret: '' }, "secret '' clears it; the kind can change")
-  assert.equal(mod.writeFollowup(dir, { webhook: { kind: 'generic', url: 'http://192.168.1.20:8080/longpi' } }).ok, true, 'generic may be http on the local network')
-  assert.equal(mod.writeFollowup(dir, { webhook: { kind: 'generic', url: 'http://localhost:9000/x' } }).ok, true)
+  assert.equal(mod.writeFollowup(dir, { webhook: { kind: 'generic', url: 'https://192.168.1.20:8443/longpi' } }).ok, true, 'generic may be https on the local network')
+  assert.equal(mod.writeFollowup(dir, { webhook: { kind: 'generic', url: 'http://192.168.1.20:8080/longpi' } }).ok, false, 'never plain http, even on the local network')
+  assert.equal(mod.writeFollowup(dir, { webhook: { kind: 'generic', url: 'https://localhost:9000/x' } }).ok, false, 'never this machine')
   assert.equal(mod.writeFollowup(dir, { webhook: null }).settings.webhook, null, 'null removes the channel')
   assert.equal(statSync(join(dir, 'followup.json')).mode & 0o777, 0o600, 'rewritten, still private')
   writeFileSync(join(dir, 'followup.json'), '{"enabled": true, "checkin_time": "99:99", "detail": "loud"}')
@@ -344,7 +345,7 @@ try {
   assert.equal((await setTool.execute({ webhook: { kind: 'feishu', url: 'http://insecure' } })).ok, false)
 
   // turning follow-up on, full detail and a webhook address wait for the person's approval in DSH
-  assert.equal(host.preExecute.length, 1, 'one tools/pre-execute listener')
+  assert.equal(host.preExecute.length, 2, 'two tools/pre-execute listeners: set_followup first, then the plan-save approval')
   const gate = (name, args, before = { kind: 'allow' }) => host.preExecute[0]({ name, arguments: args }, async () => before)
   assert.deepEqual(await gate('set_followup', { enabled: true }), { kind: 'ask', reason: 'LongPi 要开启随访提醒。只有你本人要求过才同意。' })
   assert.match((await gate('set_followup', { detail: 'full', webhook: { kind: 'generic', url: 'https://attacker.example/x?token=1' } })).reason, /完整.*https:\/\/attacker\.example\/…/)
@@ -391,6 +392,29 @@ try {
     assert.match(mod.followupTextProblem(text, 'full'), /剂量/, text)
   }
   assert.equal(mod.followupTextProblem('体重 72 千克，继续保持', 'full'), '', '千克 is a weight, not a dose')
+  // 5.1 (9a, 8c): every string from the review and its verification. Values in Chinese numerals next to a health word,
+  // and blood pressure as a/b in Chinese numerals, are values too.
+  for (const text of ['空腹血糖六点八', '血压一百五', '糖化血红蛋白六点五', '收缩压一百四十五', '低密度脂蛋白三点八', 'LDL三点八', '血压一百五十/九十',
+    'HbA1c 六点五', '收缩压一百四十', '空腹血糖六点八毫摩尔', '体重七十五公斤', '体重七十公斤', '血压一百五十毫米汞柱', '6.8', '空腹血糖6.8', '血压150', '血压150/90',
+    '一百四比九十', '心率七十二', '腰围九十', '尿酸四百二十', '肌酐八十五', '胆固醇五点二', '甘油三酯一点八']) {
+    assert.match(mod.followupTextProblem(text, 'minimal'), /简要/, text)
+  }
+  for (const text of ['今天也记得快走哦', '这周坚持了五天，打开健康页看看', '血压一直很稳定，继续保持', '记得十点前量血压', '体重一周后再称一次', '血压十点再测一次',
+    '连续一百天打卡', '三比二', '今天走了一万步，血糖记录也完成了', '血压十分正常，继续保持', '血糖十分稳定', '血脂复查定在十月十日', '血脂复查定在三月五号',
+    '体重一周后再称一次', '血糖控制第一']) {
+    assert.equal(mod.followupTextProblem(text, 'minimal'), '', text)
+  }
+  for (const text of ['血糖七', '血糖六', '血糖是六', '胆固醇五', '血糖七，继续保持']) assert.match(mod.followupTextProblem(text, 'minimal'), /简要/, `a single-digit value: ${text}`)
+  for (const text of ['五百毫克', '两克', '一千单位', '每天五百毫克', '一千五百国际单位', '二百五十微克', '三毫升', '五百 mg', '０．５ｇ', '每次两克', '五百mg', '五百片', '一千粒',
+    '1,000 IU', '2 x 500mg', '500mg/天', '每天 2 g，饭后', '二甲双胍 500mg 每日两次']) {
+    assert.match(mod.followupTextProblem(text, 'full'), /剂量/, text)
+    assert.equal(mod.hasDose(text), true, `the plan side reads it as a dose too: ${text}`)
+  }
+  for (const text of ['42.6 mg/dL', '5 毫克/分升', '体重 72 千克', '七十千克', '每天走 8000 步', '30 分钟', '每天一勺橄榄油', '一袋牛奶', '每天少抽一支烟']) assert.equal(mod.hasDose(text), false, text)
+  for (const text of ['维生素D3滴剂记得吃', '辅酶Q10胶囊记得吃', '维生素B12片别忘了', 'Omega-3 胶囊饭后吃']) {
+    assert.equal(mod.hasDose(text), false, `a number in a product name: ${text}`)
+    assert.equal(mod.followupTextProblem(text, 'full'), '', text)
+  }
 
   // journey.followup and /longpi
   mod.setConsent(routeDir, true)
@@ -451,6 +475,7 @@ function fakeHost() {
     skills: { register: () => () => {} },
     systemPrompt: { section: () => {} },
     webServer: { register: (route) => { routes.set(route.path, route.handler); return () => {} } },
+    connection: { requestRejection: () => undefined },
     commands: { register: (command) => { commands.set(command.name, command) } },
     inject: (_names, callback) => callback(ctx),
     on: (name, listener) => {
@@ -472,6 +497,7 @@ function call(host, method, url, body) {
   const req = Readable.from(body === undefined ? [] : [Buffer.from(JSON.stringify(body))])
   req.method = method
   req.url = url
+  req.headers = { host: '127.0.0.1', 'content-type': 'application/json' }
   return new Promise((resolveCall) => {
     const headers = {}
     const res = {

@@ -231,8 +231,9 @@ try {
   assert.deepEqual(journey.profile.risk, { north: true })
   assert.deepEqual(questions.map((row) => row.key).filter((key) => journey.profile.questions.find((row) => row.key === key).answered), ['age', 'sex', 'north'])
   assert.equal(journey.records.status, 'unconfigured')
+  assert.equal(journey.records.summary, null, 'no record, no summary')
   assert.equal(journey.next.action, 'records')
-  assert.equal(journey.next.detail_zh, '在 Mirobody 中生成个人 MCP 地址，重新运行安装命令时加上 --mcp-url。')
+  assert.equal(journey.next.detail_zh, '在 Mirobody 中生成个人 MCP 地址，粘贴到设置里的 LongPi 页。')
   assertSuggestions(journey, ['怎么把体检报告导入 Mirobody？', '还没有体检记录，现在可以先做什么？'])
   assert.equal(journey.results.bioage.status, 'blocked')
   assert.equal(journey.results.bioage.blocker_zh, '还没有连接 Mirobody 记录。')
@@ -311,6 +312,13 @@ try {
   assert.equal(journey.results.bioage.checkups, 4)
   assert.equal(journey.records.full_checkups, 4)
   assert.equal(journey.records.latest_checkup, '2026-08-26')
+  // what onboarding shows of the record: checkup days and their span, the groups present, wearable days in the last year
+  const { summary } = journey.records
+  assert.deepEqual({ ...summary, wearable_days: undefined }, {
+    checkups: 4, first_date: '2025-10-18', last_date: '2026-08-26',
+    categories_zh: ['血脂', '血常规', '血糖', '肝功能', '炎症', '肾功能', '体格与血压'], wearable_days: undefined,
+  })
+  assert.ok(summary.wearable_days > 300, `${summary.wearable_days} wearable days`)
   assert.equal(journey.results.bioage.date, '2026-08-26')
   assert.equal(journey.results.bioage.phenoage, step.tracking.bioage.points.at(-1).phenoage, 'the number is the skill output')
   assert.ok(journey.results.bioage.band_years > 0)
@@ -380,7 +388,7 @@ try {
   assert.equal(journey.plan.started, '2026-03-01')
   assert.equal(journey.plan.days, 207)
   const diet = step.tracking.plan.items.find((item) => item.title === '地中海饮食')
-  assert.deepEqual(journey.plan.checkin_items, [{ id: diet.id, title: '地中海饮食', done_today: false }], 'wearable, Mirobody and not-yet-started items need no tap')
+  assert.deepEqual(journey.plan.checkin_items, [{ id: diet.id, title: '地中海饮食', done_today: null }], 'wearable, Mirobody and not-yet-started items need no tap; not checked in yet is null')
   assert.deepEqual(journey.reminders, [
     { kind: 'retest', text_zh: '复测甘油三酯', date: TODAY, due: true },
     { kind: 'retest', text_zh: '复测超敏C反应蛋白', date: '2026-09-29', due: false },
@@ -398,6 +406,28 @@ try {
   assert.deepEqual(journey.next, { stage: 'routine', title_zh: '该复测了', detail_zh: '可以复测甘油三酯', action: 'review' })
   assert.ok(journey.plan.streak >= 2)
   assert.ok(journey.plan.adherence_pct >= 0 && journey.plan.adherence_pct <= 100)
+
+  // 9d: three states, the latest entry of the day wins. 没做到 is an answer (no reminder); an undo makes the day unknown again.
+  mod.addCheckIns(dataDir, [{ item: '地中海饮食', date: TODAY, done: false }], { today: TODAY, source: 'board' })
+  mod.invalidateTracking()
+  step = await journeyOf(fullConfig)
+  assert.equal(step.journey.plan.checkin_items[0].done_today, false, 'a later 没做到 replaces an earlier 完成')
+  assert.equal(step.journey.reminders.some((row) => row.kind === 'checkin'), false, '没做到 is not an open check-in')
+  const missedDay = step.tracking.items.find((item) => item.title === '地中海饮食').adherence.calendar.find((day) => day.date === TODAY)
+  assert.equal(missedDay.status, 'missed', 'adherence counts false as a miss')
+  const undo = mod.addCheckIns(dataDir, [{ item: '地中海饮食', date: TODAY, done: null }], { today: TODAY, source: 'board' })
+  assert.equal(undo.saved[0].undo, true)
+  mod.invalidateTracking()
+  step = await journeyOf(fullConfig)
+  assert.equal(step.journey.plan.checkin_items[0].done_today, null, 'undo: unknown again')
+  assert.ok(step.journey.reminders.some((row) => row.kind === 'checkin'), 'an undone day is open again')
+  assert.equal(step.tracking.items.find((item) => item.title === '地中海饮食').adherence.calendar.find((day) => day.date === TODAY).status, 'unknown', 'absence is unknown, never a miss')
+  // a note or tag alone says nothing about the day
+  mod.addCheckIns(dataDir, [{ item: '地中海饮食', date: TODAY, done: true }, { item: '地中海饮食', date: TODAY, tags: ['travel'] }], { today: TODAY, source: 'board' })
+  mod.invalidateTracking()
+  step = await journeyOf(fullConfig)
+  journey = step.journey
+  assert.equal(journey.plan.checkin_items[0].done_today, true, 'a tag-only entry does not undo the day')
 
   // --- 4. calendar -------------------------------------------------------------
   const ics = mod.buildCalendar(journey, step.tracking, { now: NOW })
@@ -532,6 +562,7 @@ try {
   assert.equal(selfTool.saved[0].label_zh, '体重')
 
   const situation = await host.tools.get('read_personal_situation').execute({})
+  assert.equal(situation.records_summary, null, 'no record, no checkups to count')
   assert.equal(situation.onboarding.stage, 'records')
   assert.equal(situation.onboarding.consent_accepted, true)
   assert.ok(situation.onboarding.questions_unanswered.includes(mod.RISK_FACT_ZH.smoker))
@@ -582,7 +613,9 @@ try {
   const sbpBefore = verdictOf(hist, '收缩压')
   assert.equal(sbpBefore.indicator, 'systolicPressures')
   assert.ok(sbpBefore.baseline, 'the wearable cuff gives a baseline')
-  assert.notEqual(sbpBefore.verdict, '无法判断')
+  // ...but a cuff read every third day never gives the seven-day mean the band was measured on (6d)
+  assert.equal(sbpBefore.verdict, '无法判断')
+  assert.match(sbpBefore.reason_zh, /需要连续 7 天的家庭血压/)
   const sbpPoints = chartOf(hist, 'sbp').points.length
   const weightBefore = verdictOf(hist, '体重')
   assert.equal(weightBefore.indicator, 'bodyMasss')
@@ -696,6 +729,7 @@ function fakeHost() {
     skills: { register: () => () => {} },
     systemPrompt: { section: (section) => { prompts.push(section) } },
     webServer: { register: (route) => { routes.set(route.path, route.handler); return () => {} } },
+    connection: { requestRejection: () => undefined },
     commands: { register: (command) => { commands.set(command.name, command) } },
     inject: (_names, callback) => callback(ctx),
     on: () => () => {},
@@ -715,6 +749,7 @@ function call(host, method, url, body) {
   const req = Readable.from(body === undefined ? [] : [Buffer.from(JSON.stringify(body))])
   req.method = method
   req.url = url
+  req.headers = { host: '127.0.0.1', 'content-type': 'application/json' }
   return new Promise((resolveCall) => {
     const headers = {}
     const res = {

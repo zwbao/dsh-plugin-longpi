@@ -37,7 +37,7 @@ function write() {
   const read = (name) => JSON.parse(readFileSync(join(fixtures, name), 'utf8'))
   const data = {
     board: read('board.json'), tracking: read('tracking.json'), journey: read('journey.json'), self: read('self.json'),
-    planDraft: read('plan-draft.json'), followup: read('followup.json'),
+    planDraft: read('plan-draft.json'), followup: read('followup.json'), indicators: read('indicators.json'), connection: read('connection.json'),
   }
   const template = readFileSync(join(here, 'index.html'), 'utf8')
   const payload = JSON.stringify(data).replace(/</g, '\\u003c')
@@ -63,15 +63,34 @@ function serve(port) {
 
 // name, query, width, height
 const SHOTS = [
+  // 5.1: the four tabs, the settings page, onboarding 3 and 4, the chat cards.
+  ['page-overview', 'view=page&stage=routine&tab=overview', 1280, 1500],
+  ['page-overview-first_result', 'view=page&stage=first_result&tab=overview', 1280, 1300],
+  ['page-indicators', 'view=page&stage=routine&tab=indicators', 1280, 2000],
+  ['page-indicators-empty', 'view=page&stage=records&tab=indicators', 1280, 900],
+  ['page-indicators-error', 'view=page&stage=routine&tab=indicators&variant=indfail', 1280, 900],
+  ['page-plan-draft', 'view=page&stage=plan&tab=plan', 1280, 2400],
+  ['page-plan-trackfail', 'view=page&stage=routine&tab=plan&variant=trackfail', 1280, 1400],
+  ['page-profile', 'view=page&stage=routine&tab=profile', 1280, 2200],
+  ['page-banner', 'view=page&stage=profile&tab=overview', 1280, 1200],
+  ['settings-longpi', 'view=settings&stage=routine', 1280, 900],
+  ['settings-longpi-off', 'view=settings&stage=records', 1280, 900],
+  ['onboarding-3-connected', 'view=onboarding&stage=routine&step=3', 1280, 1000],
+  ['chat-draft', 'view=chat&card=draft', 1280, 1100],
+  ['chat-checkin', 'view=chat&card=checkin', 1280, 700],
+  ['chat-save', 'view=chat&card=save', 1280, 800],
+  ['chat-skill', 'view=chat&card=skill', 1280, 900],
+  ['chat-situation', 'view=chat&card=situation', 1280, 700],
+  ['home-routine-popover', 'view=home&stage=routine&tap=task', 1280, 760],
   ['page-consent', 'view=page&stage=consent', 1280, 2300],
-  ['page-profile', 'view=page&stage=profile', 1280, 2900],
+  ['page-stage-profile', 'view=page&stage=profile', 1280, 1400],
   ['page-records', 'view=page&stage=records', 1280, 2500],
   ['page-first_result', 'view=page&stage=first_result&variant=nochanges', 1280, 2700],
   ['page-first_result-changes', 'view=page&stage=first_result', 1280, 3200],
   ['page-first_result-nocheckup', 'view=page&stage=first_result&variant=nocheckup', 1280, 1000],
   ['page-first_result-noaddons', 'view=page&stage=first_result&variant=noaddons', 1280, 2700],
   ['page-records-error', 'view=page&stage=records&variant=recerror', 1280, 1400],
-  ['page-plan', 'view=page&stage=plan', 1280, 4300],
+  ['page-plan', 'view=page&stage=routine&tab=plan', 1280, 4300],
   ['page-plan-dark', 'view=page&stage=plan&theme=dark', 1280, 4300],
   ['page-plan-nodraft', 'view=page&stage=plan&variant=nodraft', 1280, 3400],
   ['page-routine', 'view=page&stage=routine', 1280, 6400],
@@ -100,10 +119,10 @@ const SHOTS = [
   ['home-error', 'view=home&fail=1', 1280, 760],
   ['onboarding-1', 'view=onboarding&stage=consent&step=1', 1280, 900],
   ['onboarding-2', 'view=onboarding&stage=profile&step=2', 1280, 1100],
-  ['onboarding-3', 'view=onboarding&stage=records&step=3', 1280, 900],
+  ['onboarding-3', 'view=onboarding&stage=records&step=3', 1280, 1000],
   ['onboarding-3-nocheckup', 'view=onboarding&stage=first_result&step=3&variant=nocheckup', 1280, 900],
   ['onboarding-4', 'view=onboarding&stage=plan&step=4', 1280, 900],
-  ['onboarding-4-blocked', 'view=onboarding&stage=first_result&step=4', 1280, 900],
+  ['onboarding-4-blocked', 'view=onboarding&stage=first_result&step=4', 1280, 1000],
   ['onboarding-2-dark', 'view=onboarding&stage=profile&step=2&theme=dark', 1280, 1100],
   ['onboarding-done', 'view=onboarding&stage=routine', 1280, 700],
   ['onboarding-fail', 'view=onboarding&fail=1', 1280, 700],
@@ -147,7 +166,7 @@ const port = arg('--serve')
 if (shotDir) await shots(shotDir)
 else if (port) {
   await serve(Number(port))
-  console.log(`preview at http://127.0.0.1:${port}/?view=page (views: page, home, dock, onboarding, pill; ?stage=, ?variant=, ?theme=dark; home: ?session=0, ?bar=0, ?tap=suggest)`)
+  console.log(`preview at http://127.0.0.1:${port}/?view=page (views: page, home, dock, onboarding, pill, settings, chat; ?stage=, ?tab=, ?variant=, ?theme=dark; chat: ?card=draft|checkin|save|skill|situation|all; home: ?session=0, ?bar=0, ?tap=suggest)`)
 } else {
   console.log(`preview written to ${out}; serve it with --serve 4173`)
 }

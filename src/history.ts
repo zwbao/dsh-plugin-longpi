@@ -18,6 +18,8 @@ export interface HistoryRow {
   outputs: Record<string, OutputValue>
   /** Local date of the measurements the run read, when it read an earlier checkup. */
   measured_at?: string
+  /** A hash of what the run read (the inputs, the age, the skill version): a row whose hash is not today's is stale. */
+  inputs_key?: string
 }
 
 export interface LatestOutput extends OutputValue {
