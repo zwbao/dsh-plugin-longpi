@@ -16,6 +16,7 @@ Fixes from an external review of 0.5.0, checked claim by claim against the code,
   - For each message the person types, the configured model labels it: a current emergency, self-harm, a request to start or stop a medicine, a request for their own dose, or a question about research findings.
   - LongPi appends one note for the model. It never replaces the person's words: the old keyword match turned 无胸痛, 父亲有中风史 or "stroke risk" into "only answer 120".
   - A narrow, negation-aware rule layer is used only when the model call fails.
+  - Only where it matters: in LongPi's workspace (健康对话) every message is labelled; in other workspaces only a message that touches health, and the rest of that conversation, so a coding chat pays no extra model call or delay. A recall-first word list decides, holding every word the rule layer acts on: all 124 emergency, self-harm, medicine and dose test sentences pass it, and 20 everyday coding requests do not. `guardScope: all` labels every message, as before.
   - Live results on 266 test sentences with deepseek-v4-flash: emergencies 36/36 with no false alarm, medicine requests 66/66; median 1.2 s.
 - **Output side.** Before a turn ends, a reply that gave a dose or told the person to change a prescription gets one correction. The model judge decides; the rules decide alone only when the judge fails. Food amounts (一颗鸡蛋, 两片面包) are not doses unless a medicine is named in the same sentence.
 - **Saving a plan.**

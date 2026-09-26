@@ -361,10 +361,10 @@ path, skills_home, python_bin, set_mcp, mcp_url, mcp_token = sys.argv[1:7]
 BEGIN = "# >>> dsh-plugin-longpi (written by install.sh; keep one value per line) >>>"
 END = "# <<< dsh-plugin-longpi <<<"
 KEYS = ["skillsHome", "skillsVersion", "mirobodyPluginHome", "pythonBin", "mirobodyHome", "mcpUrl", "mcpToken",
-        "member", "timeoutMs", "skillPython", "skillTimeoutMs", "skillRuntimes", "dataDir", "maxSkillMatches", "bootstrapWorkspace"]
+        "member", "timeoutMs", "skillPython", "skillTimeoutMs", "skillRuntimes", "dataDir", "maxSkillMatches", "bootstrapWorkspace", "guardScope"]
 DEFAULTS = {"skillsVersion": "\x27\x27", "mirobodyHome": "\x27\x27", "mcpUrl": "\x27\x27", "mcpToken": "\x27\x27",
             "member": "\x27\x27", "timeoutMs": "30000", "skillTimeoutMs": "120000", "skillRuntimes": "{}",
-            "dataDir": "\x27\x27", "maxSkillMatches": "8", "bootstrapWorkspace": "true"}
+            "dataDir": "\x27\x27", "maxSkillMatches": "8", "bootstrapWorkspace": "true", "guardScope": "health"}
 
 def quote(text):
     return "\x27" + text.replace("\x27", "\x27\x27") + "\x27"

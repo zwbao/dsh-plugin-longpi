@@ -14,6 +14,7 @@ import {
   type GuardLabels, type GuidanceNote, type ReplyVerdict,
 } from './guardrails.ts'
 import { hasDoseAmount } from './guard-dose.ts'
+import { HealthSessions, insideWorkspace, touchesHealth, type GuardScope } from './guard-scope.ts'
 
 export const GUARD_TIMEOUT_MS = 4000
 const PLUGIN_SOURCE = 'dsh-plugin-longpi'
@@ -228,6 +229,8 @@ interface AgentLike {
 interface SessionLike {
   id?: string
   seq?: number
+  /** Creation metadata: the working directory the session was created in. */
+  header?: { cwd?: string }
   requestHeader?(): { config?: { provider?: string; model?: string } } | undefined
   eventAt?(seq: number): EventLike | undefined
   snapshotEvents?(): readonly EventLike[]
@@ -347,7 +350,7 @@ export function runtimeCall(llm: LlmLike, route: Route, efforts: Map<string, str
 // ---------------------------------------------------------------- stats (counts only)
 
 export const GUARD_COUNTERS = [
-  'input_checked', 'input_llm_ok', 'input_llm_failed', 'input_llm_unavailable',
+  'input_checked', 'input_llm_ok', 'input_llm_failed', 'input_llm_unavailable', 'input_skipped',
   'flag_emergency', 'flag_self_harm', 'flag_med_change', 'flag_dose', 'flag_research', 'note_appended',
   'output_checked', 'output_llm_ok', 'output_llm_failed', 'output_llm_unavailable', 'output_flag_rules', 'output_flag_llm', 'output_steered',
   'approval_asked', 'approval_no_readback', 'skill_blocked',
@@ -418,6 +421,14 @@ export function readGuardStats(dataDir: string, days = 7, now = new Date()): { s
 export interface GuardOptions {
   dataDir: () => string
   timeoutMs?: number
+  /**
+   * Where the model labels a message: 'health' (the default) in LongPi's own workspace and, elsewhere, for
+   * messages that touch health and the rest of their session; 'all' for every message. Outside the scope
+   * the rules decide.
+   */
+  scope?: () => GuardScope
+  /** Paths of the workspaces whose sessions are always labelled by the model (LongPi's own). */
+  healthWorkspaces?: () => readonly string[]
   /** Tests and the live evaluation: the model call for an agent instead of DSH's runtime. */
   call?: (agent: AgentLike | undefined) => GuardCall | null
 }
@@ -499,7 +510,29 @@ export interface Guard {
   turnStopping(payload: TurnStoppingPayload): Promise<void>
   /** Whether this agent's current turn was flagged as an emergency or self-harm (no skill runs). */
   inEmergency(agent: unknown): boolean
+  /** A LongPi tool ran in this agent's session: the model labels the rest of it. */
+  markHealth(agent: unknown): void
   count(counts: Partial<Record<GuardCounter, number>>): void
+}
+
+/** The person's earlier messages in this session, newest first (at most `limit` events back). */
+function earlierPersonTexts(session: SessionLike, limit = 2000): string[] {
+  const out: string[] = []
+  const take = (event: EventLike | undefined) => {
+    if (event?.type !== 'user/message') return
+    const message = event.data as { source?: { kind?: string }; content?: unknown } | undefined
+    if (message && (!message.source || message.source.kind === 'user')) {
+      const text = textOf(message.content)
+      if (text.trim()) out.push(text)
+    }
+  }
+  if (typeof session.eventAt === 'function' && typeof session.seq === 'number') {
+    for (let seq = session.seq - 1, seen = 0; seq >= 0 && seen < limit; seq -= 1, seen += 1) take(session.eventAt(seq))
+  } else {
+    const all = session.snapshotEvents?.() ?? []
+    for (let index = all.length - 1, seen = 0; index >= 0 && seen < limit; index -= 1, seen += 1) take(all[index])
+  }
+  return out
 }
 
 export function createGuard(ctx: Context, options: GuardOptions): Guard {
@@ -509,6 +542,31 @@ export function createGuard(ctx: Context, options: GuardOptions): Guard {
   const steered = new Set<string>()
   const timeoutMs = options.timeoutMs ?? GUARD_TIMEOUT_MS
   const count = (counts: Partial<Record<GuardCounter, number>>) => countGuard(options.dataDir(), counts)
+  const sessions = new HealthSessions()
+  const sessionOf = (agent: unknown): SessionLike | undefined => {
+    const session = agent && typeof agent === 'object' ? (agent as AgentLike).session : undefined
+    return session && typeof session === 'object' ? session : undefined
+  }
+
+  /**
+   * Whether the model labels this message: always with scope 'all'; with 'health', in LongPi's workspace, in a
+   * session already about health (a health message, a LongPi tool, or earlier health talk found once after a
+   * restart), or for a message that touches health, which marks its session.
+   */
+  const modelScope = (agent: AgentLike | undefined, text: string): boolean => {
+    if ((options.scope?.() ?? 'health') === 'all') return true
+    const session = sessionOf(agent)
+    const id = typeof session?.id === 'string' ? session.id : ''
+    const cwd = typeof session?.header?.cwd === 'string' ? session.header.cwd : ''
+    if (cwd && (options.healthWorkspaces?.() ?? []).some((root) => insideWorkspace(cwd, root))) return true
+    if (id && sessions.has(id)) return true
+    const earlier = id && session && sessions.firstSight(id) ? earlierPersonTexts(session) : []
+    if (touchesHealth(text) || earlier.some((line) => touchesHealth(line))) {
+      if (id) sessions.mark(id)
+      return true
+    }
+    return false
+  }
 
   const callFor = (agent: AgentLike | undefined): GuardCall | null => {
     if (options.call) return options.call(agent)
@@ -531,7 +589,15 @@ export function createGuard(ctx: Context, options: GuardOptions): Guard {
         const text = personText(payload.messages)
         if (!text.trim()) return decision
         const agent = payload.agent
-        const result = await classifyMessage(text, { call: callFor(agent), medications: rememberedMedications(), timeoutMs, ...(payload.signal ? { signal: payload.signal } : {}) })
+        let modelAsked = true
+        try {
+          modelAsked = modelScope(agent, text)
+        } catch {
+          // an unreadable session: ask the model, as before
+        }
+        const result: Classified = modelAsked
+          ? await classifyMessage(text, { call: callFor(agent), medications: rememberedMedications(), timeoutMs, ...(payload.signal ? { signal: payload.signal } : {}) })
+          : { labels: ruleLabels(text), source: 'rules', llm: 'skipped' }
         const { labels } = result
         if (agent && typeof agent === 'object') {
           if (labels.acute_emergency || labels.self_harm) flagged.add(agent)
@@ -540,7 +606,7 @@ export function createGuard(ctx: Context, options: GuardOptions): Guard {
         const note = guidanceNote(labels, { medicine: mentionsMedicine(text) })
         count({
           input_checked: 1,
-          [`input_llm_${result.llm}`]: 1,
+          ...(modelAsked ? { [`input_llm_${result.llm}`]: 1 } : { input_skipped: 1 }),
           flag_emergency: labels.acute_emergency ? 1 : 0,
           flag_self_harm: labels.self_harm ? 1 : 0,
           flag_med_change: labels.med_change_request ? 1 : 0,
@@ -593,6 +659,11 @@ export function createGuard(ctx: Context, options: GuardOptions): Guard {
 
     inEmergency(agent) {
       return !!agent && typeof agent === 'object' && flagged.has(agent)
+    },
+
+    markHealth(agent) {
+      const id = sessionOf(agent)?.id
+      if (typeof id === 'string' && id) sessions.mark(id)
     },
 
     count,

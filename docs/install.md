@@ -140,6 +140,7 @@ cat > "$P" <<EOF
     dataDir: ''
     maxSkillMatches: 8
     bootstrapWorkspace: true
+    guardScope: health
 EOF
 chmod 600 "$P"
 

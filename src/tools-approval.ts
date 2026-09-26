@@ -1,4 +1,5 @@
 // Approval for saving a plan from chat (claim 8d), and no skill runs in a turn flagged as an emergency.
+// A session that ran a LongPi tool is a health session: the guard's model labels the rest of it.
 // save_intervention_plan with confirm=true now waits for the person to approve in DSH, and only after the
 // same plan was read back (confirm=false) in this process within the last 30 minutes. The tool body is
 // unchanged: these are tools/pre-execute and tools/post-execute listeners, in the same shape as the
@@ -8,6 +9,7 @@ import { createHash } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { CATEGORY_ZH, isoDay, normalizePlan, type Category } from './interventions.ts'
 import type { Guard } from './guard-llm.ts'
+import { TOOL_NAMES } from './version.ts'
 
 export const READ_BACK_MS = 30 * 60_000
 export const NO_READ_BACK = '请先复述方案给用户确认'
@@ -64,7 +66,7 @@ export function resetReadBacks(): void {
   readBacks.clear()
 }
 
-export function registerApprovals(ctx: Context, guard: Pick<Guard, 'inEmergency' | 'count'>): void {
+export function registerApprovals(ctx: Context, guard: Pick<Guard, 'inEmergency' | 'count'> & Partial<Pick<Guard, 'markHealth'>>): void {
   // After every other listener allowed it: a confirmed save needs a fresh read-back and then the person's yes.
   ctx.on('tools/pre-execute', async (exec, next) => {
     const decision = await next()
@@ -85,6 +87,7 @@ export function registerApprovals(ctx: Context, guard: Pick<Guard, 'inEmergency'
   // A read-back that went through (confirm=false, no errors) is what a later confirm=true must match.
   ctx.on('tools/post-execute', async (exec, result, next) => {
     const decision = await next()
+    if ((TOOL_NAMES as readonly string[]).includes(exec.name)) guard.markHealth?.(exec.agent)
     if (exec.name !== SAVE_TOOL || result.isError) return decision
     const value = record(result.value)
     const args = record(exec.arguments)

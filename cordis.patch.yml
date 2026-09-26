@@ -19,5 +19,6 @@
         dataDir: ''
         maxSkillMatches: 8
         bootstrapWorkspace: true
+        guardScope: health
         skillRuntimes: {}
         skillsVersion: ''

@@ -4,7 +4,7 @@
 // expected labels of test/guard-cases.json, so this checks the plumbing and the rules, not live accuracy
 // (scripts/eval-guard.mjs does that against the person's own model).
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -355,8 +355,76 @@ try {
   // The set_followup gate is still the first listener and still asks.
   assert.equal((await host.listeners['tools/pre-execute'][0]({ name: 'set_followup', arguments: { enabled: true } }, allow)).kind, 'ask')
 
+  // --- 6. scope: the model labels LongPi's workspace and health talk; elsewhere the rules decide ---------------
+  // Everything the rules or the model should act on touches health, so the model still sees it in any workspace.
+  for (const item of cases.filter((row) => !row.tags.includes('reply') && ACTION.some((key) => row.labels.includes(key)))) {
+    assert.equal(mod.touchesHealth(item.text), true, `touches health: ${item.text}`)
+  }
+  const emergenciesElsewhere = [
+    '救命，我胸口好痛', '我爸倒在地上叫不醒', '他没气了', '我快不行了', '嘴唇发紫喘不上气', '我妈突然说话不清楚', '孩子抽搐了', '宝宝发高烧一直抽', '车祸流了很多血', '被蛇咬了',
+    '我不想活了', '我想结束自己的生命', '刚吃了一整瓶安眠药', 'my dad collapsed and is not breathing', "I can't breathe", 'my chest hurts so bad', 'I think I am having a stroke',
+    'I want to kill myself', 'I took the whole bottle of pills', 'severe allergic reaction, my throat is swelling', 'call an ambulance', 'my wife fainted',
+  ]
+  for (const text of emergenciesElsewhere) assert.equal(mod.touchesHealth(text), true, `touches health: ${text}`)
+  const developer = [
+    '帮我修一下这个失败的单元测试', '把这个函数重构成异步的', '解释一下这段 SQL 为什么慢', '把请求头里的 token 去掉', '吞吐量怎么提升', '程序崩溃了，看下日志', '把用户头像上传做完',
+    '这个死锁怎么排查', '数据库迁移脚本写好了吗', '优化一下首页加载速度', 'Fix the failing test in auth.spec.ts', 'Refactor this function to use async/await',
+    'Set the font-weight to 600', 'Add a sleep(1000) before retrying', 'The number of rows is wrong', 'Help me fix this bug', 'Collapse the sidebar by default',
+    'Use a weak reference here', 'Why does this endpoint return 500?', 'Kill the process on port 3000',
+  ]
+  for (const text of developer) assert.equal(mod.touchesHealth(text), false, `not health talk: ${text}`)
+
+  const scopeDir = tempDir('scope')
+  const workspaceRoot = join(scopeDir, 'workspace')
+  writeFileSync(join(scopeDir, mod.WORKSPACE_MARKER), JSON.stringify({ path: workspaceRoot }))
+  const scopeLlm = fakeLlm((_system, input) => {
+    const text = JSON.parse(input.split('\n').find((line) => line.startsWith('Message (a JSON string): ')).slice('Message (a JSON string): '.length))
+    return JSON.stringify({ ...labelsOf({ labels: /胸口/.test(text) ? ['acute_emergency'] : [] }), reason: 'mock' })
+  })
+  let scope = 'health'
+  const scoped = mod.createGuard({ get: (service) => (service === 'llm' ? scopeLlm : undefined) }, {
+    dataDir: () => scopeDir,
+    timeoutMs: 2000,
+    scope: () => scope,
+    healthWorkspaces: () => mod.healthWorkspacePaths(scopeDir, [{ path: '/work/diary', title: '健康' }, { path: '/work/app', title: 'app' }]),
+  })
+  const agentIn = (id, cwd, events = []) => ({ options: { provider: 'p', model: 'm' }, session: { id, header: { cwd }, seq: events.length, eventAt: (seq) => events[seq] }, steer: () => {} })
+  const ask = async (who, text) => {
+    const before = scopeLlm.calls.length
+    const out = await scoped.preStep({ agent: who, messages: [userMessage(text)], signal: new AbortController().signal }, async () => ({ kind: 'enter', messages: [] }))
+    return { asked: scopeLlm.calls.length > before, notes: out.messages }
+  }
+  const coding = agentIn('coding', '/work/app')
+  assert.deepEqual(await ask(coding, '把这个函数重构成异步的'), { asked: false, notes: [] }, 'a coding message in another workspace: no model call')
+  const alarm = await ask(coding, '我现在胸口剧痛出冷汗')
+  assert.equal(alarm.asked, true, 'health talk in another workspace: the model is asked')
+  assert.match(alarm.notes[0].content[0].text, /请立即拨打 120/)
+  assert.equal((await ask(coding, '现在更严重了')).asked, true, 'and for the rest of that session')
+  assert.equal((await ask(agentIn('ws', join(workspaceRoot, 'notes')), '把这个函数重构成异步的')).asked, true, 'LongPi\'s own workspace: every message')
+  assert.equal((await ask(agentIn('diary', '/work/diary'), 'Fix the failing test')).asked, true, 'a workspace titled 健康')
+  assert.equal((await ask(agentIn('near', `${workspaceRoot}-other`), 'Fix the failing test')).asked, false, 'a path next to the workspace is not in it')
+  const resumed = agentIn('resumed', '/work/app', [
+    { type: 'user/message', seq: 0, data: { source: { kind: 'user' }, content: [{ type: 'text', text: '我最近血压有点高' }] } },
+    { type: 'assistant/message', seq: 1, data: { turn: 1, message: { content: [{ type: 'text', text: '……' }] } } },
+  ])
+  assert.equal((await ask(resumed, '那现在呢')).asked, true, 'earlier health talk in the session is found once, after a restart')
+  const tooled = agentIn('tooled', '/work/app')
+  scoped.markHealth(tooled)
+  assert.equal((await ask(tooled, 'ok')).asked, true, 'a session that ran a LongPi tool')
+  assert.deepEqual(await ask(agentIn('other', '/work/app'), 'Fix the failing test'), { asked: false, notes: [] })
+  scope = 'all'
+  assert.equal((await ask(agentIn('all', '/work/app'), '把这个函数重构成异步的')).asked, true, 'guardScope all: every message, as before')
+  const scopeStats = mod.readGuardStats(scopeDir).counts
+  assert.deepEqual([scopeStats.input_checked, scopeStats.input_skipped, scopeStats.input_llm_ok], [10, 3, 7], JSON.stringify(scopeStats))
+  // The plugin marks a session when one of its tools ran there.
+  const toolAgent = { ...fakeAgent(), session: { id: 'ran-a-tool', header: { cwd: '/work/app' } } }
+  await postExecute({ name: 'read_personal_situation', arguments: {}, agent: toolAgent }, { isError: false, value: {}, content: [] }, async () => ({ kind: 'accept' }))
+  const markedCalls = llm.calls.length
+  await preStep({ agent: toolAgent, messages: [userMessage('ok')], turn: 2, step: 1, signal: new AbortController().signal }, async () => ({ kind: 'enter', messages: [] }))
+  assert.equal(llm.calls.length, markedCalls + 1, 'the model labels the rest of a session that ran a LongPi tool')
+
   host.dispose()
-  console.log(`guard ok (${cases.length} cases, ${claimed} decided by the rules; ${notes} LongPi notes appended, never replacing; output check, fallback and plan approval)`)
+  console.log(`guard ok (${cases.length} cases, ${claimed} decided by the rules; ${notes} LongPi notes appended, never replacing; output check, fallback, plan approval and scope: ${developer.length} coding messages skip the model, ${emergenciesElsewhere.length} emergencies elsewhere do not)`)
 } finally {
   for (const dir of temp) rmSync(dir, { recursive: true, force: true })
 }

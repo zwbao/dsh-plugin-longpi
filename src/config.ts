@@ -1,4 +1,5 @@
 import Schema from '@deepseek-ai/schemastery'
+import type { GuardScope } from './guard-scope.ts'
 
 export interface Config {
   skillsHome: string
@@ -17,6 +18,8 @@ export interface Config {
   skillsVersion: string
   /** On a DSH with no workspace, register <dataDir>/workspace as 「健康对话」 once, so a session can open. */
   bootstrapWorkspace: boolean
+  /** Where the safety classifier asks the model: LongPi's workspace and health talk ('health'), or every message ('all'). */
+  guardScope: GuardScope
 }
 
 export const Config: Schema<Config> = Schema.object({
@@ -35,4 +38,5 @@ export const Config: Schema<Config> = Schema.object({
   skillRuntimes: Schema.dict(Schema.string()).default({}),
   skillsVersion: Schema.string().default(''),
   bootstrapWorkspace: Schema.boolean().default(true),
+  guardScope: Schema.union([Schema.const('health' as const), Schema.const('all' as const)]).default('health'),
 })

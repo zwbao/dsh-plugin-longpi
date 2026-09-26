@@ -51,6 +51,36 @@ declare module '@deepseek-ai/cordis' {
   }
 }
 //#endregion
+//#region src/guard-scope.d.ts
+declare const GUARD_SCOPES: readonly ["health", "all"];
+type GuardScope = typeof GUARD_SCOPES[number];
+/**
+ * Whether a message touches health: a word from the lists, a medicine, or anything the rule layer acts on
+ * (an emergency, self-harm, a medicine change or a dose). Recall first; it decides only whether the model
+ * is asked, never what the note says.
+ */
+declare function touchesHealth(text: string): boolean;
+interface WorkspaceLike {
+  path: string;
+  title?: string;
+}
+/** LongPi's workspaces: the one it created (its marker in dataDir), and any titled 健康对话 or 健康. */
+declare function healthWorkspacePaths(dataDir: string, workspaces: readonly WorkspaceLike[]): string[];
+/** Whether a session's working directory is the workspace or inside it. */
+declare function insideWorkspace(cwd: string, root: string): boolean;
+/** Sessions known to be about health, and those already scanned once for earlier health talk. Bounded. */
+declare class HealthSessions {
+  private readonly max;
+  private readonly health;
+  private readonly scanned;
+  constructor(max?: number);
+  has(id: string): boolean;
+  mark(id: string): void;
+  /** True the first time for a session, so its earlier messages are read once per process. */
+  firstSight(id: string): boolean;
+  private add;
+}
+//#endregion
 //#region src/config.d.ts
 interface Config {
   skillsHome: string;
@@ -69,6 +99,8 @@ interface Config {
   skillsVersion: string;
   /** On a DSH with no workspace, register <dataDir>/workspace as 「健康对话」 once, so a session can open. */
   bootstrapWorkspace: boolean;
+  /** Where the safety classifier asks the model: LongPi's workspace and health talk ('health'), or every message ('all'). */
+  guardScope: GuardScope;
 }
 declare const Config: Schema<Config>;
 //#endregion
@@ -234,6 +266,10 @@ interface AgentLike {
 interface SessionLike {
   id?: string;
   seq?: number;
+  /** Creation metadata: the working directory the session was created in. */
+  header?: {
+    cwd?: string;
+  };
   requestHeader?(): {
     config?: {
       provider?: string;
@@ -258,7 +294,7 @@ declare function routeFor(agent: AgentLike | undefined, ctx?: Context): Route | 
  * and reasoning off when the model offers an "off" effort (thinking would not fit the deadline).
  */
 declare function runtimeCall(llm: LlmLike, route: Route, efforts?: Map<string, string | null>): GuardCall;
-declare const GUARD_COUNTERS: readonly ["input_checked", "input_llm_ok", "input_llm_failed", "input_llm_unavailable", "flag_emergency", "flag_self_harm", "flag_med_change", "flag_dose", "flag_research", "note_appended", "output_checked", "output_llm_ok", "output_llm_failed", "output_llm_unavailable", "output_flag_rules", "output_flag_llm", "output_steered", "approval_asked", "approval_no_readback", "skill_blocked"];
+declare const GUARD_COUNTERS: readonly ["input_checked", "input_llm_ok", "input_llm_failed", "input_llm_unavailable", "input_skipped", "flag_emergency", "flag_self_harm", "flag_med_change", "flag_dose", "flag_research", "note_appended", "output_checked", "output_llm_ok", "output_llm_failed", "output_llm_unavailable", "output_flag_rules", "output_flag_llm", "output_steered", "approval_asked", "approval_no_readback", "skill_blocked"];
 type GuardCounter = typeof GUARD_COUNTERS[number];
 /** Add counts for today. Never text: only how often the guard ran, fell back, flagged, noted, steered or asked. */
 declare function countGuard(dataDir: string, counts: Partial<Record<GuardCounter, number>>, now?: Date): void;
@@ -271,6 +307,14 @@ declare function readGuardStats(dataDir: string, days?: number, now?: Date): {
 interface GuardOptions {
   dataDir: () => string;
   timeoutMs?: number;
+  /**
+   * Where the model labels a message: 'health' (the default) in LongPi's own workspace and, elsewhere, for
+   * messages that touch health and the rest of their session; 'all' for every message. Outside the scope
+   * the rules decide.
+   */
+  scope?: () => GuardScope;
+  /** Paths of the workspaces whose sessions are always labelled by the model (LongPi's own). */
+  healthWorkspaces?: () => readonly string[];
   /** Tests and the live evaluation: the model call for an agent instead of DSH's runtime. */
   call?: (agent: AgentLike | undefined) => GuardCall | null;
 }
@@ -303,6 +347,8 @@ interface Guard {
   turnStopping(payload: TurnStoppingPayload): Promise<void>;
   /** Whether this agent's current turn was flagged as an emergency or self-harm (no skill runs). */
   inEmergency(agent: unknown): boolean;
+  /** A LongPi tool ran in this agent's session: the model labels the rest of it. */
+  markHealth(agent: unknown): void;
   count(counts: Partial<Record<GuardCounter, number>>): void;
 }
 declare function createGuard(ctx: Context, options: GuardOptions): Guard;
@@ -316,7 +362,7 @@ declare function planKey(args: unknown): string;
 declare function planApprovalReason(args: unknown): string;
 /** Tests: forget every read-back. */
 declare function resetReadBacks(): void;
-declare function registerApprovals(ctx: Context, guard: Pick<Guard, 'inEmergency' | 'count'>): void;
+declare function registerApprovals(ctx: Context, guard: Pick<Guard, 'inEmergency' | 'count'> & Partial<Pick<Guard, 'markHealth'>>): void;
 //#endregion
 //#region src/guard-dose.d.ts
 /** Any amount that could be a dose. */
@@ -2623,4 +2669,4 @@ declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { type BootstrapResult, CHANGES_NOTE_ZH, CLASSIFIER_SYSTEM, CONNECTION_FILE, CONNECTION_TEST_MS, CONNECTION_UNAVAILABLE, CONSENT_VERSION, Config, type ConnectionGuard, type ConnectionSource, type ConnectionStatus, type ConnectionTest, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMERGENCY_LINE_ZH, EMPTY_PROFILE, FOCUS, FOCUS_ZH, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, GROUP_KEYS, GROUP_ZH, GUARD_COUNTERS, GUARD_TIMEOUT_MS, type GroupKey, type Guard, type GuardCall, type GuardHit, type GuardLabels, HARNESS_SKILLS, type IndicatorChange, type IndicatorDetail, type IndicatorEntry, type IndicatorSource, type IndicatorsResponse, JUDGE_SYSTEM, type Journey, LABEL_KEYS, type LlmLike, NO_READ_BACK, PHENOAGE_SKILL, PRODUCT_VERSION, type PlanBrief, type PlanDraft, type Profile, READ_BACK_MS, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RecordChange, type RecordsSummary, type ReplyVerdict, type RiskFact, SELF_ALIASES, SELF_HARM_LINE_ZH, SELF_KEYS, SELF_SPEC, type SavedConnection, type SelfKey, type SelfRow, type SendResult, type Stage, TOOL_NAMES, type UnjudgedChange, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, asJson, bootstrapWorkspace, bridgeEnv, briefOptionsOf, buildBoard, buildCalendar, buildChanges, buildIndicators, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, candidatesFor, cellNumber, checkReply, checkinStatus, checkupMarkerFor, classifyMessage, clearConnection, commandExcerpt, connectionKey, connectionSource, connectionTokenProblem, connectionUrlProblem, correctionNote, countGuard, createGuard, currentPlan, daysBetween, decideFollowup, deleteSelf, describeItem, describePlan, desktopCommand, desktopSupported, detectIntents, domainSummary, dosePattern, draftPlan, effectiveConfig, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expandMarkerNames, expectedText, factorFor, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, goalProblems, groupOf, guardRoute, guidanceNote, hasDose, hasDoseAmount, heldUntil, homeBloodPressure, inQuiet, indicatorDetail, indicatorFor, indicatorsFromTable, inject, invalidateIndicators, invalidateRecords, invalidateTracking, isJsonRequest, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, markerGroupKeys, maskMcpUrl, maskUrl, matchSkills, mentionedEntities, mentionsMedicine, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseLabels, parseNumber, parseReadme, parseVerdict, personText, planApprovalReason, planKey, preGuard, profileComplete, publicFollowup, rcvBand, readCheckIns, readConnection, readFailed, readFollowup, readFollowupLog, readGuardStats, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, recordReadable, recordsSummary, registerApprovals, rememberMedications, rememberedMedications, replyRuleCheck, reportExcerpt, resetReadBacks, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, routeFor, ruleLabels, runReady, runSkill, runnableFrom, runtimeCall, sameMeasure, saveConnection, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, skillEnv, stageMeasurements, stageNow, startFollowup, stripDoses, suggestNext, summarizeIndicators, summarizeMedications, tableOf, testConnection, togetherZh, tokenKey, trackingGeneration, turnText, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };
+export { type BootstrapResult, CHANGES_NOTE_ZH, CLASSIFIER_SYSTEM, CONNECTION_FILE, CONNECTION_TEST_MS, CONNECTION_UNAVAILABLE, CONSENT_VERSION, Config, type ConnectionGuard, type ConnectionSource, type ConnectionStatus, type ConnectionTest, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMERGENCY_LINE_ZH, EMPTY_PROFILE, FOCUS, FOCUS_ZH, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, GROUP_KEYS, GROUP_ZH, GUARD_COUNTERS, GUARD_SCOPES, GUARD_TIMEOUT_MS, type GroupKey, type Guard, type GuardCall, type GuardHit, type GuardLabels, type GuardScope, HARNESS_SKILLS, HealthSessions, type IndicatorChange, type IndicatorDetail, type IndicatorEntry, type IndicatorSource, type IndicatorsResponse, JUDGE_SYSTEM, type Journey, LABEL_KEYS, type LlmLike, NO_READ_BACK, PHENOAGE_SKILL, PRODUCT_VERSION, type PlanBrief, type PlanDraft, type Profile, READ_BACK_MS, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RecordChange, type RecordsSummary, type ReplyVerdict, type RiskFact, SELF_ALIASES, SELF_HARM_LINE_ZH, SELF_KEYS, SELF_SPEC, type SavedConnection, type SelfKey, type SelfRow, type SendResult, type Stage, TOOL_NAMES, type UnjudgedChange, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, type WorkspaceLike, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, asJson, bootstrapWorkspace, bridgeEnv, briefOptionsOf, buildBoard, buildCalendar, buildChanges, buildIndicators, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, candidatesFor, cellNumber, checkReply, checkinStatus, checkupMarkerFor, classifyMessage, clearConnection, commandExcerpt, connectionKey, connectionSource, connectionTokenProblem, connectionUrlProblem, correctionNote, countGuard, createGuard, currentPlan, daysBetween, decideFollowup, deleteSelf, describeItem, describePlan, desktopCommand, desktopSupported, detectIntents, domainSummary, dosePattern, draftPlan, effectiveConfig, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expandMarkerNames, expectedText, factorFor, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, goalProblems, groupOf, guardRoute, guidanceNote, hasDose, hasDoseAmount, healthWorkspacePaths, heldUntil, homeBloodPressure, inQuiet, indicatorDetail, indicatorFor, indicatorsFromTable, inject, insideWorkspace, invalidateIndicators, invalidateRecords, invalidateTracking, isJsonRequest, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, markerGroupKeys, maskMcpUrl, maskUrl, matchSkills, mentionedEntities, mentionsMedicine, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseLabels, parseNumber, parseReadme, parseVerdict, personText, planApprovalReason, planKey, preGuard, profileComplete, publicFollowup, rcvBand, readCheckIns, readConnection, readFailed, readFollowup, readFollowupLog, readGuardStats, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, recordReadable, recordsSummary, registerApprovals, rememberMedications, rememberedMedications, replyRuleCheck, reportExcerpt, resetReadBacks, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, routeFor, ruleLabels, runReady, runSkill, runnableFrom, runtimeCall, sameMeasure, saveConnection, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, skillEnv, stageMeasurements, stageNow, startFollowup, stripDoses, suggestNext, summarizeIndicators, summarizeMedications, tableOf, testConnection, togetherZh, tokenKey, touchesHealth, trackingGeneration, turnText, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };

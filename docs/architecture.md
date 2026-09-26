@@ -20,6 +20,7 @@ LongPi is the personal layer. Three pieces stay separate.
 | `stats.ts` | Weekly anonymous counts per skill: runs, failures, missing input keys. |
 | `guardrails.ts` | The guard's rule layer (used when the model call fails), its guidance notes and the deterministic reply check. |
 | `guard-llm.ts` | The guard: the host model labels each new message and judges the reply before a turn closes, through DSH's LLM runtime with a 4 s deadline; one note appended, at most one correction steered; counts in `guard-stats.json`. |
+| `guard-scope.ts` | Where the guard asks the model: LongPi's workspace, and elsewhere messages that touch health (a recall-first word list holding the rule layer's words) and the rest of their session. |
 | `guard-dose.ts` | Dose amounts for the reply check (a local copy until the shared `dose.ts` merges). |
 | `tools-approval.ts` | A plan saved from chat needs a fresh read-back of the same plan and then the person's approval; no skill runs in a turn flagged as an emergency. |
 | `compact.ts` | Parse Mirobody's compact pipe tables (hoisted constants, single-row answers, refusals, the meta line). |

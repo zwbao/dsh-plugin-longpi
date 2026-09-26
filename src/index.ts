@@ -19,6 +19,7 @@ import { invalidateTracking, trackingGeneration } from './tracking.ts'
 import { isoDay } from './interventions.ts'
 import { resolveDataDir, resolveMirobodyPlugin, resolveSkillsHome } from './paths.ts'
 import { bootstrapWorkspace, type WorkspaceRegistryLike } from './workspace.ts'
+import { healthWorkspacePaths, type WorkspaceLike } from './guard-scope.ts'
 import { effectiveConfig } from './connection.ts'
 
 export const name = 'dsh-plugin-longpi'
@@ -30,6 +31,8 @@ export type { GuardHit, GuardLabels, ReplyVerdict } from './guardrails.ts'
 export { createGuard, classifyMessage, checkReply, parseLabels, parseVerdict, runtimeCall, routeFor, personText, turnText, countGuard, readGuardStats, CLASSIFIER_SYSTEM, JUDGE_SYSTEM, GUARD_TIMEOUT_MS, GUARD_COUNTERS } from './guard-llm.ts'
 export type { Guard, GuardCall, LlmLike } from './guard-llm.ts'
 export { registerApprovals, planKey, planApprovalReason, resetReadBacks, NO_READ_BACK, READ_BACK_MS } from './tools-approval.ts'
+export { touchesHealth, healthWorkspacePaths, insideWorkspace, HealthSessions, GUARD_SCOPES } from './guard-scope.ts'
+export type { GuardScope, WorkspaceLike } from './guard-scope.ts'
 export { hasDoseAmount } from './guard-dose.ts'
 export { PRODUCT_VERSION, TOOL_NAMES, HARNESS_SKILLS } from './version.ts'
 export { parseFrontmatter, loadCatalog, parseReadme, commandExcerpt } from './catalog.ts'
@@ -131,9 +134,24 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   registerTools(ctx, source, mount)
   registerTrackingTools(ctx, source, mount)
   registerFollowupTools(ctx, source, () => followupState(20_000).catch(() => null))
-  // The safety guard: the host model labels each new message (rules when it fails) and checks the reply
-  // before a turn closes; plan saves from chat wait for the person's approval.
-  const guard = createGuard(ctx, { dataDir: () => resolveDataDir(config.dataDir) })
+  // DSH's workspace registry, read through the context that injected it (gone with the service).
+  let registryLookup: (() => unknown) | null = null
+  const workspaces = (): WorkspaceLike[] => {
+    try {
+      const registry = registryLookup?.() as { list?: () => ReadonlyArray<{ path?: unknown; title?: unknown }> } | undefined
+      return typeof registry?.list === 'function' ? registry.list().map((row) => ({ path: String(row.path ?? ''), title: typeof row.title === 'string' ? row.title : '' })) : []
+    } catch {
+      return []
+    }
+  }
+  // The safety guard: the host model labels each new message in LongPi's workspace, and elsewhere each one that
+  // touches health (rules otherwise, and when it fails); it checks the reply before a turn closes; plan saves
+  // from chat wait for the person's approval.
+  const guard = createGuard(ctx, {
+    dataDir: () => resolveDataDir(config.dataDir),
+    scope: () => (config.guardScope === 'all' ? 'all' : 'health'),
+    healthWorkspaces: () => healthWorkspacePaths(resolveDataDir(config.dataDir), workspaces()),
+  })
   registerApprovals(ctx, guard)
   startFollowup(ctx, () => ({ dataDir: resolveDataDir(config.dataDir), getState: () => followupState(60_000), generation: trackingGeneration }))
   registerHarnessSkills(ctx)
@@ -144,6 +162,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // service comes back; the marker file keeps it to one workspace, ever.
   ctx.inject(['workspaceRegistry'], (scoped) => {
     const registry = (scoped as unknown as { workspaceRegistry?: WorkspaceRegistryLike }).workspaceRegistry
+    registryLookup = () => (scoped as unknown as { workspaceRegistry?: unknown }).workspaceRegistry
     void bootstrapWorkspace(registry, { dataDir: resolveDataDir(config.dataDir), enabled: config.bootstrapWorkspace !== false }).then((result) => {
       if (result.status === 'created') logTo(scoped, 'info', `created the 健康对话 workspace at ${result.path}`)
       else if (result.status === 'error') logTo(scoped, 'warn', `workspace bootstrap failed: ${result.error}`)
