@@ -11,6 +11,7 @@ import { recordsSummary, type RecordsSummary } from './indicators.ts'
 import { addDays, checkinStatus, daysBetween, readCheckIns } from './interventions.ts'
 import { measurementInputs } from './measurements.ts'
 import type { MountState } from './mirobody.ts'
+import type { RecordStatus } from './records.ts'
 import { CONSENT_VERSION, FOCUS, FOCUS_ZH, RISK_FACTS, RISK_FACT_ZH, type Focus, type Profile, type RiskFact } from './profile.ts'
 import { loadReference } from './reference.ts'
 import { latestSelf, readSelf, SELF_KEYS, SELF_SPEC, type SelfKey } from './selfmeasure.ts'
@@ -40,7 +41,7 @@ export interface Journey {
    * read failed or timed out (a count would then be too small).
    */
   records: {
-    status: 'unconfigured' | 'ok' | 'partial' | 'error'; error: string; read_errors: string[]; missing_reads: string[]
+    status: RecordStatus; error: string; read_errors: string[]; missing_reads: string[]
     indicator_count: number; full_checkups: number; latest_checkup: string | null; mirobody_mounted: boolean
     summary: RecordsSummary | null
   }

@@ -24,6 +24,12 @@ const RAW_LIMIT = 500
 const RAW_PAGES = 20
 const LOG_WINDOW_DAYS = 90
 
+/**
+ * How the record read went. A named type, so the declarations print it by name: an inlined union is printed in
+ * the checker's order, which differs between builds and made lib/ look stale in CI.
+ */
+export type RecordStatus = 'unconfigured' | 'ok' | 'partial' | 'error'
+
 export interface RecordSnapshot {
   profile: Profile
   estimated_age: number | null
@@ -32,7 +38,7 @@ export interface RecordSnapshot {
   indicators: IndicatorRow[]
   medications: MedicationRow[]
   /** partial: the record was read, but some reads failed or came back cut (read_errors says which). */
-  record_status: 'unconfigured' | 'ok' | 'partial' | 'error'
+  record_status: RecordStatus
   record_error: string
   /** Each read that failed or was cut, in Chinese; empty when every read succeeded. */
   read_errors: string[]
