@@ -4,7 +4,7 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { gradeBioAge } from '../src/feedback/grade.ts'
+import { gradeBioAge, gradeMarker, markerFromChange } from '../src/feedback/grade.ts'
 import { formatMeasure, plainSource, resultSentence, titleOf } from '../src/core/method-view.ts'
 import { chineseDate } from '../src/client/format.ts'
 import { isDiagnosisName, scrubVisible } from '../src/ux/plain.ts'
@@ -51,6 +51,10 @@ assert.equal(plainSource('Systolic blood pressure 148 mmHg'), '收缩压（高�
 assert.equal(formatMeasure(47.2, 'a', 'wearable_age').includes('a'), false)
 assert.match(formatMeasure(47.2, 'a', 'wearable_age'), /岁/)
 assert.equal(titleOf('unknown-skill', '可穿戴时钟'), '可穿戴时钟')
+assert.equal(titleOf('aging-biomarker-framework', '衰老标志物对照', 'blood_phenoage_age_deviation'), '血检身体年龄减周岁', 'a blood panel is not a methylation clock')
+assert.equal(titleOf('aging-biomarker-framework', '', 'grimage2_age_deviation'), '甲基化时钟偏差')
+assert.equal(titleOf('biological-aging-generational-shifts', '衰老测量对照', 'phenoage_gap'), '身体年龄减周岁')
+assert.equal(formatMeasure(-8.89, 'a', 'phenoage_gap'), '-8.89 岁')
 const unbound = resultSentence({
   skill: 'china-par-ascvd-risk',
   label: 'unverified-binding',
@@ -164,5 +168,13 @@ assert.equal(chatConcern.allowed_claims.includes('celebrate'), false)
 const chatCheer = feedbackFor(trackingOf(cheered), null).find((row) => row.id === 'fb-bioage')
 assert.equal(chatCheer.headline_zh, cheered.headline_zh)
 assert.equal(chatCheer.allowed_claims.includes('younger'), true)
+
+// A haemoglobin fall below the lab range reads like the doctor card, not 「先不说变好或变差」.
+const hbRow = { key: 'hb', label_zh: '血红蛋白', unit: 'g/L', compare: { from_date: '2022-04-19', from: 151, to_date: '2026-05-18', to: 114, pct: -24.5 }, band_pct: { up: 8.4, down: -8.4 }, direction: 'down', verdict: 'unclear', ask_doctor: true, verified: true, range_flag: 'low' }
+const hbMessage = gradeMarker(markerFromChange(hbRow), '2026-07-27')
+assert.match(hbMessage.headline_zh, /已经低于参考范围/)
+assert.equal(hbMessage.headline_zh.includes('先不说变好或变差'), false)
+const { range_flag: _flag, ...inRange } = hbRow
+assert.match(gradeMarker(markerFromChange({ ...inRange, ask_doctor: false }), '2026-07-27').headline_zh, /先不说变好或变差/)
 
 console.log('fix-062 ok')

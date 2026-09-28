@@ -149,6 +149,7 @@ function changeOf(row: Raw): RecordChange | null {
     text_zh: text,
     advice_zh: str(row.advice_zh),
     ...(str(row.caveat_zh) ? { caveat_zh: str(row.caveat_zh) } : {}),
+    ...(row.range_flag === 'low' || row.range_flag === 'high' ? { range_flag: row.range_flag } : {}),
     source: { title: str(source.title), url: str(source.url), ...(str(source.doi) ? { doi: str(source.doi) } : {}) },
     verified: row.verified === true,
   }

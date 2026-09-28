@@ -233,7 +233,7 @@ function MethodCard(props: { result: MethodResult }): React.ReactElement {
   const numeric = out != null && typeof out.value === 'number'
   const sentence = resultSentence(props.result, { youngerAllowed: false })
   return h('div', { className: 'lp-card lp-result', 'data-result-label': props.result.label },
-    h(CardHead, { label: titleOf(props.result.skill, props.result.title_zh), info: h('span', { className: 'lp-info-line' }, props.result.limits_zh || '模型估计，不是诊断。'), mark: props.result.label }),
+    h(CardHead, { label: titleOf(props.result.skill, props.result.title_zh, out?.key ?? ''), info: h('span', { className: 'lp-info-line' }, props.result.limits_zh || '模型估计，不是诊断。'), mark: props.result.label }),
     numeric
       ? h('div', { className: 'lp-result-figure' },
         h('span', { className: 'lp-bignum' }, fmt(out.value as number)),

@@ -67,6 +67,8 @@ export interface RecordChange {
   text_zh: string
   advice_zh: string
   caveat_zh?: string
+  /** Set when the doctor is asked because the latest value left the lab's range. */
+  range_flag?: 'low' | 'high'
   source: { title: string; url: string; doi?: string }
   verified: boolean
 }

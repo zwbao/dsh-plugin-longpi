@@ -35,7 +35,7 @@ export function communityHtml(view: CommunityView): string {
   const topics = view.voting.topics.map((topic) => `
     <label class="topic"><input type="radio" name="topic" value="${esc(topic.id)}" ${view.voting.mine === topic.id ? 'checked' : ''}> ${esc(topic.title_zh)} <span>${topic.votes}</span></label>`).join('')
   const cards = view.cards.length === 0
-    ? '<p class="note">还没有贡献卡。完成本机计算后会出现在这里，不和化验结果挂钩。</p>'
+    ? '<p class="note">贡献卡是你在这台电脑上参加研究之后留下的一张卡，和化验结果好坏无关。还没有贡献卡，完成本机计算后会出现在这里。</p>'
     : view.cards.map((card) => `<article class="card slim"><h3>${esc(card.title_zh)}</h3><p>${esc(card.body_zh)}</p></article>`).join('')
   const log = view.translog.length === 0
     ? '<p class="note">还没有东西离开这台电脑。</p>'
@@ -90,7 +90,7 @@ export function communityHtml(view: CommunityView): string {
   <section class="card" id="pulse"><p class="kicker">大家的结果</p>${pulse}</section>
   <section class="card"><p class="kicker">发回给你</p><p>${esc(view.give_back_zh)}</p></section>
   <section class="card" id="vote">
-    <p class="kicker">下一季题目</p>
+    <p class="kicker">下个赛季的题目</p>
     <h2>你想先研究哪一件</h2>
     <form id="vote-form">${topics}<button type="submit">记下我的一票</button></form>
     <p class="note">${esc(view.voting.note_zh)}</p>
@@ -98,7 +98,7 @@ export function communityHtml(view: CommunityView): string {
   ${studies}
   <section><h2>贡献卡</h2>${cards}</section>
   <section class="card"><h2>发出记录</h2><p class="note">这里只记离开这台电脑的东西：什么时候、发给哪一项研究。</p>${log}</section>
-  <p class="note">基因、姓名、原始化验单和图片不参加。进度写在这一页的正文里，不盖住别的卡片。</p>
+  <p class="note">基因、姓名、原始化验单和图片不参加。</p>
 </main>
 <script>
 async function post(path, body) {

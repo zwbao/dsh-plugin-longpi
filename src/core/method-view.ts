@@ -47,7 +47,15 @@ export function facingUnit(unit: string, key = ''): string {
   return raw
 }
 
-export function titleOf(skill: string, titleZh = ''): string {
+// When one method reports several numbers, the number on the card names the card. aging-biomarker-framework
+// is 甲基化时钟偏差 only when a methylation clock filled it; from a blood panel it is the blood PhenoAge gap.
+const TITLE_BY_OUTPUT: Record<string, string> = {
+  blood_phenoage_age_deviation: '血检身体年龄减周岁',
+  phenoage_gap: '身体年龄减周岁',
+}
+
+export function titleOf(skill: string, titleZh = '', outputKey = ''): string {
+  if (skill !== PHENO_SKILL && skill !== RISK_SKILL && TITLE_BY_OUTPUT[outputKey]) return TITLE_BY_OUTPUT[outputKey]
   if (TITLES[skill]) return TITLES[skill]
   const named = titleZh.trim().replace(/。$/, '')
   if (named && /[\u4e00-\u9fff]/.test(named) && !/[A-Za-z]{4,}/.test(named)) return named.length > 22 ? named.slice(0, 22) : named
@@ -159,7 +167,7 @@ export function resultSentence(row: MethodResult, opts: { youngerAllowed: boolea
   if (row.label === 'evidence-only') return evidenceSentence(row)
   const out = primaryOutput(row)
   const shown = out && out.value != null && out.value !== '' ? formatMeasure(out.value, out.unit, out.key) : '没有个人数字'
-  const title = titleOf(row.skill, row.title_zh)
+  const title = titleOf(row.skill, row.title_zh, out?.key ?? '')
   let text: string
   if (row.label === 'unverified-binding') {
     const raw = row.inputs_used.map((item) => item.quote.trim()).find(Boolean) ?? ''
@@ -180,7 +188,7 @@ export function methodFactText(row: MethodResult): string {
   if (row.label === 'verified') {
     const out = primaryOutput(row)
     const shown = out && out.value != null && out.value !== '' ? formatMeasure(out.value, out.unit, out.key) : '没有个人数字'
-    return `${titleOf(row.skill, row.title_zh)}是 ${shown}（已核对）。`
+    return `${titleOf(row.skill, row.title_zh, out?.key ?? '')}是 ${shown}（已核对）。`
   }
   return resultSentence(row, { youngerAllowed: false })
 }
@@ -190,7 +198,7 @@ export function verifiedMention(results: readonly MethodResult[]): string | null
   if (!row) return null
   const out = primaryOutput(row)
   if (!out || out.value == null || out.value === '') return null
-  return `已核对：${titleOf(row.skill, row.title_zh)} ${formatMeasure(out.value, out.unit, out.key)}`
+  return `已核对：${titleOf(row.skill, row.title_zh, out.key)} ${formatMeasure(out.value, out.unit, out.key)}`
 }
 
 export function redCellDriverNames(rows: readonly { key?: string; label_zh?: string }[]): string[] {

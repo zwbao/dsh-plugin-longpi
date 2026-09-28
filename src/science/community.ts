@@ -11,9 +11,9 @@ import { plainQuestion, plainSummary } from './plain-copy.ts'
 import { readLog } from './translog.ts'
 
 export const TOPICS = [
-  { id: 'sleep-glucose', title_zh: '下一季：睡眠时间和空腹血糖' },
-  { id: 'sit-break', title_zh: '下一季：久坐打断和餐后血糖' },
-  { id: 'weekend-steps', title_zh: '下一季：周末步数和血压' },
+  { id: 'sleep-glucose', title_zh: '下个赛季：睡眠时间和空腹血糖' },
+  { id: 'sit-break', title_zh: '下个赛季：久坐打断和餐后血糖' },
+  { id: 'weekend-steps', title_zh: '下个赛季：周末步数和血压' },
 ] as const
 
 export interface CommunityView {

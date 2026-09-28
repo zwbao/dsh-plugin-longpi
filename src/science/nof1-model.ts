@@ -28,7 +28,7 @@ export function nOf1SeasonQuest(seasonId: string): NOf1Quest {
     id: 'qs-n-of-1',
     season_id: seasonId,
     kind: 'science_n_of_1',
-    title_zh: '按随机顺序完成本季的个人对照，洗脱日照常生活，血糖只记在这台电脑',
+    title_zh: '按打乱的顺序做完这个赛季的个人小试验；中间休息的日子照常生活，血糖只记在这台电脑上',
     criteria: { event: 'study.n_of_1_completed', count: 1 },
     reward: { draws: 1 },
     origin: 'rule',

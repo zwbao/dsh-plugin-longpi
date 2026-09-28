@@ -30,6 +30,8 @@ export interface LabMarkerInput {
   same_lab?: boolean | null
   /** Days already waited, when the plan clock differs from the gap between draws. */
   waited_days?: number | null
+  /** The latest value is outside the lab's range: a two-way marker then has a direction worth a doctor's look. */
+  range_flag?: 'low' | 'high'
 }
 
 export interface BioAgeInput {
@@ -285,6 +287,9 @@ export function gradeMarker(marker: LabMarkerInput, today: string): FeedbackMess
   if (/home mean|one office|诊室/.test(marker.blocked_by ?? '')) {
     headline = `${marker.label_zh}只有一次诊室读数，还不能比较。请连续 7 天在家测量后再看方向。`
     body = '一次诊室血压落在波动里或外面，都不能下结论。'
+  } else if (/no direction|没有方向/.test(marker.blocked_by ?? '') && marker.range_flag && ask && marker.from != null && marker.to != null) {
+    // A two-way marker that left the lab's range says the same thing as the doctor card above it.
+    headline = `${movePhrase(marker)}，变化超出了波动，而且已经${marker.range_flag === 'low' ? '低于' : '高于'}参考范围。建议带着这几次体检报告问医生。`
   } else if (/no direction|没有方向/.test(marker.blocked_by ?? '')) {
     headline = marker.from != null && marker.to != null
       ? `${movePhrase(marker)}，变化${isBeyond(marker) ? '超出了波动' : '还不大'}，但${marker.label_zh}没有单一的好坏方向，所以先不说变好或变差。`
@@ -631,6 +636,7 @@ export function markerFromChange(row: {
   verdict: 'better' | 'worse' | 'unclear'
   ask_doctor: boolean
   verified: boolean
+  range_flag?: 'low' | 'high'
 }): LabMarkerInput {
   const glucoseFall = (row.key === 'glucose' || row.key === 'hba1c') && row.direction === 'down' && row.verdict === 'unclear'
   let verdict: MarkerVerdict | null = row.verdict === 'better' ? 'working' : row.verdict === 'worse' ? 'wrong way' : 'cannot tell'
@@ -655,6 +661,7 @@ export function markerFromChange(row: {
     blocked_by: blocked,
     ask_doctor: row.ask_doctor,
     same_lab: null,
+    ...(row.range_flag ? { range_flag: row.range_flag } : {}),
   }
 }
 
