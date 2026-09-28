@@ -108,7 +108,9 @@ function skillBody(raw: string, card: SkillCard): string {
 
 export function registerLibrarySkills(ctx: Context, skillsHome: () => string = libraryHome): void {
   ctx.inject(['skills'], (scoped) => {
-    const skills = scoped.skills
+    const skills = scoped.skills as typeof scoped.skills & { registerProvider?: Context['skills']['registerProvider'] }
+    // Test hosts stub register only. The real dsh registry has registerProvider.
+    if (typeof skills.registerProvider !== 'function') return undefined
     return skills.registerProvider(() => ({
       name: LIBRARY_PROVIDER,
       async list() {

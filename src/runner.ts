@@ -132,6 +132,19 @@ function fail(skill: string, revision: string, error_kind: string, error: string
   }
 }
 
+/** A script that exits 0 without a value did not produce a personal number. */
+function labelAfterRun(report: BindingReport, outputs: Record<string, OutputValue>): BindingReport {
+  if (report.label === 'evidence-only') return report
+  const produced = Object.values(outputs).some((item) => item && item.value != null && item.value !== '')
+  if (produced) return report
+  return {
+    ...report,
+    label: 'evidence-only',
+    blockReason: 'evidence-only',
+    limits_zh: '这次没有算出个人数字。',
+  }
+}
+
 function coronaryCell(text: string): string | null {
   for (const line of text.split(/\r?\n/)) {
     const cell = line.split(/[,:\t]/)[0]?.trim() ?? ''
@@ -467,7 +480,7 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
       : report
         ? 'Quote report_excerpt, including the 边界 line. Cite outputs exactly. Do not add a diagnosis or a dose.'
         : 'No out/report.md was written. Say so. Do not invent the missing readout.',
-    ...(bindingReport ? { method: methodFromReport(request.name, bindingReport, outputs) } : {}),
+    ...(bindingReport ? { method: methodFromReport(request.name, labelAfterRun(bindingReport, outputs), outputs) } : {}),
   }
   if (payload.method) payload.hint = `${payload.hint} ${payload.method.limits_zh}`
   remember(request.dataDir, {

@@ -194,4 +194,24 @@ try {
   rmSync(ranDir, { recursive: true, force: true })
 }
 
+const ageOnly = mod.assessBinding({
+  skill: 'imaging-organ-aging-clock',
+  inputs: { age: { source_row_id: 'profile:age', value: 41, unit: '岁', provenance: 'profile', quote: '实足年龄 41' } },
+}, { home, profile: { age: 41, sex: 'male' } })
+const ageDir = mkdtempSync(join(tmpdir(), 'longpi-age-only-'))
+try {
+  const ageRun = await mod.runSkill({
+    home, dataDir: ageDir, name: 'imaging-organ-aging-clock', args: [], files: [], python: 'python3', timeoutMs: 20000, revision: catalog.revision,
+    binding: { skill: 'imaging-organ-aging-clock', inputs: { age: ageOnly.inputs_used.find((item) => item.input === 'age') ?? { source_row_id: 'profile:age', value: 41, unit: '岁', provenance: 'profile', quote: '实足年龄 41' } } },
+    bindingView: { home, profile: { age: 41, sex: 'male' } },
+    profile: { age: 41, sex: 'male' },
+  })
+  assert.equal(ageRun.ok, true, JSON.stringify(ageRun))
+  assert.equal(ageRun.method.label, 'evidence-only')
+  assert.equal(ageRun.method.outputs.length, 0)
+  assert.match(ageRun.method.limits_zh, /没有算出个人数字/)
+} finally {
+  rmSync(ageDir, { recursive: true, force: true })
+}
+
 console.log(`library-binding ok (${index.length} methods, index ${chars} chars)`)
