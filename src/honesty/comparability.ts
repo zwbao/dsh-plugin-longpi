@@ -232,7 +232,11 @@ export function judgeSeries(marker: BiovarMarker, readings: readonly SeriesPoint
   const pick = options.filter((row): row is Compared => row != null).sort((a, b) => b.ratio - a.ratio)[0]
   if (!pick) return { change: null, blocked: false, complete: true }
   const direction = pick.pct > 0 ? 'up' : 'down'
-  const glucoseFall = direction === 'down' && GLUCOSE_KEYS.includes(marker.key) && (glucoseTreated || marker.key === 'glucose')
+  // Fasting glucose that came down from above the usual range (6.1 mmol/L) into it, with no glucose-lowering
+  // treatment, is good news: the body-age story and this row then say the same thing. Any other fall stays unclear.
+  const intoRange = marker.key === 'glucose' && !glucoseTreated && direction === 'down'
+    && pick.from.value > 6.1 && pick.to.value >= 3.9 && pick.to.value <= 6.1
+  const glucoseFall = !intoRange && direction === 'down' && GLUCOSE_KEYS.includes(marker.key) && (glucoseTreated || marker.key === 'glucose')
   const verdict = glucoseFall ? 'unclear' : verdictOf(marker.better, direction)
   const wbcInside = marker.key === 'wbc' && [pick.from.value, pick.to.value].every((value) => value >= 3.5 && value <= 9.5)
   const askDoctor = !wbcInside && (verdict === 'worse' || (verdict === 'unclear' && marker.better === 'range') || (glucoseFall && glucoseTreated))

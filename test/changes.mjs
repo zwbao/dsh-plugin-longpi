@@ -208,6 +208,14 @@ try {
   assert.deepEqual(await fallsWith([]), { glucose: ['unclear', false, NEUTRAL], hba1c: ['better', false, GOOD] }, 'no treatment: fasting glucose falling is only a change')
   assert.deepEqual(await fallsWith([metformin('active')]), { glucose: ['unclear', true, GLUCOSE_FALL], hba1c: ['unclear', true, GLUCOSE_FALL] }, 'on metformin: both to a doctor')
   assert.deepEqual(await fallsWith([metformin('已停用')]), { glucose: ['unclear', false, NEUTRAL], hba1c: ['better', false, GOOD] }, 'a stopped medicine does not count')
+  // Down from above the usual range into it, untreated: good news, the same as the body-age story says.
+  const intoRange = [
+    lab('Fasting Blood Glucose-FBG', '空腹血糖', '14771-0', 'mmol/L', D1, 6.6),
+    lab('Fasting Blood Glucose-FBG', '空腹血糖', '14771-0', 'mmol/L', D3, 5.0),
+  ]
+  const rangeServer = await serve({ tz: 'Asia/Shanghai', today: TODAY, observations: intoRange, medications: { plans: [], log: [], history: [] } })
+  const inRange = (await mod.buildChanges(await contextOf(configFor(synthDir, rangeServer.url)))).changes.find((row) => row.key === 'glucose')
+  assert.deepEqual([inRange.verdict, inRange.ask_doctor, inRange.advice_zh], ['better', false, GOOD], 'untreated fasting glucose back into range is good news')
   assert.ok(Math.abs(pctOf(44, 45)) < bandOf('albumin').up * 100, 'albumin moved, within its band')
 
   // weight has no better direction: a real change, but not one for the doctor

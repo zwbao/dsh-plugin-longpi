@@ -219,7 +219,11 @@ function changeOf(marker: BiovarMarker, points: Point[], z: number, glucoseTreat
   if (!pick) return null
   const direction = pick.pct > 0 ? 'up' : 'down'
   // Fasting glucose falling is never called good news; HbA1c falling is, unless the person is treated for diabetes.
-  const glucoseFall = direction === 'down' && GLUCOSE_KEYS.includes(marker.key) && (glucoseTreated || marker.key === 'glucose')
+  // Fasting glucose that came down from above the usual range (6.1 mmol/L) into it, with no glucose-lowering
+  // treatment, is good news: the body-age story and this row then say the same thing. Any other fall stays unclear.
+  const intoRange = marker.key === 'glucose' && !glucoseTreated && direction === 'down'
+    && pick.from.value > 6.1 && pick.to.value >= 3.9 && pick.to.value <= 6.1
+  const glucoseFall = !intoRange && direction === 'down' && GLUCOSE_KEYS.includes(marker.key) && (glucoseTreated || marker.key === 'glucose')
   const verdict = glucoseFall ? 'unclear' : verdictOf(marker.better, direction)
   // A white-cell count that stays inside the usual adult range is not a reason to send someone to a doctor
   // just because it cleared a tight desirable-CVA band (about ±31%).
