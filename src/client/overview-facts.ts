@@ -35,3 +35,17 @@ export function isCovered(covered: Covered, row: { key?: string; label_zh?: stri
   if (label && covered.labels.has(label)) return true
   return covered.redCell && RED_CELL_LABEL.test(label)
 }
+
+/** Rows 值得注意的变化 shows on 总览: the first three the doctor card does not already cover. */
+export const NOTABLE_ON_OVERVIEW = 3
+
+export function notableRows<T extends { key?: string; label_zh?: string }>(rows: readonly T[], covered: Covered): T[] {
+  return rows.filter((row) => !isCovered(covered, row)).slice(0, NOTABLE_ON_OVERVIEW)
+}
+
+/** The doctor card's detail without the title it repeats: the values once, then what to do. */
+export function careDetail(title: string, detail: string): string {
+  if (!detail || detail === title) return ''
+  const lead = /^请先去看医生：/.test(title)
+  return lead ? detail.replace(/^请先去看医生：/, '').replace(/请先去看医生。/g, '').replace(/\s{2,}/g, ' ').trim() : detail
+}

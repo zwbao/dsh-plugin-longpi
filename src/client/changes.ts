@@ -10,7 +10,7 @@ import { LineChart } from './charts.ts'
 import { Icon } from './icons.ts'
 import type { Journey, RecordChange } from './types.ts'
 import { sourceLabel } from '../ux/plain.ts'
-import { isCovered, NOTHING_COVERED, type Covered } from './overview-facts.ts'
+import { isCovered, notableRows, NOTHING_COVERED, type Covered } from './overview-facts.ts'
 
 const h = React.createElement
 
@@ -64,9 +64,6 @@ function distinct<T>(items: readonly T[], keyOf: (item: T) => string): T[] {
     return true
   })
 }
-
-/** Rows shown on 概览; the rest are one tap away on 指标. */
-const NOTABLE = 3
 
 const VERDICT_ZH: Record<RecordChange['verdict'], string> = { better: '变好', worse: '变差', unclear: '需结合参考范围' }
 
@@ -131,7 +128,7 @@ export function NotableChanges(props: { journey: Journey; onOpenIndicators: () =
   // Values 最重要的一步 is already about are one short line here, not rows and advice again (INT062 fix 7).
   const covered = props.covered ?? NOTHING_COVERED
   const onCard = rows.filter((row) => isCovered(covered, row))
-  const shown = rows.filter((row) => !isCovered(covered, row)).slice(0, NOTABLE)
+  const shown = notableRows(rows, covered)
   const advice = groupsOf(shown).filter((group) => group.advice && group.tone === 'warn')
   const pointer = onCard.length > 0
     ? `${onCard[0]?.label_zh ?? ''}${onCard.length > 1 ? `等 ${onCard.length} 项` : ''}的变化，就是上面「最重要的一步」说的那件事。`

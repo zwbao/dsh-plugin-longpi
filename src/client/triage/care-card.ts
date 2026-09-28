@@ -8,6 +8,7 @@ import { Icon } from '../icons.ts'
 import { notifyChanged } from '../store.ts'
 import type { Journey } from '../types.ts'
 import { Btn, LinkButton } from '../ui.ts'
+import { careDetail } from '../overview-facts.ts'
 
 const h = React.createElement
 type Notify = (text: string, tone?: 'info' | 'good' | 'bad') => void
@@ -107,7 +108,7 @@ export function CareCard(props: { journey: Journey; onNotice: Notify; onIndicato
     h('div', { className: 'lp-next-text' },
       h('div', { className: 'lp-label' }, h(Icon, { name: 'warn', size: 14 }), ' 最重要的一步'),
       h('div', { className: 'lp-strong' }, journey.next.title_zh),
-      journey.next.detail_zh && journey.next.detail_zh !== journey.next.title_zh ? h('p', { className: 'lp-muted' }, journey.next.detail_zh) : null),
+      careDetail(journey.next.title_zh, journey.next.detail_zh) ? h('p', { className: 'lp-muted' }, careDetail(journey.next.title_zh, journey.next.detail_zh)) : null),
     h('div', { className: 'lp-form-actions' },
       h(Btn, { size: 'sm', disabled: busy, onClick: () => { void openBrief() } }, busy ? '正在整理…' : '医生简报（可打印）'),
       h(Btn, { size: 'sm', variant: 'outline', onClick: props.onIndicators }, '看这些指标'),

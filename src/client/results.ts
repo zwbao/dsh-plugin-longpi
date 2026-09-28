@@ -12,7 +12,7 @@ import {
   PHENO_SKILL, primaryOutput, redCellDriverNames, resultSentence, RISK_SKILL,
   speciesOf, stripYoungerClaim, titleOf, versusCalendarAge,
 } from '../core/method-view.ts'
-import { isCovered, NOTHING_COVERED, type Covered } from './overview-facts.ts'
+import { isCovered, notableRows, NOTHING_COVERED, type Covered } from './overview-facts.ts'
 import { fmt, LineChart } from './charts.ts'
 import { FeedbackBlock, messagesFor } from './feedback/index.ts'
 import { chineseDate, riskText } from './format.ts'
@@ -179,8 +179,11 @@ export function BodyAgeCard(props: {
 
 function KeyTrends(props: { journey: Journey; older: boolean; covered?: Covered }): React.ReactElement | null {
   // Values 最重要的一步 is already about are not listed again beside body age (INT062 fix 7).
+  // Nor are the rows 值得注意的变化 lists further down: each change is said once on 总览.
   const covered = props.covered ?? NOTHING_COVERED
-  const trends = pickKeyTrends((props.journey.changes ?? []).filter((row) => !isCovered(covered, row)), props.older)
+  const changes = props.journey.changes ?? []
+  const below = new Set(notableRows(changes, covered).map((row) => row.key))
+  const trends = pickKeyTrends(changes.filter((row) => !isCovered(covered, row) && !below.has(row.key)), props.older)
   if (trends.length === 0) return null
   return h('div', { className: 'lp-trends' },
     h('div', { className: 'lp-caption' }, '旁边的变化'),

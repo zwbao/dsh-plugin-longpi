@@ -144,6 +144,6 @@ export function Overview(props: OverviewProps): React.ReactElement {
     h(ResultsRow, { journey, tracking: props.tracking, onAction: props.onAction, onNotice: props.onNotice, covered }),
     doctor ? null : h(NextCard, props),
     h(NotableChanges, { journey, covered, onOpenIndicators: () => props.goTab('indicators', { filter: 'changed' }) }),
-    // The research invitation waits under the person's own results.
-    h(ScienceIntro, { goTab: props.goTab }))
+    // The research invitation waits under the person's own results, and not on a day the top fact is a doctor step.
+    doctor ? null : h(ScienceIntro, { goTab: props.goTab }))
 }
