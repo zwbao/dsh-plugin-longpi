@@ -15,7 +15,7 @@ import { addDays, CATEGORY_ZH, currentPlan, daysBetween, readCheckIns, readPlans
 import { RISK_FACT_ZH, type RiskFact } from './profile.ts'
 import type { InputSpec } from './catalog.ts'
 import { aliasIndex, candidatesFor, indicatorFor, measurementInputs, notRead, resolveInput, stageMeasurements, type MeasurementIn } from './measurements.ts'
-import { loadCourses, loadDoseLog, loadSeries, recordReadable, sameMeasure, type CourseRow, type RecordSnapshot, type SeriesPoint } from './records.ts'
+import { loadCourses, loadDoseLog, loadSeries, readFlags, recordReadable, sameMeasure, type CourseRow, type RecordSnapshot, type SeriesPoint } from './records.ts'
 import { expandMarkerNames, loadReference, markerFor, rcvBand, type Reference } from './reference.ts'
 import { runSkill, type Levers } from './runner.ts'
 import { readSelf, selfKeyOf, selfSeries, SELF_DEVICE_NAMES, SELF_SPEC } from './selfmeasure.ts'
@@ -345,7 +345,7 @@ function pairsFor(card: SkillCard, records: RecordSnapshot): Pair[] {
 
 /** The inputs the record lacks, split: truly not on file, and not read (a failed read, or a catalogue cut short). */
 function absentInputs(pairs: readonly Pair[], records: RecordSnapshot): { missing: Pair[]; unread: Pair[] } {
-  const reads = { failed: records.missing_reads, catalog_truncated: records.catalog_truncated }
+  const reads = readFlags(records)
   const absent = pairs.filter((pair) => !pair.indicator)
   const unread = absent.filter((pair) => notRead(pair.spec, records.indicators, reads))
   return { missing: absent.filter((pair) => !unread.includes(pair)), unread }
@@ -648,6 +648,16 @@ export function goalProblems(catalog: Catalog, goals: PlanVersion['goals'], skil
   return [...new Set(out)]
 }
 
+/** A missing lab, with a tape-measure waist said as not measured yet rather than as a failed read. */
+function missingLabsNote(labels: readonly string[]): string {
+  const waist = labels.filter((label) => label.includes('腰围'))
+  const rest = labels.filter((label) => !label.includes('腰围'))
+  const parts: string[] = []
+  if (rest.length > 0) parts.push(`记录里还缺${rest.join('、')}。`)
+  if (waist.length > 0) parts.push(`${waist.join('、')}还没有测过，现在量一下填上就能算。`)
+  return parts.join('')
+}
+
 function numberOrNull(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
 }
@@ -782,7 +792,7 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
   const missingLabs: string[] = []
   // On file but not read (a failed read, or a catalogue cut short): unknown, never listed as a test to add.
   const unreadLabs: string[] = []
-  const reads = { failed: context.records.missing_reads, catalog_truncated: context.records.catalog_truncated }
+  const reads = readFlags(context.records)
   for (const spec of measurementInputs(card)) {
     const row = indicatorFor(spec, context.records.indicators)
     if (row) found.push({ spec, key: spec.key, row })
@@ -806,7 +816,7 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
   }
   if (missingLabs.length > 0 || missingFacts.length > 0 || unreadLabs.length > 0) {
     const unreadHint = unreadLabs.length > 0 ? `${unreadLabs.join('、')}的最新值没有读到（读取失败），不是没有测过。` : ''
-    base.note_zh = `${missingLabs.length > 0 ? `记录里还缺${missingLabs.join('、')}。` : ''}${unreadHint}${factsHint}`
+    base.note_zh = `${missingLabsNote(missingLabs)}${unreadHint}${factsHint}`
     return base
   }
   const measurements: MeasurementIn[] = []

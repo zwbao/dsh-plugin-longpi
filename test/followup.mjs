@@ -3,7 +3,7 @@
 // dedup across restarts, 6 a day), webhook payloads and signatures, the desktop
 // command (no shell), and the tools and routes. The desktop runner and fetch
 // are injected before anything runs: no test calls osascript, notify-send or
-// the network. Times are local (no Z), so the test holds in any time zone.
+// the network. Times are Asia/Shanghai wall time (+08:00), so the test holds in any process zone.
 
 import assert from 'node:assert/strict'
 import { createHmac } from 'node:crypto'
@@ -34,7 +34,8 @@ function tempDir(name) {
   temp.push(dir)
   return dir
 }
-const at = (day, time) => new Date(`${day}T${time}:00`)
+// Wall time in Asia/Shanghai. The process zone is not the person's day.
+const at = (day, time) => new Date(`${day}T${time}:00+08:00`)
 const FEISHU = 'https://open.feishu.cn/open-apis/bot/v2/hook/2c0ffee0-token-abcdef'
 
 function state(extra = {}) {
@@ -102,6 +103,13 @@ try {
   assert.equal(statSync(join(dir, 'followup.json')).mode & 0o777, 0o600, 'rewritten, still private')
   writeFileSync(join(dir, 'followup.json'), '{"enabled": true, "checkin_time": "99:99", "detail": "loud"}')
   assert.deepEqual(mod.readFollowup(dir), { ...mod.DEFAULT_FOLLOWUP, enabled: true }, 'a bad stored field falls back to its default')
+  const keptHook = on({ webhook: { kind: 'feishu', url: FEISHU, secret: 'sekrit' } })
+  writeFileSync(join(dir, 'followup.json'), `${JSON.stringify(keptHook)}\n`)
+  writeFileSync(join(dir, 'followup.json'), '{')
+  const torn = mod.writeFollowup(dir, { enabled: true })
+  assert.equal(torn.ok, false)
+  assert.equal(torn.error, mod.FOLLOWUP_DAMAGED)
+  assert.equal(readFileSync(join(dir, 'followup.json'), 'utf8'), '{', 'a torn settings file is not replaced with defaults')
 
   const secretSettings = on({ webhook: { kind: 'feishu', url: FEISHU, secret: 'sekrit' } })
   const shown = mod.publicFollowup(secretSettings)
@@ -122,6 +130,11 @@ try {
   assert.equal(kinds(decide(at('2026-09-24', '20:59'))).includes('checkin'), false, 'not due before check-in time')
   assert.equal(kinds(decide(at('2026-09-24', '21:05'), on(), state({ checkin_open: [] }))).includes('checkin'), false, 'all done: no reminder')
   assert.equal(kinds(decide(at('2026-09-24', '21:05'), on(), state(), [row('checkin', 'checkin:2026-09-24', at('2026-09-24', '21:00'))])).includes('checkin'), false, 'once a day')
+  // 00:30 in China is still that civil day, even when the process zone (here CEST) is on the previous date.
+  assert.equal(mod.isoDay(new Date('2026-07-28T00:30:00+08:00')), '2026-07-28')
+  assert.equal(mod.isoDay(new Date('2026-07-27T16:30:00Z')), '2026-07-28')
+  assert.ok(kinds(decide(new Date('2026-09-24T21:05:00+08:00'))).includes('checkin'), '21:05 in China is check-in time')
+  assert.equal(kinds(decide(new Date('2026-09-24T20:59:00+08:00'))).includes('checkin'), false)
 
   sends = decide(at('2026-09-24', '09:00'))
   assert.deepEqual(sends, [{ kind: 'retest', key: 'retest:甘油三酯:2026-09-24', text: 'LongPi：今天有一项复测到期。' }], 'only the retest dated today, minimal')
@@ -206,6 +219,18 @@ try {
   assert.equal(statSync(join(tickDir, 'followup_log.jsonl')).mode & 0o777, 0o600)
   // a restart: nothing in memory, the log file decides
   assert.deepEqual(await mod.followupTick({ dataDir: tickDir, now: at('2026-09-24', '23:31'), getState }), [], 'no second send after a restart')
+  // a channel that did not deliver is tried again; one that did is not
+  const failDir = tempDir('fail-send')
+  mod.writeFollowup(failDir, { enabled: true, desktop: true })
+  const failRun = async () => ({ ok: false, error: 'no display' })
+  const restoreFail = mod.setFollowupDeps({ run: failRun })
+  const checkinOnly = async () => state({ retests: [] })
+  const failed = await mod.followupTick({ dataDir: failDir, now: at('2026-09-24', '21:05'), getState: checkinOnly })
+  assert.equal(failed[0].ok, false)
+  const retried = await mod.followupTick({ dataDir: failDir, now: at('2026-09-24', '21:06'), getState: checkinOnly })
+  assert.deepEqual(retried.map((item) => item.kind), ['checkin'], 'a failed reminder is sent again')
+  restoreFail()
+  assert.equal(mod.readFollowupLog(failDir).length, 2, 'both attempts are logged, so the daily cap still counts them')
   rows = await mod.followupTick({ dataDir: tickDir, now: at('2026-09-25', '08:00'), getState })
   assert.deepEqual(rows, [], "yesterday's reminders are never back-filled")
   assert.equal(mod.readFollowupLog(tickDir).length, 2)
@@ -356,7 +381,12 @@ try {
   assert.deepEqual(await gate('set_followup', { enabled: true }, { kind: 'deny', reason: 'policy' }), { kind: 'deny', reason: 'policy' }, 'another listener\'s denial stands')
 
   // quiet hours hold model-written messages too (the page's test button is the only exception)
-  const hhmm = (date) => `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+  const hhmm = (date) => {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Shanghai', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date)
+    const pick = (type) => parts.find((part) => part.type === type)?.value ?? '00'
+    const hour = pick('hour') === '24' ? '00' : pick('hour')
+    return `${hour}:${pick('minute')}`
+  }
   const clock = new Date()
   mod.writeFollowup(routeDir, { quiet: { start: hhmm(new Date(clock.getTime() - 3_600_000)), end: hhmm(new Date(clock.getTime() + 3_600_000)) }, checkin_time: hhmm(new Date(clock.getTime() + 7_200_000)), retest_time: hhmm(new Date(clock.getTime() + 7_200_000)) })
   const logBefore = mod.readFollowupLog(routeDir).length

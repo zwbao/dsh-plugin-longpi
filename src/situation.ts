@@ -55,8 +55,15 @@ function firstText(rec: Record<string, unknown>, keys: readonly string[]): strin
   return ''
 }
 
+/** A LOINC code from a compact row. Mirobody sends `loinc` or `http://loinc.org`. */
+export function loincCode(system: string | undefined, code: string | undefined): string {
+  const text = (system ?? '').trim().toLowerCase()
+  if (text !== 'loinc' && !text.includes('loinc.org')) return ''
+  return (code ?? '').trim()
+}
+
 function loincOf(row: Record<string, string>): string {
-  return (row.system ?? '').toLowerCase() === 'loinc' ? (row.code ?? '').trim() : ''
+  return loincCode(row.system, row.code)
 }
 
 /** Rows of a Mirobody catalogue or latest table as indicator rows. */

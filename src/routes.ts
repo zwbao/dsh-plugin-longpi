@@ -487,7 +487,10 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
           const consent = setConsent(resolveDataDir(config().dataDir), accept, new Date())
           invalidateTracking()
           sendJson(res, 200, { ok: true, consent })
-        })().catch(() => sendJson(res, 400, { ok: false, error: 'consent failed' }))
+        })().catch((error: unknown) => {
+          const message = error instanceof Error ? error.message : 'consent failed'
+          sendJson(res, 400, { ok: false, error: message.includes('damaged') ? message : 'consent failed' })
+        })
       },
     })
 
@@ -757,7 +760,7 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
           sendJson(res, 200, { ok: true, profile: normalized.profile })
         })().catch((error: unknown) => {
           const message = error instanceof Error ? error.message : 'profile failed'
-          sendJson(res, 400, { ok: false, error: message === 'body too large' ? message : 'profile failed' })
+          sendJson(res, 400, { ok: false, error: message === 'body too large' || message.includes('damaged') ? message : 'profile failed' })
         })
       },
     })

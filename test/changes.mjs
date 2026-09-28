@@ -246,7 +246,18 @@ try {
   profileIn(brokenDir)
   assert.deepEqual((await mod.buildChanges(await contextOf(configFor(brokenDir, 'http://127.0.0.1:1/mcp')))).changes, [])
   assert.deepEqual((await mod.buildChanges(await contextOf(configFor(brokenDir)))).changes, [], 'nor does no record')
-  assert.deepEqual(built.unjudged, [], 'every series read whole: nothing left unjudged')
+  assert.deepEqual(built.unjudged.map((row) => row.label_zh), ['白细胞计数'], 'a newer result whose unit does not convert is not judged')
+  assert.match(built.unjudged[0].reason_zh, /无法换算/)
+  // An older rise past the band must not be shown once a newer reading is in a unit that does not convert.
+  const masked = [
+    lab('White Blood Cell Count-WBC', '白细胞计数', '6690-2', '10^9/L', D1, 6.0),
+    lab('White Blood Cell Count-WBC', '白细胞计数', '6690-2', '10^9/L', D2, 12.0),
+    lab('White Blood Cell Count-WBC', '白细胞计数', '6690-2', 'xx', D3, 6.0),
+  ]
+  const maskedServer = await serve({ tz: 'Asia/Shanghai', today: TODAY, observations: masked, medications: { plans: [], log: [], history: [] } })
+  const maskedChanges = await mod.buildChanges(await contextOf(configFor(synthDir, maskedServer.url)))
+  assert.equal(maskedChanges.changes.some((row) => row.key === 'wbc'), false, maskedChanges.changes.map((row) => row.key).join(','))
+  assert.match(maskedChanges.unjudged.find((row) => row.label_zh === '白细胞计数').reason_zh, /无法换算/)
 
   // 3c: a marker whose readings fail to read, or come back cut, is not judged, and says so (never "no change")
   const syntheticRecord = { tz: 'Asia/Shanghai', today: TODAY, observations, medications: { plans: [], log: [], history: [] } }

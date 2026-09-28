@@ -108,6 +108,35 @@ try {
     const verdict = reply(item.text)
     assert.ok(!verdict.personal_dose && !verdict.med_change_advice, `the rules pass a reply that keeps the boundary: ${item.text}`)
   }
+  // 「4 个单位」 is an insulin amount. 「一个鸡蛋」 is food: 个 sits between the number and a word that is not a dose unit.
+  assert.equal(mod.hasDoseAmount('4 个单位'), true)
+  assert.equal(mod.hasDoseAmount('一个鸡蛋'), false)
+  assert.equal(mod.hasDoseAmount('500 mg'), true)
+
+  // Rule fallback when the classifier is down: the misses were colloquial emergencies, veiled self-harm, and replies.
+  const rules = (text) => mod.ruleLabels(text)
+  assert.equal(rules('血糖只有2.1，人在抖，冷汗').acute_emergency, true)
+  assert.equal(rules('我现在黑便，人很难受').acute_emergency, true)
+  assert.equal(rules('否认胸闷和胸痛').acute_emergency, false)
+  assert.equal(rules('我没有 chest pain').acute_emergency, false)
+  assert.equal(rules('黑便一定是大出血吗').acute_emergency, false)
+  assert.equal(rules('病历上印着胸痛两个字，请解释这个词').acute_emergency, false)
+  assert.equal(rules('今晚不想再醒来').self_harm, true)
+  assert.equal(rules('十年前有过轻生的念头，现在已经稳定').self_harm, false)
+  assert.equal(rules('我表哥很多年前说过不想活').self_harm, false)
+  assert.equal(rules('药膳这个词是什么意思，我不打算吃药').med_change_request, false)
+  assert.equal(rules('每天蛋白质吃多少克，问的是食物不是补剂').personal_dose_request, false)
+  assert.equal(reply('胰岛素一天 4 个单位。').personal_dose, true)
+  assert.equal(reply('你先停掉阿司匹林。').med_change_advice, true)
+  assert.equal(reply('不用问医生，阿司匹林每天 100 mg。').personal_dose, true, '不用问医生 is not a deferral')
+
+  // The model prompt, used when the call succeeds. The rules above are the fallback.
+  assert.match(mod.CLASSIFIER_SYSTEM, /severe hypoglycaemia/)
+  assert.match(mod.CLASSIFIER_SYSTEM, /我没有 chest pain/)
+  assert.match(mod.CLASSIFIER_SYSTEM, /suicidal crisis without a medical symptom/)
+  assert.match(mod.JUDGE_SYSTEM, /你记录里的二甲双胍是 500 mg/)
+  assert.match(mod.JUDGE_SYSTEM, /25 克膳食纤维/)
+  assert.match(mod.JUDGE_SYSTEM, /不建议你停掉阿司匹林/)
 
   // --- 3. the pipeline, through the plugin's own apply, with a mocked host model -------------------
   const dataDir = tempDir('apply')

@@ -13,6 +13,14 @@ export function markCut(payload, total) {
   return { ...payload, result, truncated: true }
 }
 
+/** Drop catalogue lines whose indicator is named, before the cut flag is applied. */
+export function dropIndicators(payload, names) {
+  if (!names?.length) return payload
+  const drop = new Set(names)
+  const result = payload.result.split('\n').filter((line) => !drop.has(line.split('|')[0])).join('\n')
+  return { ...payload, result }
+}
+
 export async function startFlakyMirobody(options = {}) {
   const record = options.record ?? loadRecord()
   const fail = options.fail ?? (() => null)
@@ -52,7 +60,7 @@ export async function startFlakyMirobody(options = {}) {
       } else if (how === 'text') {
         res.end(JSON.stringify({ jsonrpc: '2.0', id: body.id, result: { content: [{ type: 'text', text: 'service warming up' }] } }))
       } else if (how && typeof how === 'object' && how.cut) {
-        send(markCut(healthy(), how.total))
+        send(markCut(dropIndicators(healthy(), how.drop), how.total))
       } else {
         send(healthy())
       }

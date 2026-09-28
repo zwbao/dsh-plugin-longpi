@@ -3,7 +3,7 @@ import type { LatestOutput } from './history.ts'
 import { domainSummary, matchSkills } from './match.ts'
 import type { MountState } from './mirobody.ts'
 import type { Receipt } from './runner.ts'
-import type { RecordSnapshot } from './records.ts'
+import { readFlags, type RecordSnapshot } from './records.ts'
 import { PRODUCT_VERSION } from './version.ts'
 
 export function buildBoard(input: {
@@ -21,7 +21,7 @@ export function buildBoard(input: {
     intents: input.catalog.intents,
     profile: { age: input.records.profile.age, sex: input.records.profile.sex },
     outputs,
-    reads: { failed: input.records.missing_reads, catalog_truncated: input.records.catalog_truncated },
+    reads: readFlags(input.records),
   })
   return {
     product: 'dsh-plugin-longpi',

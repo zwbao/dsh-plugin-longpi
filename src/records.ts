@@ -4,10 +4,12 @@ import { discoverPython, runBridgeStatus, type BridgeStatus } from './bridge.ts'
 import { callMcpTool, mcpHost, redact, type McpCallResult } from './mcp.ts'
 import { readProfile, estimatedAge, type Profile } from './profile.ts'
 import { rememberMedications } from './guardrails.ts'
-import { summarizeIndicators, summarizeMedications, type IndicatorRow, type MedicationRow } from './situation.ts'
+import { loincCode, summarizeIndicators, summarizeMedications, type IndicatorRow, type MedicationRow } from './situation.ts'
 import { cellNumber, tableOf } from './compact.ts'
 import { readSelf, selfIndicators, selfKeyOf, SELF_ALIASES, SELF_DEVICE_NAMES, SELF_KEYS, SELF_SPEC, SELF_SUFFIX, type SelfKey } from './selfmeasure.ts'
 import { foldName, nameVariants } from './units.ts'
+import { loadCatalog, type InputSpec } from './catalog.ts'
+import { indicatorFor, matchesInputName } from './measurements.ts'
 
 const MAX_INDICATORS = 400
 /** Mirobody's own cap on catalogue names (its tool description: "200 catalogue names"). */
@@ -46,11 +48,21 @@ export interface RecordSnapshot {
   missing_reads: string[]
   /** The catalogue itself was cut, so an indicator missing from it may simply not have been read. */
   catalog_truncated: boolean
+  /**
+   * Input keys asked for by LOINC and name after a cut catalogue, where the server answered.
+   * Absence then means not on file. A failed ask is not listed here.
+   */
+  probed_inputs: string[]
 }
 
 /** Whether the record was read, whole or in part: the reads that worked are used, the failed ones named. */
 export function recordReadable(records: Pick<RecordSnapshot, 'record_status'>): boolean {
   return records.record_status === 'ok' || records.record_status === 'partial'
+}
+
+/** What a missing input means: a failed read, a cut catalogue, or a lookup that already answered. */
+export function readFlags(records: Pick<RecordSnapshot, 'missing_reads' | 'catalog_truncated' | 'probed_inputs'>): { failed: readonly string[]; catalog_truncated: boolean; probed: readonly string[] } {
+  return { failed: records.missing_reads, catalog_truncated: records.catalog_truncated, probed: records.probed_inputs ?? [] }
 }
 
 function memberArgs(member: string): Record<string, unknown> {
@@ -112,6 +124,7 @@ export async function loadRecords(config: Config, dataDir: string, pluginHome: s
     medications: remote.medications.map((row) => ({ ...row })),
     read_errors: [...remote.read_errors],
     missing_reads: [...remote.missing_reads],
+    probed_inputs: [...remote.probed_inputs],
   }
 }
 
@@ -159,6 +172,7 @@ async function loadRemote(config: Config, pluginHome: string): Promise<Remote> {
     read_errors: [],
     missing_reads: [],
     catalog_truncated: false,
+    probed_inputs: [],
   }
   if (!configured) return snapshot
 
@@ -238,6 +252,7 @@ async function loadRemote(config: Config, pluginHome: string): Promise<Remote> {
     }
     snapshot.missing_reads = [...new Set(unread)]
   }
+  if (snapshot.catalog_truncated) await supplementCutCatalog(config, snapshot, secrets)
   const meds = await callMcpTool({
     url: config.mcpUrl,
     token: config.mcpToken,
@@ -259,20 +274,161 @@ async function loadRemote(config: Config, pluginHome: string): Promise<Remote> {
   return snapshot
 }
 
-/** Why a catalogue came back cut, or '' when it is whole: Mirobody's own marker, its cap, or ours. */
+/**
+ * Why a catalogue came back cut, or '' when it is whole.
+ * Mirobody 1.5.0 sets `truncated` on every catalogue of two or more series (it compared the
+ * catalogue size, copied onto each row, with 1). A page whose parsed rows equal `rows` and `of N`,
+ * with no character cut, is the whole catalogue. The flag alone is not a cut.
+ */
 function catalogueCut(payload: unknown, table: ReturnType<typeof tableOf>, listed: number): string {
-  const flagged = Boolean(payload && typeof payload === 'object' && (payload as { truncated?: unknown }).truncated === true)
-  const rows = table?.meta.rows ?? table?.rows.length ?? listed
+  const parsed = table?.rows.length ?? listed
+  const claimed = table?.meta.rows
   const total = table?.meta.total ?? null
-  if (table?.meta.truncated || flagged || (total != null && total > rows)) {
-    return `指标目录被截断：Mirobody 只返回了 ${rows} 项${total != null ? `（共 ${total} 项）` : ''}，其余指标没有读到（目录不能分页）。`
+  const charCut = textOf(payload).includes('… cut at ')
+  const short = claimed != null && claimed > parsed
+  if (charCut || short || (total != null && total > parsed)) {
+    return `指标目录被截断：Mirobody 只返回了 ${parsed} 项${total != null ? `（共 ${total} 项）` : ''}，其余指标没有读到（目录不能分页）。`
   }
   // No "of N" to go by: a catalogue exactly at Mirobody's cap was most likely cut there.
-  if (table && total == null && table.rows.length >= MIROBODY_CATALOG_CAP) {
-    return `指标目录返回了 ${table.rows.length} 项，正好是 Mirobody 的上限，可能还有指标没有读到。`
+  if (table && total == null && parsed >= MIROBODY_CATALOG_CAP) {
+    return `指标目录返回了 ${parsed} 项，正好是 Mirobody 的上限，可能还有指标没有读到。`
   }
   if (listed > MAX_INDICATORS) return `指标目录超过 ${MAX_INDICATORS} 项，只读取了前 ${MAX_INDICATORS} 项。`
   return ''
+}
+
+/** Phenotypic age and China-PAR. Their inputs are looked up by code when the catalogue is cut. */
+const MODEL_SKILLS = ['accelerated-biological-aging-risk', 'china-par-ascvd-risk']
+
+function modelInputSpecs(home: string): InputSpec[] {
+  let catalog: ReturnType<typeof loadCatalog>
+  try {
+    catalog = loadCatalog(home)
+  } catch {
+    return []
+  }
+  const specs: InputSpec[] = []
+  for (const name of MODEL_SKILLS) {
+    const card = catalog.cards.find((item) => item.name === name)
+    if (!card) continue
+    for (const spec of card.inputs) {
+      if (!spec.required || (spec.from ?? 'measurements') !== 'measurements') continue
+      specs.push(spec)
+    }
+  }
+  return specs
+}
+
+function selectorsFor(spec: InputSpec): string[] {
+  const out: string[] = []
+  for (const item of [...(spec.loinc ?? []), spec.label_zh, ...(spec.aliases ?? [])]) {
+    const text = item.trim()
+    if (!text || text.includes('_') || out.includes(text)) continue
+    out.push(text)
+  }
+  return out
+}
+
+/** A lookup that found nothing: a refusal naming the indicator, a fallback catalogue, or an empty table. */
+function lookupAbsent(payload: unknown): boolean {
+  const table = tableOf(payload)
+  if (!table) return false
+  if (table.error) {
+    const text = `${table.error.kind} ${table.error.message}`.toLowerCase()
+    return text.includes('invalid_arguments') || text.includes('not in this record') || text.includes('no indicator matched')
+  }
+  if (table.notes.some((note) => note.includes('no indicator matched'))) return true
+  if (table.rows.length === 0) return true
+  if (table.rows.every((row) => !(row.value ?? '').trim() && (row.first_date || row.count))) return true
+  return false
+}
+
+function rowMatchesSpec(spec: InputSpec, row: IndicatorRow): boolean {
+  if (row.loinc && (spec.loinc ?? []).includes(row.loinc)) return true
+  return matchesInputName(spec, row.name) || matchesInputName(spec, row.label)
+}
+
+function mergeFound(snapshot: Remote, rows: readonly IndicatorRow[]): void {
+  const filled = new Map(rows.filter((row) => row.value).map((row) => [row.name.toLowerCase(), row]))
+  if (filled.size === 0) return
+  const seen = new Set(snapshot.indicators.map((item) => item.name.toLowerCase()))
+  snapshot.indicators = snapshot.indicators.map((item) => {
+    const hit = filled.get(item.name.toLowerCase())
+    if (!hit) return item
+    const merged = { ...item, ...hit, loinc: hit.loinc ?? item.loinc }
+    if (!merged.loinc) delete merged.loinc
+    return merged
+  })
+  for (const row of filled.values()) {
+    if (seen.has(row.name.toLowerCase())) continue
+    snapshot.indicators.push(row)
+    seen.add(row.name.toLowerCase())
+  }
+}
+
+/**
+ * After a cut catalogue, ask for each model input by its LOINC codes and names. A hit is merged.
+ * An answer that the series is not on file is recorded on probed_inputs, so it is "not measured"
+ * rather than a failed read. A transport failure leaves the input unread.
+ */
+async function supplementCutCatalog(config: Config, snapshot: Remote, secrets: string[]): Promise<void> {
+  const home = config.skillsHome?.trim()
+  if (!home) return
+  const specs = modelInputSpecs(home).filter((spec) => !indicatorFor(spec, snapshot.indicators))
+  if (specs.length === 0) return
+  const failed = new Set<string>()
+  const selectors = specs.flatMap((spec) => selectorsFor(spec).map((selector) => ({ key: spec.key, selector })))
+  for (let start = 0; start < selectors.length; start += LATEST_CHUNK) {
+    const chunk = selectors.slice(start, start + LATEST_CHUNK)
+    const names = [...new Set(chunk.map((item) => item.selector))]
+    const latest = await callMcpTool({
+      url: config.mcpUrl,
+      token: config.mcpToken,
+      name: 'query_health_indicators',
+      args: { ...memberArgs(config.member), indicators: names, aggregate: 'latest' },
+      timeoutMs: config.timeoutMs,
+    })
+    if (latest.success === false) {
+      snapshot.read_errors.push(`${names.length} 项模型指标的最新值读取失败：${redact(latest.error || 'read failed', secrets)}`)
+      for (const item of chunk) failed.add(item.key)
+      if (latest.error_kind === 'unavailable' || latest.error_kind === 'denied') break
+      continue
+    }
+    const payload = payloadOf(latest)
+    if (lookupAbsent(payload)) continue
+    const problem = batchProblem(payload)
+    if (problem) {
+      snapshot.read_errors.push(`${names.length} 项模型指标的最新值读取失败：${redact(problem, secrets)}`)
+      for (const item of chunk) failed.add(item.key)
+      continue
+    }
+    mergeFound(snapshot, summarizeIndicators(payload, MAX_INDICATORS))
+  }
+  const still = specs.filter((spec) => !failed.has(spec.key) && !indicatorFor(spec, snapshot.indicators))
+  const labels = [...new Set(still.map((spec) => spec.label_zh).filter(Boolean))].slice(0, 20)
+  if (labels.length > 0) {
+    const call = await callMcpTool({
+      url: config.mcpUrl,
+      token: config.mcpToken,
+      name: 'query_health_indicators',
+      args: { ...memberArgs(config.member), keywords: labels, aggregate: 'latest' },
+      timeoutMs: config.timeoutMs,
+    })
+    if (call.success === false) {
+      snapshot.read_errors.push(`模型指标按名称读取失败：${redact(call.error || 'read failed', secrets)}`)
+      for (const spec of still) failed.add(spec.key)
+    } else {
+      const payload = payloadOf(call)
+      if (!lookupAbsent(payload) && !batchProblem(payload)) {
+        const rows = summarizeIndicators(payload, MAX_INDICATORS).filter((row) => still.some((spec) => rowMatchesSpec(spec, row)))
+        mergeFound(snapshot, rows)
+      }
+    }
+  }
+  for (const spec of specs) {
+    if (!failed.has(spec.key)) snapshot.probed_inputs.push(spec.key)
+  }
+  snapshot.probed_inputs = [...new Set(snapshot.probed_inputs)]
 }
 
 /** Why a latest-value answer is not one, or '': a refusal, or a payload that is no indicator table. */
@@ -311,11 +467,38 @@ export interface SeriesResult {
 }
 
 /**
+ * Which series a table row belongs to. A row that names one of the asked indicators
+ * (or carries that name in `code`, the device namespace) keeps it. A day call asks
+ * for one indicator, and a bucket that names nothing belongs to that indicator;
+ * its display, when the row has one, is kept as the label. A nameless row in a
+ * batch of several indicators is dropped: those buckets cannot be split.
+ */
+function filedRow(row: Record<string, string>, asked: readonly string[], claimUnnamed: boolean): Record<string, string> | null {
+  const stated = (row.indicator ?? '').trim()
+  const code = (row.code ?? '').trim()
+  const indicator = stated && asked.includes(stated) ? stated
+    : code && asked.includes(code) ? code
+      : claimUnnamed && asked.length === 1 ? (asked[0] ?? '')
+        : ''
+  if (!indicator) return null
+  if (stated === indicator) return row
+  return { ...row, indicator, ...(stated && !row.name ? { name: stated } : {}) }
+}
+
+/**
  * Dated values of named indicators, oldest first. resolution raw returns every
- * reading (labs); day returns one daily mean per indicator (wearables). Values
- * that are not numbers ("Positive", "<0.5") are left out, never guessed. A
- * batch that fails does not stop the others (unless Mirobody is down or refuses
- * the account); its names are listed in failed.
+ * reading (labs); day returns one daily value per indicator (wearables; Mirobody's
+ * elected day, or the newest reading of that civil day). Values that are not
+ * numbers ("Positive", "<0.5") are left out, never guessed. A batch that fails
+ * does not stop the others (unless Mirobody is down or refuses the account);
+ * its names are listed in failed.
+ *
+ * A day read asks for one indicator at a time. Mirobody 1.5.0 and 1.5.1 select
+ * `display` for a day bucket and not the printed name, and an uncoded series
+ * (dailySteps, dailyTotalSleepTime) has no display, so the compact table has
+ * the day's avg and no indicator. Two such series in one table cannot be told
+ * apart. The bucket's `period` is already the account's civil day (Asia/Shanghai
+ * once that zone is set).
  */
 export async function loadSeries(
   config: Config,
@@ -334,8 +517,10 @@ export async function loadSeries(
       out.error ??= redact(problem, secrets)
       out.failed.push(...chunk)
     }
-    for (let start = 0; start < wanted.length; start += SERIES_CHUNK) {
-      const chunk = wanted.slice(start, start + SERIES_CHUNK)
+    // Day buckets of an uncoded series omit the name, so each day call is one indicator.
+    const chunkSize = options.resolution === 'day' ? 1 : SERIES_CHUNK
+    for (let start = 0; start < wanted.length; start += chunkSize) {
+      const chunk = wanted.slice(start, start + chunkSize)
       const args: Record<string, unknown> = {
         ...memberArgs(config.member),
         indicators: chunk,
@@ -350,7 +535,7 @@ export async function loadSeries(
         fail(chunk, call.error || 'series read failed')
         // Down or refused: the other batches would fail the same way, each after a timeout.
         if (call.error_kind === 'unavailable' || call.error_kind === 'denied') {
-          out.failed.push(...wanted.slice(start + SERIES_CHUNK))
+          out.failed.push(...wanted.slice(start + chunkSize))
           break
         }
         continue
@@ -367,8 +552,9 @@ export async function loadSeries(
       }
       const rows = new Map<string, Array<Record<string, string>>>()
       for (const row of table.rows) {
-        const indicator = (row.indicator ?? '').trim()
-        if (indicator) rows.set(indicator, [...(rows.get(indicator) ?? []), row])
+        const filed = filedRow(row, chunk, options.resolution === 'day')
+        if (!filed) continue
+        rows.set(filed.indicator, [...(rows.get(filed.indicator) ?? []), filed])
       }
       // A series that filled the limit lost its oldest readings: read those again, a window ending earlier each time.
       const full = options.resolution === 'raw' ? chunk.filter((name) => (rows.get(name)?.length ?? 0) >= RAW_LIMIT) : []
@@ -385,7 +571,8 @@ export async function loadSeries(
         if (value == null || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue
         const series = out.series[indicator] ?? (out.series[indicator] = { indicator, unit: (row.unit ?? '').trim(), points: [] })
         if (row.name && row.name !== indicator && !series.label) series.label = row.name
-        if ((row.system ?? '').toLowerCase() === 'loinc' && row.code && !series.loinc) series.loinc = row.code
+        const code = loincCode(row.system, row.code)
+        if (code && !series.loinc) series.loinc = code
         series.points.push({ date, time: row.time ?? date, value, unit: (row.unit ?? series.unit).trim(), ...(row.file ? { file: row.file } : {}) })
       }
       // Cut: a series still full after its older readings were read again, or a table Mirobody marked cut (by its

@@ -85,16 +85,26 @@ export function factorFor(marker: BiovarMarker, unit: string): number | null {
   return null
 }
 
-/** One point per day (the last reading of that day), oldest first, the most recent KEEP_POINTS days. */
-function dailyPoints(marker: BiovarMarker, readings: readonly SeriesPoint[]): Point[] {
+/**
+ * One point per day (the last reading of that day that converts), oldest first, the most recent
+ * KEEP_POINTS days. blocked: a newer reading could not be converted, so the older points are not the
+ * latest result and must not be reported as the change.
+ */
+function dailyPoints(marker: BiovarMarker, readings: readonly SeriesPoint[]): { points: Point[]; blocked: boolean } {
   const sorted = [...readings].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
   const byDay = new Map<string, number>()
+  let blocked = false
   for (const point of sorted) {
     const factor = factorFor(marker, point.unit)
-    if (factor == null || !Number.isFinite(point.value)) continue
+    if (factor == null || !Number.isFinite(point.value)) {
+      if (factor == null) blocked = true
+      continue
+    }
+    blocked = false
     byDay.set(point.date, factor === 1 ? point.value : Number((point.value * factor).toPrecision(6)))
   }
-  return [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, value]) => ({ date, value })).slice(-KEEP_POINTS)
+  const points = [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, value]) => ({ date, value })).slice(-KEEP_POINTS)
+  return { points, blocked }
 }
 
 function round1(value: number): number {
@@ -220,7 +230,12 @@ export async function buildChanges(context: ChangesContext): Promise<{ changes: 
       unjudged.push({ label_zh: marker.label_zh, reason_zh: '历次结果太多，读取时被截断，没有读全，这次没有判断它的变化。' })
       continue
     }
-    const change = changeOf(marker, dailyPoints(marker, rows.flatMap((name) => series[name] ?? [])), biovar.z, glucoseTreated)
+    const daily = dailyPoints(marker, rows.flatMap((name) => series[name] ?? []))
+    if (daily.blocked) {
+      unjudged.push({ label_zh: marker.label_zh, reason_zh: `有一次较新的结果单位无法换算成 ${marker.unit}，这次没有判断它的变化。` })
+      continue
+    }
+    const change = changeOf(marker, daily.points, biovar.z, glucoseTreated)
     if (change) found.push(change)
   }
   found.sort((a, b) => Number(b.ask_doctor) - Number(a.ask_doctor) || b.ratio - a.ratio)

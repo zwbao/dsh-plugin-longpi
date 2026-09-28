@@ -13,11 +13,11 @@ const SHARED_UNIT = '(?:g|ml|(?<!千)克|毫升|单位|units?|滴|drops?|勺|袋
 // A concentration (mmol/L, mg/dL, g/L) is a lab value, not an amount taken.
 const NOT_CONCENTRATION = '(?!\\s*\\/\\s*(?:d?l|ml|kg|m2)\\b)'
 
-/** A number with a unit only a medicine or supplement is taken in: 500 mg, 1000 IU, 2 capsules. */
-export const PHARMA_DOSE = new RegExp(`${NUMBER}\\s*${PHARMA_UNIT}${NOT_CONCENTRATION}(?![a-z])`, 'i')
+/** A number with a unit only a medicine or supplement is taken in: 500 mg, 1000 IU, 2 capsules, 4 个单位. */
+export const PHARMA_DOSE = new RegExp(`${NUMBER}\\s*(?:个\\s*)?${PHARMA_UNIT}${NOT_CONCENTRATION}(?![a-z])`, 'i')
 
 /** A number with a unit shared with food (克, ml, 片, 颗): a dose only when a medicine is named in the same sentence. */
-export const SHARED_DOSE = new RegExp(`${NUMBER}\\s*${SHARED_UNIT}${NOT_CONCENTRATION}(?![a-z])`, 'i')
+export const SHARED_DOSE = new RegExp(`${NUMBER}\\s*(?:个\\s*)?${SHARED_UNIT}${NOT_CONCENTRATION}(?![a-z])`, 'i')
 
 /** Any amount that could be a dose. */
 export function hasDoseAmount(text: string): boolean {

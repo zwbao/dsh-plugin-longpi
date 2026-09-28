@@ -5,7 +5,7 @@
 import type { Catalog, SkillCard } from './catalog.ts'
 import type { Config } from './config.ts'
 import { runnableFrom, type MeasurementIn } from './measurements.ts'
-import type { RecordSnapshot } from './records.ts'
+import { readFlags, type RecordSnapshot } from './records.ts'
 import { runSkill } from './runner.ts'
 import type { Tracking } from './tracking.ts'
 
@@ -31,7 +31,7 @@ export function readiness(catalog: Catalog, records: RecordSnapshot, outputs: Re
   for (const card of catalog.cards) {
     if (!personal(card)) continue
     out.declared += 1
-    const run = runnableFrom(card, records.indicators, { age: records.profile.age, sex: records.profile.sex }, outputs, { failed: records.missing_reads, catalog_truncated: records.catalog_truncated })
+    const run = runnableFrom(card, records.indicators, { age: records.profile.age, sex: records.profile.sex }, outputs, readFlags(records))
     if (run.record === 'ready') out.ready.push({ name: card.name, blurb: card.blurb, domain: card.domain })
     else if (run.record === 'near') out.near.push({ name: card.name, blurb: card.blurb, missing: run.missing })
     if (run.missing.length === 1 && run.missing_from_record.length === 1) {

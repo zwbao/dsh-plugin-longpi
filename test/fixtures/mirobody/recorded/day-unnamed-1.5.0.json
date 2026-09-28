@@ -1,0 +1,51 @@
+{
+  "source": "recorded from the local Mirobody at 127.0.0.1:18060 (GET /api/health version 1.5.0) for u-test-v2wear@example.invalid after provision.py --feed-day of personas/p01.json for 2026-07-26, 2026-07-27, 2026-07-28 and 2026-07-30. Timezone Asia/Shanghai. The same bucket SQL in the 1.5.1 tree selects display and not name_text, so an uncoded series' day table also has no indicator column.",
+  "window": {
+    "start": "2026-07-26",
+    "end": "2026-07-30"
+  },
+  "persona": {
+    "dailySteps": {
+      "2026-07-26": 4281,
+      "2026-07-27": 8683,
+      "2026-07-28": 8613,
+      "2026-07-30": 8971
+    },
+    "dailyTotalSleepTime": {
+      "2026-07-26": 5.9,
+      "2026-07-27": 6.9,
+      "2026-07-28": 6.8,
+      "2026-07-30": 7.1
+    }
+  },
+  "day": {
+    "dailySteps": {
+      "args_indicators": [
+        "dailySteps"
+      ],
+      "result": "(constants: n=1, unit={#})\nperiod|avg|min|max\n2026-07-26|4281.0|4281.0|4281.0\n2026-07-27|8683.0|8683.0|8683.0\n2026-07-28|8613.0|8613.0|8613.0\n2026-07-30|8971.0|8971.0|8971.0\n\n(window=2026-07-26..2026-07-30, tz=Asia/Shanghai, dates=tz_exact, resolution=day, rows=4)\nnotes: no data for an indicator means it was never recorded, not that the condition is absent",
+      "status": "ok",
+      "row_count": 4,
+      "truncated": false
+    },
+    "dailyTotalSleepTime": {
+      "args_indicators": [
+        "dailyTotalSleepTime"
+      ],
+      "result": "(constants: n=1, unit=h)\nperiod|avg|min|max\n2026-07-26|5.9|5.9|5.9\n2026-07-27|6.9|6.9|6.9\n2026-07-28|6.8|6.8|6.8\n2026-07-30|7.1|7.1|7.1\n\n(window=2026-07-26..2026-07-30, tz=Asia/Shanghai, dates=tz_exact, resolution=day, rows=4)\nnotes: no data for an indicator means it was never recorded, not that the condition is absent",
+      "status": "ok",
+      "row_count": 4,
+      "truncated": false
+    },
+    "both": {
+      "args_indicators": [
+        "dailySteps",
+        "dailyTotalSleepTime"
+      ],
+      "result": "(constants: n=1)\nperiod|avg|min|max|unit\n2026-07-26|4281.0|4281.0|4281.0|{#}\n2026-07-27|8683.0|8683.0|8683.0|{#}\n2026-07-28|8613.0|8613.0|8613.0|{#}\n2026-07-30|8971.0|8971.0|8971.0|{#}\n2026-07-26|5.9|5.9|5.9|h\n2026-07-27|6.9|6.9|6.9|h\n2026-07-28|6.8|6.8|6.8|h\n2026-07-30|7.1|7.1|7.1|h\n\n(window=2026-07-26..2026-07-30, tz=Asia/Shanghai, dates=tz_exact, resolution=day, rows=8)\nnotes: no data for an indicator means it was never recorded, not that the condition is absent",
+      "status": "ok",
+      "row_count": 8,
+      "truncated": false
+    }
+  }
+}

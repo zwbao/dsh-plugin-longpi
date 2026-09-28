@@ -182,6 +182,51 @@ function scriptOf(dir: string, entry: EntrySpec | undefined, body: string): stri
   return findScript(dir, body)
 }
 
+/**
+ * Printed names and LOINC codes the installed manifests omit. Applied when a card is loaded, so PhenoAge
+ * still binds the owner's sheet when longevity-skills has not been patched. 115742-9 (RDW-SD) is not added.
+ */
+const FIELD_INPUT_BINDS: Record<string, Record<string, { aliases?: readonly string[]; loinc?: readonly string[] }>> = {
+  'accelerated-biological-aging-risk': {
+    glucose_mmol: { aliases: ['空腹血葡萄糖', 'FBG'] },
+    rdw_pct: { aliases: ['红细胞分布宽度-变异系数'], loinc: ['30385-9'] },
+    mcv_fl: { loinc: ['30428-7'] },
+  },
+  'china-par-ascvd-risk': {
+    waist_cm: { aliases: ['腹围'] },
+  },
+}
+
+function mergeList(existing: string[] | undefined, extra: readonly string[] | undefined): string[] | undefined {
+  if (!extra?.length) return existing
+  const out = [...(existing ?? [])]
+  let added = false
+  for (const item of extra) {
+    if (!out.includes(item)) {
+      out.push(item)
+      added = true
+    }
+  }
+  return added ? out : existing
+}
+
+/** Add the field-test binds onto one card. A manifest that already lists them is left unchanged. */
+export function supplementFieldInputs<T extends { name: string; inputs: InputSpec[] }>(card: T): T {
+  const table = FIELD_INPUT_BINDS[card.name]
+  if (!table) return card
+  let changed = false
+  const inputs = card.inputs.map((spec) => {
+    const extra = table[spec.key]
+    if (!extra) return spec
+    const aliases = mergeList(spec.aliases, extra.aliases)
+    const loinc = mergeList(spec.loinc, extra.loinc)
+    if (aliases === spec.aliases && loinc === spec.loinc) return spec
+    changed = true
+    return { ...spec, ...(aliases ? { aliases } : {}), ...(loinc ? { loinc } : {}) }
+  })
+  return changed ? { ...card, inputs } : card
+}
+
 function cardFrom(dir: string, name: string, data: ManifestLike, skillMd: string): SkillCard | null {
   let parsed: { name: string; description: string; body: string }
   try {
@@ -190,7 +235,7 @@ function cardFrom(dir: string, name: string, data: ManifestLike, skillMd: string
     return null
   }
   const domains = data.domains?.length ? data.domains : ['未归类']
-  return {
+  const card: SkillCard = {
     name,
     description: data.description || parsed.description,
     domain: domains[0] ?? '未归类',
@@ -213,6 +258,7 @@ function cardFrom(dir: string, name: string, data: ManifestLike, skillMd: string
       year: data.paper.year,
     } : null,
   }
+  return supplementFieldInputs(card)
 }
 
 function legacyCard(dir: string, name: string, meta: { domain: string; blurb: string } | undefined, skillMd: string): SkillCard | null {

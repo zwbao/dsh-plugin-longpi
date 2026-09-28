@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { randomBytes } from 'node:crypto'
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 export const SEXES = ['female', 'male', 'other', 'unknown'] as const
@@ -189,9 +190,29 @@ export function readProfile(dataDir: string): Profile {
   }
 }
 
+export const PROFILE_DAMAGED = 'profile.json is damaged and was not overwritten'
+
+/** True when a profile file exists but cannot be read back as a profile. */
+function profileDamaged(dataDir: string): boolean {
+  const path = profilePath(dataDir)
+  if (!existsSync(path)) return false
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as unknown
+    return !normalizeProfile(parsed).ok
+  } catch {
+    return true
+  }
+}
+
 export function writeProfile(dataDir: string, profile: Profile): void {
-  mkdirSync(dirname(profilePath(dataDir)), { recursive: true, mode: 0o700 })
-  writeFileSync(profilePath(dataDir), `${JSON.stringify(profile, null, 2)}\n`, { mode: 0o600 })
+  const path = profilePath(dataDir)
+  // A torn or rejected file still holds the last good bytes. Replacing it with an empty merge loses them.
+  if (profileDamaged(dataDir)) throw new Error(PROFILE_DAMAGED)
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+  const tmp = `${path}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`
+  writeFileSync(tmp, `${JSON.stringify(profile, null, 2)}\n`, { mode: 0o600 })
+  chmodSync(tmp, 0o600)
+  renameSync(tmp, path)
 }
 
 /** Record that the person accepted (or withdrew from) the current first-run notice. Never called on the model's word. */

@@ -6,7 +6,7 @@ import { matchSkills, domainSummary } from './match.ts'
 import type { MountState } from './mirobody.ts'
 import { clampMatches, resolveDataDir, resolveSkillsHome } from './paths.ts'
 import { normalizeProfile, readProfile, writeProfile, estimatedAge, FOCUS, RISK_FACTS, type Profile } from './profile.ts'
-import { loadRecords, type RecordSnapshot } from './records.ts'
+import { loadRecords, readFlags, type RecordSnapshot } from './records.ts'
 import { readReceipts, runSkill } from './runner.ts'
 import { PRODUCT_VERSION } from './version.ts'
 import { discoverPython, runBridgeStatus } from './bridge.ts'
@@ -110,7 +110,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
       const { catalog, records, outputs, current } = input
       const profile = { age: records.profile.age, sex: records.profile.sex }
       const dispatch = matchSkills(catalog.cards, '', records.indicators, clampMatches(current.maxSkillMatches), {
-        intents: catalog.intents, profile, outputs, reads: { failed: records.missing_reads, catalog_truncated: records.catalog_truncated },
+        intents: catalog.intents, profile, outputs, reads: readFlags(records),
       })
       const read = await journeyOf(input)
       return asJson({
@@ -193,7 +193,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
         profile: { age: records.profile.age, sex: records.profile.sex },
         outputs,
         lexicon,
-        reads: { failed: records.missing_reads, catalog_truncated: records.catalog_truncated },
+        reads: readFlags(records),
       })
       return asJson({
         question,
@@ -433,7 +433,11 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
       }
       const normalized = normalizeProfile(next)
       if (!normalized.ok) return asJson({ ok: false, error: normalized.error })
-      writeProfile(dataDir, normalized.profile)
+      try {
+        writeProfile(dataDir, normalized.profile)
+      } catch (error) {
+        return asJson({ ok: false, error: error instanceof Error ? error.message : 'profile failed' })
+      }
       invalidateTracking()
       return asJson({
         ok: true,

@@ -4,7 +4,7 @@
 // Needs ../../longevity-skills (or LONGEVITY_SKILLS_HOME); skips without it.
 
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -189,6 +189,18 @@ try {
   assert.ok(blank.missing.includes('现在吸烟') && !blank.missing.includes('住在北方（长江以北）'))
   const merged = mod.mergeProfile(mod.readProfile(dataDir), { risk: { smoker: true, north: null } })
   assert.deepEqual(mod.normalizeProfile(merged).profile.risk, { smoker: true }, 'a partial update keeps other fields and clears a null')
+  // A torn profile must not be replaced by the empty profile a failed read returns.
+  const tornDir = mkdtempSync(join(tmpdir(), 'longpi-profile-torn-'))
+  try {
+    mod.writeProfile(tornDir, { displayName: '陈明', birthYear: 1972, age: 53, sex: 'male', risk: { diabetes: true }, focus: ['bioage'], consent: { version: mod.CONSENT_VERSION, accepted_at: '2026-07-01T00:00:00.000Z' } })
+    writeFileSync(join(tornDir, 'profile.json'), '{')
+    assert.throws(() => mod.setConsent(tornDir, true, new Date('2026-07-28T00:30:00+08:00')), /damaged/)
+    assert.equal(readFileSync(join(tornDir, 'profile.json'), 'utf8'), '{')
+    assert.throws(() => mod.writeProfile(tornDir, { displayName: '', birthYear: null, age: null, sex: 'unknown', risk: {}, focus: [], consent: null }), /damaged/)
+    assert.equal(readFileSync(join(tornDir, 'profile.json'), 'utf8'), '{')
+  } finally {
+    rmSync(tornDir, { recursive: true, force: true })
+  }
 
   // the history keeps one phenotypic age per checkup date
   const history = readFileSync(join(dataDir, 'history.jsonl'), 'utf8').trim().split('\n').map((line) => JSON.parse(line))
@@ -236,6 +248,18 @@ try {
   const week = (end, value, days = 7) => Array.from({ length: days }, (_, i) => at(mod.addDays(end, -i), value, 'mmHg')).reverse()
   const homeWeeks = judge(walk, sbpMarker, [...week('2026-05-31', 130), ...week('2026-09-20', 112)])
   assert.equal(homeWeeks.verdict, '有效', homeWeeks.reason_zh)
+  // A day with ten readings must not outweigh six days with one: the week is the mean of daily means.
+  const heavy = (date, value, n) => Array.from({ length: n }, (_, i) => at(date, value, 'mmHg')).map((point, i) => ({ ...point, time: `${date} ${String(8 + i).padStart(2, '0')}:00:00` }))
+  const baseDays = Array.from({ length: 7 }, (_, i) => mod.addDays('2026-05-31', -i))
+  const fuDays = Array.from({ length: 7 }, (_, i) => mod.addDays('2026-09-20', -i))
+  const uneven = [
+    ...baseDays.flatMap((date) => heavy(date, 140, 1)),
+    ...fuDays.slice(1).flatMap((date) => heavy(date, 120, 1)),
+    ...heavy(fuDays[0], 180, 10),
+  ]
+  const biased = judge(walk, sbpMarker, uneven)
+  assert.equal(biased.verdict, '波动内', biased.reason_zh)
+  assert.ok(Math.abs(biased.followup.value - (120 * 6 + 180) / 7) < 0.02, biased.followup.value)
   const shortWeek = judge(walk, sbpMarker, [...week('2026-05-31', 130), ...week('2026-09-20', 112, 3)])
   assert.equal(shortWeek.verdict, '无法判断')
   assert.match(shortWeek.reason_zh, /需要连续 7 天的家庭血压：复测只有 3 天的读数/)

@@ -286,14 +286,20 @@ function compare(row: EffectRow, change: { abs: number; pct: number } | null, un
   return Math.abs(observed) < Math.min(Math.abs(low), Math.abs(high)) ? 'smaller' : 'larger'
 }
 
-/** Mean of the readings in the last `days` days of a run of readings, dated at its last day, and on how many days they fell. */
+/** Mean of daily means over the last `days` days, dated at the last day, and how many days had a reading. A day with more cuff readings does not outweigh a day with one. */
 function meanOver(points: readonly SeriesPoint[], days: number): { point: SeriesPoint; days: number } | undefined {
   const last = points.at(-1)
   if (!last) return undefined
   const from = addDays(last.date, -(days - 1))
-  const used = points.filter((point) => point.date >= from && point.date <= last.date)
-  const value = used.reduce((sum, point) => sum + point.value, 0) / used.length
-  return { point: { ...last, value: Math.round(value * 100) / 100 }, days: new Set(used.map((point) => point.date)).size }
+  const byDay = new Map<string, number[]>()
+  for (const point of points) {
+    if (point.date < from || point.date > last.date) continue
+    byDay.set(point.date, [...(byDay.get(point.date) ?? []), point.value])
+  }
+  const daily = [...byDay.values()].map((values) => values.reduce((sum, value) => sum + value, 0) / values.length)
+  if (daily.length === 0) return undefined
+  const value = daily.reduce((sum, one) => sum + one, 0) / daily.length
+  return { point: { ...last, value: Math.round(value * 100) / 100 }, days: byDay.size }
 }
 
 /** Names as the next steps and reasons say them: 「甲」和「乙」, 「甲」、「乙」和「丙」. */

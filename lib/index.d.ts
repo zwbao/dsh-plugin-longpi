@@ -464,6 +464,11 @@ declare function parseReadme(raw: string): Map<string, {
   domain: string;
   blurb: string;
 }>;
+/** Add the field-test binds onto one card. A manifest that already lists them is left unchanged. */
+declare function supplementFieldInputs<T extends {
+  name: string;
+  inputs: InputSpec[];
+}>(card: T): T;
 declare function loadCatalog(home: string): Catalog;
 declare function commandExcerpt(body: string): string;
 //#endregion
@@ -547,6 +552,7 @@ declare function runnableFrom(card: SkillCard, indicators: readonly RecordIndica
 }, outputs?: Record<string, unknown>, reads?: {
   failed?: readonly string[];
   catalog_truncated?: boolean;
+  probed?: readonly string[];
 }): Runnable;
 /** A record row that could hold one declared input, and its place: the order of the input's codes in skill.json. */
 interface Candidate {
@@ -562,9 +568,14 @@ interface Candidate {
  */
 declare function candidatesFor(spec: InputSpec, indicators: readonly RecordIndicator[]): Candidate[];
 /**
+ * Whether a report or series name is this input. Exact folded names, the same name with 血 inserted
+ * (空腹血葡萄糖 and 空腹葡萄糖), or the label plus a CV/percent qualifier.
+ */
+declare function matchesInputName(spec: InputSpec, text: string | undefined): boolean;
+/**
  * The record indicator that holds one declared input: of the rows with a number, the newest across all of the
- * input's codes; on the same date the earlier code in skill.json order. Rows matched only by name are the
- * fallback when no row carries a code.
+ * input's codes; on the same date a unit that converts beats a missing or wrong label, then the earlier code
+ * in skill.json order. Rows matched only by name are the fallback when no row carries a code.
  */
 declare function indicatorFor(spec: InputSpec, indicators: readonly RecordIndicator[]): RecordIndicator | null;
 //#endregion
@@ -602,6 +613,7 @@ interface MatchOptions {
   reads?: {
     failed?: readonly string[];
     catalog_truncated?: boolean;
+    probed?: readonly string[];
   };
 }
 interface MatchResult {
@@ -760,6 +772,7 @@ declare function normalizeProfile(input: unknown): {
 declare function mergeProfile(current: Profile, update: Record<string, unknown>): Record<string, unknown>;
 declare function estimatedAge(birthYear: number | null, nowYear: number): number | null;
 declare function readProfile(dataDir: string): Profile;
+declare const PROFILE_DAMAGED = "profile.json is damaged and was not overwritten";
 declare function writeProfile(dataDir: string, profile: Profile): void;
 /** Record that the person accepted (or withdrew from) the current first-run notice. Never called on the model's word. */
 declare function setConsent(dataDir: string, accept: boolean, now?: Date): Consent | null;
@@ -920,6 +933,11 @@ interface RecordSnapshot {
   missing_reads: string[];
   /** The catalogue itself was cut, so an indicator missing from it may simply not have been read. */
   catalog_truncated: boolean;
+  /**
+   * Input keys asked for by LOINC and name after a cut catalogue, where the server answered.
+   * Absence then means not on file. A failed ask is not listed here.
+   */
+  probed_inputs: string[];
 }
 /** Whether the record was read, whole or in part: the reads that worked are used, the failed ones named. */
 declare function recordReadable(records: Pick<RecordSnapshot, 'record_status'>): boolean;
@@ -967,10 +985,18 @@ interface SeriesResult {
 }
 /**
  * Dated values of named indicators, oldest first. resolution raw returns every
- * reading (labs); day returns one daily mean per indicator (wearables). Values
- * that are not numbers ("Positive", "<0.5") are left out, never guessed. A
- * batch that fails does not stop the others (unless Mirobody is down or refuses
- * the account); its names are listed in failed.
+ * reading (labs); day returns one daily value per indicator (wearables; Mirobody's
+ * elected day, or the newest reading of that civil day). Values that are not
+ * numbers ("Positive", "<0.5") are left out, never guessed. A batch that fails
+ * does not stop the others (unless Mirobody is down or refuses the account);
+ * its names are listed in failed.
+ *
+ * A day read asks for one indicator at a time. Mirobody 1.5.0 and 1.5.1 select
+ * `display` for a day bucket and not the printed name, and an uncoded series
+ * (dailySteps, dailyTotalSleepTime) has no display, so the compact table has
+ * the day's avg and no indicator. Two such series in one table cannot be told
+ * apart. The bucket's `period` is already the account's civil day (Asia/Shanghai
+ * once that zone is set).
  */
 declare function loadSeries(config: Config, names: readonly string[], options: {
   start: string;
@@ -1436,6 +1462,9 @@ declare function readCheckIns(dataDir: string): CheckIn[];
  * is an undo, is absent: unknown, never a miss. A note or tag alone says nothing about it.
  */
 declare function checkinStatus(rows: readonly CheckIn[]): Map<string, Map<string, boolean>>;
+/** Civil clock for check-ins, streaks and reminders. The person is in China; the process zone is not. */
+declare const CIVIL_TZ = "Asia/Shanghai";
+/** YYYY-MM-DD in Asia/Shanghai, not UTC and not the process zone. */
 declare function isoDay(at?: Date): string;
 declare function addDays(iso: string, days: number): string;
 declare function daysBetween(from: string, to: string): number;
@@ -1922,6 +1951,7 @@ declare const FOLLOWUP_TEST_TEXT = "这是一条 LongPi 测试提醒。";
 declare function webhookUrlProblem(_kind: WebhookKind, url: string): string;
 /** The saved settings, with defaults for anything missing or unreadable. */
 declare function readFollowup(dataDir: string): FollowupSettings;
+declare const FOLLOWUP_DAMAGED = "followup.json is damaged and was not overwritten";
 /** Check and save a partial update from the page or a tool. The file is private to the person (0600). */
 declare function writeFollowup(dataDir: string, update: unknown): {
   ok: true;
@@ -1938,9 +1968,9 @@ declare function readFollowupLog(dataDir: string): FollowupLogRow[];
 declare function appendFollowupLog(dataDir: string, row: FollowupLogRow): void;
 /** Sends attempted on the local day of `now` (every kind counts, failed ones too). */
 declare function sentToday(log: readonly FollowupLogRow[], now: Date): number;
-/** ISO weekday of a local time: Monday = 1 … Sunday = 7. */
+/** ISO weekday of the Asia/Shanghai clock: Monday = 1 … Sunday = 7. */
 declare function isoWeekday(now: Date): Weekday;
-/** ISO week of a local date, as 2026-W39. */
+/** ISO week of the Asia/Shanghai date, as 2026-W39. */
 declare function isoWeek(now: Date): string;
 /** Inside quiet hours; a window whose start is after its end wraps midnight (22:30–08:00). */
 declare function inQuiet(quiet: FollowupSettings['quiet'], now: Date): boolean;
@@ -2021,7 +2051,7 @@ interface FollowupContext {
   generation?: () => number;
 }
 /**
- * Tick every 60 s in the host's local time zone, as a Cordis effect: the interval is cleared when the
+ * Tick every 60 s on the Asia/Shanghai clock, as a Cordis effect: the interval is cleared when the
  * plugin is disposed, is unref'd so it never keeps the process alive, and never overlaps itself. One
  * journey read is reused the same day for up to an hour, and never after a check-in, a plan or profile
  * save or a self measurement (the generation changes), so a reminder never counts items already ticked.
@@ -2674,4 +2704,4 @@ declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { type BootstrapResult, CHANGES_NOTE_ZH, CLASSIFIER_SYSTEM, CONNECTION_FILE, CONNECTION_TEST_MS, CONNECTION_UNAVAILABLE, CONSENT_VERSION, Config, type ConnectionGuard, type ConnectionSource, type ConnectionStatus, type ConnectionTest, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMERGENCY_LINE_ZH, EMPTY_PROFILE, FOCUS, FOCUS_ZH, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, GROUP_KEYS, GROUP_ZH, GUARD_COUNTERS, GUARD_SCOPES, GUARD_TIMEOUT_MS, type GroupKey, type Guard, type GuardCall, type GuardHit, type GuardLabels, type GuardScope, HARNESS_SKILLS, HealthSessions, type IndicatorChange, type IndicatorDetail, type IndicatorEntry, type IndicatorSource, type IndicatorsResponse, JUDGE_SYSTEM, type Journey, LABEL_KEYS, type LlmLike, NO_READ_BACK, PHENOAGE_SKILL, PRODUCT_VERSION, type PlanBrief, type PlanDraft, type Profile, READ_BACK_MS, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RecordChange, type RecordSnapshot, type RecordStatus, type RecordsSummary, type ReplyVerdict, type RiskFact, SELF_ALIASES, SELF_HARM_LINE_ZH, SELF_KEYS, SELF_SPEC, type SavedConnection, type SelfKey, type SelfRow, type SendResult, type Stage, TOOL_NAMES, type UnjudgedChange, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, type WorkspaceLike, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, asJson, bootstrapWorkspace, bridgeEnv, briefOptionsOf, buildBoard, buildCalendar, buildChanges, buildIndicators, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, candidatesFor, cellNumber, checkReply, checkinStatus, checkupMarkerFor, classifyMessage, clearConnection, commandExcerpt, connectionKey, connectionSource, connectionTokenProblem, connectionUrlProblem, correctionNote, countGuard, createGuard, currentPlan, daysBetween, decideFollowup, deleteSelf, describeItem, describePlan, desktopCommand, desktopSupported, detectIntents, domainSummary, dosePattern, draftPlan, effectiveConfig, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expandMarkerNames, expectedText, factorFor, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, goalProblems, groupOf, guardRoute, guidanceNote, hasDose, hasDoseAmount, healthWorkspacePaths, heldUntil, homeBloodPressure, inQuiet, indicatorDetail, indicatorFor, indicatorsFromTable, inject, insideWorkspace, invalidateIndicators, invalidateRecords, invalidateTracking, isJsonRequest, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, markerGroupKeys, maskMcpUrl, maskUrl, matchSkills, mentionedEntities, mentionsMedicine, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseLabels, parseNumber, parseReadme, parseVerdict, personText, planApprovalReason, planKey, preGuard, profileComplete, publicFollowup, rcvBand, readCheckIns, readConnection, readFailed, readFollowup, readFollowupLog, readGuardStats, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, recordReadable, recordsSummary, registerApprovals, rememberMedications, rememberedMedications, replyRuleCheck, reportExcerpt, resetReadBacks, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, routeFor, ruleLabels, runReady, runSkill, runnableFrom, runtimeCall, sameMeasure, saveConnection, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, skillEnv, stageMeasurements, stageNow, startFollowup, stripDoses, suggestNext, summarizeIndicators, summarizeMedications, tableOf, testConnection, togetherZh, tokenKey, touchesHealth, trackingGeneration, turnText, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };
+export { type BootstrapResult, CHANGES_NOTE_ZH, CIVIL_TZ, CLASSIFIER_SYSTEM, CONNECTION_FILE, CONNECTION_TEST_MS, CONNECTION_UNAVAILABLE, CONSENT_VERSION, Config, type ConnectionGuard, type ConnectionSource, type ConnectionStatus, type ConnectionTest, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMERGENCY_LINE_ZH, EMPTY_PROFILE, FOCUS, FOCUS_ZH, FOLLOWUP_DAMAGED, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, GROUP_KEYS, GROUP_ZH, GUARD_COUNTERS, GUARD_SCOPES, GUARD_TIMEOUT_MS, type GroupKey, type Guard, type GuardCall, type GuardHit, type GuardLabels, type GuardScope, HARNESS_SKILLS, HealthSessions, type IndicatorChange, type IndicatorDetail, type IndicatorEntry, type IndicatorSource, type IndicatorsResponse, JUDGE_SYSTEM, type Journey, LABEL_KEYS, type LlmLike, NO_READ_BACK, PHENOAGE_SKILL, PRODUCT_VERSION, PROFILE_DAMAGED, type PlanBrief, type PlanDraft, type Profile, READ_BACK_MS, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RecordChange, type RecordSnapshot, type RecordStatus, type RecordsSummary, type ReplyVerdict, type RiskFact, SELF_ALIASES, SELF_HARM_LINE_ZH, SELF_KEYS, SELF_SPEC, type SavedConnection, type SelfKey, type SelfRow, type SendResult, type Stage, TOOL_NAMES, type UnjudgedChange, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, type WorkspaceLike, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, asJson, bootstrapWorkspace, bridgeEnv, briefOptionsOf, buildBoard, buildCalendar, buildChanges, buildIndicators, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, candidatesFor, cellNumber, checkReply, checkinStatus, checkupMarkerFor, classifyMessage, clearConnection, commandExcerpt, connectionKey, connectionSource, connectionTokenProblem, connectionUrlProblem, correctionNote, countGuard, createGuard, currentPlan, daysBetween, decideFollowup, deleteSelf, describeItem, describePlan, desktopCommand, desktopSupported, detectIntents, domainSummary, dosePattern, draftPlan, effectiveConfig, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expandMarkerNames, expectedText, factorFor, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, goalProblems, groupOf, guardRoute, guidanceNote, hasDose, hasDoseAmount, healthWorkspacePaths, heldUntil, homeBloodPressure, inQuiet, indicatorDetail, indicatorFor, indicatorsFromTable, inject, insideWorkspace, invalidateIndicators, invalidateRecords, invalidateTracking, isJsonRequest, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, markerGroupKeys, maskMcpUrl, maskUrl, matchSkills, matchesInputName, mentionedEntities, mentionsMedicine, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseLabels, parseNumber, parseReadme, parseVerdict, personText, planApprovalReason, planKey, preGuard, profileComplete, publicFollowup, rcvBand, readCheckIns, readConnection, readFailed, readFollowup, readFollowupLog, readGuardStats, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, recordReadable, recordsSummary, registerApprovals, rememberMedications, rememberedMedications, replyRuleCheck, reportExcerpt, resetReadBacks, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, routeFor, ruleLabels, runReady, runSkill, runnableFrom, runtimeCall, sameMeasure, saveConnection, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, skillEnv, stageMeasurements, stageNow, startFollowup, stripDoses, suggestNext, summarizeIndicators, summarizeMedications, supplementFieldInputs, tableOf, testConnection, togetherZh, tokenKey, touchesHealth, trackingGeneration, turnText, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };

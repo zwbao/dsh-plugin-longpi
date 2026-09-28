@@ -13,6 +13,7 @@ import { Readable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import * as mod from '../lib/index.js'
 import { loadRecord, startFakeMirobody } from './fake-mirobody.mjs'
+import { startFlakyMirobody } from './flaky-mirobody.mjs'
 
 const root = dirname(fileURLToPath(import.meta.url))
 const sibling = resolve(root, '..', '..', 'longevity-skills')
@@ -709,6 +710,78 @@ try {
   const apartJourney = (await journeyOf(configFor(apartDir, apart.url))).journey
   assert.equal(apartJourney.results.bioage.blocker_zh, '九项血检还没有在同一天测齐。')
   assert.ok(apartJourney.addons.some((row) => row.item_zh === '九项血检安排在同一天' && row.unlocks_zh === '身体年龄' && !row.self_measurable))
+
+  // A complete catalogue Mirobody 1.5.0 marks truncated (rows == of N), plus uncoded Chinese names.
+  // Glucose and RDW-CV are on file; CRP is not; waist was never measured. Neither is a failed read.
+  const spec = (skill, key) => catalog.cards.find((card) => card.name === skill).inputs.find((item) => item.key === key)
+  const glucoseSpec = spec(mod.PHENOAGE_SKILL, 'glucose_mmol')
+  const rdwSpec = spec(mod.PHENOAGE_SKILL, 'rdw_pct')
+  const crpSpec = spec(mod.PHENOAGE_SKILL, 'crp_mg_dl')
+  assert.equal(mod.matchesInputName(glucoseSpec, '空腹血葡萄糖'), true)
+  assert.equal(mod.matchesInputName(rdwSpec, '红细胞分布宽度-变异系数'), true)
+  assert.equal(mod.matchesInputName(rdwSpec, '红细胞分布宽度-标准差'), false, 'RDW-SD is not RDW-CV')
+  assert.equal(mod.matchesInputName(crpSpec, '总蛋白'), false)
+  assert.equal(mod.matchesInputName(crpSpec, 'Protein [Mass/volume] in Serum or Plasma'), false)
+  const reading = (indicator, name, code, unit, value) => ({
+    indicator, name, system: code ? 'http://loinc.org' : '', code, unit, date: '2026-02-11', time: '2026-02-11 00:00:00', value: String(value), file: '',
+  })
+  const ownerSeries = [
+    reading('Albumin [Mass/volume] in Serum or Plasma', '白蛋白', '1751-7', 'g/L', '45.70'),
+    reading('Creatinine [Moles/volume] in Serum or Plasma', '肌酐', '14682-9', 'umol/L', '73'),
+    reading('Alkaline phosphatase [Enzymatic activity/volume] in Serum or Plasma', '碱性磷酸酶', '6768-6', 'U/L', '72'),
+    reading('Leukocytes [#/volume] in Blood', '白细胞计数', '26464-8', '10^9/L', '5.9'),
+    reading('Lymphocytes/Leukocytes in Blood', '淋巴细胞百分比', '26478-8', '%', '40.7'),
+    reading('MCV [Entitic mean volume] in Red Blood Cells', '平均红细胞体积', '30428-7', 'fL', '68.0'),
+    reading('空腹血葡萄糖', '空腹血葡萄糖', '', 'mmol/L', '5.67'),
+    reading('红细胞分布宽度-变异系数', '红细胞分布宽度-变异系数', '', '%', '18'),
+    reading('红细胞分布宽度-标准差', '红细胞分布宽度-标准差', '', 'fL', '44.0'),
+    reading('Systolic blood pressure', '收缩压', '8480-6', 'mmHg', '116'),
+    reading('Cholesterol [Moles/volume] in Serum or Plasma', '总胆固醇', '14647-2', 'mmol/L', '3.92'),
+    reading('Cholesterol in HDL [Moles/volume] in Serum or Plasma', '高密度脂蛋白胆固醇', '14646-4', 'mmol/L', '1.52'),
+    reading('Protein [Mass/volume] in Serum or Plasma', '总蛋白', '2885-2', 'g/L', '78.9'),
+  ]
+  const ownerRecord = { tz: 'UTC', today: TODAY, observations: ownerSeries, medications: { plans: [], log: [], history: [] } }
+  const falseCut = await startFlakyMirobody({
+    record: ownerRecord,
+    fail: (name, args) => (name === 'query_health_indicators' && !args.indicators && !args.keywords ? { cut: true, total: ownerSeries.length } : null),
+  })
+  servers.push(falseCut)
+  const falseDir = tempDir('false-cut')
+  mod.writeProfile(falseDir, { age: 30, sex: 'male', risk: FACTS, consent: { version: mod.CONSENT_VERSION, accepted_at: NOW.toISOString() } })
+  const falseStep = await journeyOf(configFor(falseDir, falseCut.url))
+  assert.equal(falseStep.records.catalog_truncated, false, 'rows equal of N is the whole catalogue, even when Mirobody sets truncated')
+  assert.equal(falseStep.records.record_status, 'ok', falseStep.records.record_error)
+  assert.equal(falseStep.records.indicators.find((row) => row.name.startsWith('Albumin')).loinc, '1751-7', 'http://loinc.org still carries the code')
+  assert.equal(mod.indicatorFor(glucoseSpec, falseStep.records.indicators).value, '5.67')
+  assert.equal(mod.indicatorFor(rdwSpec, falseStep.records.indicators).value, '18')
+  assert.equal(mod.indicatorFor(crpSpec, falseStep.records.indicators), null)
+  assert.equal(falseCut.calls.some((call) => (call.args.indicators ?? []).includes('30522-7')), false, 'a complete catalogue is not looked up again')
+  assert.deepEqual(falseStep.journey.results.bioage.missing, ['C反应蛋白'])
+  assert.equal(falseStep.journey.results.bioage.blocker_zh, '记录里还缺C反应蛋白。')
+  assert.equal(falseStep.journey.results.bioage.blocker_zh.includes('目录没有读全'), false)
+  assert.deepEqual(falseStep.journey.results.risk.missing_labs, ['腰围'])
+  assert.match(falseStep.journey.results.risk.blocker_zh, /腰围还没有测过，现在量一下填上就能算/)
+  assert.equal(falseStep.journey.results.risk.blocker_zh.includes('读取失败'), false)
+  assert.equal(falseStep.journey.next.title_zh, '还差 2 项检查')
+
+  // A real cut: the fasting-glucose series is past the page, recoverable by its LOINC code.
+  const hidden = reading('Hidden glucose', 'not-an-alias', '1558-6', 'mmol/L', '5.50')
+  const cutRecord = { ...ownerRecord, observations: ownerSeries.filter((row) => row.indicator !== '空腹血葡萄糖').concat(hidden) }
+  const realCut = await startFlakyMirobody({
+    record: cutRecord,
+    fail: (name, args) => (name === 'query_health_indicators' && !args.indicators && !args.keywords ? { cut: true, total: cutRecord.observations.length + 10, drop: ['Hidden glucose'] } : null),
+  })
+  servers.push(realCut)
+  const cutDir = tempDir('real-cut')
+  mod.writeProfile(cutDir, { age: 30, sex: 'male', risk: FACTS, consent: { version: mod.CONSENT_VERSION, accepted_at: NOW.toISOString() } })
+  const cutStep = await journeyOf(configFor(cutDir, realCut.url))
+  assert.equal(cutStep.records.catalog_truncated, true)
+  assert.equal(mod.indicatorFor(glucoseSpec, cutStep.records.indicators).value, '5.50', 'a LOINC past the catalogue page is read explicitly')
+  assert.deepEqual(cutStep.journey.results.bioage.missing, ['C反应蛋白'])
+  assert.equal(cutStep.journey.results.bioage.blocker_zh, '记录里还缺C反应蛋白。')
+  assert.deepEqual(cutStep.journey.results.risk.missing_labs, ['腰围'])
+  assert.match(cutStep.journey.results.risk.blocker_zh, /还没有测过/)
+  assert.equal(cutStep.journey.results.risk.blocker_zh.includes('读取失败'), false)
 
   host.dispose()
   console.log(`journey ok (stages consent → profile → records → first_result → plan → routine; China-PAR ${journey.results.risk.risk_pct}% ${journey.results.risk.category_zh}, phenotypic age at ${journey.results.bioage.checkups} checkups)`)

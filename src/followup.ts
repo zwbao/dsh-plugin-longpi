@@ -12,11 +12,11 @@
 // the network.
 
 import { spawn } from 'node:child_process'
-import { createHmac } from 'node:crypto'
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createHmac, randomBytes } from 'node:crypto'
+import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import { addDays, daysBetween, isoDay } from './interventions.ts'
+import { addDays, civilParts, daysBetween, isoDay } from './interventions.ts'
 
 export const WEBHOOK_KINDS = ['feishu', 'wecom', 'dingtalk', 'bark', 'generic'] as const
 export type WebhookKind = (typeof WEBHOOK_KINDS)[number]
@@ -259,15 +259,32 @@ function applyUpdate(current: FollowupSettings, update: Record<string, unknown>,
   return { ok: true, settings: next }
 }
 
+export const FOLLOWUP_DAMAGED = 'followup.json is damaged and was not overwritten'
+
+/** A file that is not JSON must not be replaced by defaults: that drops the webhook URL and secret. */
+function followupDamaged(dataDir: string): boolean {
+  const path = settingsPath(dataDir)
+  if (!existsSync(path)) return false
+  try {
+    JSON.parse(readFileSync(path, 'utf8'))
+    return false
+  } catch {
+    return true
+  }
+}
+
 /** Check and save a partial update from the page or a tool. The file is private to the person (0600). */
 export function writeFollowup(dataDir: string, update: unknown): { ok: true; settings: FollowupSettings } | { ok: false; error: string } {
   if (!isRecord(update)) return { ok: false, error: 'settings must be an object' }
+  if (followupDamaged(dataDir)) return { ok: false, error: FOLLOWUP_DAMAGED }
   const result = applyUpdate(readFollowup(dataDir), update)
   if (!result.ok) return result
   mkdirSync(dataDir, { recursive: true, mode: 0o700 })
-  writeFileSync(settingsPath(dataDir), `${JSON.stringify(result.settings, null, 2)}\n`, { mode: 0o600 })
-  // mode only applies when the file is created.
-  chmodSync(settingsPath(dataDir), 0o600)
+  const path = settingsPath(dataDir)
+  const tmp = `${path}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`
+  writeFileSync(tmp, `${JSON.stringify(result.settings, null, 2)}\n`, { mode: 0o600 })
+  chmodSync(tmp, 0o600)
+  renameSync(tmp, path)
   return result
 }
 
@@ -328,17 +345,19 @@ function minutesOf(time: string): number {
 }
 
 function localMinutes(now: Date): number {
-  return now.getHours() * 60 + now.getMinutes()
+  const parts = civilParts(now)
+  return parts.hour * 60 + parts.minute
 }
 
-/** ISO weekday of a local time: Monday = 1 … Sunday = 7. */
+/** ISO weekday of the Asia/Shanghai clock: Monday = 1 … Sunday = 7. */
 export function isoWeekday(now: Date): Weekday {
-  return (((now.getDay() + 6) % 7) + 1) as Weekday
+  return (((civilParts(now).weekday + 6) % 7) + 1) as Weekday
 }
 
-/** ISO week of a local date, as 2026-W39. */
+/** ISO week of the Asia/Shanghai date, as 2026-W39. */
 export function isoWeek(now: Date): string {
-  const day = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()))
+  const parts = civilParts(now)
+  const day = new Date(Date.UTC(parts.year, parts.month - 1, parts.day))
   day.setUTCDate(day.getUTCDate() + 4 - (((day.getUTCDay() + 6) % 7) + 1))
   const yearStart = Date.UTC(day.getUTCFullYear(), 0, 1)
   const week = Math.ceil(((day.getTime() - yearStart) / 86_400_000 + 1) / 7)
@@ -372,9 +391,14 @@ function localIso(day: string, time: string): string {
   return `${day}T${time}:00`
 }
 
+/** A failed attempt with no channel delivered does not count: the next tick tries again, up to the daily cap. */
+function delivered(row: FollowupLogRow): boolean {
+  return row.ok || Object.values(row.channels).some(Boolean)
+}
+
 function sentKeys(log: readonly FollowupLogRow[]): Set<string> {
   // One send may cover several retests: its key joins theirs with '|'.
-  return new Set(log.flatMap((row) => row.key.split('|')))
+  return new Set(log.filter(delivered).flatMap((row) => row.key.split('|')))
 }
 
 function retestKey(row: { marker: string; first_due: string }): string {
@@ -719,7 +743,7 @@ export interface FollowupContext {
 }
 
 /**
- * Tick every 60 s in the host's local time zone, as a Cordis effect: the interval is cleared when the
+ * Tick every 60 s on the Asia/Shanghai clock, as a Cordis effect: the interval is cleared when the
  * plugin is disposed, is unref'd so it never keeps the process alive, and never overlaps itself. One
  * journey read is reused the same day for up to an hour, and never after a check-in, a plan or profile
  * save or a self measurement (the generation changes), so a reminder never counts items already ticked.

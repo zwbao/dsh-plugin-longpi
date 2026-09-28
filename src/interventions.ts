@@ -127,9 +127,41 @@ export function checkinStatus(rows: readonly CheckIn[]): Map<string, Map<string,
   return out
 }
 
+/** Civil clock for check-ins, streaks and reminders. The person is in China; the process zone is not. */
+export const CIVIL_TZ = 'Asia/Shanghai'
+
+const WEEKDAY_INDEX: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 }
+
+/** Wall-clock parts in Asia/Shanghai. Hour 24 (some engines at midnight) is 0. */
+export function civilParts(at: Date = new Date()): { year: number; month: number; day: number; hour: number; minute: number; weekday: number } {
+  const fmt = new Intl.DateTimeFormat('en-US', {
+    timeZone: CIVIL_TZ,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    weekday: 'short',
+  })
+  const map = Object.fromEntries(fmt.formatToParts(at).filter((part) => part.type !== 'literal').map((part) => [part.type, part.value]))
+  let hour = Number(map.hour)
+  if (hour === 24) hour = 0
+  return {
+    year: Number(map.year),
+    month: Number(map.month),
+    day: Number(map.day),
+    hour,
+    minute: Number(map.minute),
+    weekday: WEEKDAY_INDEX[map.weekday ?? ''] ?? 0,
+  }
+}
+
+/** YYYY-MM-DD in Asia/Shanghai, not UTC and not the process zone. */
 export function isoDay(at: Date = new Date()): string {
-  const local = new Date(at.getTime() - at.getTimezoneOffset() * 60_000)
-  return local.toISOString().slice(0, 10)
+  const parts = civilParts(at)
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)}`
 }
 
 export function addDays(iso: string, days: number): string {

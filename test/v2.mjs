@@ -109,10 +109,10 @@ try {
   assert.equal(mod.latestOutputs(dataDir).phenoage.value, 50.12)
   assert.equal(mod.seriesOf(dataDir, 'phenoage').length, 1)
 
-  const noAge = await mod.runSkill({ ...base, profile: { age: null, sex: 'unknown' }, name: 'demo-phenoage', measurements: [{ key: 'crp_mg_dl', value: '0.1' }, { key: 'albumin_gL', value: '45' }] })
+  const noAge = await mod.runSkill({ ...base, profile: { age: null, sex: 'unknown' }, name: 'demo-phenoage', measurements: [{ key: 'crp_mg_dl', value: '0.1', unit: 'mg/dL' }, { key: 'albumin_gL', value: '45' }] })
   assert.equal(noAge.error_kind, 'missing_inputs')
 
-  const scriptRefused = await mod.runSkill({ ...base, name: 'demo-phenoage', measurements: [{ key: 'crp_mg_dl', value: '20' }, { key: 'albumin_gL', value: '45' }] })
+  const scriptRefused = await mod.runSkill({ ...base, name: 'demo-phenoage', measurements: [{ key: 'crp_mg_dl', value: '20', unit: 'mg/dL' }, { key: 'albumin_gL', value: '45' }] })
   assert.equal(scriptRefused.ok, false)
   assert.equal(scriptRefused.error_kind, 'input_problems')
   assert.equal(scriptRefused.problems[0].kind, 'range')

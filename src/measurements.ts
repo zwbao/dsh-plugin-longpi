@@ -1,7 +1,9 @@
 // Turn a person's measurements into the CSV a skill script reads, with the
-// same rules as skillkit.py in the skill: key names carry their unit, aliases
-// are read in the input's unit unless unit_required, units convert only with
-// the factors skill.json declares, and ranges are checked after conversion.
+// same rules as skillkit.py in the skill: units convert only with the factors
+// skill.json declares, and ranges are checked after conversion. An input with
+// unit_required refuses a missing unit even when the row is passed under the
+// input's own key (the record path does that). A missing unit used to be read
+// as the key's unit, so a unitless CRP became mg/dL.
 // Also decides which skills this person's record can already run, and which
 // are ready (or one or two tests short) from the record itself.
 
@@ -115,7 +117,7 @@ export function stageMeasurements(card: SkillCard, items: readonly MeasurementIn
       problems.push({ key: String(item.key), label: String(item.key), kind: 'unknown', message_zh: `${item.key} 不是这个技能要的输入。` })
       continue
     }
-    const { spec, byKey } = hit
+    const { spec } = hit
     const number = parseNumber(item.value)
     if (number == null) {
       problems.push({ key: spec.key, label: spec.label_zh, kind: 'parse', message_zh: `${spec.label_zh} 的值「${String(item.value)}」不是一个可以计算的数。` })
@@ -125,7 +127,9 @@ export function stageMeasurements(card: SkillCard, items: readonly MeasurementIn
     let factor: number | null = 1
     let shown = unitLabel(spec) ? `按 ${unitLabel(spec)} 读` : '没有单位'
     if (!normalizeUnit(unit)) {
-      if (!byKey && spec.unit_required) {
+      // The record path passes spec.key. The key name is not a unit: a unitless
+      // or unlabelled CRP must not be read as mg/dL.
+      if (spec.unit_required) {
         const accepted = [spec.unit ?? '', ...Object.keys(spec.accept ?? {}).filter((name) => normalizeUnit(name) !== normalizeUnit(spec.unit ?? ''))]
         problems.push({ key: spec.key, label: spec.label_zh, kind: 'unit_missing', message_zh: `${spec.label_zh} 没有写单位。这一项常见 ${accepted.join('、')}，请写明单位。` })
         continue
@@ -197,7 +201,7 @@ export function runnableFrom(
   indicators: readonly RecordIndicator[],
   profile: { age: number | null; sex: string },
   outputs: Record<string, unknown> = {},
-  reads: { failed?: readonly string[]; catalog_truncated?: boolean } = {},
+  reads: { failed?: readonly string[]; catalog_truncated?: boolean; probed?: readonly string[] } = {},
 ): Runnable {
   if (card.inputsStatus === 'none' || card.inputs.length === 0 || !card.script) {
     return { status: 'unknown', have: [], missing: [], from_record: [], record: 'none', missing_from_record: [], unread: [] }
@@ -275,10 +279,32 @@ export function candidatesFor(spec: InputSpec, indicators: readonly RecordIndica
     if (device >= 0) out.push({ row, rank: codes.length + device, by: 'code' })
   }
   if (out.length > 0) return out.sort((a, b) => a.rank - b.rank)
-  const names = new Set([spec.key, spec.label_zh, ...(spec.aliases ?? [])].map((name) => foldName(name)).filter(Boolean))
-  const byName = (text: string | undefined) => Boolean(text) && nameVariants(text as string).some((variant) => names.has(variant))
   // A self row is in the list only when it is newer than the record's own row, so it is tried first.
-  return preferSelf(indicators).filter((row) => byName(row.name) || byName(row.label)).map((row) => ({ row, rank: codes.length + devices.length, by: 'name' as const }))
+  return preferSelf(indicators).filter((row) => matchesInputName(spec, row.name) || matchesInputName(spec, row.label)).map((row) => ({ row, rank: codes.length + devices.length, by: 'name' as const }))
+}
+
+/** Qualifiers a report may append to an analyte (红细胞分布宽度-变异系数). 标准差 is RDW-SD, not RDW-CV. */
+const NAME_QUALIFIERS = new Set(['变异系数', 'cv', '百分比'])
+
+/**
+ * Whether a report or series name is this input. Exact folded names, the same name with 血 inserted
+ * (空腹血葡萄糖 and 空腹葡萄糖), or the label plus a CV/percent qualifier.
+ */
+export function matchesInputName(spec: InputSpec, text: string | undefined): boolean {
+  if (!text) return false
+  const aliases = [spec.key, spec.label_zh, ...(spec.aliases ?? [])].map((name) => foldName(name)).filter(Boolean)
+  const exact = new Set(aliases)
+  const variants = nameVariants(text)
+  if (variants.some((variant) => exact.has(variant))) return true
+  const stripped = new Set(aliases.map((alias) => alias.replace(/血/g, '')).filter((alias) => alias.length >= 2))
+  if (variants.some((variant) => stripped.has(variant.replace(/血/g, '')))) return true
+  for (const variant of variants) {
+    for (const alias of aliases) {
+      if (alias.length < 4 || variant.length <= alias.length || !variant.startsWith(alias)) continue
+      if (NAME_QUALIFIERS.has(variant.slice(alias.length))) return true
+    }
+  }
+  return false
 }
 
 /**
@@ -286,11 +312,13 @@ export function candidatesFor(spec: InputSpec, indicators: readonly RecordIndica
  * among the reads that failed; or none is listed, and the catalogue was cut, or the input is known only by
  * name while some rows went unread (their report names come with the value, so they cannot be matched).
  */
-export function notRead(spec: InputSpec, indicators: readonly RecordIndicator[], reads: { failed?: readonly string[]; catalog_truncated?: boolean }): boolean {
+export function notRead(spec: InputSpec, indicators: readonly RecordIndicator[], reads: { failed?: readonly string[]; catalog_truncated?: boolean; probed?: readonly string[] }): boolean {
   const failed = new Set(reads.failed ?? [])
   const names = candidatesFor(spec, indicators).map((item) => item.row.name)
   if (names.some((name) => failed.has(name))) return true
   if (names.length > 0) return false
+  // An explicit lookup answered: the series is not on file, even if the catalogue was cut.
+  if ((reads.probed ?? []).includes(spec.key)) return false
   const coded = (spec.loinc ?? []).length > 0 || (spec.device_codes ?? []).length > 0
   return Boolean(reads.catalog_truncated) || (!coded && failed.size > 0)
 }
@@ -299,16 +327,34 @@ function dateOf(row: RecordIndicator): string {
   return row.date || row.last_date || ''
 }
 
+/** A row whose unit converts, or whose missing unit is allowed. A wrong label (Nightingale unit, empty CRP) does not. */
+function unitAccepted(spec: InputSpec, row: RecordIndicator): boolean {
+  const unit = String(row.unit ?? '')
+  if (!normalizeUnit(unit)) return !spec.unit_required
+  return unitFactor(spec, unit) != null
+}
+
+function preferCandidate(spec: InputSpec, item: Candidate, best: Candidate): boolean {
+  const itemDate = dateOf(item.row)
+  const bestDate = dateOf(best.row)
+  if (itemDate !== bestDate) return itemDate > bestDate
+  // Same day, same code: a convertible unit beats a missing or wrong one, then the earlier code in skill.json.
+  const itemOk = unitAccepted(spec, item.row)
+  const bestOk = unitAccepted(spec, best.row)
+  if (itemOk !== bestOk) return itemOk
+  return item.rank < best.rank
+}
+
 /**
  * The record indicator that holds one declared input: of the rows with a number, the newest across all of the
- * input's codes; on the same date the earlier code in skill.json order. Rows matched only by name are the
- * fallback when no row carries a code.
+ * input's codes; on the same date a unit that converts beats a missing or wrong label, then the earlier code
+ * in skill.json order. Rows matched only by name are the fallback when no row carries a code.
  */
 export function indicatorFor(spec: InputSpec, indicators: readonly RecordIndicator[]): RecordIndicator | null {
   let best: Candidate | null = null
   for (const item of candidatesFor(spec, indicators)) {
     if (parseNumber(item.row.value) == null) continue
-    if (!best || dateOf(item.row) > dateOf(best.row) || (dateOf(item.row) === dateOf(best.row) && item.rank < best.rank)) best = item
+    if (!best || preferCandidate(spec, item, best)) best = item
   }
   return best?.row ?? null
 }

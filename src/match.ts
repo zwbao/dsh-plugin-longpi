@@ -27,7 +27,7 @@ export interface MatchOptions {
   outputs?: Record<string, unknown>
   lexicon?: EvidenceLexicon
   /** Reads that failed (records.missing_reads) or a cut catalogue: such inputs are not read, never "missing". */
-  reads?: { failed?: readonly string[]; catalog_truncated?: boolean }
+  reads?: { failed?: readonly string[]; catalog_truncated?: boolean; probed?: readonly string[] }
 }
 
 export interface MatchResult {

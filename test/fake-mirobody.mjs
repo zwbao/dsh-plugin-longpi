@@ -126,9 +126,21 @@ function byIndicator(record) {
   return out
 }
 
+function resolveIndicator(groups, wanted) {
+  if (groups.has(wanted)) return wanted
+  for (const [name, items] of groups) {
+    if (items.some((item) => item.code === wanted || item.name === wanted)) return name
+  }
+  return ''
+}
+
 function pickNames(record, args) {
   const groups = byIndicator(record)
-  if (Array.isArray(args.indicators) && args.indicators.length > 0) return args.indicators
+  if (Array.isArray(args.indicators) && args.indicators.length > 0) {
+    const resolved = [...new Set(args.indicators.map((wanted) => resolveIndicator(groups, String(wanted))).filter(Boolean))]
+    // Nothing matched: keep the request so the caller still gets "not in this record".
+    return resolved.length > 0 ? resolved : args.indicators
+  }
   if (Array.isArray(args.keywords) && args.keywords.length > 0) {
     const words = args.keywords.map((word) => String(word).toLowerCase())
     return [...groups.keys()].filter((name) => words.some((word) => name.toLowerCase().includes(word)))
