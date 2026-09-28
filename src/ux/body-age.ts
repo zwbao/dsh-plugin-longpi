@@ -7,12 +7,28 @@ const PANEL_KEYS: Array<keyof PhenoPanel> = [
   'mcv_fl', 'rdw_pct', 'alp_u_l', 'wbc_10e3', 'age',
 ]
 
-/** A skill measurement list already in the method's units, plus the age used for that draw. */
-export function panelFromMeasurements(rows: readonly { key: string; value: number | string }[], age: number): PhenoPanel | null {
+// The skill converts declared units itself (skill.json); the attribution below needs the method's units too.
+// Factor from the unit a record may carry to the key's unit. A unit not listed is taken as already right.
+const TO_METHOD_UNIT: Record<string, Record<string, number>> = {
+  albumin_gL: { 'g/dl': 10, 'g/l': 1 },
+  creat_umol: { 'mg/dl': 88.4, 'umol/l': 1, 'µmol/l': 1, 'μmol/l': 1 },
+  glucose_mmol: { 'mg/dl': 1 / 18.016, 'mmol/l': 1 },
+  crp_mg_dl: { 'mg/l': 0.1, 'mg/dl': 1 },
+}
+
+function inMethodUnit(key: string, value: number, unit: string | undefined): number {
+  const table = TO_METHOD_UNIT[key]
+  const factor = table?.[(unit ?? '').trim().toLowerCase().replace(/\s+/g, '')]
+  return factor ? value * factor : value
+}
+
+/** A skill measurement list (with the unit each value came in), plus the age used for that draw. */
+export function panelFromMeasurements(rows: readonly { key: string; value: number | string; unit?: string }[], age: number): PhenoPanel | null {
   const values: Partial<PhenoPanel> = { age }
   for (const row of rows) {
-    if ((PANEL_KEYS as string[]).includes(row.key) && typeof row.value === 'number' && Number.isFinite(row.value)) {
-      values[row.key as keyof PhenoPanel] = row.value
+    const value = typeof row.value === 'string' ? Number(row.value) : row.value
+    if ((PANEL_KEYS as string[]).includes(row.key) && typeof value === 'number' && Number.isFinite(value)) {
+      values[row.key as keyof PhenoPanel] = inMethodUnit(row.key, value, row.unit)
     }
   }
   for (const key of PANEL_KEYS) if (typeof values[key] !== 'number') return null
@@ -242,7 +258,10 @@ export function bodyAgeStory(input: {
   }
   const named = helping.filter((row) => row.healthy).slice(0, 2)
   const who = named.length > 0 ? named : helping.slice(0, 2)
-  const from = who.length > 0 ? `主要来自${who.map((row) => `${row.label_zh}${verb(row.from, row.to)}`).join('和')}。` : ''
+  const down = who.filter((row) => row.to < row.from).map((row) => row.label_zh)
+  const up = who.filter((row) => row.to > row.from).map((row) => row.label_zh)
+  const moved = [down.length > 0 ? `${down.join('和')}降了下来` : '', up.length > 0 ? `${up.join('和')}升了上来` : ''].filter(Boolean).join('，')
+  const from = moved ? `主要来自${moved}。` : ''
   const headline = `你确实年轻了 ${yearsText(input.deltaYears)} 岁（模型估计，超出了测量波动，是真实的变化）。${from}`.replace(/。$/, '。')
   return { headline_zh: headline, chat_zh: headline, allows_younger: true, concern: false, drivers }
 }

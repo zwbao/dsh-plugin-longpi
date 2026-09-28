@@ -219,6 +219,11 @@ try {
       assert.ok(own.at(-1) > 'cordis.patch.yml.bak-20260101000005', 'the new backup is kept')
       for (const name of own) assert.equal(statSync(join(profileDir, name)).mode & 0o777, 0o600, name)
       assert.equal(statSync(patch).mode & 0o777, 0o600)
+      // The corner says LongPi: the official wordmark row is disabled inside LongPi's own block.
+      const written = readFileSync(patch, 'utf8')
+      const block = written.slice(written.indexOf('# >>> dsh-plugin-longpi'), written.indexOf('# <<< dsh-plugin-longpi'))
+      assert.match(block, /- id: ui-brand-official\n  disabled: true/)
+      assert.match(written, /- id: other-plugin/, 'other rows stay')
       assert.ok(existsSync(`${patch}.bak-manual`) && existsSync(`${patch}.bak-2026010100000`), 'files not named by the installer are never removed')
       assert.match(installer, /配置备份/, 'the summary says so')
       chmodSync(patch, 0o600)

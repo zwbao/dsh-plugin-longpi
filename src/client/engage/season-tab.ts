@@ -59,17 +59,17 @@ export function SeasonPanel(props: {
     return h('div', { className: 'lp-season-invite', style: { display: 'flex', flexDirection: 'column', gap: 8 } },
       h('h2', { style: { margin: 0, fontSize: 18 } }, props.view.invite.title_zh),
       h('p', { style: { margin: 0 } }, props.view.invite.body_zh),
-      props.view.subject_zh ? h('p', { style: { margin: 0 } }, `这一季用的是${props.view.subject_zh}的年龄和性别。`) : null,
-      h('a', { href: props.view.invite.odds_path }, '公开概率'),
+      props.view.subject_zh ? h('p', { style: { margin: 0 } }, `这个赛季用的是${props.view.subject_zh}的年龄和性别。`) : null,
+      h('a', { href: props.view.invite.odds_path }, '概率说明'),
       h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
-        h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'opt_in' }) }, '开始这一季'),
+        h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'opt_in' }) }, '开始这个赛季'),
         h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'decline_invite' }) }, '先不用')),
       props.note ? h('p', { style: { margin: 0 } }, props.note) : null)
   }
   if (props.view.pressure !== true) {
     return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
-      h('p', { style: { margin: 0 } }, '这一季先不推。想开始时点下面。'),
-      h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'opt_in' }) }, '开始这一季'),
+      h('p', { style: { margin: 0 } }, '这个赛季先不推。想开始时点下面。'),
+      h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'opt_in' }) }, '开始这个赛季'),
       props.view.streak.frozen.length > 0 ? h(StreakLine, { streak: props.view.streak, onFreeze: props.onFreeze, busy: props.busy }) : null,
       props.note ? h('p', { style: { margin: 0 } }, props.note) : null)
   }
@@ -102,7 +102,7 @@ export function SeasonPanel(props: {
     season?.recap_zh ? h('div', null, h('div', { style: { fontWeight: 600 } }, '这一赛季的回看'), h('p', { style: { margin: '4px 0 0' } }, season.recap_zh)) : null,
     props.view.family?.available ? h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
       props.view.family.opted
-        ? h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'share_recap' }) }, '把这一季的回看给家人')
+        ? h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'share_recap' }) }, '把这个赛季的回看发给家人')
         : h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'family_on' }) }, '打开家人圈')) : null,
     h(CodexPanel, { codex: props.view.codex, onDraw: props.onDraw, onOpt: props.onOpt, onRun: props.onRun, busy: props.busy, note: props.note }))
 }

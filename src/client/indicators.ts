@@ -12,7 +12,7 @@ import { chineseDate } from './format.ts'
 import { Icon } from './icons.ts'
 import { normalizeIndicatorDetail } from './normalize.ts'
 import { reload, useIndicators, type IndicatorFilter } from './store.ts'
-import { judgementKind, judgementText, lifeAreaOf, movementOf, scrubVisible, type JudgementKey, type LifeArea } from '../ux/plain.ts'
+import { judgementKind, judgementText, lifeAreaOf, movementOf, scrubVisible, sourceLabel, type JudgementKey, type LifeArea } from '../ux/plain.ts'
 import type { IndicatorDetail, IndicatorRow, IndicatorsResponse, IndicatorSource } from './types.ts'
 import { Btn, Info, LoadError, Skeleton } from './ui.ts'
 
@@ -146,7 +146,7 @@ function DetailBody(props: { detail: IndicatorDetail }): React.ReactElement {
     noiseSentence(props.detail)
       ? h('p', { className: 'lp-caption' },
         noiseSentence(props.detail),
-        biovar?.source.url ? h(React.Fragment, null, ' 来源：', h('a', { href: biovar.source.url, target: '_blank', rel: 'noopener noreferrer' }, biovar.source.title || biovar.source.url)) : biovar?.source.title ? ` 来源：${biovar.source.title}` : '',
+        biovar?.source.url ? h(React.Fragment, null, ' 来源：', h('a', { href: biovar.source.url, target: '_blank', rel: 'noopener noreferrer', title: biovar.source.title || undefined }, sourceLabel(biovar.source.title))) : biovar?.source.title ? ` 来源：${sourceLabel(biovar.source.title)}` : '',
         biovar?.source.doi ? ` · doi:${biovar.source.doi}` : '')
       : biovar && (row.gate === 'too_early' || (row.reason_zh ?? '').startsWith('太早'))
         ? h('p', { className: 'lp-caption' }, reasonBesideChip(row.gate, row.reason_zh) || '间隔还没到这项的最短复测时间。')
@@ -155,7 +155,7 @@ function DetailBody(props: { detail: IndicatorDetail }): React.ReactElement {
           : h('p', { className: 'lp-caption' }, row.range_zh
             ? '这项没有用来比较两次变化的波动数据。上面按参考范围标了偏低或偏高。'
             : row.source === 'checkup' ? '这项没有收录个体正常波动数据，分不清真实变化和波动，所以不作判断。' : '手环和自测数据按周均值或日值显示趋势，不作正常波动判断。'),
-    biovar ? h('p', { className: 'lp-caption' }, `研究里用来判断变化的范围：+${fmt(biovar.band_pct.up, 1)}% / ${fmt(biovar.band_pct.down, 1)}%（来源：${biovar.source.title || '收录的研究'}）`) : null,
+    biovar ? h('p', { className: 'lp-caption' }, `研究里用来判断变化的范围：+${fmt(biovar.band_pct.up, 1)}% / ${fmt(biovar.band_pct.down, 1)}%（来源：${sourceLabel(biovar.source.title)}）`) : null,
     biovar?.caveat_zh && !row.gate ? h('p', { className: 'lp-caption' }, biovar.caveat_zh) : null,
     points.length > 0
       ? h('table', { className: 'lp-ind-table' },

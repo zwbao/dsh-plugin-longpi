@@ -48,6 +48,16 @@ export interface BioAgeInput {
   story_younger?: boolean
 }
 
+/**
+ * The body-age sentence the tracking step already chose (see ux/body-age.ts), for the graded message.
+ * The page, the chat and the share card all read this one sentence.
+ */
+export function bioAgeStory(headline: string | undefined, allowsYounger: boolean | undefined): Pick<BioAgeInput, 'story_zh' | 'story_younger'> {
+  const text = (headline ?? '').trim()
+  if (!/你确实年轻了|算出来小了/.test(text)) return {}
+  return { story_zh: text, story_younger: allowsYounger === true && !/不一定是好事/.test(text) }
+}
+
 export interface BehaviourInput {
   key: string
   title_zh: string

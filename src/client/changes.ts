@@ -9,6 +9,7 @@ import React from 'react'
 import { LineChart } from './charts.ts'
 import { Icon } from './icons.ts'
 import type { Journey, RecordChange } from './types.ts'
+import { sourceLabel } from '../ux/plain.ts'
 
 const h = React.createElement
 
@@ -133,7 +134,7 @@ export function Basis(props: { journey: Journey; rows: readonly RecordChange[] }
         '波动数据来源：',
         ...sources.flatMap((source, index) => [
           index > 0 ? '；' : null,
-          source.url ? h('a', { key: source.url, href: source.url, target: '_blank', rel: 'noopener noreferrer' }, source.title || source.url) : source.title,
+          source.url ? h('a', { key: source.url, href: source.url, target: '_blank', rel: 'noopener noreferrer', title: source.title || undefined }, sourceLabel(source.title)) : sourceLabel(source.title),
           source.verified ? null : '（引用尚未逐字核对）',
         ])) : null,
       props.journey.changes_note_zh ? h('p', { className: 'lp-fine' }, props.journey.changes_note_zh) : null))

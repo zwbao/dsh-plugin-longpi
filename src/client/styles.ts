@@ -536,7 +536,7 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
 /* The host is the last child of DSH's hero composer stack; home.ts sets its top margin so the row sits
    12 px under the card whatever the stack's gap. Empty (no row for this stage), it takes no room. */
 .lp-home-host {
-  display: flex; flex-wrap: wrap; justify-content: center; width: 100%; min-width: 0;
+  display: flex; flex-wrap: wrap; justify-content: center; width: 100%; min-width: 0; box-sizing: border-box;
   padding: 0 var(--dsh-composer-side-clearance, 16px);
 }
 .lp-home-host:empty { display: none; }
@@ -931,6 +931,26 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
   .lp-header, .lp-result-head, .lp-card-head { flex-wrap: wrap; }
   .lp-linkbtn, .lp-bignum { max-width: 100%; }
   .lp-bignum { font-size: 36px; line-height: 44px; }
+}
+/* A narrow page or settings column (a phone, or DSH's settings dialog at phone width, where the LongPi column
+   is only about 110 px): every row wraps, fields take the column's width, nothing is pushed past the edge. */
+@container lp-root (max-width: 360px) {
+  .lp-settings > *, .lp-settings section, .lp-settings div, .lp-settings form, .lp-settings fieldset, .lp-settings label,
+  .lp-settings li, .lp-settings details, .lp-settings summary, .lp-settings span, .lp-settings p, .lp-settings h2, .lp-settings h3 { min-width: 0; max-width: 100%; }
+  .lp-settings input:not([type=radio]):not([type=checkbox]), .lp-settings select, .lp-settings textarea { min-width: 0 !important; max-width: 100%; width: 100%; box-sizing: border-box; }
+  .lp-settings button { max-width: 100%; height: auto; min-height: 30px; white-space: normal; text-align: left; }
+  .lp-settings .lp-set-head, .lp-settings .lp-set-title, .lp-settings .lp-field-label, .lp-settings .lp-input-unit, .lp-settings .lp-seg,
+  .lp-settings .lp-status, .lp-settings .lp-privacy-row, .lp-settings .lp-switch, .lp-settings .lp-check, .lp-settings .lp-subhead,
+  .lp-settings .lp-remind-row, .lp-settings .lp-form-actions { flex-wrap: wrap; }
+  .lp-settings .lp-grid-2, .lp-settings .lp-followup-times, .lp-settings .lp-followup-grid, .lp-settings .lp-remind { grid-template-columns: minmax(0, 1fr); }
+  .lp-settings .lp-seg { width: auto; max-width: 100%; }
+  .lp-settings .lp-seg-opt, .lp-settings .lp-seg-opt span { min-width: 0; height: auto; white-space: normal; }
+  .lp-settings, .lp-settings * { overflow-wrap: anywhere; }
+}
+/* On a narrow page an ⓘ note spans the column instead of hanging off the button toward the edge. The page root
+   contains layout, so "fixed" here is relative to it. */
+@container lp-root (max-width: 480px) {
+  .lp-info-pop { position: fixed; left: 12px; right: 12px; top: auto; width: auto; max-width: none; margin-top: 28px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .lp-card, .lp-win, .lp-pop, .lp-skeleton, .lp-hero, .lp-home-row, .lp-task-ring, .lp-pill-wrap, .lp-notice, .lp-spin, .lp-info-pop, .lp-task-menu { animation: none; }

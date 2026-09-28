@@ -7,6 +7,7 @@ import { activeStudyIds, latestConsent } from './consent-flow.ts'
 import { RELEASE_STAYS_ZH } from './budget.ts'
 import { EARLY_ZH, thresholdCard, type ThresholdCard } from './coldstart.ts'
 import { ethicsLine, loadStudies, publicQuestions, type LoadedStudy } from './manifest.ts'
+import { plainQuestion, plainSummary } from './plain-copy.ts'
 import { readLog } from './translog.ts'
 
 export const TOPICS = [
@@ -96,11 +97,11 @@ function studyCard(row: LoadedStudy, dataDir: string): StudyCard {
   return {
     id: row.manifest.id,
     title_zh: row.manifest.title_zh,
-    summary_zh: row.manifest.summary_zh,
+    summary_zh: plainSummary(row.manifest.id, row.manifest.summary_zh),
     kind: row.manifest.kind,
     ethics_zh: ethicsLine(row.manifest),
     consented,
-    questions: publicQuestions(row.manifest).slice(0, 2),
+    questions: publicQuestions(row.manifest).slice(0, 2).map(plainQuestion),
     text_zh: row.text_zh,
   }
 }

@@ -5,6 +5,7 @@ import React from 'react'
 import { registerOverviewCard } from '../registry.ts'
 import type { Journey, Tracking } from '../types.ts'
 import {
+  bioAgeStory,
   buildFeedback,
   markerFromChange,
   markerFromEngine,
@@ -56,6 +57,8 @@ export function feedbackInputOf(journey: Journey, tracking: Tracking | null): Fe
     date: points.at(-1)?.date ?? result.date,
     draws: points.length > 0 ? points.length : result.checkups,
     same_lab: null,
+    // The same sentence the page caption and the chat use: a concern is never graded as a celebration here.
+    ...bioAgeStory(result.headline_zh, result.allows_younger),
   }
   const behaviours: BehaviourInput[] = (journey.plan.checkin_items ?? [])
     .filter((item) => item.done_today === true)

@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { postJson } from '../api.ts'
+import { PLAIN_QUESTIONS } from '../../science/plain-copy.ts'
 
 const h = React.createElement
 
@@ -17,16 +18,7 @@ export interface StudyRow {
   text_zh: string
 }
 
-const PLAIN: Record<string, { question_zh: string; options_zh: string[] }> = {
-  live: {
-    question_zh: '现在会把你的检查数据发出这台电脑吗？',
-    options_zh: ['会，马上就发', '不会。研究正式开始前，只保存在你的设备上', '你一点同意就会发出去'],
-  },
-  who: {
-    question_zh: '下面谁先不参加这个走路的小试验？',
-    options_zh: ['谁都可以，包括正在打胰岛素的人', '正在打胰岛素，或在吃容易让血糖过低的药的人，先不参加', '只有不满 18 岁的人可以'],
-  },
-}
+const PLAIN = PLAIN_QUESTIONS
 
 export function ConsentPanel(props: { study: StudyRow; onChange: () => void; onError: (message: string) => void }): React.ReactElement {
   const questions = props.study.questions.slice(0, 2)

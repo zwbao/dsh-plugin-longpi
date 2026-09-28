@@ -273,7 +273,7 @@ try {
     { item_zh: 'C反应蛋白', unlocks_zh: '身体年龄', self_measurable: false },
   ])
   assert.deepEqual(journey.next, { stage: 'first_result', title_zh: '量一次腰围', detail_zh: '补上这一项，才能算出心血管风险。之后还可以补：C反应蛋白。', action: 'addons' })
-  assertSuggestions(journey, ['腰围和C反应蛋白和上次比，变了多少？', '下次看医生，我要问哪几件？', '现在我先做哪一件？'])
+  assertSuggestions(journey, ['腰围、C反应蛋白跟上次比，变了多少？', '下次看医生，我要问哪几件？', '现在我先做哪一件？'])
 
   // a plan saved before any first result is lived day by day: the routine, not first_result
   const early = tempDir('plan-before-result')

@@ -8,7 +8,7 @@ import { gradeBioAge } from '../src/feedback/grade.ts'
 import { formatMeasure, plainSource, resultSentence, titleOf } from '../src/core/method-view.ts'
 import { chineseDate } from '../src/client/format.ts'
 import { isDiagnosisName, scrubVisible } from '../src/ux/plain.ts'
-import { attributeDrivers, bodyAgeLines, bodyAgeStory, phenotypicAge } from '../src/ux/body-age.ts'
+import { attributeDrivers, bodyAgeLines, bodyAgeStory, panelFromMeasurements, phenotypicAge } from '../src/ux/body-age.ts'
 import { PRODUCT_VERSION } from '../src/version.ts'
 import { narrateBioAge } from '../src/tracking.ts'
 import { feedbackFor } from '../src/feedback/index.ts'
@@ -72,6 +72,17 @@ const base = {
 const mcvDown = { ...base, mcv_fl: 78 }
 const crpDown = { ...base, crp_mg_dl: 0.08, glucose_mmol: 4.8 }
 assert.ok(phenotypicAge(base) != null)
+// A record in mg/L (hs-CRP) or mg/dL (creatinine, glucose) is read in the method's units.
+const fromRecord = panelFromMeasurements([
+  { key: 'albumin_gL', value: 4.6, unit: 'g/dL' }, { key: 'creat_umol', value: 0.95, unit: 'mg/dL' }, { key: 'glucose_mmol', value: 99, unit: 'mg/dL' },
+  { key: 'crp_mg_dl', value: 2.4, unit: 'mg/L' }, { key: 'lymph_pct', value: 31 }, { key: 'mcv_fl', value: 90 }, { key: 'rdw_pct', value: 13 },
+  { key: 'alp_u_l', value: 70 }, { key: 'wbc_10e3', value: 6 },
+], 41)
+assert.equal(fromRecord.albumin_gL, 46)
+assert.ok(Math.abs(fromRecord.creat_umol - 83.98) < 0.01)
+assert.ok(Math.abs(fromRecord.glucose_mmol - 5.495) < 0.01)
+assert.ok(Math.abs(fromRecord.crp_mg_dl - 0.24) < 1e-9)
+assert.equal(panelFromMeasurements([{ key: 'mcv_fl', value: 90 }], 41), null, 'a missing input gives no panel')
 const mcvDrivers = attributeDrivers(base, mcvDown, { cautions: ['mcv'] })
 assert.equal(mcvDrivers[0]?.key, 'mcv_fl')
 const concern = bodyAgeStory({
@@ -136,7 +147,7 @@ const crpChange = { key: 'crp', label_zh: '超敏C反应蛋白', ask_doctor: fal
 const glucoseChange = { key: 'glucose', label_zh: '空腹血糖', ask_doctor: false, verdict: 'unclear' }
 const cheered = narrateBioAge({ ...bioBase, points: drawPoints(-1, -5.8), pheno_compare: { before: { ...base, age: 37 }, after: { ...crpDown, age: 41 } } }, [crpChange, glucoseChange], noDoctor, false)
 assert.match(cheered.headline_zh, /^你确实年轻了 4\.8 岁（模型估计，超出了测量波动，是真实的变化）。主要来自/)
-assert.match(cheered.headline_zh, /超敏 C 反应蛋白变小|空腹血糖变小/)
+assert.match(cheered.headline_zh, /主要来自(空腹血糖|超敏 C 反应蛋白)(和(空腹血糖|超敏 C 反应蛋白))?降了下来。$/)
 assert.equal(cheered.allows_younger, true)
 // Without a verified band the celebration waits; the wording already on the page stays.
 const unverified = narrateBioAge({ ...bioBase, band_verified: false, points: drawPoints(-1, -5.8), pheno_compare: { before: { ...base, age: 37 }, after: { ...crpDown, age: 41 } } }, [], noDoctor, false)

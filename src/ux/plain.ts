@@ -110,7 +110,7 @@ export function insightSentence(input: { sleepHours?: number | null; steps?: num
 /** Questions in the person's own voice, about what changed and the next visit. */
 export function suggestedQuestions(input: { changes?: readonly string[]; visit?: string | null }): string[] {
   const names = (input.changes ?? []).filter(Boolean).slice(0, 2)
-  const change = names.length > 0 ? `${names.join('和')}和上次比，变了多少？` : '和上次比，哪一项变了？'
+  const change = names.length > 0 ? `${names.join('、')}跟上次比，变了多少？` : '和上次比，哪一项变了？'
   const visit = input.visit ? `下次 ${input.visit} 看医生，我要问哪几件？` : '下次看医生，我要问哪几件？'
   return [change, visit, '现在我先做哪一件？']
 }
@@ -204,6 +204,21 @@ const NOT_DIAGNOSIS = /维生素|vitamin/i
 export function isDiagnosisName(name: string): boolean {
   if (NOT_DIAGNOSIS.test(name)) return false
   return ICD_DOTTED.test(name) || ICD_TAIL.test(name.trim())
+}
+
+/**
+ * A paper as a person reads it: first author and year (Coskun 等，2020 年的研究). The English title stays behind the link.
+ * A Chinese title is kept as it is.
+ */
+export function sourceLabel(title: string): string {
+  const text = title.trim()
+  if (!text) return '收录的研究'
+  if (/[\u4e00-\u9fff]/.test(text) && !/[A-Za-z]{4,}(?:\s+[A-Za-z]{2,}){2,}/.test(text)) return text
+  const author = /^([A-Z][A-Za-z'’-]+)/.exec(text)?.[1] ?? ''
+  const year = /\b(19\d{2}|20\d{2})\b/.exec(text)?.[1] ?? ''
+  if (author && year) return `${author} 等，${year} 年的研究`
+  if (year) return `${year} 年的研究`
+  return author ? `${author} 等的研究` : '收录的研究'
 }
 
 /** Drop backend names from a sentence a person will read. */

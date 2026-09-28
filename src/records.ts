@@ -658,13 +658,14 @@ async function loadRemote(config: Config, pluginHome: string): Promise<Remote> {
  * with no character cut, is the whole catalogue. The flag alone is not a cut.
  */
 function catalogueCut(payload: unknown, table: ReturnType<typeof tableOf>, listed: number): string {
-  const parsed = table?.rows.length ?? listed
+  // The row count Mirobody prints covers every section, including the person-reported conditions after the indicators.
+  const parsed = table ? table.rows.length + (table.sections ?? []).reduce((sum, section) => sum + section.rows.length, 0) : listed
   const claimed = table?.meta.rows
   const total = table?.meta.total ?? null
   const charCut = textOf(payload).includes('… cut at ')
   const short = claimed != null && claimed > parsed
   if (charCut || short || (total != null && total > parsed)) {
-    return `指标目录没有读全：这次只读到 ${parsed} 项${total != null ? `（共 ${total} 项）` : ''}，其余没有读到。`
+    return `指标目录没有读全：这次只读到 ${table?.rows.length ?? parsed} 项${total != null ? `（共 ${total} 项）` : ''}，其余没有读到。`
   }
   // No "of N" to go by: a catalogue exactly at Mirobody's cap was most likely cut there.
   if (table && total == null && parsed >= MIROBODY_CATALOG_CAP) {

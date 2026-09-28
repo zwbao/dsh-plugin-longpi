@@ -180,7 +180,7 @@ function KeyTrends(props: { journey: Journey; older: boolean }): React.ReactElem
     h('ul', { 'aria-label': '旁边的变化' },
     ...trends.map((row) => h('li', { key: row.label_zh },
       h('span', { className: 'lp-strong' }, row.label_zh),
-      h('span', { className: 'lp-caption' }, ` ${row.text_zh}`)))))
+      h('span', { className: 'lp-caption' }, ` ${row.text_zh.startsWith(row.label_zh) ? row.text_zh.slice(row.label_zh.length).trim() : row.text_zh}`)))))
 }
 
 function rangeCaption(age: number | null): React.ReactElement | null {

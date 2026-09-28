@@ -1061,6 +1061,15 @@ interface CompactTable {
     kind: string;
     message: string;
   };
+  /**
+   * Later tables after a blank line, e.g. the catalogue's "reported by the person" section
+   * (constants kind=condition): diagnoses the person reported. They are not rows of the first table.
+   */
+  sections?: Array<{
+    title: string;
+    constants: Record<string, string>;
+    rows: Array<Record<string, string>>;
+  }>;
 }
 declare function parseCompact(text: string): CompactTable;
 /**
