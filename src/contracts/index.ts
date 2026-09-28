@@ -22,6 +22,7 @@ export type * from './codex.ts'
 export type * from './science.ts'
 export type * from './triage.ts'
 export type * from './agents.ts'
+export type * from './library.ts'
 
 export type RouteHandler = (req: { method: string; url: string; query: URLSearchParams; headers: Record<string, unknown> }, body: unknown) => Promise<unknown>
 

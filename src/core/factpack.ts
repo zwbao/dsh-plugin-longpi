@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto'
 import type { NumberRef } from '../contracts/common.ts'
 import type { FactPack, Stage } from '../contracts/factpack.ts'
+import { registeredMethodResults } from '../contracts/library.ts'
 import type { ExclusionItem, GoalItem } from '../contracts/memory.ts'
 import type { NextBestAction } from '../contracts/surfaces.ts'
 import type { RecordChange } from '../changes.ts'
@@ -79,6 +80,7 @@ export function packFp(pack: Omit<FactPack, 'fp'>): string {
     plan: pack.plan, exclusions: pack.exclusions.map((row) => row.id), safety: pack.safety,
     digest: pack.memory_digest_zh, asked: pack.asked_recent,
     triage: pack.triage.care.map((row) => [row.finding_id, row.care_status, row.visit_date, row.outcome_zh]),
+    methods: pack.method_results.map((row) => [row.skill, row.label, row.outputs.map((item) => [item.key, item.value, item.unit])]),
   }
   return createHash('sha256').update(JSON.stringify(canonical)).digest('hex').slice(0, 32)
 }
@@ -134,6 +136,7 @@ export function packFrom(input: PackInput): FactPack {
     generations: { records: 0, tracking: input.trackingGeneration, memory_rev: state.rev, plan: input.plan.version, triage_rev: care.length, season_rev: 0 },
     triage: { findings: input.care.findings, care, stop },
     stage_next: input.stageNext,
+    method_results: registeredMethodResults(),
   }
   let candidates: NextBestAction[] = []
   candidates.push(...screening.map((row) => row.action))

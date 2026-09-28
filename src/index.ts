@@ -44,6 +44,7 @@ import { resolveDataDir, resolveMirobodyPlugin, resolveSkillsHome } from './path
 import { bootstrapWorkspace, type WorkspaceRegistryLike } from './workspace.ts'
 import { healthWorkspacePaths, type WorkspaceLike } from './guard-scope.ts'
 import { effectiveConfig } from './connection.ts'
+import { mountLibraryLanes } from './contracts/library.ts'
 
 export const name = 'dsh-plugin-longpi'
 export const inject = ['tools']
@@ -188,6 +189,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   registerApprovals(ctx, guard)
   startFollowup(ctx, () => ({ dataDir: resolveDataDir(config.dataDir), getState: () => followupState(60_000), generation: trackingGeneration }))
   registerHarnessSkills(ctx)
+  // 0.6.0 lanes register with registerLibraryMount. apply() does not import lane files.
+  mountLibraryLanes(ctx)
   registerRoutes(ctx, source, mount)
   registerCommands(ctx, source, mount)
   // Optional: without DSH's workspace registry the plugin loads as before. Cordis re-runs this when the
@@ -349,6 +352,10 @@ export { FACT_PRIORITY_RANK } from './contracts/factpack.ts'
 export { AGENT_PROFILE_IDS } from './contracts/agents.ts'
 export { youngerAllowed } from './contracts/feedback.ts'
 export { oddsSumToOne } from './contracts/codex.ts'
+export {
+  registerLibraryHooks, registerLibraryMount, mountLibraryLanes,
+  listSkillIndex, validateBinding, readStore, methodResults, registeredMethodResults,
+} from './contracts/library.ts'
 export { MODULES, registerModules } from './modules.ts'
 export type * from './contracts/index.ts'
 // 0.5.3 agent core (AA step 1–2, M1): memory, bus, fact pack, surfaces, triage and care.

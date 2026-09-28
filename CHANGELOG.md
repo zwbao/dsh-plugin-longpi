@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased — 0.6.0 library-first
+
+Contract revision `0.6.0-dev.0`. The page still computes what 0.5.6 computed. Shared types are in `src/contracts/library.ts`. Lane file ownership is `docs/dev/0.6.0-lanes.md`. Installing the plugin is meant to install dsh and the whole longevity-skills library; dsh's agent drives that library. The plugin supplies data, checks a binding (unit, range, provenance), labels a result verified, unverified-binding, or evidence-only, and keeps the safety rules. It does not select, rank away, hide, or gate a method.
+
+合同修订 `0.6.0-dev.0`。页面上算出的数与 0.5.6 相同。共享类型在 `src/contracts/library.ts`，各条线的文件归属在 `docs/dev/0.6.0-lanes.md`。
+
 ## 0.5.6
 
 Owner-facing / 给使用者

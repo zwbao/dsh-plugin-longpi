@@ -1,6 +1,7 @@
-// The per-person fact pack (AA §2.4, §3.3). Frozen at C0.
+// The per-person fact pack (AA §2.4, §3.3). Frozen at C0, plus method_results (0.6.0 C1).
 
 import type { Id, IsoDay, NumberRef } from './common.ts'
+import type { MethodResult } from './library.ts'
 import type { ConditionFlag, DrugClass, ExclusionItem } from './memory.ts'
 import type { NextBestAction } from './surfaces.ts'
 import type { FeedbackMessage } from './feedback.ts'
@@ -53,5 +54,7 @@ export interface FactPack {
   }
   /** M5: the stage's own next step (the journey's rule), which the fact-ranked floor ranks among the others. */
   stage_next: { title_zh: string; detail_zh: string; action: string } | null
+  /** Labeled library results for this generation. Empty until L4 records them. */
+  method_results: MethodResult[]
 }
 export const FACT_PRIORITY_RANK: Readonly<Record<FactPriority, number>> = { emergency: 0, must_surface: 1, should_surface: 2, context: 3 }
