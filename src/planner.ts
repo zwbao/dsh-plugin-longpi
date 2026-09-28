@@ -15,18 +15,18 @@ import {
   reproductiveDenied, reproductiveFromText, TIME_RESTRICTED,
 } from './plan-safety.ts'
 import { NO_STOP, panelPoints } from './doctor-first.ts'
-import { memoryFor } from './core/memory.ts'
+import { drugClassesOf, memoryFor } from './core/memory.ts'
 import { rememberFromWords } from './core/remember-rules.ts'
 import { careState, seenChangeKeys, seenNotes } from './triage/care.ts'
 import { buildTracking, type ModelCard, type TrackingContext } from './tracking.ts'
-import { CATEGORY_ZH, currentPlan, type Category } from './interventions.ts'
+import { addDays, CATEGORY_ZH, currentPlan, type Category } from './interventions.ts'
 import type { MountState } from './mirobody.ts'
 import { preferSelf } from './measurements.ts'
 import { FOCUS, FOCUS_ZH, type Focus } from './profile.ts'
 import { sameMeasure } from './records.ts'
 import { checkupMarkerFor, loadReference, markerFor, markerGroupKeys, type Biovar, type BiovarMarker, type EffectRow } from './reference.ts'
 import { SELF_SPEC } from './selfmeasure.ts'
-import { currentMedications, GLUCOSE_LOWERING, type IndicatorRow, type MedicationRow } from './situation.ts'
+import { GLUCOSE_LOWERING, medicationsForWindow, type IndicatorRow, type MedicationRow } from './situation.ts'
 import { foldName, parseNumber } from './units.ts'
 
 export const DRAFT_CATEGORIES = ['diet', 'exercise', 'sleep', 'weight', 'behavior', 'supplement'] as const
@@ -68,7 +68,11 @@ export interface PlanBrief {
     /** Forms the evidence row lists (快走、骑车…), for exercise items. */
     examples_zh: string[]
   }>
-  safety: { medications: string[]; notes_zh: string[]; stop_zh?: string; no_weight_loss?: boolean }
+  /**
+   * weight_med: a current medicine, or one that starts inside the plan window, that moves weight by itself (GLP-1,
+   * SGLT2, insulin). The draft then gives no trial kilogram figure and no weight goal (INT062 fix 5b).
+   */
+  safety: { medications: string[]; notes_zh: string[]; stop_zh?: string; no_weight_loss?: boolean; weight_med?: string }
   /** Evidence ids and titles the person already refused. */
   excluded_ids?: string[]
   excluded_phrases?: string[]
@@ -132,6 +136,20 @@ const SMOKING_CESSATION = /戒烟|smoking cessation|quit smoking/i
 const ALCOHOL = /饮酒|少喝酒|减酒|限酒|酒精|alcohol/i
 /** Office systolic below this, with no treated or stated hypertension, is normal: no BP-lowering item (FINDINGS 47/58/69). */
 const NORMAL_SBP = 130
+/** How far ahead a draft looks for a medicine that is about to start: one season, about 12 weeks. */
+export const PLAN_WINDOW_DAYS = 84
+/** Medicine classes that move body weight by themselves. */
+const WEIGHT_MED_CLASSES = new Set(['glp1ra', 'sglt2i', 'insulin'])
+
+/** The first current or about-to-start medicine that moves weight by itself, or ''. */
+function weightMedicine(current: readonly string[]): string {
+  return current.find((name) => drugClassesOf(name).some((cls) => WEIGHT_MED_CLASSES.has(cls))) ?? ''
+}
+
+/** The plain attribution sentence for a draft while such a medicine is in use. */
+export function weightMedNote(name: string): string {
+  return `你在用（或这段时间会开始用）${name}：这段时间体重的变化主要会来自${name}，不是方案本身的效果，所以方案里不写试验的公斤数，也不设体重目标。`
+}
 const NORMAL_DBP = 85
 const BP_KEYS = ['sbp', 'dbp']
 const ASKED_WHY = '你指定要改善的指标'
@@ -179,7 +197,8 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
   const stored = readPlanPrefs(context.dataDir)
   if ((options.constraints ?? '').trim()) rememberExclusions(context.dataDir, exclusionsFromText(options.constraints ?? ''))
   const excluded = readPlanPrefs(context.dataDir)
-  const current = currentMedications(medications)
+  // A prescription whose start date falls inside the plan window counts from the draft on (INT062 fix 5a).
+  const current = medicationsForWindow(medications, addDays(context.today, PLAN_WINDOW_DAYS))
   // Conditions they told LongPi (memory; unconfirmed ones count too, since they only add caution).
   const remembered = rememberedReproductive(context.dataDir)
   const folic = preconceptionFolic(medications)
@@ -270,7 +289,7 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
     focus,
     priorities,
     candidates,
-    safety: { medications: current, notes_zh: screen.notes, ...(stop.stop ? { stop_zh: stop.sentence_zh } : {}), ...(holdWeightLoss(classes) ? { no_weight_loss: true } : {}) },
+    safety: { medications: current, notes_zh: screen.notes, ...(stop.stop ? { stop_zh: stop.sentence_zh } : {}), ...(holdWeightLoss(classes) ? { no_weight_loss: true } : {}), ...(screen.weightMed ? { weight_med: screen.weightMed } : {}) },
     excluded_ids: excluded.excluded_ids,
     excluded_phrases: excluded.excluded_phrases,
     past_items: past,
@@ -439,6 +458,9 @@ function latestFor(key: string, indicators: readonly IndicatorRow[], biovar: Bio
 // --- candidates ----------------------------------------------------------------
 
 interface Screen {
+  /** A medicine that moves weight by itself (fix 5b), and a GLP-1 by name (fix 5c); '' when none. */
+  weightMed: string
+  glp1Name: string
   onMedication: boolean
   bpTreated: boolean
   glucoseRisk: boolean
@@ -461,6 +483,8 @@ function safetyScreen(risk: Partial<Record<string, boolean>>, medications: reado
   const names = current.join('、')
   const notes: string[] = []
   const screen: Screen = {
+    weightMed: weightMedicine(current),
+    glp1Name: current.find((name) => drugClassesOf(name).includes('glp1ra')) ?? '',
     onMedication: current.length > 0,
     bpTreated: risk.bp_treated === true || current.some((name) => ANTIHYPERTENSIVE.test(name)),
     glucoseRisk: risk.diabetes === true || current.some((name) => GLUCOSE_LOWERING.test(name)),
@@ -482,6 +506,7 @@ function safetyScreen(risk: Partial<Record<string, boolean>>, medications: reado
   if (screen.sglt2) notes.push(`你在用${screen.sglt2Name}（SGLT2 抑制剂）。进食明显减少、断食或极低碳饮食时，它可以引起正常血糖性酮症酸中毒（euglycaemic ketoacidosis）：血糖不高，但会恶心、呕吐、腹痛、乏力、呼吸深快，需要立即就医。所以这份草稿不安排限时进食、断食或极低碳饮食；生病或吃得明显少时，先问开药的医生要不要暂停。`)
   if (screen.hypoDrugs) notes.push('你在用胰岛素或磺脲类：运动、少吃和减重都有低血糖风险，先与医生确认。')
   else if (screen.glucoseRisk && !screen.sglt2) notes.push('你有糖尿病或在用降糖药：限时进食、少吃这类饮食改动有低血糖风险，先与医生确认。')
+  if (screen.weightMed) notes.push(weightMedNote(screen.weightMed))
   if (screen.pregnant) notes.push('怀孕时不安排限时进食、减重、饮酒和鱼油。')
   if (screen.ckd) notes.push('肾功能不全时不安排未经调整的 DASH 饮食（钾含量高），需要肾脏专科或营养师看过。')
   if (screen.antithrombotic) notes.push('你在用抗凝或抗血小板药：鱼油可能增加出血风险，先与医生确认。')
@@ -500,6 +525,8 @@ function cautionsFor(row: EffectRow, screen: Screen): string[] {
   if (screen.bpTreated && row.category === 'exercise') out.push('血压用药期间，运动强度先与医生确认')
   if (screen.hypoDrugs && (row.category === 'exercise' || row.category === 'weight' || TIME_RESTRICTED.test(text) || /减重|节食|热量限制/.test(text))) out.push('你在用胰岛素或磺脲类，这项有低血糖风险，先与医生确认')
   else if (screen.glucoseRisk && TIME_RESTRICTED.test(text)) out.push('有低血糖风险，先与医生确认')
+  // INT062 fix 5c: a GLP-1 already cuts appetite. The window is kept, with the prescriber told first.
+  if (screen.glp1Name && TIME_RESTRICTED.test(text)) out.push(`先告诉开药的医生：${screen.glp1Name}本身会让人吃得少、容易恶心，进食窗口里要吃够蛋白质和水；恶心、呕吐或吃不下时先停这一项`)
   if (screen.antithrombotic && FISH_OIL.test(text)) out.push('可能增加出血风险，先与医生确认')
   if (FISH_OIL.test(text)) out.push(FISH_OIL_CAUTION)
   const taking = row.category === 'supplement' ? screen.current.find((name) => sameThing(name, row)) : undefined
@@ -550,7 +577,7 @@ function candidatesOf(priorities: Priority[], effects: readonly EffectRow[], bio
       design: row.design,
       doi: row.doi,
       verified: row.verified,
-      expected_zh: expectedText(row),
+      expected_zh: screen.weightMed && key === 'weight' ? expectedWithoutAmount(row, screen.weightMed) : expectedText(row),
       needs_doctor: row.category === 'supplement' || cautions.length > 0,
       cautions_zh: cautions,
       effect_in_record_unit: inRecord,
@@ -599,6 +626,17 @@ function fmt(value: number): string {
 
 function amountText(value: number, unit: string): string {
   return unit === '%' ? `${fmt(value)} 个百分点` : `${fmt(value)} ${unit}`.trim()
+}
+
+/**
+ * The evidence line for a weight item while a weight-moving medicine is in use: the trial and its direction,
+ * no kilogram figure, and whose effect the weight change will mostly be (INT062 fix 5b).
+ */
+export function expectedWithoutAmount(row: EffectRow, medicine: string): string {
+  const design = DESIGN_ZH[row.design] ?? row.design
+  const weeks = row.duration_weeks ? `，约 ${row.duration_weeks} 周` : ''
+  const direction = row.effect.value < 0 ? '有所下降' : '有所上升'
+  return `试验中${row.marker_zh}平均${direction}（${row.population}，${design}${weeks}）。这段时间体重的变化主要会来自${medicine}，不按试验数字定目标`
 }
 
 export function expectedText(row: EffectRow): string {
@@ -901,6 +939,7 @@ function goalsFor(brief: PlanBrief, chosen: Group[], implausible: string[] = [])
   for (const priority of brief.priorities) {
     if (priority.value == null) continue
     if (brief.safety.no_weight_loss && priority.marker_key === 'weight') continue
+    if (brief.safety.weight_med && priority.marker_key === 'weight') continue
     let skipped = false
     for (const group of chosen) {
       const rows = group.rows.filter((item) => item.marker_key === priority.marker_key && item.verified && item.effect_in_record_unit != null)

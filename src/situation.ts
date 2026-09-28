@@ -37,6 +37,18 @@ export function currentMedications(rows: readonly MedicationRow[]): string[] {
   return rows.filter((row) => row.name && !STOPPED.test(row.status ?? '')).map((row) => row.name)
 }
 
+/**
+ * The medicines a plan starting today has to allow for (INT062 fix 5a): the current ones, including one whose
+ * start date falls inside the plan window (a prescription that begins next week counts from the draft on). A start
+ * date past the window is not this plan's.
+ */
+export function medicationsForWindow(rows: readonly MedicationRow[], windowEnd: string): string[] {
+  return currentMedications(rows.filter((row) => {
+    const since = (row.since ?? '').slice(0, 10)
+    return !/^\d{4}-\d{2}-\d{2}$/.test(since) || since <= windowEnd
+  }))
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   return value as Record<string, unknown>
