@@ -6,7 +6,6 @@
 // row lists the same items) is on screen, and × hides it until tomorrow.
 
 import React from 'react'
-import { EngageDock } from './engage/index.ts'
 import { checkStateOf } from './checkin.ts'
 import { PANEL_ID } from './constants.ts'
 import { localToday } from './format.ts'
@@ -74,5 +73,5 @@ export function ReminderPill(props: PillProps): React.ReactElement | null {
   const pill = typeof props.usePanelInfo === 'function'
     ? h(WithPanelInfo, { ...props, usePanelInfo: props.usePanelInfo })
     : h(WithoutPanelInfo, props)
-  return h(React.Fragment, null, pill, h(EngageDock))
+  return pill
 }

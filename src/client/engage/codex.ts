@@ -12,10 +12,10 @@ export interface CodexView {
   draws_available: number
   draws_today: number
   daily_cap: number
-  owned: Array<{ id: string; title_zh: string; body_zh: string; rarity_zh: string; family: string }>
+  owned: Array<{ id: string; title_zh: string; body_zh: string; rarity_zh: string; family: string; offer?: { kind: string; text_zh: string; label?: string | null } }>
 }
 
-export function CodexPanel(props: { codex: CodexView | null; onDraw: () => void; onOpt: (on: boolean) => void; busy: boolean; note: string }): React.ReactElement | null {
+export function CodexPanel(props: { codex: CodexView | null; onDraw: () => void; onOpt: (on: boolean) => void; onRun?: (cardId: string) => void; busy: boolean; note: string }): React.ReactElement | null {
   const codex = props.codex
   if (!codex) return null
   if (codex.hidden) {
@@ -35,7 +35,11 @@ export function CodexPanel(props: { codex: CodexView | null; onDraw: () => void;
     codex.owned.length === 0
       ? h('p', { style: { opacity: 0.7 } }, '还没有抽到卡。次数只从测量、记录、就诊或复测来。')
       : h('ul', { style: { paddingLeft: 18, margin: '8px 0' } }, codex.owned.slice(0, 12).map((card) =>
-        h('li', { key: card.id }, `${card.rarity_zh} · ${card.title_zh}`))))
+        h('li', { key: card.id },
+          h('div', null, `${card.rarity_zh} · ${card.title_zh}`),
+          card.family === 'insight' ? h('div', null, card.body_zh) : null,
+          card.offer ? h('div', null, card.offer.text_zh) : null,
+          card.offer?.kind === 'run' && props.onRun ? h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onRun?.(card.id) }, '用我的记录算') : null))))
 }
 
 const buttonStyle: React.CSSProperties = {

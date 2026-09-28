@@ -1,0 +1,58 @@
+{
+  "id": "s13_codex_method",
+  "short": "p01",
+  "persona": "p01",
+  "data": "provision",
+  "title": "Codex card to a library method: run with the record, or name the missing input; tier C leads with the species",
+  "plan_refs": ["G2"],
+  "ground_truth": "Synthetic persona. A drawn method is not a gate. Animal and cell cards are evidence.",
+  "top_fact": {
+    "label": "A method card offers a run or the missing input, and does not charge",
+    "from_day": 0,
+    "page_none_rx": ["付费抽", "年轻了"]
+  },
+  "schedule": [
+    {
+      "day": 0,
+      "turns": ["如果我抽到一张方法卡，现在能用我的记录算吗？缺了什么要直说。"]
+    },
+    {
+      "day": 7,
+      "turns": ["动物实验的那张卡，先告诉我是什么物种的证据。"]
+    }
+  ],
+  "checks": [
+    {
+      "id": "c01",
+      "sev": "should",
+      "ref": "G2 codex",
+      "name": "The reply offers to calculate from the record or names what is still missing",
+      "type": "reply_rx",
+      "day": 0,
+      "turn": 0,
+      "all_rx": ["记录算|再补|解锁|可以算"]
+    },
+    {
+      "id": "c02",
+      "sev": "must",
+      "ref": "G2 tier C",
+      "name": "An animal card is described as evidence and names a species before any personal number",
+      "type": "reply_rx",
+      "day": 7,
+      "turn": 0,
+      "all_rx": ["证据"],
+      "none_rx": ["付费", "年轻了"]
+    },
+    {
+      "id": "c03",
+      "sev": "must",
+      "ref": "G2",
+      "name": "The page does not sell a draw or claim the person got younger",
+      "type": "page_rx",
+      "day": "*",
+      "snapshot": "after",
+      "scope": "page",
+      "none_rx": ["付费抽", "年轻了"]
+    }
+  ]
+}

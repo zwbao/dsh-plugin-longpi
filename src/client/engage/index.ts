@@ -1,8 +1,8 @@
-// Season dock in the shell overlay, plus registry seats for the integrator.
+// Season page and an in-flow header. Nothing from this module is position:fixed or position:absolute.
 
 import React from 'react'
 import { errorText, getJson, postJson } from '../api.ts'
-import { registerOverviewCard, registerPageTab, registerSettingsSection } from '../registry.ts'
+import { registerPageTab, registerSettingsSection } from '../registry.ts'
 import { NudgeOffer } from './nudge-pill.ts'
 import { SeasonPanel, type SeasonView } from './season-tab.ts'
 
@@ -18,7 +18,6 @@ function shanghaiDay(): string {
 
 export function EngageDock(props: { variant?: 'dock' | 'page' } = {}): React.ReactElement | null {
   const [view, setView] = React.useState<SeasonView | null>(null)
-  const [open, setOpen] = React.useState(false)
   const [note, setNote] = React.useState('')
   const [busy, setBusy] = React.useState(false)
   const [failed, setFailed] = React.useState('')
@@ -64,40 +63,34 @@ export function EngageDock(props: { variant?: 'dock' | 'page' } = {}): React.Rea
     note,
     onAction: (body) => { void run('/api/longpi/season', body) },
     onDraw: () => { void run('/api/longpi/codex/draw', {}) },
+    onRun: (cardId) => { void run('/api/longpi/codex/run', { card_id: cardId }) },
     onFreeze: (reason) => { const day = shanghaiDay(); void run('/api/longpi/streak-freeze', { reason, from: day, to: day }) },
     onOpt: (on) => { void run('/api/longpi/nudges', { codex_enabled: on }) },
   }) : null
   if (page) {
     return h('div', { className: 'lp lp-season-page', style: { display: 'flex', flexDirection: 'column', gap: 8 } },
       failed ? h('p', null, failed) : null,
-      panel ?? h('p', { className: 'lp-muted' }, '这一季正在读取。'))
+      panel ?? h('p', { className: 'lp-muted' }, '这一季正在读取。'),
+      view?.nudge?.offer ? h(NudgeOffer, {
+        offer: true,
+        onAccept: () => { void run('/api/longpi/nudges', { nudge_in_workflow: true, offer_seen: true }) },
+        onDismiss: () => { void run('/api/longpi/nudges', { dismiss: true, offer_seen: true }) },
+      }) : null)
   }
-  if (view?.needs_consent && !open) return null
-  const shell = {
-    position: 'absolute' as const, left: 20, bottom: 136, zIndex: 1, pointerEvents: 'auto' as const, maxWidth: open ? 380 : 160,
-    color: 'var(--lp-ink)',
-  }
-  const card = { background: 'var(--lp-layer-2)', color: 'var(--lp-ink)', boxShadow: 'var(--lp-lift, 0 4px 16px rgba(0,0,0,.12))' }
-  const frozen = view?.streak.frozen ?? []
-  return h(React.Fragment, null,
-    h('style', null, '@media (max-width: 900px) { .lp-season-dock { display: none !important; } }'),
-    frozen.length > 0 ? h('p', { className: 'lp-caption', id: 'lp-streak-freeze' }, `连续打卡冻结 ${frozen.length} 天（${frozen.slice(-3).map((row) => row.day).join('、')}）。`) : null,
-    h('div', { className: 'lp lp-season-dock', style: shell },
-      h('button', {
-        type: 'button',
-        onClick: () => { setOpen((value) => !value); void load() },
-        style: { ...card, border: 0, borderRadius: 999, padding: '6px 12px', font: 'inherit', cursor: 'pointer' },
-      }, view?.season ? `本季 · 第 ${view.season.week} 周` : '本季'),
-      open ? h('div', {
-        style: { ...card, marginTop: 8, maxHeight: '60vh', overflow: 'auto', padding: 12, borderRadius: 16, fontSize: 13, lineHeight: '20px' },
-      },
-        failed ? h('p', null, failed) : null,
-        panel) : null),
-    view?.nudge?.offer ? h(NudgeOffer, {
-      offer: true,
-      onAccept: () => { void run('/api/longpi/nudges', { nudge_in_workflow: true, offer_seen: true }) },
-      onDismiss: () => { void run('/api/longpi/nudges', { dismiss: true, offer_seen: true }) },
-    }) : null)
+  return null
+}
+
+/** In-flow season title. Hidden until the person opts in, so it never covers the page. */
+export function SeasonBar(props: { onOpen?: () => void }): React.ReactElement | null {
+  const [text, setText] = React.useState('')
+  React.useEffect(() => {
+    void getJson<SeasonView>('/api/longpi/season').then((view) => {
+      const header = (view as SeasonView & { header?: { show?: boolean; text_zh?: string } }).header
+      setText(header?.show && header.text_zh ? header.text_zh : '')
+    }).catch(() => setText(''))
+  }, [])
+  if (!text) return null
+  return h('button', { type: 'button', className: 'lp-season-bar', onClick: () => props.onOpen?.() }, text)
 }
 
 function freezeToday(reason: 'sick' | 'travel'): void {
@@ -122,12 +115,7 @@ function SeasonPage(_props: Record<string, unknown>): React.ReactElement | null 
   return EngageDock({ variant: 'page' })
 }
 
-function SeasonDock(_props: Record<string, unknown>): React.ReactElement | null {
-  return EngageDock({})
-}
-
 registerPageTab({ id: 'season', label_zh: '本季', order: 35, Component: SeasonPage })
-registerOverviewCard({ id: 'season', order: 40, Component: SeasonDock })
 registerSettingsSection({ id: 'season-reminder', order: 30, Component: EngageSettingsNote })
 
 export { SeasonPanel } from './season-tab.ts'

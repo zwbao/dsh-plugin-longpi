@@ -28,6 +28,9 @@ export interface SeasonView {
   weekly_zh: string | null
   reminder_zh: string | null
   nudge?: { offer: boolean; enabled: boolean }
+  invite?: null | { show: boolean; title_zh: string; body_zh: string; odds_path: string }
+  family?: { available: boolean; opted: boolean; subject_zh: string | null }
+  subject_zh?: string | null
 }
 
 const STATUS: Record<string, string> = { active: '进行中', retest_window: '复测窗口', closed: '已结束', upcoming: '还没开始' }
@@ -40,8 +43,20 @@ export function SeasonPanel(props: {
   onDraw: () => void
   onFreeze: (reason: 'sick' | 'travel') => void
   onOpt: (on: boolean) => void
+  onRun?: (cardId: string) => void
 }): React.ReactElement {
   const season = props.view.season
+  if (props.view.invite?.show) {
+    return h('div', { className: 'lp-season-invite', style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+      h('h2', { style: { margin: 0, fontSize: 18 } }, props.view.invite.title_zh),
+      h('p', { style: { margin: 0 } }, props.view.invite.body_zh),
+      props.view.subject_zh ? h('p', { style: { margin: 0 } }, `这一季用的是${props.view.subject_zh}的年龄和性别。`) : null,
+      h('a', { href: props.view.invite.odds_path }, '公开概率'),
+      h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+        h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'opt_in' }) }, '开始这一季'),
+        h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'decline_invite' }) }, '先不用')),
+      props.note ? h('p', { style: { margin: 0 } }, props.note) : null)
+  }
   if (props.view.pressure !== true) {
     return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
       h('p', { style: { margin: 0 } }, '这一季先不推。想开始时点下面。'),
@@ -53,6 +68,7 @@ export function SeasonPanel(props: {
   return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
     season ? h('div', null,
       h('div', { style: { fontWeight: 600 } }, season.title_zh),
+      props.view.subject_zh ? h('div', null, `按${props.view.subject_zh}的记录`) : null,
       h('div', { style: { opacity: 0.75 } }, `第 ${season.week} / ${season.weeks} 周 · ${STATUS[season.status] ?? season.status}${chapter ? ` · ${chapter.title_zh}` : ''}`),
       h('div', { style: { opacity: 0.75 } }, `${season.start} → ${season.end}${season.retest_day ? ` · 复测 ${season.retest_day}` : ''}`)) : h('p', null, '这一季还没有开始。'),
     props.view.reminder_zh ? h('p', { style: { margin: 0 } }, props.view.reminder_zh) : null,
@@ -61,13 +77,19 @@ export function SeasonPanel(props: {
       h('li', { key: quest.id }, `${quest.status === 'done' ? '完成' : '未完成'} ${quest.progress}/${quest.count} · ${quest.title_zh}`))),
     h(StreakLine, { streak: props.view.streak, onFreeze: props.onFreeze, busy: props.busy }),
     h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+      h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'book' }) }, '我约了医生'),
       h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'care_visit', with_brief: true }) }, '我带着简报看过医生了'),
+      h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'addon', key: 'ferritin' }) }, '已补铁蛋白'),
       h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'addon', key: 'hscrp' }) }, '已加测 hs-CRP'),
       h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'retest' }) }, '做了复测'),
       season?.status === 'closed' ? h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'next_season' }) }, '开始下一季') : null),
     props.view.weekly_zh ? h('pre', { style: { whiteSpace: 'pre-wrap', font: 'inherit', margin: 0 } }, props.view.weekly_zh) : null,
     season?.recap_zh ? h('div', null, h('div', { style: { fontWeight: 600 } }, '这一季的回看'), h('p', { style: { margin: '4px 0 0' } }, season.recap_zh)) : null,
-    h(CodexPanel, { codex: props.view.codex, onDraw: props.onDraw, onOpt: props.onOpt, busy: props.busy, note: props.note }))
+    props.view.family?.available ? h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
+      props.view.family.opted
+        ? h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'share_recap' }) }, '把这一季的回看给家人')
+        : h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'family_on' }) }, '打开家人圈')) : null,
+    h(CodexPanel, { codex: props.view.codex, onDraw: props.onDraw, onOpt: props.onOpt, onRun: props.onRun, busy: props.busy, note: props.note }))
 }
 
 const buttonStyle: React.CSSProperties = {

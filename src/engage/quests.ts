@@ -5,8 +5,10 @@ import type { Quest } from '../contracts/engagement.ts'
 
 export interface QuestFacts {
   careWithBrief: boolean
+  booked: boolean
   waist: boolean
   hscrp: boolean
+  keys: Record<string, boolean>
   activeDays: number
   retestInWindow: boolean
 }
@@ -76,11 +78,29 @@ export function makeQuests(seasonId: Id, need: { waist: boolean; hscrp: boolean 
   return quests
 }
 
+function scored(quest: Quest, facts: QuestFacts): number | null {
+  const event = quest.criteria.event
+  const where = quest.criteria.where ?? {}
+  if (event === 'care.visit_logged') return facts.careWithBrief ? 1 : 0
+  if (event === 'care.booked') return facts.booked ? 1 : 0
+  if (event === 'retest.arrived') return facts.retestInWindow ? 1 : 0
+  if (event === 'checkin.logged') return Math.min(quest.criteria.count, facts.activeDays)
+  if (event === 'selfmeasure.logged') {
+    const key = typeof where.key === 'string' ? where.key : ''
+    if (key === 'waist') return facts.waist ? 1 : 0
+    if (key === 'hscrp') return facts.hscrp ? 1 : 0
+    if (key && facts.keys[key]) return 1
+    return 0
+  }
+  return null
+}
+
 export function questProgress(quest: Quest, facts: QuestFacts): number {
   if (quest.id === 'qs-care-visit') return facts.careWithBrief ? 1 : 0
   if (quest.id === 'qs-waist') return facts.waist ? 1 : 0
   if (quest.id === 'qs-hscrp') return facts.hscrp ? 1 : 0
   if (quest.id === 'qs-show-up') return Math.min(quest.criteria.count, facts.activeDays)
   if (quest.id === 'qs-retest') return facts.retestInWindow ? 1 : 0
-  return quest.progress
+  const generic = scored(quest, facts)
+  return generic == null ? quest.progress : generic
 }

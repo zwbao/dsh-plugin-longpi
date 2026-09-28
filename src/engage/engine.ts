@@ -15,13 +15,23 @@ import { addDays, checkinStatus, daysBetween, isoDay, readCheckIns } from '../in
 import { personMinor } from '../privacy/index.ts'
 import { estimatedAge, FOCUS, readProfile } from '../profile.ts'
 import { readSelf } from '../selfmeasure.ts'
+import { calculatorIdentity } from '../subject.ts'
+import { bindRecord } from '../bind.ts'
+import { loadCatalog } from '../catalog.ts'
+import { runSkill } from '../runner.ts'
+import { libraryHome } from '../skills-provider.ts'
 import { cardById, codexBlock, codexBlockZh, loadCodexPack, type CodexBlock } from './codex.ts'
 import { drawOnce, oddsDisclosure, rarityZh } from './droptable.ts'
 import { nudgeView, type NudgeState } from './nudges.ts'
+import { offerForCard, viewFromStored, type MethodOffer, type StoredRecord } from './offer.ts'
+import {
+  applyRetestValues, chapterGrade, insightBody, materializeQuests, pairsFromFacts, resolvePersonal, seasonHeader, shareCardText, shareRecapText,
+  type SeasonDraft, type SeasonFact, type SeasonPair,
+} from './personal.ts'
 import { readQuiet, seasonPressureOn } from './quiet.ts'
 import { makeQuests, questProgress, type QuestFacts } from './quests.ts'
 import { commitmentOf } from './rng.ts'
-import { chapterList, recapText, seasonSpan, seasonStatus, weekOf } from './seasons.ts'
+import { chapterList, MIN_SEASON_DAYS, recapText, seasonSpan, seasonStatus, weekOf } from './seasons.ts'
 import { computeStreak, daysInRange } from './streak.ts'
 import { makeUnlocks, openUnlock, REMINDER_ZH } from './unlocks.ts'
 import { weeklyText } from './weekly.ts'
@@ -37,7 +47,7 @@ const TITLES: Record<string, string> = {
   plan: '这一季把一件事做完',
 }
 
-interface StoredAction { key: string; day: IsoDay; kind: 'care' | 'hscrp' | 'waist' | 'retest' | 'life' }
+interface StoredAction { key: string; day: IsoDay; kind: 'care' | 'hscrp' | 'waist' | 'retest' | 'life' | 'booked' | 'ferritin' | 'iron' }
 
 interface CodexState {
   seed_hex: string
@@ -49,7 +59,13 @@ interface CodexState {
   choice: 'on' | 'off' | null
   draw_days: Record<string, number>
   utility_used: string[]
+  notes: Record<string, string>
+  offers: Record<string, MethodOffer>
 }
+
+interface CareFunnel { doctor_step: IsoDay | null; booked: IsoDay | null; visited: IsoDay | null }
+interface InviteState { ready: boolean; reason: 'first_result' | 'doctor_step' | null; declined: boolean }
+interface FamilyState { opted: boolean; shares: Array<{ id: string; kind: 'card' | 'recap'; at: string; text_zh: string }> }
 
 interface State {
   version: 1
@@ -65,6 +81,17 @@ interface State {
   /** Season and daily wording on the home. Null until they opt in. */
   pressure: 'on' | 'off' | null
   weekly_zh: string | null
+  facts: SeasonFact[]
+  facts_fp: string
+  coach_draft: SeasonDraft | null
+  personal_origin: 'coach' | 'template' | 'rule' | null
+  pairs: SeasonPair[]
+  care: CareFunnel
+  invite: InviteState
+  family: FamilyState
+  ended_by_retest: boolean
+  record_fp: string
+  applied_signature: string
 }
 
 interface Runtime {
@@ -91,12 +118,57 @@ function emptyState(): State {
     quests: [],
     unlocks: [],
     streak: { current: 0, best: 0, freezes_available: 0, frozen: [], last_active: null },
-    codex: { seed_hex: '', commitment: '', counter: 0, pity: 0, grants: [], owned: [], choice: null, draw_days: {}, utility_used: [] },
+    codex: { seed_hex: '', commitment: '', counter: 0, pity: 0, grants: [], owned: [], choice: null, draw_days: {}, utility_used: [], notes: {}, offers: {} },
     actions: [],
     rewarded: [],
     nudge: { choice: null, dismissed: false, offered: false, last_shown: null },
     pressure: null,
     weekly_zh: null,
+    facts: [],
+    facts_fp: '',
+    coach_draft: null,
+    personal_origin: null,
+    pairs: [],
+    care: { doctor_step: null, booked: null, visited: null },
+    invite: { ready: false, reason: null, declined: false },
+    family: { opted: false, shares: [] },
+    ended_by_retest: false,
+    record_fp: '',
+    applied_signature: '',
+  }
+}
+
+function hydrate(raw: State): State {
+  const base = emptyState()
+  const codex = raw.codex ?? base.codex
+  return {
+    ...base,
+    ...raw,
+    quests: Array.isArray(raw.quests) ? raw.quests : [],
+    unlocks: Array.isArray(raw.unlocks) ? raw.unlocks : [],
+    actions: Array.isArray(raw.actions) ? raw.actions : [],
+    rewarded: Array.isArray(raw.rewarded) ? raw.rewarded : [],
+    facts: Array.isArray(raw.facts) ? raw.facts : [],
+    pairs: Array.isArray(raw.pairs) ? raw.pairs : [],
+    care: { ...base.care, ...(raw.care ?? {}) },
+    invite: { ...base.invite, ...(raw.invite ?? {}) },
+    family: {
+      opted: raw.family?.opted === true,
+      shares: Array.isArray(raw.family?.shares) ? raw.family.shares.slice(-20) : [],
+    },
+    applied_signature: typeof raw.applied_signature === 'string' ? raw.applied_signature : '',
+    ended_by_retest: raw.ended_by_retest === true,
+    personal_origin: raw.personal_origin === 'coach' || raw.personal_origin === 'template' || raw.personal_origin === 'rule' ? raw.personal_origin : null,
+    codex: {
+      ...base.codex,
+      ...codex,
+      grants: Array.isArray(codex.grants) ? codex.grants : [],
+      owned: Array.isArray(codex.owned) ? codex.owned : [],
+      draw_days: codex.draw_days ?? {},
+      utility_used: Array.isArray(codex.utility_used) ? codex.utility_used : [],
+      notes: codex.notes ?? {},
+      offers: codex.offers ?? {},
+    },
   }
 }
 
@@ -111,7 +183,7 @@ function readState(dataDir: string): State {
     const raw = JSON.parse(readFileSync(path, 'utf8')) as State
     if (!raw || raw.version !== 1 || !raw.codex || !raw.streak) throw new Error('version')
     if (raw.pressure !== 'on' && raw.pressure !== 'off') raw.pressure = null
-    return raw
+    return hydrate(raw)
   } catch {
     try { renameSync(path, `${path}.damaged-${Date.now()}`) } catch { /* leave the damaged file if rename fails */ }
     return emptyState()
@@ -152,6 +224,10 @@ function emit<T extends HealthEventType>(type: T, payload: HealthEventPayloads[T
 interface World {
   today: IsoDay
   age: number | null
+  accountAge: number | null
+  sex: string
+  subject: boolean
+  subject_zh: string | null
   consent: boolean
   focus: string | null
   minorFlag: boolean
@@ -162,6 +238,7 @@ interface World {
   selfDays: IsoDay[]
   checkinDays: IsoDay[]
   doctorFirst: boolean
+  displayName: string
 }
 
 function memoryFlags(dataDir: string): { minor: boolean; optOut: boolean; nudge: boolean } {
@@ -209,7 +286,8 @@ function readWorld(dataDir: string, now: Date): World {
   const today = isoDay(now)
   const profile = readProfile(dataDir)
   const year = Number(today.slice(0, 4))
-  const age = profile.age ?? estimatedAge(profile.birthYear, year)
+  const accountAge = profile.age ?? estimatedAge(profile.birthYear, year)
+  const identity = calculatorIdentity(profile)
   const memory = memoryFlags(dataDir)
   const self = readSelf(dataDir)
   const labs = readLabsOnFile(dataDir)
@@ -222,10 +300,15 @@ function readWorld(dataDir: string, now: Date): World {
   } catch { checkins = [] }
   return {
     today,
-    age,
+    age: identity.age,
+    accountAge,
+    sex: identity.sex,
+    subject: identity.subject,
+    subject_zh: profile.subject?.relationship_zh ?? null,
     consent: Boolean(profile.consent?.accepted_at),
     focus: profile.focus[0] ?? null,
-    minorFlag: memory.minor,
+    minorFlag: memory.minor || (identity.subject && identity.age != null && identity.age < 18),
+    displayName: profile.displayName ?? '',
     memoryOptOut: memory.optOut,
     memoryNudge: memory.nudge,
     waist: self.some((row) => row.key === 'waist') || labs.waist,
@@ -247,12 +330,20 @@ function factsOf(state: State, world: World): QuestFacts & { allActive: IsoDay[]
   const waist = world.waist || state.actions.some((action) => action.kind === 'waist')
   const hscrp = world.hscrp || state.actions.some((action) => action.kind === 'hscrp')
   const careWithBrief = state.actions.some((action) => action.kind === 'care')
+  const booked = state.actions.some((action) => action.kind === 'booked')
+  const keys: Record<string, boolean> = {}
+  for (const action of state.actions) {
+    if (action.kind === 'iron' || action.kind === 'ferritin') keys.ferritin = true
+    if (action.kind !== 'life' && action.kind !== 'care' && action.kind !== 'retest' && action.kind !== 'booked') keys[action.kind] = true
+  }
   const allActive = activeDays(state, world)
-  const inSeason = (day: IsoDay) => Boolean(season) && day >= season!.start && day <= season!.end
-  const windowStart = season ? addDays(season.end, -13) : world.today
-  const retestInWindow = state.actions.some((action) => action.kind === 'retest' && action.day >= windowStart && action.day <= (season?.end ?? action.day))
+  const inSeason = (day: IsoDay) => Boolean(season) && day >= season!.start && day <= (state.ended_by_retest ? world.today : season!.end)
+  const windowStart = season ? addDays(season.start, MIN_SEASON_DAYS - 1) : world.today
+  const retestInWindow = state.actions.some((action) => action.kind === 'retest' && action.day >= windowStart && action.day <= world.today)
   return {
     careWithBrief,
+    booked,
+    keys,
     waist,
     hscrp,
     activeDays: allActive.filter(inSeason).length,
@@ -262,10 +353,30 @@ function factsOf(state: State, world: World): QuestFacts & { allActive: IsoDay[]
 }
 
 function blockOf(state: State, world: World): CodexBlock {
+  const optedOut = state.codex.choice === 'off' || (state.codex.choice == null && world.memoryOptOut)
+  if (world.subject) return codexBlock({ age: world.age, minorFlag: world.minorFlag, optOut: optedOut, configOn: runtime.codexOn() })
   const privacy = personMinor()
   if (privacy && !privacy.codex) return privacy.minor ? 'minor' : 'age_unknown'
-  const optedOut = state.codex.choice === 'off' || (state.codex.choice == null && world.memoryOptOut)
   return codexBlock({ age: world.age, minorFlag: world.minorFlag, optOut: optedOut, configOn: runtime.codexOn() })
+}
+
+function personalize(state: State, season: Season): void {
+  const built = resolvePersonal(state.facts, state.coach_draft)
+  if (!built) {
+    if (state.facts.length > 0 && !state.personal_origin) state.personal_origin = 'rule'
+    return
+  }
+  const signature = `${built.origin}:${built.draft.title_zh}:${built.draft.quests.map((quest) => quest.id).join(',')}`
+  if (state.applied_signature === signature) return
+  if (state.quests.some((quest) => quest.status === 'done')) return
+  season.title_zh = built.draft.title_zh
+  season.theme = { focus: built.draft.focus, marker_keys: [...built.draft.marker_keys] }
+  season.chapters = chapterList(built.draft.focus === 'care' || built.draft.focus === 'data' ? built.draft.focus : 'generic', season.chapters.length)
+  state.quests = materializeQuests(season.id, built.draft, built.origin === 'coach' ? 'coach' : 'rule')
+  season.quest_ids = state.quests.map((quest) => quest.id)
+  state.personal_origin = built.origin
+  state.applied_signature = signature
+  if (state.pairs.length === 0) state.pairs = pairsFromFacts(state.facts)
 }
 
 function grant(state: State, world: World, kind: DrawGrant['kind'], day: IsoDay, earnedBy: Id): void {
@@ -309,14 +420,18 @@ function startSeason(state: State, world: World): void {
   season.quest_ids = state.quests.map((quest) => quest.id)
   season.unlock_ids = state.unlocks.map((unlock) => unlock.id)
   state.rewarded = state.rewarded.filter((id) => id.startsWith('presence:'))
+  state.ended_by_retest = false
+  state.applied_signature = ''
   if (state.streak.freezes_available < 1) state.streak.freezes_available = 1
   ensureSeed(state)
+  personalize(state, season)
   emit('season.started', { season_id: season.id })
 }
 
 function reduce(state: State, world: World, now: Date): void {
   if (!world.consent) return
   if (!state.season) startSeason(state, world)
+  else if (state.season) personalize(state, state.season)
   const season = state.season
   if (!season) return
   const at = now.toISOString() as IsoTime
@@ -348,10 +463,12 @@ function reduce(state: State, world: World, now: Date): void {
   state.streak.current = computed.current
   state.streak.best = Math.max(state.streak.best, computed.current)
   state.streak.last_active = computed.lastActive
-  const status = seasonStatus(season, world.today)
+  if (state.quests.some((quest) => quest.kind === 'retest' && quest.status === 'done')) state.ended_by_retest = true
+  const status = state.ended_by_retest ? 'closed' : seasonStatus(season, world.today)
   season.status = status
   if (status === 'closed' && !state.recap_zh) {
-    state.recap_zh = recapText({
+    const graded = chapterGrade(state.pairs, world.today)
+    const base = recapText({
       title: season.title_zh,
       start: season.start,
       end: season.end,
@@ -361,8 +478,9 @@ function reduce(state: State, world: World, now: Date): void {
       best: state.streak.best,
       frozen: state.streak.frozen.length,
       draws: state.codex.counter,
-      retest: facts.retestInWindow,
+      retest: facts.retestInWindow || state.ended_by_retest,
     })
+    state.recap_zh = graded.text_zh ? `${base}${graded.text_zh}` : base
     emit('season.ended', { season_id: season.id, completed_quests: state.quests.filter((quest) => quest.status === 'done').length })
   }
   const open = state.quests.filter((quest) => quest.status === 'open').map((quest) => quest.title_zh)
@@ -411,13 +529,19 @@ export interface EngageView {
     draws_today: number
     daily_cap: number
     commitment: string | null
-    owned: Array<{ id: string; title_zh: string; body_zh: string; rarity: Rarity; rarity_zh: string; family: string }>
+    owned: Array<{ id: string; title_zh: string; body_zh: string; rarity: Rarity; rarity_zh: string; family: string; offer?: MethodOffer }>
   }
   weekly_zh: string | null
   reminder_zh: string | null
   nudge: { offer: boolean; enabled: boolean; show: boolean }
   /** False until they opt into the season. The quest list stays in the payload; the panel does not push it. */
   pressure: boolean
+  personal_origin: 'coach' | 'template' | 'rule' | null
+  invite: null | { show: true; title_zh: string; body_zh: string; odds_path: string }
+  header: { show: boolean; text_zh: string }
+  care_path: { doctor_step: IsoDay | null; booked: IsoDay | null; visited: IsoDay | null }
+  family: { available: boolean; opted: boolean; subject_zh: string | null }
+  subject_zh: string | null
 }
 
 function viewOf(state: State, world: World, dataDir = ''): EngageView {
@@ -484,16 +608,32 @@ function viewOf(state: State, world: World, dataDir = ''): EngageView {
       owned: (block ? [] : shown).map((card) => ({
         id: card.id,
         title_zh: card.title_zh,
-        body_zh: card.body_zh,
+        body_zh: state.codex.notes[card.id] || card.body_zh,
         rarity: card.rarity,
         rarity_zh: rarityZh(card.rarity),
         family: card.family,
+        ...(state.codex.offers[card.id] ? { offer: state.codex.offers[card.id] } : {}),
       })),
     },
     weekly_zh: state.weekly_zh,
     reminder_zh: !pressure ? null : locked && season && season.status !== 'closed' ? (REMINDER_ZH[locked.key] ?? null) : (season && season.status !== 'closed' && state.quests.some((quest) => quest.status === 'open') ? '这一季还有没做完的事，打开健康页看一眼就好' : null),
     nudge,
     pressure,
+    personal_origin: state.personal_origin,
+    invite: world.consent && state.invite.ready && !state.invite.declined && !pressure && season ? {
+      show: true,
+      title_zh: season.title_zh,
+      body_zh: '这一季跟着你自己的记录走，做几件具体的事，结束在一次真正的复测。图鉴没有付费，概率对每个成年人都一样。未满 18 岁不开放图鉴。',
+      odds_path: '/api/longpi/codex/odds',
+    } : null,
+    header: seasonHeader({ pressure, title: season?.title_zh ?? null, week: season ? weekOf(season, world.today) : null }),
+    care_path: { ...state.care },
+    family: {
+      available: (world.accountAge ?? -1) >= 18 && (world.age ?? -1) >= 18,
+      opted: state.family.opted,
+      subject_zh: world.subject_zh,
+    },
+    subject_zh: world.subject ? world.subject_zh : null,
   }
 }
 
@@ -504,7 +644,7 @@ function safePack() {
 export function syncEngage(dataDir: string, now: Date = new Date()): EngageView {
   if (!dataDir) {
     const blank = emptyState()
-    return viewOf(blank, { today: isoDay(now), age: null, consent: false, focus: null, minorFlag: false, memoryOptOut: false, memoryNudge: false, waist: false, hscrp: false, selfDays: [], checkinDays: [], doctorFirst: false }, dataDir)
+    return viewOf(blank, { today: isoDay(now), age: null, accountAge: null, sex: 'unknown', subject: false, subject_zh: null, consent: false, focus: null, minorFlag: false, memoryOptOut: false, memoryNudge: false, waist: false, hscrp: false, selfDays: [], checkinDays: [], doctorFirst: false, displayName: '' }, dataDir)
   }
   const world = readWorld(dataDir, now)
   const state = readState(dataDir)
@@ -531,7 +671,14 @@ function addAction(state: State, kind: StoredAction['kind'], day: IsoDay): boole
   return true
 }
 
-export function actEngage(dataDir: string, action: { action: 'care_visit'; with_brief?: boolean } | { action: 'addon'; key: string } | { action: 'retest' } | { action: 'next_season' }, now: Date = new Date()): { ok: boolean; error?: string; note?: string; view: EngageView } {
+export type EngageAction =
+  | { action: 'care_visit'; with_brief?: boolean }
+  | { action: 'book'; department_zh?: string }
+  | { action: 'addon'; key: string }
+  | { action: 'retest'; measurements?: Array<{ key: string; value: number; date?: string }> }
+  | { action: 'next_season' }
+
+export function actEngage(dataDir: string, action: EngageAction, now: Date = new Date()): { ok: boolean; error?: string; note?: string; view: EngageView } {
   const world = readWorld(dataDir, now)
   if (!world.consent) return { ok: false, error: '先完成知情同意，这一季再开始。', view: syncEngage(dataDir, now) }
   const state = readState(dataDir)
@@ -546,18 +693,27 @@ export function actEngage(dataDir: string, action: { action: 'care_visit'; with_
     state.unlocks = []
     state.recap_zh = null
     state.weekly_zh = null
+    state.ended_by_retest = false
+    state.applied_signature = ''
+    state.pairs = state.pairs.map((pair) => pair.to == null ? pair : { ...pair, from: pair.to, from_date: pair.to_date ?? pair.from_date, to: null, to_date: null })
     state.rewarded = state.rewarded.filter((id) => id.startsWith('presence:'))
+  } else if (action.action === 'book') {
+    addAction(state, 'booked', world.today)
+    if (!state.care.booked) state.care.booked = world.today
+    emit('care.booked', { department_zh: action.department_zh?.slice(0, 40) || '医生', day: world.today })
   } else if (action.action === 'care_visit') {
     if (!action.with_brief) return { ok: false, error: '这次要算完成，需要带着简报去。简报可以在健康页准备。', view: syncEngage(dataDir, now) }
     addAction(state, 'care', world.today)
+    if (!state.care.visited) state.care.visited = world.today
   } else if (action.action === 'addon') {
-    if (action.key !== 'hscrp' && action.key !== 'waist') return { ok: false, error: '只能记下腰围或 hs-CRP。', view: syncEngage(dataDir, now) }
-    addAction(state, action.key, world.today)
+    if (action.key !== 'hscrp' && action.key !== 'waist' && action.key !== 'ferritin' && action.key !== 'iron') return { ok: false, error: '只能记下腰围、hs-CRP 或铁蛋白。', view: syncEngage(dataDir, now) }
+    addAction(state, action.key === 'iron' ? 'ferritin' : action.key, world.today)
   } else if (action.action === 'retest') {
     addAction(state, 'retest', world.today)
+    if (action.measurements && action.measurements.length > 0) state.pairs = applyRetestValues(state.pairs, action.measurements, world.today)
     if (!state.season) reduce(state, world, now)
     const season = state.season
-    const windowStart = season ? addDays(season.end, -13) : world.today
+    const windowStart = season ? addDays(season.start, MIN_SEASON_DAYS - 1) : world.today
     if (season && world.today < windowStart) {
       reduce(state, world, now)
       saveState(dataDir, state)
@@ -600,7 +756,7 @@ export function freezeEngage(dataDir: string, input: { reason: 'sick' | 'travel'
   }
 }
 
-export function prefsEngage(dataDir: string, input: { codex?: boolean; nudge?: boolean; dismiss?: boolean; offerSeen?: boolean; shown?: boolean; pressure?: boolean }, now: Date = new Date()): EngageView {
+export function prefsEngage(dataDir: string, input: { codex?: boolean; nudge?: boolean; dismiss?: boolean; offerSeen?: boolean; shown?: boolean; pressure?: boolean; family?: boolean; declineInvite?: boolean }, now: Date = new Date()): EngageView {
   const world = readWorld(dataDir, now)
   const state = readState(dataDir)
   if (input.codex === true) state.codex.choice = 'on'
@@ -609,6 +765,9 @@ export function prefsEngage(dataDir: string, input: { codex?: boolean; nudge?: b
   if (input.nudge === false) { state.nudge.choice = 'off'; state.nudge.dismissed = true }
   if (input.pressure === true) state.pressure = 'on'
   if (input.pressure === false) state.pressure = 'off'
+  if (input.declineInvite) state.invite.declined = true
+  if (input.family === false) state.family.opted = false
+  if (input.family === true && (world.accountAge ?? -1) >= 18 && (world.age ?? -1) >= 18) state.family.opted = true
   if (input.dismiss) state.nudge.dismissed = true
   if (input.offerSeen) state.nudge.offered = true
   if (input.shown) {
@@ -616,7 +775,7 @@ export function prefsEngage(dataDir: string, input: { codex?: boolean; nudge?: b
     emit('nudge.shown', { nudge_id: `ng${randomBytes(6).toString('hex')}`, where: 'overlay' })
   }
   if (world.consent) reduce(state, world, now)
-  if (world.consent || input.codex != null || input.nudge != null || input.pressure != null) saveState(dataDir, state)
+  if (world.consent || input.codex != null || input.nudge != null || input.pressure != null || input.family != null || input.declineInvite) saveState(dataDir, state)
   return viewOf(state, world, dataDir)
 }
 
@@ -625,7 +784,7 @@ export interface DrawResponse {
   error?: string
   reason?: string
   view: EngageView
-  card?: { id: string; title_zh: string; body_zh: string; rarity: Rarity; rarity_zh: string; family: string; duplicate: boolean }
+  card?: { id: string; title_zh: string; body_zh: string; rarity: Rarity; rarity_zh: string; family: string; duplicate: boolean; offer?: MethodOffer }
   questions_zh?: string[]
   deep_dive_zh?: string
   pity_before?: number
@@ -679,6 +838,13 @@ export function drawEngage(dataDir: string, now: Date = new Date()): DrawRespons
   state.codex.draw_days[world.today] = usedToday + 1
   const first = !state.codex.owned.includes(drawn.card.id)
   if (first) state.codex.owned.push(drawn.card.id)
+  if (drawn.card.family === 'insight') {
+    const done = state.quests.filter((quest) => quest.status === 'done').map((quest) => quest.title_zh)
+    state.codex.notes[drawn.card.id] = insightBody(days, done)
+  }
+  if (drawn.card.family === 'method' || drawn.card.family === 'species' || drawn.card.evidence_tier === 'animal' || drawn.card.evidence_tier === 'cell') {
+    state.codex.offers[drawn.card.id] = offerForCard(drawn.card, libraryHome(), viewFromStored(libraryHome(), readRecord(dataDir)))
+  }
   let questions: string[] | undefined
   let deep: string | undefined
   if (first && drawn.card.utility === 'streak_freeze') {
@@ -697,7 +863,16 @@ export function drawEngage(dataDir: string, now: Date = new Date()): DrawRespons
   return {
     ok: true,
     view: viewOf(state, world, dataDir),
-    card: { id: drawn.card.id, title_zh: drawn.card.title_zh, body_zh: drawn.card.body_zh, rarity: drawn.card.rarity, rarity_zh: rarityZh(drawn.card.rarity), family: drawn.card.family, duplicate: drawn.result.duplicate },
+    card: {
+      id: drawn.card.id,
+      title_zh: drawn.card.title_zh,
+      body_zh: state.codex.notes[drawn.card.id] || drawn.card.body_zh,
+      rarity: drawn.card.rarity,
+      rarity_zh: rarityZh(drawn.card.rarity),
+      family: drawn.card.family,
+      duplicate: drawn.result.duplicate,
+      ...(state.codex.offers[drawn.card.id] ? { offer: state.codex.offers[drawn.card.id] } : {}),
+    },
     ...(questions ? { questions_zh: questions } : {}),
     ...(deep ? { deep_dive_zh: deep } : {}),
     pity_before: drawn.result.pity_before,
@@ -723,6 +898,212 @@ export function logLifeEngage(dataDir: string, input: { event: 'sick' | 'travel'
   }
   const frozen = freezeEngage(dataDir, { reason, from, to }, now)
   return { ok: frozen.ok, error: frozen.error, froze: frozen.ok ? frozen.view.streak.frozen.map((row) => row.day).filter((day) => day >= from && day <= to) : [], view: frozen.view }
+}
+
+function readRecord(dataDir: string): StoredRecord | null {
+  try {
+    const raw = JSON.parse(readFileSync(join(engageDir(dataDir), 'record.json'), 'utf8')) as StoredRecord
+    if (!raw || !Array.isArray(raw.indicators)) return null
+    return {
+      age: typeof raw.age === 'number' ? raw.age : null,
+      sex: typeof raw.sex === 'string' ? raw.sex : 'unknown',
+      indicators: raw.indicators.slice(0, 80),
+    }
+  } catch {
+    return null
+  }
+}
+
+function writeRecord(dataDir: string, record: StoredRecord): void {
+  writeJson(join(engageDir(dataDir), 'record.json'), {
+    age: record.age,
+    sex: record.sex,
+    indicators: record.indicators.slice(0, 80).map((row) => ({
+      name: String(row.name ?? '').slice(0, 80),
+      value: String(row.value ?? '').slice(0, 40),
+      unit: String(row.unit ?? '').slice(0, 20),
+      ...(row.loinc ? { loinc: String(row.loinc).slice(0, 20) } : {}),
+      ...(row.date ? { date: String(row.date).slice(0, 10) } : {}),
+    })),
+  })
+}
+
+export function noteSeasonContext(dataDir: string, input: {
+  facts: SeasonFact[]
+  doctorStep?: boolean
+  firstResult?: boolean
+  draft?: SeasonDraft | null
+  record?: StoredRecord | null
+}, now: Date = new Date()): EngageView {
+  if (!dataDir) return syncEngage(dataDir, now)
+  const world = readWorld(dataDir, now)
+  const state = readState(dataDir)
+  const fp = input.facts.map((fact) => `${fact.id}:${fact.rule}`).join('|')
+  let changed = false
+  if (fp !== state.facts_fp) {
+    state.facts = input.facts.slice(0, 12).map((fact) => ({
+      id: String(fact.id).slice(0, 80),
+      rule: String(fact.rule).slice(0, 80),
+      text_zh: String(fact.text_zh).slice(0, 240),
+      refs: (fact.refs ?? []).filter((ref) => Number.isFinite(ref.value)).slice(0, 4).map((ref) => ({
+        key: String(ref.key).slice(0, 40),
+        label_zh: String(ref.label_zh).slice(0, 40),
+        value: ref.value,
+        unit: String(ref.unit ?? '').slice(0, 20),
+        date: ref.date ? String(ref.date).slice(0, 10) : null,
+      })),
+    }))
+    state.facts_fp = fp
+    changed = true
+  }
+  if (input.draft) {
+    state.coach_draft = input.draft
+    changed = true
+  }
+  if (input.doctorStep && !state.care.doctor_step) {
+    state.care.doctor_step = world.today
+    changed = true
+  }
+  if ((input.firstResult || input.doctorStep) && !state.invite.declined && !state.invite.ready) {
+    state.invite.ready = true
+    state.invite.reason = input.doctorStep ? 'doctor_step' : 'first_result'
+    changed = true
+  }
+  if (input.record) {
+    const stamp = `${input.record.age ?? ''}:${input.record.sex}:${input.record.indicators.length}`
+    if (stamp !== state.record_fp) {
+      state.record_fp = stamp
+      writeRecord(dataDir, input.record)
+      changed = true
+    }
+  }
+  if (!changed && state.season) return viewOf(state, world, dataDir)
+  if (world.consent) reduce(state, world, now)
+  if (world.consent || changed) saveState(dataDir, state)
+  return viewOf(state, world, dataDir)
+}
+
+export function shareEngage(dataDir: string, input: { kind: 'card' | 'recap'; card_id?: string }, now: Date = new Date()): { ok: boolean; error?: string; text_zh?: string; view: EngageView } {
+  const world = readWorld(dataDir, now)
+  const state = readState(dataDir)
+  const view = () => viewOf(state, world, dataDir)
+  if ((world.accountAge ?? -1) < 18 || (world.age ?? -1) < 18) return { ok: false, error: '家人圈只对成年人开放。', view: view() }
+  if (!state.family.opted) return { ok: false, error: '先打开家人圈。', view: view() }
+  let text = ''
+  if (input.kind === 'recap') {
+    if (!state.recap_zh) return { ok: false, error: '这一季还没有回看。', view: view() }
+    text = shareRecapText(state.recap_zh, world.displayName)
+  } else {
+    const pack = safePack()
+    const card = pack && input.card_id ? cardById(pack, input.card_id) : null
+    if (!card || !state.codex.owned.includes(card.id)) return { ok: false, error: '只能分享已经抽到的卡。', view: view() }
+    if (blockOf(state, world)) return { ok: false, error: '图鉴没有打开，不能分享卡。', view: view() }
+    text = shareCardText({
+      rarity_zh: rarityZh(card.rarity),
+      title_zh: card.title_zh,
+      body_zh: state.codex.notes[card.id] || card.body_zh,
+    }, world.displayName)
+  }
+  state.family.shares.push({ id: `sh${randomBytes(4).toString('hex')}`, kind: input.kind, at: now.toISOString(), text_zh: text })
+  state.family.shares = state.family.shares.slice(-20)
+  saveState(dataDir, state)
+  return { ok: true, text_zh: text, view: viewOf(state, world, dataDir) }
+}
+
+export async function runCodexMethod(dataDir: string, cardId: string, now: Date = new Date()): Promise<{ ok: boolean; error?: string; text_zh: string; label: string | null; ran: boolean; view: EngageView }> {
+  const world = readWorld(dataDir, now)
+  const state = readState(dataDir)
+  if (world.consent) reduce(state, world, now)
+  const denied = (error: string, text = error) => {
+    saveState(dataDir, state)
+    return { ok: false, error, text_zh: text, label: null, ran: false, view: viewOf(state, world, dataDir) }
+  }
+  if (blockOf(state, world)) return denied(codexBlockZh(blockOf(state, world)))
+  const pack = safePack()
+  const card = pack ? cardById(pack, cardId) : null
+  if (!card || !state.codex.owned.includes(card.id)) return denied('只能计算已经抽到的方法卡。')
+  const home = libraryHome()
+  const offer = state.codex.offers[card.id] ?? offerForCard(card, home, viewFromStored(home, readRecord(dataDir)))
+  state.codex.offers[card.id] = offer
+  if (offer.kind === 'evidence') {
+    saveState(dataDir, state)
+    return { ok: true, text_zh: offer.text_zh, label: 'evidence-only', ran: false, view: viewOf(state, world, dataDir) }
+  }
+  if (offer.kind !== 'run' || !offer.skill) {
+    saveState(dataDir, state)
+    return { ok: false, error: offer.text_zh, text_zh: offer.text_zh, label: offer.label, ran: false, view: viewOf(state, world, dataDir) }
+  }
+  const catalog = loadCatalog(home)
+  const skill = catalog.cards.find((item) => item.name === offer.skill)
+  const stored = viewFromStored(home, readRecord(dataDir))
+  if (!skill || !stored) return denied(offer.text_zh)
+  const report = bindRecord(skill, stored)
+  if (!report.ok) {
+    saveState(dataDir, state)
+    return { ok: false, error: offer.text_zh, text_zh: offer.text_zh, label: report.label, ran: false, view: viewOf(state, world, dataDir) }
+  }
+  const ran = await runSkill({
+    home,
+    dataDir,
+    name: skill.name,
+    args: [],
+    files: [],
+    binding: {
+      skill: skill.name,
+      inputs: Object.fromEntries(report.inputs_used.map((row) => [row.input, {
+        source_row_id: row.source_row_id,
+        value: row.value,
+        unit: row.unit,
+        provenance: row.provenance,
+        quote: row.quote,
+      }])),
+    },
+    bindingView: stored,
+    python: 'python3',
+    timeoutMs: 8000,
+    revision: catalog.revision,
+    profile: { age: stored.profile?.age ?? null, sex: stored.profile?.sex ?? 'unknown' },
+    useProfile: true,
+  })
+  saveState(dataDir, state)
+  const label = ran.method?.label ?? offer.label
+  return {
+    ok: ran.ok,
+    text_zh: offer.text_zh,
+    label,
+    ran: true,
+    ...(ran.ok ? {} : { error: ran.error || '这次没有算出结果。' }),
+    view: viewOf(state, world, dataDir),
+  }
+}
+
+export function careMetrics(dataDir: string, now: Date = new Date()): {
+  origin: State['personal_origin']
+  title: string | null
+  pressure: boolean
+  doctor_step: IsoDay | null
+  booked: IsoDay | null
+  visited: IsoDay | null
+  days_to_first_care: number | null
+  quests_done: number
+  quests_total: number
+  draws: number
+} {
+  const view = syncEngage(dataDir, now)
+  const state = readState(dataDir)
+  const first = [state.care.booked, state.care.visited].filter((day): day is IsoDay => Boolean(day)).sort()[0] ?? null
+  return {
+    origin: state.personal_origin,
+    title: view.season?.title_zh ?? null,
+    pressure: view.pressure,
+    doctor_step: state.care.doctor_step,
+    booked: state.care.booked,
+    visited: state.care.visited,
+    days_to_first_care: state.care.doctor_step && first ? daysBetween(state.care.doctor_step, first) : null,
+    quests_done: view.quests.filter((quest) => quest.status === 'done').length,
+    quests_total: view.quests.length,
+    draws: state.codex.counter,
+  }
 }
 
 export function engagementSummary(): FactPack['engagement'] {

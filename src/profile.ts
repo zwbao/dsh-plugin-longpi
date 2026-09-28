@@ -252,7 +252,7 @@ function consentsOf(value: unknown): { ok: true; value: ProfileConsents } | Fail
 export function mergeProfile(current: Profile, update: Record<string, unknown>): Record<string, unknown> {
   const merged: Record<string, unknown> = { ...current, risk: { ...current.risk }, focus: [...current.focus] }
   const unknown = new Set<RiskFact>(current.riskUnknown ?? [])
-  for (const key of ['displayName', 'birthYear', 'age', 'sex', 'focus'] as const) {
+  for (const key of ['displayName', 'birthYear', 'age', 'sex', 'focus', 'subject'] as const) {
     if (key in update) merged[key] = update[key]
   }
   if (update.risk && typeof update.risk === 'object' && !Array.isArray(update.risk)) {

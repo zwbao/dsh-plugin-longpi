@@ -18,6 +18,7 @@ import { Overview } from './overview.ts'
 import { PlanTab } from './plan.ts'
 import { registerClientModules } from './modules.ts'
 import { ProfileTab } from './profile-tab.ts'
+import { SeasonBar } from './engage/index.ts'
 import { pageTabs } from './registry.ts'
 import type { ResultTarget } from './results.ts'
 import {
@@ -217,6 +218,7 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
     h('div', { className: 'lp-page' },
       h(Header, { journey, failed: !journey && !loading, refreshing, onRefresh: () => { void doRefresh() } }),
       notice ? h('div', { className: 'lp-notice-slot' }, notice) : null,
+      journey ? h(SeasonBar, { onOpen: () => setTab('season') }) : null,
       body,
       h('footer', { className: 'lp-footer' },
         h('p', null, journey?.boundary_zh || BOUNDARY_FALLBACK),

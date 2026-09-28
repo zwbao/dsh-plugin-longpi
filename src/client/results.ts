@@ -242,16 +242,6 @@ const METHOD_CSS = `
 .lp-method-evidence { grid-column: 1 / -1; }
 .lp-results .lp-card { min-width: 0; }
 @container lp-root (max-width: 720px) { .lp-method-block { grid-template-columns: 1fr; } }
-@media (min-width: 901px) {
-  .lp-page { padding-bottom: 96px; }
-  .lp-season-dock {
-    position: fixed !important;
-    left: 16px !important;
-    bottom: 16px !important;
-    max-width: 148px !important;
-    z-index: 2 !important;
-  }
-}
 `
 
 export function ResultsRow(props: {
