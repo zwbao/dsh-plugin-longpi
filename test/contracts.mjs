@@ -88,12 +88,14 @@ function walk(dir) {
 }
 for (const file of walk(join(root, '..', 'src'))) assert.doesNotMatch(readFileSync(file, 'utf8'), /session\.append\(/, `${file} appends a session event`)
 
-// 0.6.0: L2 registers the catalog index and binding check. L3 readStore and L4 methodResults still throw.
+// 0.6.0: L2 registers the catalog index and the binding check. L3 registers
+// readStore when the data-in module mounts, so it still throws here. L4
+// registers methodResults; with nothing recorded the list is empty.
 assert.ok(Array.isArray(mod.listSkillIndex()))
 const unknownSkill = mod.validateBinding({ skill: 'not-a-real-skill', inputs: {} })
 assert.equal(unknownSkill.ok, false)
 assert.throws(() => mod.readStore('methylation'), /not implemented in C1/)
-assert.throws(() => mod.methodResults(), /not implemented in C1/)
+assert.deepEqual(mod.methodResults(), [])
 assert.deepEqual(mod.registeredMethodResults(), [])
 const offRead = mod.registerLibraryHooks({
   readStore: (kind) => (kind === 'conditions' ? [{ code: 'E55', system: 'ICD-10', display: '维生素 D 缺乏', onset: null, source: 'fixture' }] : []),

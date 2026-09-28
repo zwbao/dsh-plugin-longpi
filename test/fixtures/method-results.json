@@ -1,0 +1,59 @@
+[
+  {
+    "skill": "retinal-aging-biomarkers-longitudinal",
+    "label": "verified",
+    "outputs": [{ "key": "gap_years", "value": 7.8, "unit": "岁" }],
+    "inputs_used": [{
+      "input": "retinal_age",
+      "source_row_id": "row-retina-2026-06-02",
+      "value": 66.8,
+      "unit": "岁",
+      "provenance": "routine_lab",
+      "quote": "眼底报告视网膜年龄 66.8 岁"
+    }],
+    "catalog_version": "2026.39.0",
+    "ran_at": "2026-09-28T08:00:00+08:00",
+    "limits_zh": "视网膜年龄减去实足年龄，旁边是论文里的误差范围。这是模型估计，不是诊断。"
+  },
+  {
+    "skill": "sleep-chart-biological-ageing",
+    "label": "unverified-binding",
+    "outputs": [{ "key": "bin", "value": "正常", "unit": "" }],
+    "inputs_used": [{
+      "input": "sleep_h",
+      "source_row_id": "row-sleep-median",
+      "value": 6.4,
+      "unit": "h",
+      "provenance": "wearable",
+      "quote": "近 120 夜睡眠中位数 6.4 小时"
+    }],
+    "catalog_version": "2026.39.0",
+    "ran_at": "2026-09-28T08:00:00+08:00",
+    "limits_zh": "这是睡眠时长落在论文的哪一档，不是诊断。"
+  },
+  {
+    "skill": "aging-biomarker-framework",
+    "label": "unverified-binding",
+    "outputs": [{ "key": "gap_years", "value": -1.4, "unit": "岁" }],
+    "inputs_used": [{
+      "input": "clock_age",
+      "source_row_id": "row-clock-2026-05",
+      "value": 46.6,
+      "unit": "岁",
+      "provenance": "methylation_clock",
+      "quote": "甲基化报告上的时钟年龄 46.6 岁"
+    }],
+    "catalog_version": "2026.39.0",
+    "ran_at": "2026-09-28T08:00:00+08:00",
+    "limits_zh": "这是甲基化时钟和实足年龄的差。绑定还没核对成你的血检之前，这个差只对照报告上的数。"
+  },
+  {
+    "skill": "aging-mouse-brain-atlas",
+    "label": "evidence-only",
+    "outputs": [],
+    "inputs_used": [],
+    "catalog_version": "2026.39.0",
+    "ran_at": "2026-09-28T08:00:00+08:00",
+    "limits_zh": "物种：小鼠。论文报告的是小鼠脑区，不是你的数字。"
+  }
+]

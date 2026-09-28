@@ -3,6 +3,7 @@
 // exists and every list is a list, so no surface breaks on a missing field.
 // Nothing is invented: a missing number stays null, a missing flag is false.
 
+import { parseMethodResults } from '../core/method-view.ts'
 import { BOUNDARY_FALLBACK } from './constants.ts'
 import { localToday } from './format.ts'
 import type {
@@ -300,6 +301,7 @@ export function normalizeJourney(input: unknown): Journey {
       .map((row) => ({ label_zh: str(row.label_zh), reason_zh: str(row.reason_zh) })),
     surfaces: surfacesOf(raw.surfaces),
     triage: triageOf(obj(raw.triage)),
+    method_results: parseMethodResults(raw.method_results),
   }
 }
 

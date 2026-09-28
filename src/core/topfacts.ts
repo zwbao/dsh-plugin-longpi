@@ -3,12 +3,15 @@
 
 import type { NumberRef } from '../contracts/common.ts'
 import { FACT_PRIORITY_RANK, type TopFact } from '../contracts/factpack.ts'
+import { registeredMethodResults, type MethodResult } from '../contracts/library.ts'
 import type { ConditionFlag, DrugClass } from '../contracts/memory.ts'
 import type { TriageFinding } from '../contracts/triage.ts'
 import type { RecordChange } from '../changes.ts'
 import type { StopHit } from '../plan-safety.ts'
 import { statusLine } from '../triage/rules.ts'
 import { outcomeText, type CareState } from '../triage/care.ts'
+import { methodFactText, overviewSlice } from './method-view.ts'
+import './method-results.ts'
 
 const KIND_ORDER: Record<TopFact['kind'], number> = { triage: 0, safety_med: 1, safety_condition: 2, screening: 3, care_followup: 4, milestone: 5, goal: 6 }
 
@@ -24,6 +27,12 @@ export interface TopFactInput {
   screening?: TopFact[]
   /** The stop used the men's limits because no sex is on file. */
   needsSex?: boolean
+  /**
+   * Labeled method results for this generation. Omitted means the registered
+   * hook, which is empty until a run is recorded. They rank under triage and
+   * safety: an emergency, a critical pattern, and a safety medicine stay first.
+   */
+  methods?: readonly MethodResult[]
 }
 
 const MED_FACT: Partial<Record<DrugClass, { rule: string; text: (name: string) => string }>> = {
@@ -40,6 +49,19 @@ const CONDITION_FACT: Partial<Record<ConditionFlag, { rule: string; text: string
   breastfeeding: { rule: 'safety.condition.breastfeeding', text: '你在哺乳：方案不安排限时进食或断食，体重指数低于 24 时不设减重目标，避免饮酒' },
   ckd: { rule: 'safety.condition.ckd', text: '你有慢性肾病：方案不安排未经调整的 DASH 饮食' },
   cancer_followup: { rule: 'safety.condition.cancer_followup', text: '你在肿瘤随访中：任何饮食或补剂改动先问主治医生' },
+}
+
+function methodTopFacts(results: readonly MethodResult[]): TopFact[] {
+  const slice = overviewSlice(results)
+  return [...slice.value, ...slice.evidence].map((row, index) => ({
+    id: `method-result-${index + 1}`,
+    kind: 'milestone',
+    priority: 'should_surface',
+    text_zh: methodFactText(row),
+    refs: [],
+    source_ids: [],
+    rule: row.label === 'verified' ? 'method.verified' : row.label === 'unverified-binding' ? 'method.unverified' : 'method.evidence',
+  }))
 }
 
 function changeRefs(row: RecordChange): NumberRef[] {
@@ -90,5 +112,8 @@ export function rankTopFacts(input: TopFactInput): TopFact[] {
   }
   for (const fact of input.screening ?? []) facts.push(fact)
   for (const goal of input.goals.slice(0, 2)) facts.push({ id: `goal-${goal.id}`, kind: 'goal', priority: 'context', text_zh: `你的目标：${goal.text_zh}`, refs: [], source_ids: [goal.id], rule: 'memory.goal' })
+  // Under triage and safety. should_surface sits below emergency and must_surface,
+  // and milestone sits below a should_surface triage or screening fact.
+  facts.push(...methodTopFacts(input.methods ?? registeredMethodResults()))
   return facts.sort((a, b) => FACT_PRIORITY_RANK[a.priority] - FACT_PRIORITY_RANK[b.priority] || KIND_ORDER[a.kind] - KIND_ORDER[b.kind])
 }

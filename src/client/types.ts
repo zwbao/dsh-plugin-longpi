@@ -2,6 +2,8 @@
 // /api/longpi/journey field for field; Board and Tracking keep every field
 // optional because older servers and the preview omit some of them.
 
+import type { MethodResult } from '../contracts/library.ts'
+
 export type Stage = 'consent' | 'profile' | 'records' | 'first_result' | 'plan' | 'routine'
 export type Focus = 'bioage' | 'cardio' | 'glucose' | 'weight' | 'sleep' | 'plan'
 export type SelfKey = 'waist' | 'sbp' | 'dbp' | 'weight'
@@ -151,6 +153,8 @@ export interface Journey {
   surfaces: JourneySurfaces | null
   /** 0.5.3 (M1): findings for a doctor and what the person answered about going. Older servers: empty. */
   triage: JourneyTriage
+  /** Labeled library results. Older servers omit it. */
+  method_results?: MethodResult[]
 }
 
 export interface SurfaceCardView { id: string; text_zh: string; detail_zh: string; fact_ids: string[]; tone: string; source: string; prompt_zh: string }
