@@ -11,7 +11,7 @@
 // The same reads give the record summary the onboarding shows.
 
 import { createHash } from 'node:crypto'
-import { buildChanges, type RecordChange } from './changes.ts'
+import { absoluteLevel, buildChanges, type RecordChange } from './changes.ts'
 import type { Config } from './config.ts'
 import { connectionKey } from './connection.ts'
 import { resolveMarkers } from './evaluate.ts'
@@ -58,6 +58,9 @@ export interface IndicatorEntry {
   gate?: 'too_early' | 'not_comparable'
   /** The 太早 or 不可比 sentence. The indicators page shows it next to the chip. */
   reason_zh?: string
+  /** A single value outside the usual adult range. Shown even when the change itself is unjudged. */
+  range_flag?: 'low' | 'high'
+  range_zh?: string
 }
 
 export interface IndicatorsResponse {
@@ -219,7 +222,7 @@ function specsOf(records: RecordSnapshot, selfRows: readonly SelfRow[], markers:
       spec.unit = snapshot?.unit || spec.marker?.unit || ''
     }
   }
-  const out = [...byId.values()]
+  const out = mergeFastingGlucose([...byId.values()])
   for (const key of SELF_KEYS) {
     if (!selfRows.some((row) => row.key === key)) continue
     const spec = SELF_SPEC[key]
@@ -229,6 +232,66 @@ function specsOf(records: RecordSnapshot, selfRows: readonly SelfRow[], markers:
     })
   }
   return out
+}
+
+const FASTING_LOINC = new Set(['14771-0', '1558-6'])
+
+function isFastingGlucoseName(text: string): boolean {
+  const folded = foldName(text)
+  if (/餐后|随机|负荷|糖化|尿|指尖|瞬感/.test(folded)) return false
+  const bare = folded.replace(/血/g, '')
+  return bare === '空腹葡萄糖' || bare === '空腹血糖' || bare === '葡萄糖' || folded === '血糖'
+}
+
+/** 空腹血糖 and 葡萄糖 from the same venous draws are one series. Finger-stick and CGM stay out of it. */
+function mergeFastingGlucose(specs: Spec[]): Spec[] {
+  const fasting = specs.filter((spec) => spec.source === 'checkup' && (FASTING_LOINC.has(spec.loinc ?? '') || isFastingGlucoseName(spec.label) || spec.names.some((name) => isFastingGlucoseName(name))))
+  if (fasting.length < 2) return specs
+  const keep = fasting[0]
+  if (!keep) return specs
+  keep.id = 'analyte:fpg'
+  keep.label = '空腹血糖'
+  for (const other of fasting.slice(1)) {
+    for (const name of other.names) if (!keep.names.includes(name)) keep.names.push(name)
+    if (other.snapshot) keep.snapshot = newer(keep.snapshot, other.snapshot)
+    if (!keep.loinc && other.loinc) keep.loinc = other.loinc
+    if (!keep.marker && other.marker) keep.marker = other.marker
+  }
+  const drop = new Set(fasting.slice(1).map((spec) => spec.id))
+  return specs.filter((spec) => !drop.has(spec.id))
+}
+
+/** A diabetes-relevant value the indicator row should not leave as 未判断. */
+function attentionLevel(label: string, value: number | null, text: string, treated: boolean): { flag: 'low' | 'high'; text_zh: string } | null {
+  if (!treated) return null
+  const blob = `${label} ${text}`
+  if (/血清|总蛋白|白蛋白电泳/.test(blob) && !/尿/.test(blob)) return null
+  if (value != null && /尿白蛋白.?肌酐|尿微量白蛋白|UACR|\bACR\b/i.test(blob) && value >= 30) {
+    return { flag: 'high', text_zh: `尿白蛋白/肌酐比 ${value} 高于常用分界 30 mg/g。有糖尿病时要带给医生看，不是“未判断就是正常”。` }
+  }
+  if (/尿蛋白/.test(blob) && !/肌酐|UACR/i.test(blob) && ((value != null && value >= 30) || /阳性|\+|↑|偏高/.test(text || String(value ?? '')))) {
+    return { flag: 'high', text_zh: `尿蛋白 ${text || value}。有糖尿病时要带给医生看，不是“未判断就是正常”。` }
+  }
+  if (value != null && value > 5 && value < 60 && /egfr|肾小球滤过/i.test(blob)) {
+    return { flag: 'low', text_zh: `eGFR ${value} 低于 60。有糖尿病时要和医生看肾功能，不是“未判断就是正常”。` }
+  }
+  if (/眼底|视网膜/.test(blob) && /微动脉瘤|视网膜病变|新生血管|出血/.test(blob)) {
+    return { flag: 'high', text_zh: '眼底记录里有需要医生看的描述。有糖尿病时带给眼科或内分泌科，不是“未判断就是正常”。' }
+  }
+  return null
+}
+
+function glucoseKind(file: string | undefined): 'cgm' | 'finger' | 'other' {
+  const text = file ?? ''
+  if (/^lp:cgm|cgm|瞬感|传感器/i.test(text)) return 'cgm'
+  if (/home:glucose|finger|指尖|指血/i.test(text)) return 'finger'
+  return 'other'
+}
+
+const GLUCOSE_LABEL: Record<'cgm' | 'finger' | 'other', string> = {
+  cgm: '瞬感血糖',
+  finger: '指尖血糖',
+  other: '血糖记录',
 }
 
 /** The factor that brings a unit to the row's unit, from the row's convert table; null when it cannot. */
@@ -355,9 +418,15 @@ async function build(context: IndicatorsContext): Promise<Built> {
   const status = records.record_status as string
   const readable = status === 'ok' || status === 'partial'
   const checkupNames = [...new Set(specs.filter((spec) => spec.source === 'checkup').flatMap((spec) => spec.names))]
-  const deviceNames = [...new Set(specs.filter((spec) => spec.source === 'device').flatMap((spec) => spec.names))]
+  const deviceNames = [...new Set(specs.filter((spec) => spec.source === 'device').flatMap((spec) => spec.names).filter((name) => name !== 'bloodGlucoses'))]
+  const splitGlucose = specs.some((spec) => spec.names.includes('bloodGlucoses'))
   const reads: Read[] = readable
-    ? [...chunked(checkupNames, CHECKUP_CHUNK).map((names) => ({ names, resolution: 'raw' as const })), ...chunked(deviceNames, DEVICE_CHUNK).map((names) => ({ names, resolution: 'day' as const }))]
+    ? [
+      ...chunked(checkupNames, CHECKUP_CHUNK).map((names) => ({ names, resolution: 'raw' as const })),
+      ...chunked(deviceNames, DEVICE_CHUNK).map((names) => ({ names, resolution: 'day' as const })),
+      // Finger-stick and CGM share the name bloodGlucoses. A day bucket drops the file, so the split needs the raw points.
+      ...(splitGlucose ? [{ names: ['bloodGlucoses'], resolution: 'raw' as const }] : []),
+    ]
     : []
   const rawWindow = { start: addDays(today, -CHECKUP_LOOKBACK_DAYS), end: today, resolution: 'raw' as const }
   const dayWindow = { start: addDays(today, -(WEARABLE_LOOKBACK_DAYS - 1)), end: today, resolution: 'day' as const }
@@ -397,6 +466,36 @@ async function build(context: IndicatorsContext): Promise<Built> {
     let reason: string | undefined
     let allPoints: IndicatorDetail['all_points'] = []
     let biovar: IndicatorDetail['biovar']
+
+    if (spec.source === 'device' && spec.names.includes('bloodGlucoses')) {
+      const raw = reads.find((read) => read.resolution === 'raw' && read.names.includes('bloodGlucoses'))
+      const series = raw?.result?.series.bloodGlucoses?.points ?? []
+      const buckets = new Map<'cgm' | 'finger' | 'other', SeriesPoint[]>()
+      for (const point of series) {
+        const kind = glucoseKind(point.file)
+        buckets.set(kind, [...(buckets.get(kind) ?? []), point])
+      }
+      if (buckets.size > 0) {
+        for (const [kind, group] of buckets) {
+          const unit = group.at(-1)?.unit || spec.unit
+          const days = daily(group, unit, null)
+          for (const point of days) wearableDays.add(point.date)
+          const last = days.at(-1)
+          const latest = last ? { date: last.date, value: last.value } : null
+          const label = GLUCOSE_LABEL[kind]
+          const level = latest?.value != null ? absoluteLevel(label, latest.value, unit, records.profile.sex) : null
+          const id = `device:bloodGlucoses:${kind}`
+          rows.push({
+            id, label_zh: label, unit, source: 'device', latest, points: weeklyMeans(days, today), change: null, judged: 'unjudged',
+            plan_marker: isPlanMarker(spec), ...(readError ? { read_error: readError } : {}),
+            ...(level ? { range_flag: level.flag, range_zh: level.text_zh } : {}),
+            group: 'glucose',
+          })
+          details.set(id, { all_points: days.slice(-DETAIL_POINTS).map((point) => ({ ...point, unit })) })
+        }
+        continue
+      }
+    }
 
     if (spec.source === 'checkup') {
       spec.unit ||= readings.at(-1)?.unit ?? ''
@@ -457,10 +556,14 @@ async function build(context: IndicatorsContext): Promise<Built> {
         .map((row) => ({ date: row.date, value: row.value, unit: SELF_SPEC[key].unit }))
     }
 
+    const level = (latest?.value != null ? absoluteLevel(spec.label, latest.value, spec.unit, records.profile.sex) : null)
+      ?? attentionLevel(spec.label, latest?.value ?? null, latest?.text ?? '', glucoseTreated)
     const entry: IndicatorEntry & { group: GroupKey } = {
       id: spec.id, label_zh: spec.label, unit: spec.unit, source: spec.source, latest, points, change, judged,
       plan_marker: isPlanMarker(spec), ...(readError ? { read_error: readError } : {}),
-      ...(gate ? { gate, reason_zh: reason } : {}), group: spec.group,
+      ...(gate ? { gate, reason_zh: reason } : {}),
+      ...(level ? { range_flag: level.flag, range_zh: level.text_zh } : {}),
+      group: spec.group,
     }
     rows.push(entry)
     details.set(spec.id, { all_points: allPoints.slice(-DETAIL_POINTS), ...(biovar ? { biovar } : {}) })

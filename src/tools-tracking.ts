@@ -14,7 +14,7 @@ import { resolveDataDir, resolveSkillsHome } from './paths.ts'
 import { invalidateRecords, loadRecords } from './records.ts'
 import { addSelf, SELF_KEYS, SELF_SPEC } from './selfmeasure.ts'
 import { buildTracking, describeItem, describePlan, goalProblems, invalidateTracking, modelGoals } from './tracking.ts'
-import { addStatement } from './meds-stated.ts'
+import { addStatement, presentMedications, readStatements } from './meds-stated.ts'
 import { planDraftHeld, sessionKey } from './plan-hold.ts'
 import { HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH } from './plan-safety.ts'
 import { briefOptionsOf, buildPlanBrief, replyForDraft, settleDraft } from './planner.ts'
@@ -27,6 +27,33 @@ function jsonText(value: unknown): [{ type: 'text'; text: string }] {
 const jsonOut = {
   schema: { type: 'json' as const },
   render: (_args: unknown, value: unknown) => jsonText(value),
+}
+
+const SAVE_READ_MS = 8_000
+
+export async function medicationNames(
+  current: Config,
+  dataDir: string,
+  pluginHome: string,
+  full: boolean,
+  waitMs = SAVE_READ_MS,
+  load: typeof loadRecords = loadRecords,
+): Promise<Array<{ name: string; plan_id?: string }>> {
+  const local = () => presentMedications([], readStatements(dataDir)).rows.map((row) => ({ name: row.name }))
+  const remote = load(current, dataDir, pluginHome).then((records) =>
+    records.medications.map((row) => ({ name: row.name, ...(row.plan_id ? { plan_id: row.plan_id } : {}) })))
+  if (full) return remote
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      remote,
+      new Promise<Array<{ name: string }>>((resolve) => {
+        timer = setTimeout(() => resolve(local()), waitMs)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
 }
 
 const HOW_TO_READ = [
@@ -132,10 +159,12 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
     isConcurrencySafe: () => false,
     async execute(args) {
       const { current, dataDir } = where()
-      const records = await loadRecords(current, dataDir, mount.pluginHome)
+      // confirm=false only needs medicine names for the read-back. A full catalogue can sit on 正在核对
+      // past the tool timeout (Y30 day 22). Eight seconds, then the medicines they already asked us to remember.
+      const medications = await medicationNames(current, dataDir, mount.pluginHome, args.confirm === true)
       const normalized = normalizePlan(args, {
         today: isoDay(),
-        medications: records.medications.map((row) => ({ name: row.name, ...(row.plan_id ? { plan_id: row.plan_id } : {}) })),
+        medications,
         previous: currentPlan(dataDir),
       })
       // What is stored, as stored: the plan's title and note, and each item with its details (after dose stripping).

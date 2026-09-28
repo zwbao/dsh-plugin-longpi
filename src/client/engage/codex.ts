@@ -33,7 +33,7 @@ export function CodexPanel(props: { codex: CodexView | null; onDraw: () => void;
       h('button', { type: 'button', onClick: () => props.onOpt(false), style: buttonStyle }, '关闭图鉴')),
     props.note ? h('p', { style: { margin: '8px 0 0' } }, props.note) : null,
     codex.owned.length === 0
-      ? h('p', { style: { opacity: 0.7 } }, '还没有抽到卡。次数只从测量、打卡、就诊或复测来。')
+      ? h('p', { style: { opacity: 0.7 } }, '还没有抽到卡。次数只从测量、记录、就诊或复测来。')
       : h('ul', { style: { paddingLeft: 18, margin: '8px 0' } }, codex.owned.slice(0, 12).map((card) =>
         h('li', { key: card.id }, `${card.rarity_zh} · ${card.title_zh}`))))
 }

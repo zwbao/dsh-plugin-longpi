@@ -18,6 +18,7 @@ import { readSelf } from '../selfmeasure.ts'
 import { cardById, codexBlock, codexBlockZh, loadCodexPack, type CodexBlock } from './codex.ts'
 import { drawOnce, oddsDisclosure, rarityZh } from './droptable.ts'
 import { nudgeView, type NudgeState } from './nudges.ts'
+import { readQuiet, seasonPressureOn } from './quiet.ts'
 import { makeQuests, questProgress, type QuestFacts } from './quests.ts'
 import { commitmentOf } from './rng.ts'
 import { chapterList, recapText, seasonSpan, seasonStatus, weekOf } from './seasons.ts'
@@ -61,6 +62,8 @@ interface State {
   actions: StoredAction[]
   rewarded: string[]
   nudge: NudgeState
+  /** Season and daily wording on the home. Null until they opt in. */
+  pressure: 'on' | 'off' | null
   weekly_zh: string | null
 }
 
@@ -92,6 +95,7 @@ function emptyState(): State {
     actions: [],
     rewarded: [],
     nudge: { choice: null, dismissed: false, offered: false, last_shown: null },
+    pressure: null,
     weekly_zh: null,
   }
 }
@@ -106,6 +110,7 @@ function readState(dataDir: string): State {
   try {
     const raw = JSON.parse(readFileSync(path, 'utf8')) as State
     if (!raw || raw.version !== 1 || !raw.codex || !raw.streak) throw new Error('version')
+    if (raw.pressure !== 'on' && raw.pressure !== 'off') raw.pressure = null
     return raw
   } catch {
     try { renameSync(path, `${path}.damaged-${Date.now()}`) } catch { /* leave the damaged file if rename fails */ }
@@ -175,6 +180,31 @@ function memoryFlags(dataDir: string): { minor: boolean; optOut: boolean; nudge:
   return out
 }
 
+function labsPath(dataDir: string): string {
+  return join(dataDir, 'engage', 'labs.json')
+}
+
+/** Written when a journey sees hs-CRP or waist on the record, so the season stops asking for a test already on file. */
+export function noteLabsOnFile(dataDir: string, labs: { hscrp: boolean; waist: boolean }): void {
+  if (!dataDir) return
+  const path = labsPath(dataDir)
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
+  const tmp = `${path}.${process.pid}.tmp`
+  writeFileSync(tmp, `${JSON.stringify({ hscrp: labs.hscrp === true, waist: labs.waist === true })}\n`, { mode: 0o600 })
+  chmodSync(tmp, 0o600)
+  renameSync(tmp, path)
+}
+
+function readLabsOnFile(dataDir: string): { hscrp: boolean; waist: boolean } {
+  if (!dataDir) return { hscrp: false, waist: false }
+  try {
+    const raw = JSON.parse(readFileSync(labsPath(dataDir), 'utf8')) as { hscrp?: unknown; waist?: unknown }
+    return { hscrp: raw?.hscrp === true, waist: raw?.waist === true }
+  } catch {
+    return { hscrp: false, waist: false }
+  }
+}
+
 function readWorld(dataDir: string, now: Date): World {
   const today = isoDay(now)
   const profile = readProfile(dataDir)
@@ -182,6 +212,7 @@ function readWorld(dataDir: string, now: Date): World {
   const age = profile.age ?? estimatedAge(profile.birthYear, year)
   const memory = memoryFlags(dataDir)
   const self = readSelf(dataDir)
+  const labs = readLabsOnFile(dataDir)
   let checkins: IsoDay[] = []
   try {
     const status = checkinStatus(readCheckIns(dataDir))
@@ -197,8 +228,8 @@ function readWorld(dataDir: string, now: Date): World {
     minorFlag: memory.minor,
     memoryOptOut: memory.optOut,
     memoryNudge: memory.nudge,
-    waist: self.some((row) => row.key === 'waist'),
-    hscrp: false,
+    waist: self.some((row) => row.key === 'waist') || labs.waist,
+    hscrp: labs.hscrp,
     selfDays: [...new Set(self.map((row) => row.date))],
     checkinDays: checkins,
     doctorFirst: false,
@@ -273,7 +304,7 @@ function startSeason(state: State, world: World): void {
   }
   state.season = season
   state.recap_zh = null
-  state.quests = makeQuests(season.id, { waist: !world.waist && !state.actions.some((action) => action.kind === 'waist'), hscrp: true })
+  state.quests = makeQuests(season.id, { waist: !world.waist && !state.actions.some((action) => action.kind === 'waist'), hscrp: !world.hscrp && !state.actions.some((action) => action.kind === 'hscrp') })
   state.unlocks = makeUnlocks()
   season.quest_ids = state.quests.map((quest) => quest.id)
   season.unlock_ids = state.unlocks.map((unlock) => unlock.id)
@@ -385,17 +416,20 @@ export interface EngageView {
   weekly_zh: string | null
   reminder_zh: string | null
   nudge: { offer: boolean; enabled: boolean; show: boolean }
+  /** False until they opt into the season. The quest list stays in the payload; the panel does not push it. */
+  pressure: boolean
 }
 
-function viewOf(state: State, world: World): EngageView {
+function viewOf(state: State, world: World, dataDir = ''): EngageView {
   const season = state.season
   const block = season ? blockOf(state, world) : null
   const pack = season ? safePack() : null
   const shown = state.codex.owned.map((id) => pack ? cardById(pack, id) : null).filter((card): card is CodexCard => Boolean(card))
+  const pressure = dataDir ? seasonPressureOn(readQuiet(dataDir)) : state.pressure === 'on'
   const nudge = nudgeView(
     { ...state.nudge, choice: state.nudge.choice ?? (world.memoryNudge ? 'on' : null) },
     world.today,
-    Boolean(season) && season?.status !== 'closed',
+    pressure && Boolean(season) && season?.status !== 'closed',
   )
   const locked = state.unlocks.find((unlock) => unlock.status === 'locked')
   return {
@@ -427,9 +461,9 @@ function viewOf(state: State, world: World): EngageView {
       id: unlock.id,
       key: unlock.key,
       title_zh: unlock.title_zh,
-      teaser_zh: unlock.teaser_zh,
+      teaser_zh: unlock.status === 'unlocked' ? '已解锁' : unlock.teaser_zh,
       status: unlock.status,
-      reminder_zh: REMINDER_ZH[unlock.key] ?? unlock.teaser_zh,
+      reminder_zh: unlock.status === 'unlocked' ? '' : (REMINDER_ZH[unlock.key] ?? unlock.teaser_zh),
     })),
     streak: {
       current: state.streak.current,
@@ -457,8 +491,9 @@ function viewOf(state: State, world: World): EngageView {
       })),
     },
     weekly_zh: state.weekly_zh,
-    reminder_zh: locked && season && season.status !== 'closed' ? (REMINDER_ZH[locked.key] ?? null) : (season && season.status !== 'closed' && state.quests.some((quest) => quest.status === 'open') ? '这一季还有没做完的事，打开健康页看一眼就好' : null),
+    reminder_zh: !pressure ? null : locked && season && season.status !== 'closed' ? (REMINDER_ZH[locked.key] ?? null) : (season && season.status !== 'closed' && state.quests.some((quest) => quest.status === 'open') ? '这一季还有没做完的事，打开健康页看一眼就好' : null),
     nudge,
+    pressure,
   }
 }
 
@@ -469,18 +504,18 @@ function safePack() {
 export function syncEngage(dataDir: string, now: Date = new Date()): EngageView {
   if (!dataDir) {
     const blank = emptyState()
-    return viewOf(blank, { today: isoDay(now), age: null, consent: false, focus: null, minorFlag: false, memoryOptOut: false, memoryNudge: false, waist: false, hscrp: false, selfDays: [], checkinDays: [], doctorFirst: false })
+    return viewOf(blank, { today: isoDay(now), age: null, consent: false, focus: null, minorFlag: false, memoryOptOut: false, memoryNudge: false, waist: false, hscrp: false, selfDays: [], checkinDays: [], doctorFirst: false }, dataDir)
   }
   const world = readWorld(dataDir, now)
   const state = readState(dataDir)
-  if (!world.consent) return viewOf(state, world)
+  if (!world.consent) return viewOf(state, world, dataDir)
   reduce(state, world, now)
   saveState(dataDir, state)
-  return viewOf(state, world)
+  return viewOf(state, world, dataDir)
 }
 
 export function plainReminderOf(dataDir: string): string | null {
-  if (!dataDir) return null
+  if (!dataDir || !seasonPressureOn(readQuiet(dataDir))) return null
   const state = readState(dataDir)
   if (!state.season || state.season.status === 'closed') return null
   const locked = state.unlocks.find((unlock) => unlock.status === 'locked')
@@ -504,7 +539,7 @@ export function actEngage(dataDir: string, action: { action: 'care_visit'; with_
     if (!state.season || seasonStatus(state.season, world.today) !== 'closed') {
       reduce(state, world, now)
       saveState(dataDir, state)
-      return { ok: false, error: '这一季还没有结束。', view: viewOf(state, world) }
+      return { ok: false, error: '这一季还没有结束。', view: viewOf(state, world, dataDir) }
     }
     state.season = null
     state.quests = []
@@ -526,12 +561,12 @@ export function actEngage(dataDir: string, action: { action: 'care_visit'; with_
     if (season && world.today < windowStart) {
       reduce(state, world, now)
       saveState(dataDir, state)
-      return { ok: true, note: `已记下。复测窗口从 ${windowStart} 开始，到那时才算完成这项任务。`, view: viewOf(state, world) }
+      return { ok: true, note: `已记下。复测窗口从 ${windowStart} 开始，到那时才算完成这项任务。`, view: viewOf(state, world, dataDir) }
     }
   }
   reduce(state, world, now)
   saveState(dataDir, state)
-  return { ok: true, view: viewOf(state, world) }
+  return { ok: true, view: viewOf(state, world, dataDir) }
 }
 
 export function freezeEngage(dataDir: string, input: { reason: 'sick' | 'travel' | 'other'; from: IsoDay; to: IsoDay }, now: Date = new Date()): { ok: boolean; error?: string; view: EngageView } {
@@ -561,17 +596,19 @@ export function freezeEngage(dataDir: string, input: { reason: 'sick' | 'travel'
   return {
     ok: true,
     ...(missed > 0 ? { error: `冻结了 ${applied.length} 天，其余 ${missed} 天没有冻结次数了。` } : {}),
-    view: viewOf(state, world),
+    view: viewOf(state, world, dataDir),
   }
 }
 
-export function prefsEngage(dataDir: string, input: { codex?: boolean; nudge?: boolean; dismiss?: boolean; offerSeen?: boolean; shown?: boolean }, now: Date = new Date()): EngageView {
+export function prefsEngage(dataDir: string, input: { codex?: boolean; nudge?: boolean; dismiss?: boolean; offerSeen?: boolean; shown?: boolean; pressure?: boolean }, now: Date = new Date()): EngageView {
   const world = readWorld(dataDir, now)
   const state = readState(dataDir)
   if (input.codex === true) state.codex.choice = 'on'
   if (input.codex === false) state.codex.choice = 'off'
   if (input.nudge === true) state.nudge.choice = 'on'
   if (input.nudge === false) { state.nudge.choice = 'off'; state.nudge.dismissed = true }
+  if (input.pressure === true) state.pressure = 'on'
+  if (input.pressure === false) state.pressure = 'off'
   if (input.dismiss) state.nudge.dismissed = true
   if (input.offerSeen) state.nudge.offered = true
   if (input.shown) {
@@ -579,8 +616,8 @@ export function prefsEngage(dataDir: string, input: { codex?: boolean; nudge?: b
     emit('nudge.shown', { nudge_id: `ng${randomBytes(6).toString('hex')}`, where: 'overlay' })
   }
   if (world.consent) reduce(state, world, now)
-  if (world.consent || input.codex != null || input.nudge != null) saveState(dataDir, state)
-  return viewOf(state, world)
+  if (world.consent || input.codex != null || input.nudge != null || input.pressure != null) saveState(dataDir, state)
+  return viewOf(state, world, dataDir)
 }
 
 export interface DrawResponse {
@@ -598,27 +635,27 @@ export interface DrawResponse {
 export function drawEngage(dataDir: string, now: Date = new Date()): DrawResponse {
   const world = readWorld(dataDir, now)
   const state = readState(dataDir)
-  if (!world.consent) return { ok: false, reason: 'consent', error: '先完成知情同意。', view: viewOf(state, world) }
+  if (!world.consent) return { ok: false, reason: 'consent', error: '先完成知情同意。', view: viewOf(state, world, dataDir) }
   reduce(state, world, now)
   const block = blockOf(state, world)
   if (block) {
     saveState(dataDir, state)
-    return { ok: false, reason: block, error: codexBlockZh(block), view: viewOf(state, world) }
+    return { ok: false, reason: block, error: codexBlockZh(block), view: viewOf(state, world, dataDir) }
   }
   const pack = safePack()
   if (!pack) {
     saveState(dataDir, state)
-    return { ok: false, reason: 'pack', error: '图鉴卡组还没有放进安装包。', view: viewOf(state, world) }
+    return { ok: false, reason: 'pack', error: '图鉴卡组还没有放进安装包。', view: viewOf(state, world, dataDir) }
   }
   const grantRow = state.codex.grants.find((row) => !row.used_by)
   if (!grantRow) {
     saveState(dataDir, state)
-    return { ok: false, reason: 'no_grant', error: '还没有抽卡次数。完成一项健康行动（测量、打卡、带着简报就诊或复测）才会获得。', view: viewOf(state, world) }
+    return { ok: false, reason: 'no_grant', error: '还没有抽卡次数。完成一项健康行动（测量、记录、带着简报就诊或复测）才会获得。', view: viewOf(state, world, dataDir) }
   }
   const usedToday = state.codex.draw_days[world.today] ?? 0
   if (usedToday >= pack.table.daily_cap) {
     saveState(dataDir, state)
-    return { ok: false, reason: 'daily_cap', error: `今天的 ${pack.table.daily_cap} 次已经抽完，明天再抽。次数还留着。`, view: viewOf(state, world) }
+    return { ok: false, reason: 'daily_cap', error: `今天的 ${pack.table.daily_cap} 次已经抽完，明天再抽。次数还留着。`, view: viewOf(state, world, dataDir) }
   }
   ensureSeed(state)
   const seed = Buffer.from(state.codex.seed_hex, 'hex')
@@ -659,7 +696,7 @@ export function drawEngage(dataDir: string, now: Date = new Date()): DrawRespons
   saveState(dataDir, state)
   return {
     ok: true,
-    view: viewOf(state, world),
+    view: viewOf(state, world, dataDir),
     card: { id: drawn.card.id, title_zh: drawn.card.title_zh, body_zh: drawn.card.body_zh, rarity: drawn.card.rarity, rarity_zh: rarityZh(drawn.card.rarity), family: drawn.card.family, duplicate: drawn.result.duplicate },
     ...(questions ? { questions_zh: questions } : {}),
     ...(deep ? { deep_dive_zh: deep } : {}),
@@ -724,7 +761,7 @@ export function candidateSeeds(dataDir: string, now: Date = new Date()): Array<{
     })
   }
   const quest = view.quests.find((row) => row.status === 'open')
-  if (quest) out.push({ id: 'nba-season-quest', kind: 'season_quest', priority: 42, title_zh: quest.title_zh, detail_zh: '这一季只做几件事，不用每天打卡。', prompt_zh: '我这一季现在该做什么？' })
+  if (quest && view.pressure) out.push({ id: 'nba-season-quest', kind: 'season_quest', priority: 42, title_zh: quest.title_zh, detail_zh: '这一季只做几件事，其余日子不必打开。', prompt_zh: '我这一季现在该做什么？' })
   if (view.codex.enabled && view.codex.draws_available > 0) out.push({ id: 'nba-claim-draw', kind: 'claim_draw', priority: 38, title_zh: '有一次图鉴抽取', detail_zh: '次数来自健康行动。没有付费。', prompt_zh: '我想抽一张长寿图鉴' })
   return out
 }

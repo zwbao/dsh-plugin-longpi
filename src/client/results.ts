@@ -9,6 +9,7 @@ import { fmt, LineChart } from './charts.ts'
 import { FeedbackBlock, messagesFor } from './feedback/index.ts'
 import { chineseDate, riskText } from './format.ts'
 import { Icon } from './icons.ts'
+import { modelRangeNote } from '../honesty/model-range.ts'
 import { recordConnected } from './normalize.ts'
 import { InlineSelf } from './self-measure.ts'
 import { BIOAGE_INFO, RISK_INFO } from './terms.ts'
@@ -134,6 +135,11 @@ export function BodyAgeCard(props: {
     h('p', { className: 'lp-fine' }, [count > 0 ? `${count} 次体检` : '', points.length > 1 && band != null ? '浅色带为正常波动' : ''].filter(Boolean).join(' · ')))
 }
 
+function rangeCaption(age: number | null): React.ReactElement | null {
+  const text = modelRangeNote('china-par', age)
+  return text ? h('p', { className: 'lp-caption', id: 'lp-risk-range' }, text) : null
+}
+
 export function RiskCard(props: {
   journey: Journey
   tracking: Tracking | null
@@ -141,12 +147,15 @@ export function RiskCard(props: {
   onNotice: Notify
 }): React.ReactElement {
   const result = props.journey.results.risk
+  const range = rangeCaption(props.journey.profile.age)
   if (result.status !== 'ok') {
     const needs = [...result.missing_facts, ...result.missing_labs]
-    return h(Blocked, {
-      journey: props.journey, label: '10 年心血管风险', info: RISK_INFO, blocker: result.blocker_zh, needs,
-      action: riskAction(props.journey), selfAddon: riskSelfAddon(props.journey), onAction: props.onAction, onNotice: props.onNotice, idPrefix: 'lp-risk',
-    })
+    return h(React.Fragment, null,
+      h(Blocked, {
+        journey: props.journey, label: '10 年心血管风险', info: RISK_INFO, blocker: result.blocker_zh, needs,
+        action: riskAction(props.journey), selfAddon: riskSelfAddon(props.journey), onAction: props.onAction, onNotice: props.onNotice, idPrefix: 'lp-risk',
+      }),
+      range)
   }
   const card: ModelCard | undefined = props.tracking?.models?.find((row) => row.model === 'china-par')
   const goal = card?.goal?.risk_pct
@@ -155,7 +164,8 @@ export function RiskCard(props: {
     h('div', { className: 'lp-result-figure' },
       h('span', { className: 'lp-bignum' }, riskText(result.risk_pct)),
       h('span', { className: 'lp-bignum-unit' }, '%'),
-      result.category_zh ? h('span', { className: 'lp-pill' }, result.category_zh) : null),
+      result.category_zh ? h('span', { className: 'lp-pill' }, result.category_zh) : null,
+      range),
     goal != null && Number.isFinite(goal)
       ? h('div', { className: 'lp-result-goal' },
         h('span', { className: 'lp-caption' }, '达到方案目标约'),

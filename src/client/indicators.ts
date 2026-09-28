@@ -19,6 +19,23 @@ const h = React.createElement
 
 const SOURCE_ZH: Record<IndicatorSource, string> = { checkup: '体检', device: '手环', self: '自测' }
 
+/** The chip already says 太早. The caption keeps the rest of the sentence once, never a second 太早 or a noise line. */
+function reasonBesideChip(gate: string | undefined, reason: string | undefined): string {
+  const text = (reason ?? '').trim()
+  if (!text) return ''
+  if (gate === 'too_early' || text.startsWith('太早')) return text.replace(/^太早[：:]?\s*/, '')
+  return text
+}
+
+function noiseSentence(detail: IndicatorDetail): string | null {
+  const { row, biovar } = detail
+  if (!biovar) return null
+  const tooEarly = row.gate === 'too_early' || (row.reason_zh ?? '').startsWith('太早')
+  const beyond = row.judged === 'changed'
+  if (tooEarly || beyond) return null
+  return `正常波动：+${fmt(biovar.band_pct.up, 1)}% / ${fmt(biovar.band_pct.down, 1)}%（个体内变异 ${fmt(biovar.cvi_pct, 1)}%）。两次结果之差在这个范围内，多半是测量和生理波动。`
+}
+
 const FILTERS: Array<{ key: IndicatorFilter; label: string; test: (row: IndicatorRow) => boolean }> = [
   { key: 'all', label: '全部', test: () => true },
   { key: 'changed', label: '有变化', test: (row) => row.judged === 'changed' },
@@ -48,6 +65,10 @@ function Sparkline(props: { points: Array<{ date: string; value: number }>; labe
 export function JudgedChip(props: { row: IndicatorRow; gate?: string; reason?: string }): React.ReactElement {
   const { row } = props
   const reason = props.reason ?? ''
+  if (row.range_flag === 'low' || row.range_flag === 'high') {
+    const low = row.range_flag === 'low'
+    return h('span', { className: `lp-chip-c lp-chip-c-${low ? 'warn' : 'warn'}`, title: row.range_zh || (low ? '低于参考范围' : '高于参考范围') }, low ? '偏低' : '偏高')
+  }
   if (props.gate === 'too_early' || reason.startsWith('太早')) {
     return h('span', { className: 'lp-chip-c lp-chip-c-unjudged', title: reason || '间隔还没到这项的最短复测时间' }, '太早')
   }
@@ -83,7 +104,7 @@ function IndicatorLine(props: { row: IndicatorRow; open: boolean; onToggle: () =
       row.read_error ? h('span', { className: 'lp-ind-spark' }) : h('span', { className: 'lp-ind-spark' }, h(Sparkline, { points: row.points, label: row.label_zh })),
       h('span', { className: 'lp-ind-judged' },
         h(JudgedChip, { row, gate: props.gate, reason: props.reason }),
-        props.reason ? h('span', { className: 'lp-caption lp-ind-date' }, props.reason) : null),
+        reasonBesideChip(props.gate, props.reason) ? h('span', { className: 'lp-caption lp-ind-date' }, reasonBesideChip(props.gate, props.reason)) : null),
       h('span', { className: 'lp-ind-source lp-caption' }, SOURCE_ZH[row.source]),
       h(Icon, { name: 'chevron', size: 14, className: 'lp-ind-chevron' })),
     props.open ? h(DetailPanel, { row, id: panelId }) : null)
@@ -119,13 +140,20 @@ function DetailBody(props: { detail: IndicatorDetail }): React.ReactElement {
     numeric.length > 1 && units.length <= 1
       ? h(LineChart, { points: numeric.map((point) => ({ date: point.date, value: point.value })), unit: prettyUnits(units[0] ?? row.unit), label: row.label_zh, height: 150, digits })
       : null,
-    biovar
+    row.range_zh ? h('p', { className: 'lp-caption' }, row.range_zh) : null,
+    noiseSentence(props.detail)
       ? h('p', { className: 'lp-caption' },
-        `正常波动：+${fmt(biovar.band_pct.up, 1)}% / ${fmt(biovar.band_pct.down, 1)}%（个体内变异 ${fmt(biovar.cvi_pct, 1)}%）。两次结果之差在这个范围内，多半是测量和生理波动。`,
-        biovar.source.url ? h(React.Fragment, null, ' 来源：', h('a', { href: biovar.source.url, target: '_blank', rel: 'noopener noreferrer' }, biovar.source.title || biovar.source.url)) : biovar.source.title ? ` 来源：${biovar.source.title}` : '',
-        biovar.source.doi ? ` · doi:${biovar.source.doi}` : '')
-      : h('p', { className: 'lp-caption' }, row.source === 'checkup' ? '这项没有收录个体正常波动数据，分不清真实变化和波动，所以不作判断。' : '手环和自测数据按周均值或日值显示趋势，不作正常波动判断。'),
-    biovar?.caveat_zh ? h('p', { className: 'lp-caption' }, biovar.caveat_zh) : null,
+        noiseSentence(props.detail),
+        biovar?.source.url ? h(React.Fragment, null, ' 来源：', h('a', { href: biovar.source.url, target: '_blank', rel: 'noopener noreferrer' }, biovar.source.title || biovar.source.url)) : biovar?.source.title ? ` 来源：${biovar.source.title}` : '',
+        biovar?.source.doi ? ` · doi:${biovar.source.doi}` : '')
+      : biovar && (row.gate === 'too_early' || (row.reason_zh ?? '').startsWith('太早'))
+        ? h('p', { className: 'lp-caption' }, reasonBesideChip(row.gate, row.reason_zh) || '间隔还没到这项的最短复测时间。')
+        : biovar && row.judged === 'changed'
+          ? h('p', { className: 'lp-caption' }, '两次结果之差超出了上面的正常波动范围。')
+          : h('p', { className: 'lp-caption' }, row.range_zh
+            ? '这项没有用来比较两次变化的波动数据。上面按参考范围标了偏低或偏高。'
+            : row.source === 'checkup' ? '这项没有收录个体正常波动数据，分不清真实变化和波动，所以不作判断。' : '手环和自测数据按周均值或日值显示趋势，不作正常波动判断。'),
+    biovar?.caveat_zh && !row.gate ? h('p', { className: 'lp-caption' }, biovar.caveat_zh) : null,
     points.length > 0
       ? h('table', { className: 'lp-ind-table' },
         h('caption', { className: 'lp-sr' }, `${row.label_zh}历次数值`),

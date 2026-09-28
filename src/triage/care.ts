@@ -7,6 +7,8 @@ import type { CareItem, NewMemoryItem } from '../contracts/memory.ts'
 import type { TriageFinding } from '../contracts/triage.ts'
 import { currentBus } from '../core/bus.ts'
 import { memoryFor } from '../core/memory.ts'
+import { quoteIn } from '../core/turn-text.ts'
+import { addDays } from '../interventions.ts'
 import { DOCTOR_ZH, type StopResult } from '../plan-safety.ts'
 import { findingsFrom, patterns } from './rules.ts'
 
@@ -47,9 +49,56 @@ export interface VisitInput {
   department_zh?: string
   outcome_zh?: string
   quote_zh?: string
+  /** The person's own message this turn, for the verbatim check. */
+  said_zh?: string
+  /** Civil day used to resolve 下周一. */
+  today?: string
   via: 'chat' | 'page'
   session_id?: string
   confirmed?: boolean
+}
+
+const DENY_BOOKING = /没约|没有约|未约|没有这条预约|不是这天|不是那天|删掉|取消这|页头说我已约|你又说没有/
+const AFFIRM_BOOKING = /(?:我|已经|刚).{0,8}(?:约了|约好|预约|挂了号|挂号)|约了\d|约好了|预约了|已挂号|挂好了号/
+const WEEKDAY: Record<string, number> = { 日: 0, 天: 0, 一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6 }
+
+function upcomingWeekday(today: string, want: number): string {
+  const dow = new Date(`${today}T12:00:00+08:00`).getUTCDay()
+  let delta = (want - dow + 7) % 7
+  if (delta === 0) delta = 7
+  return addDays(today, delta)
+}
+
+/** Whether their words name this calendar day (2026-10-05, 10月5日, or 下周一 when that is the day). */
+export function dateSaid(quote: string, visitDate: string, today?: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(visitDate)) return false
+  const folded = quote.normalize('NFKC').replace(/\s+/g, '')
+  if (folded.includes(visitDate)) return true
+  const [, month, day] = visitDate.split('-').map(Number) as [number, number, number]
+  if (new RegExp(`${month}月${day}[日号]`).test(folded)) return true
+  if (today) {
+    const relative = /下?周([一二三四五六日天])/.exec(folded)
+    const want = relative ? WEEKDAY[relative[1] ?? ''] : undefined
+    if (want != null && upcomingWeekday(today, want) === visitDate) return true
+  }
+  return false
+}
+
+/** They are denying a booking (没约那一天, 页头说我已约). */
+export function deniesBooking(quote: string): boolean {
+  return DENY_BOOKING.test(quote.normalize('NFKC'))
+}
+
+/**
+ * A booking is theirs only when the quote is their words, says they booked, and names the date.
+ * 「下周一去社区医院」 is a plan, not a booking. 「页头说我已约 10 月 5 日」 is a denial.
+ */
+export function affirmsBooking(quote: string, said: string, visitDate: string, today?: string): boolean {
+  const text = quote.normalize('NFKC').trim()
+  if (!text || !quoteIn(text, said)) return false
+  if (deniesBooking(text)) return false
+  if (!AFFIRM_BOOKING.test(text.replace(/\s+/g, ''))) return false
+  return dateSaid(text, visitDate, today)
 }
 
 function isDay(value: unknown): value is IsoDay {
@@ -60,10 +109,58 @@ function isDay(value: unknown): value is IsoDay {
  * Record a booking, a visit or a decision not to go. Without a finding id it applies to the first open
  * finding. Supersedes the finding's previous care item, so the history stays in memory_log.
  */
-export function logCareVisit(dataDir: string, input: VisitInput, findings: readonly TriageFinding[]): { ok: true; item: CareItem } | { ok: false; error: string } {
+export function logCareVisit(dataDir: string, input: VisitInput, findings: readonly TriageFinding[]): { ok: true; item: CareItem; cleared?: boolean; kept?: boolean } | { ok: false; error: string } {
   const finding = input.finding_id ? findings.find((row) => row.id === input.finding_id) : findings.find((row) => row.status !== 'visited') ?? findings[0]
   const findingId = finding?.id ?? input.finding_id ?? ''
   if (!['advised', 'booked', 'visited', 'declined', 'unknown'].includes(input.status)) return { ok: false, error: 'status must be advised, booked, visited, declined or unknown' }
+  const store = memoryFor(dataDir)
+  const previous = findingId ? careFor(dataDir, findingId) : careItems(dataDir).filter((row) => row.care_status === 'booked').at(-1) ?? null
+  // Chat can store a booking only from the person's own words: a date they said they booked.
+  // Anything else is a proposal (no date on the header). A denial retracts the booking and stays retracted.
+  if (input.status === 'booked' && input.via === 'chat') {
+    const quote = (input.quote_zh ?? '').trim()
+    const said = input.said_zh ?? ''
+    const provenance: Provenance = {
+      kind: 'chat', at: new Date().toISOString(), by: 'M1',
+      ...(input.session_id ? { session_id: input.session_id } : {}),
+      ...(quote ? { quote_zh: quote.slice(0, 200) } : {}),
+    }
+    if (said && deniesBooking(said) && (!quote || quoteIn(quote, said))) {
+      const booked = careItems(dataDir).filter((row) => row.care_status === 'booked')
+      if (booked.length > 0) store.apply(booked.map((row) => ({ op: 'retract' as const, id: row.id, provenance })), 'M1')
+      const ghost = {
+        ...(booked[0] ?? previous ?? { id: 'cleared', kind: 'care' as const, text_zh: '', confirmed: true, status: 'retracted' as const, safety_relevant: false, provenance, updated: provenance.at }),
+        care_status: 'unknown' as const,
+        text_zh: '已删掉这条预约',
+        confirmed: true,
+        status: 'retracted' as const,
+        visit_date: undefined,
+      }
+      return { ok: true, cleared: true, item: ghost as CareItem }
+    }
+    const day = isDay(input.visit_date) ? input.visit_date : ''
+    if (day && affirmsBooking(quote, said, day, input.today)) {
+      input = { ...input, confirmed: true }
+    } else if (previous?.care_status === 'visited' || (previous?.care_status === 'booked' && previous.confirmed !== false)) {
+      return { ok: true, kept: true, item: previous }
+    } else {
+      const proposed = day || '未写日期'
+      const proposal = {
+        kind: 'care',
+        ...(findingId ? { finding_id: findingId } : {}),
+        care_status: 'advised' as const,
+        ...(input.department_zh || finding?.department_zh ? { department_zh: input.department_zh || finding?.department_zh } : {}),
+        text_zh: `待确认：提到 ${proposed} 看医生，你还没有亲口说约了这一天。`,
+        confirmed: false,
+        provenance,
+      } as NewMemoryItem
+      const applied = store.apply([previous ? { op: 'supersede', id: previous.id, item: proposal } : { op: 'add', item: proposal }], 'M1')
+      const id = applied.applied[0]
+      const saved = (store.active('care') as CareItem[]).find((row) => row.id === id)
+      if (!saved) return { ok: false, error: applied.rejected[0]?.reason ?? 'not saved' }
+      return { ok: true, item: saved }
+    }
+  }
   const pattern = patterns().find((row) => `finding-${row.id}` === findingId)
   const provenance: Provenance = {
     kind: input.via, at: new Date().toISOString(), by: 'M1',
@@ -81,8 +178,6 @@ export function logCareVisit(dataDir: string, input: VisitInput, findings: reado
     confirmed: input.confirmed !== false,
     provenance,
   } as NewMemoryItem
-  const store = memoryFor(dataDir)
-  const previous = findingId ? careFor(dataDir, findingId) : null
   // A visit told without a date took place on the day that was booked (when that day has come), else today.
   const itemRecord = item as unknown as { visit_date?: string; outcome_zh?: string; text_zh: string }
   if (input.status === 'visited' && !itemRecord.visit_date) {

@@ -1,11 +1,42 @@
 // Medicines the person asks LongPi to remember. Mirobody may already hold an imported plan;
 // a stated line is stored in medication_statements.jsonl and mirrored into memory.
 
-import { addStatement, presentMedications, readStatements, type StatedMedication } from '../meds-stated.ts'
+import { addStatement, drugCore, presentMedications, readStatements, type StatedMedication } from '../meds-stated.ts'
 import { memoryFor } from '../core/memory.ts'
 
+function memoryMedications(dataDir: string): StatedMedication[] {
+  try {
+    const items = memoryFor(dataDir).read().items
+    const out: StatedMedication[] = []
+    for (const item of items) {
+      if (item.status !== 'active' || (item.kind !== 'medication' && item.kind !== 'supplement')) continue
+      if (item.stopped) continue
+      const name = item.name_zh?.trim()
+      if (!name) continue
+      out.push({
+        name,
+        dose_text: '',
+        frequency_text: item.regimen_text?.trim() ?? '',
+        since: item.started ?? '',
+        at: item.updated ?? '',
+      })
+    }
+    return out
+  } catch {
+    return []
+  }
+}
+
 export function listMedications(dataDir: string): { lines: string[]; rows: StatedMedication[] } {
-  const rows = readStatements(dataDir)
+  const stated = readStatements(dataDir)
+  const seen = new Set(stated.map((row) => drugCore(row.name)))
+  const rows = [...stated]
+  for (const row of memoryMedications(dataDir)) {
+    const key = drugCore(row.name)
+    if (seen.has(key)) continue
+    seen.add(key)
+    rows.push(row)
+  }
   return { rows, lines: presentMedications([], rows).lines }
 }
 

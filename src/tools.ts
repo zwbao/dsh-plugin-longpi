@@ -409,7 +409,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
       north: { oneOf: [{ type: 'boolean' }, { type: 'null' }], description: 'They live in northern China (north of the Yangtze); false for southern China. null clears it: they are unsure or do not know.' },
       urban: { oneOf: [{ type: 'boolean' }, { type: 'null' }], description: 'They live in a city; false for a rural area. null clears it: they are unsure or do not know.' },
       family_history: { oneOf: [{ type: 'boolean' }, { type: 'null' }], description: 'A parent or sibling had a heart attack or stroke. null clears it: they are unsure or do not know.' },
-      pregnant: { oneOf: [{ type: 'boolean' }, { type: 'null' }], description: 'They said they are pregnant. null clears it. Never infer it.' },
+      pregnant: { oneOf: [{ type: 'boolean' }, { type: 'null' }], description: 'They said they are pregnant now. Planning a pregnancy (备孕) or breastfeeding is not this flag: leave it unset. null clears it. Never infer it.' },
       ckd: { oneOf: [{ type: 'boolean' }, { type: 'null' }], description: 'They said they have chronic kidney disease. null clears it. Never infer it from a lab.' },
     },
     output: jsonOut,
@@ -422,18 +422,26 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
       const dataDir = resolveDataDir(config().dataDir)
       const current = readProfile(dataDir)
       const risk = { ...current.risk }
+      const unknown = new Set(current.riskUnknown ?? [])
       for (const key of RISK_FACTS) {
         const value = (args as Record<string, unknown>)[key]
-        if (typeof value === 'boolean') risk[key] = value
-        // null: the person is unsure or does not know, so the fact goes back to unknown (never "no").
-        else if (value === null) delete risk[key]
+        if (typeof value === 'boolean') {
+          risk[key] = value
+          unknown.delete(key)
+        } else if (value === null) {
+          // 不确定: keep it distinct from never-asked, and never store it as no.
+          delete risk[key]
+          unknown.add(key)
+        }
       }
       const next = {
+        ...current,
         displayName: args.displayName ?? current.displayName,
         birthYear: args.birthYear ?? current.birthYear,
         age: args.age ?? current.age,
         sex: args.sex ?? current.sex,
         risk,
+        ...(unknown.size > 0 ? { riskUnknown: [...unknown] } : { riskUnknown: undefined }),
         focus: args.focus ?? current.focus,
         consent: current.consent,
       }

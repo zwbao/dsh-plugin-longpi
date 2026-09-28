@@ -196,7 +196,7 @@ export function PlanSection(props: {
   const tracking = props.tracking
   const today = props.journey.today
   if (!props.journey.plan.exists && !tracking?.plan) {
-    return h(Section, { id: 'lp-plan', title: '我的方案', kicker: '还没有方案' },
+    return h(Section, { id: 'lp-plan', title: '我的方案', kicker: '草稿' },
       h(PlanDraftCard, { journey: props.journey, onNotice: props.onNotice, onPrompt: props.onPrompt }),
       h(PlanStart, { journey: props.journey, onPrompt: props.onPrompt }))
   }

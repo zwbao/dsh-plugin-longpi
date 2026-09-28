@@ -1,6 +1,6 @@
 // The profile questions, shared by onboarding step 2 and the page's 档案 card.
 // Only questions that unlock a result are asked. Every one can be skipped, and
-// 不确定 is saved as unknown (the fact is cleared), never as "no".
+// 不确定 is saved as riskUnknown. A fact left untouched is omitted, so a full-form save does not mark it unknown. Never as "no".
 
 import React from 'react'
 import { errorText, postJson } from './api.ts'
@@ -31,6 +31,7 @@ interface Draft {
 function draftOf(journey: Journey | null): Draft {
   const profile = journey?.profile
   const risk: Partial<Record<RiskFact, Answer>> = {}
+  for (const key of profile?.riskUnknown ?? []) risk[key] = 'unsure'
   for (const [key, value] of Object.entries(profile?.risk ?? {})) risk[key as RiskFact] = value ? 'yes' : 'no'
   return {
     displayName: profile?.displayName ?? '',
@@ -96,10 +97,12 @@ export function ProfileEditor(props: {
     }
     setBusy(true)
     try {
-      const risk = Object.fromEntries(facts.map((row) => {
+      const risk: Record<string, boolean | null> = {}
+      for (const row of facts) {
         const answer = draft.risk[row.key as RiskFact] ?? ''
-        return [row.key, answer === 'yes' ? true : answer === 'no' ? false : null]
-      }))
+        if (answer === '') continue
+        risk[row.key] = answer === 'yes' ? true : answer === 'no' ? false : null
+      }
       const body: Record<string, unknown> = { age: ageCheck.value, sex: draft.sex, risk, focus: draft.focus }
       if (!onboarding) body.displayName = draft.displayName.trim()
       await postJson('/api/longpi/profile', body)
@@ -119,7 +122,10 @@ export function ProfileEditor(props: {
     edit({ focus: has ? draft.focus.filter((item) => item !== key) : [...draft.focus, key] })
   }
   const female = draft.sex === 'female'
-  const answeredFacts = facts.filter((row) => (draft.risk[row.key as RiskFact] ?? '') === 'yes' || draft.risk[row.key as RiskFact] === 'no').length
+  const answeredFacts = facts.filter((row) => {
+    const answer = draft.risk[row.key as RiskFact] ?? ''
+    return answer === 'yes' || answer === 'no' || answer === 'unsure'
+  }).length
 
   return h('form', { className: `lp-profile lp-profile-${props.variant}`, onSubmit: (event: React.FormEvent) => { void save(event) }, noValidate: true },
     onboarding ? null : h('div', { className: 'lp-field' },

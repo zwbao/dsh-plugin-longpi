@@ -17,6 +17,7 @@ import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameS
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { plainReminderOf } from './engage/engine.ts'
+import { readQuiet, remindersHeld } from './engage/quiet.ts'
 import { addDays, civilParts, daysBetween, isoDay } from './interventions.ts'
 
 export const WEBHOOK_KINDS = ['feishu', 'wecom', 'dingtalk', 'bark', 'generic'] as const
@@ -499,7 +500,7 @@ function withPlain(dataDir: string, state: FollowupState | null): FollowupState 
 export function followupSilence(input: { now: Date; settings: FollowupSettings; state: FollowupState | null; log: readonly FollowupLogRow[] }): string {
   const { now, settings, state, log } = input
   if (!settings.enabled) {
-    return '提醒是关着的。打开之后，没有方案时，只有到期的复测、待解锁的检查或本季任务才会提醒；这些都没有，就保持安静，不会每天催打卡。'
+    return '提醒是关着的。打开之后，没有方案时，只有到期的复测、待解锁的检查或本季任务才会提醒；这些都没有，就保持安静。'
   }
   if (inQuiet(settings.quiet, now)) return '现在是免打扰时段，到点的提醒会在时段结束后同一天再发。'
   if (state && decideFollowup({ now, settings, state, log }).length > 0) return ''
@@ -803,6 +804,7 @@ export async function followupTick(input: { dataDir: string; now: Date; getState
   const settings = readFollowup(input.dataDir)
   const log = readFollowupLog(input.dataDir)
   if (!followupArmed(settings, log, input.now)) return []
+  if (remindersHeld(readQuiet(input.dataDir))) return []
   const state = withPlain(input.dataDir, await input.getState())
   if (!state) return []
   const rows: FollowupLogRow[] = []

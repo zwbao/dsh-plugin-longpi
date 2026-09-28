@@ -47,6 +47,24 @@ function keep(raw: unknown): NarrativeFinding | null {
   }
 }
 
+/**
+ * Exam and conclusion lines Mirobody stored as indicator rows (a report uploaded in Mirobody, not through LongPi).
+ * The same parser as a LongPi upload; duplicates of a line already stored are skipped.
+ */
+export function findingsFromIndicators(dataDir: string, indicators: readonly { name?: string; label?: string; value?: string | number; date?: string; last_date?: string }[]): NarrativeFinding[] {
+  if (!dataDir || indicators.length === 0) return []
+  const lines: string[] = []
+  for (const row of indicators) {
+    const value = row.value == null ? '' : String(row.value)
+    const text = `${row.label ?? ''} ${row.name ?? ''} ${value}`.replace(/\s+/g, ' ').trim()
+    if (!/TI[-\s]?RADS|BI[-\s]?RADS|总检|超声|医师建议|体检结论/.test(text)) continue
+    const date = (row.date || row.last_date || '').slice(0, 10)
+    lines.push(date && !text.includes(date) ? `${text} ${date}` : text)
+  }
+  if (lines.length === 0) return []
+  return storeFindings(dataDir, parseNarrative(lines.join('\n')))
+}
+
 export function listFindings(dataDir: string): NarrativeFinding[] {
   if (!dataDir) return []
   return readJsonl(pathOf(dataDir), keep)
@@ -67,17 +85,18 @@ export function parseNarrative(text: string, date = ''): NarrativeFinding[] {
   for (const line of lines) {
     const ti = TI.exec(line)
     const bi = BI.exec(line)
-    if (ti) {
-      const size = SIZE.exec(line)?.[1]?.replace(/\s+/g, '') ?? ''
-      const grade = ti[1] ?? ''
-      const where = /甲状腺/.test(line) ? '甲状腺' : /结节/.test(line) ? '结节' : '超声'
-      push('ti-rads', `${where}${size ? ` ${size}` : ''}，TI-RADS ${grade}。`.replace(/\s+/g, ' '), grade)
-      continue
-    }
-    if (bi) {
-      const grade = bi[1] ?? ''
-      const where = /乳/.test(line) ? '乳腺' : '超声'
-      push('bi-rads', `${where}，BI-RADS ${grade}。`, grade)
+    if (ti || bi) {
+      if (ti) {
+        const size = SIZE.exec(line)?.[1]?.replace(/\s+/g, '') ?? ''
+        const grade = ti[1] ?? ''
+        const where = /甲状腺/.test(line) ? '甲状腺' : /结节/.test(line) ? '结节' : '超声'
+        push('ti-rads', `${where}${size ? ` ${size}` : ''}，TI-RADS ${grade}。`.replace(/\s+/g, ' '), grade)
+      }
+      if (bi) {
+        const grade = bi[1] ?? ''
+        const where = /乳/.test(line) ? '乳腺' : '超声'
+        push('bi-rads', `${where}，BI-RADS ${grade}。`, grade)
+      }
       continue
     }
     if (/医师建议|总检|体检结论|超声提示|超声结论|建议[:：]/.test(line) && !/^\d/.test(line)) {

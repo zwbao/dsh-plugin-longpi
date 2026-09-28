@@ -906,6 +906,8 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
   const who = calculatorIdentity(context.records.profile)
   const profile = { ...context.records.profile, age: who.age, sex: who.sex }
   const missingFacts: string[] = []
+  const uncertainFacts: string[] = []
+  const uncertain = new Set(profile.riskUnknown ?? [])
   if (profile.age == null) missingFacts.push('实足年龄')
   // China-PAR has one equation for men and one for women; 'other' or unknown cannot pick one.
   if (profile.sex !== 'male' && profile.sex !== 'female') missingFacts.push('性别（男或女）')
@@ -913,7 +915,8 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
   for (const item of RISK_FLAGS) {
     if (item.men_only && profile.sex !== 'male') continue
     const value = profile.risk?.[item.fact]
-    if (value == null) missingFacts.push(RISK_FACT_ZH[item.fact])
+    if (value == null && uncertain.has(item.fact)) uncertainFacts.push(RISK_FACT_ZH[item.fact])
+    else if (value == null) missingFacts.push(RISK_FACT_ZH[item.fact])
     else args.push(item.flag, value ? 'yes' : 'no')
   }
   // Labs are listed even without a record, so the person knows what a checkup (or a tape measure) must supply.
@@ -931,21 +934,22 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
   base.missing_facts = missingFacts
   base.missing = [...missingLabs, ...missingFacts]
   const factsHint = missingFacts.length > 0 ? `档案里还缺${missingFacts.join('、')}（在健康页填写，或在对话里告诉我）。` : ''
+  const uncertainHint = uncertainFacts.length > 0 ? `${uncertainFacts.join('、')}记为不确定，China-PAR 需要“是”或“否”才能计算。` : ''
   if (context.records.record_status === 'error') {
     // Which labs the record lacks is unknown while the read fails, so none are listed as add-ons.
     base.missing_labs = []
     base.missing = [...missingFacts]
-    base.note_zh = `${readFailed(context.records)}${factsHint}`
+    base.note_zh = `${readFailed(context.records)}${factsHint}${uncertainHint}`
     return base
   }
   if (!recordReadable(context.records)) {
     const labsHint = missingLabs.length > 0 ? `，计算还需要${missingLabs.join('、')}` : ''
-    base.note_zh = `还没有连接 Mirobody 体检记录${labsHint}。${factsHint}`
+    base.note_zh = `还没有连接 Mirobody 体检记录${labsHint}。${factsHint}${uncertainHint}`
     return base
   }
-  if (missingLabs.length > 0 || missingFacts.length > 0 || unreadLabs.length > 0) {
+  if (missingLabs.length > 0 || missingFacts.length > 0 || unreadLabs.length > 0 || uncertainFacts.length > 0) {
     const unreadHint = unreadLabs.length > 0 ? `${unreadLabs.join('、')}的最新值没有读到（读取失败），不是没有测过。` : ''
-    base.note_zh = `${missingLabsNote(missingLabs)}${unreadHint}${factsHint}`
+    base.note_zh = `${missingLabsNote(missingLabs)}${unreadHint}${factsHint}${uncertainHint}`
     return base
   }
   const measurements: MeasurementIn[] = []

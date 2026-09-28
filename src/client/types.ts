@@ -98,6 +98,8 @@ export interface Journey {
     age: number | null
     sex: Sex
     risk: Partial<Record<RiskFact, boolean>>
+    /** Facts they explicitly left as 不确定. Absent means never asked, not "no". */
+    riskUnknown?: RiskFact[]
     focus: Focus[]
     complete: boolean
     questions: JourneyQuestion[]
@@ -211,6 +213,9 @@ export interface IndicatorRow {
   /** 太早 or 不可比. Absent when the row was judged or simply not compared. */
   gate?: 'too_early' | 'not_comparable'
   reason_zh?: string
+  /** A single value outside the usual adult range, or a diabetes marker that should not stay 未判断. */
+  range_flag?: 'low' | 'high'
+  range_zh?: string
 }
 
 export interface IndicatorsResponse {

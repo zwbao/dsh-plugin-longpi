@@ -16,7 +16,7 @@ function shanghaiDay(): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 }
 
-export function EngageDock(_props?: Record<string, unknown>): React.ReactElement | null {
+export function EngageDock(props: { variant?: 'dock' | 'page' } = {}): React.ReactElement | null {
   const [view, setView] = React.useState<SeasonView | null>(null)
   const [open, setOpen] = React.useState(false)
   const [note, setNote] = React.useState('')
@@ -57,14 +57,32 @@ export function EngageDock(_props?: Record<string, unknown>): React.ReactElement
   }
 
   if (!view && !failed) return null
+  const page = props?.variant === 'page'
+  const panel = view ? h(SeasonPanel, {
+    view,
+    busy,
+    note,
+    onAction: (body) => { void run('/api/longpi/season', body) },
+    onDraw: () => { void run('/api/longpi/codex/draw', {}) },
+    onFreeze: (reason) => { const day = shanghaiDay(); void run('/api/longpi/streak-freeze', { reason, from: day, to: day }) },
+    onOpt: (on) => { void run('/api/longpi/nudges', { codex_enabled: on }) },
+  }) : null
+  if (page) {
+    return h('div', { className: 'lp lp-season-page', style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+      failed ? h('p', null, failed) : null,
+      panel ?? h('p', { className: 'lp-muted' }, '这一季正在读取。'))
+  }
   if (view?.needs_consent && !open) return null
   const shell = {
     position: 'absolute' as const, left: 20, bottom: 136, zIndex: 1, pointerEvents: 'auto' as const, maxWidth: open ? 380 : 160,
     color: 'var(--lp-ink)',
   }
   const card = { background: 'var(--lp-layer-2)', color: 'var(--lp-ink)', boxShadow: 'var(--lp-lift, 0 4px 16px rgba(0,0,0,.12))' }
+  const frozen = view?.streak.frozen ?? []
   return h(React.Fragment, null,
-    h('div', { className: 'lp', style: shell },
+    h('style', null, '@media (max-width: 900px) { .lp-season-dock { display: none !important; } }'),
+    frozen.length > 0 ? h('p', { className: 'lp-caption', id: 'lp-streak-freeze' }, `连续打卡冻结 ${frozen.length} 天（${frozen.slice(-3).map((row) => row.day).join('、')}）。`) : null,
+    h('div', { className: 'lp lp-season-dock', style: shell },
       h('button', {
         type: 'button',
         onClick: () => { setOpen((value) => !value); void load() },
@@ -74,15 +92,7 @@ export function EngageDock(_props?: Record<string, unknown>): React.ReactElement
         style: { ...card, marginTop: 8, maxHeight: '60vh', overflow: 'auto', padding: 12, borderRadius: 16, fontSize: 13, lineHeight: '20px' },
       },
         failed ? h('p', null, failed) : null,
-        view ? h(SeasonPanel, {
-          view,
-          busy,
-          note,
-          onAction: (body) => { void run('/api/longpi/season', body) },
-          onDraw: () => { void run('/api/longpi/codex/draw', {}) },
-          onFreeze: (reason) => { const day = shanghaiDay(); void run('/api/longpi/streak-freeze', { reason, from: day, to: day }) },
-          onOpt: (on) => { void run('/api/longpi/nudges', { codex_enabled: on }) },
-        }) : null) : null),
+        panel) : null),
     view?.nudge?.offer ? h(NudgeOffer, {
       offer: true,
       onAccept: () => { void run('/api/longpi/nudges', { nudge_in_workflow: true, offer_seen: true }) },
@@ -108,12 +118,16 @@ export function EngageSettingsNote(_props?: Record<string, unknown>): React.Reac
   return h('p', { className: 'lp-caption', style: { marginTop: 8 } }, line)
 }
 
-function RegisteredSeason(_props: Record<string, unknown>): React.ReactElement {
-  return h(EngageDock)
+function SeasonPage(_props: Record<string, unknown>): React.ReactElement | null {
+  return EngageDock({ variant: 'page' })
 }
 
-registerPageTab({ id: 'season', label_zh: '本季', order: 35, Component: RegisteredSeason })
-registerOverviewCard({ id: 'season', order: 40, Component: RegisteredSeason })
+function SeasonDock(_props: Record<string, unknown>): React.ReactElement | null {
+  return EngageDock({})
+}
+
+registerPageTab({ id: 'season', label_zh: '本季', order: 35, Component: SeasonPage })
+registerOverviewCard({ id: 'season', order: 40, Component: SeasonDock })
 registerSettingsSection({ id: 'season-reminder', order: 30, Component: EngageSettingsNote })
 
 export { SeasonPanel } from './season-tab.ts'

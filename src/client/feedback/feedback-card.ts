@@ -5,6 +5,11 @@ import type { FeedbackMessage } from '../../contracts/feedback.ts'
 
 const h = React.createElement
 
+function retestLine(retest: NonNullable<FeedbackMessage['retest']>): string {
+  if (retest.why_zh.includes('复测已在')) return retest.why_zh
+  return `建议复测：${retest.earliest} 至 ${retest.recommended}。${retest.why_zh}`
+}
+
 export function FeedbackCard(props: { messages: FeedbackMessage[] }): React.ReactElement | null {
   if (props.messages.length === 0) return null
   return h('section', { className: 'lp-card', id: 'lp-feedback', 'aria-label': '这次的变化' },
@@ -12,5 +17,5 @@ export function FeedbackCard(props: { messages: FeedbackMessage[] }): React.Reac
     ...props.messages.map((row) => h('div', { key: row.id },
       h('p', { className: row.tone === 'celebrate' ? 'lp-strong' : 'lp-muted' }, row.headline_zh),
       row.body_zh ? h('p', { className: 'lp-caption' }, row.body_zh) : null,
-      row.retest ? h('p', { className: 'lp-fine' }, `建议复测：${row.retest.earliest} 至 ${row.retest.recommended}。${row.retest.why_zh}`) : null)))
+      row.retest ? h('p', { className: 'lp-fine' }, retestLine(row.retest)) : null)))
 }

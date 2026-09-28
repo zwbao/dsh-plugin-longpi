@@ -40,8 +40,15 @@ interface UploadLog {
   bytes: number
   checkup_day: string | null
   forwarded: boolean
+  /** True only after Mirobody accepted the file, or a local-only success (WeGene narrative, pasted findings). A failed push is not written. */
+  accepted?: boolean
   duplicate_of?: string
   wrong_person?: boolean
+}
+
+function keptUpload(row: UploadLog): boolean {
+  if (row.wrong_person) return false
+  return row.forwarded === true || row.accepted === true
 }
 
 function logPath(dataDir: string): string {
@@ -264,7 +271,7 @@ export async function ingestDocument(deps: Pick<CoreDeps, 'config' | 'dataDir' |
   if (!text && contentTypeOf(filename) === 'text/plain') text = bytes.toString('utf8')
   const sha = createHash('sha256').update(bytes).digest('hex')
   const fingerprint = textFingerprint(text)
-  const prior = readLog(dataDir).find((row) => (sha && row.sha256 === sha) || (fingerprint && row.fingerprint === fingerprint))
+  const prior = readLog(dataDir).find((row) => keptUpload(row) && ((sha && row.sha256 === sha) || (fingerprint && row.fingerprint === fingerprint)))
   if (prior) {
     const existing = listFindings(dataDir).filter((row) => row.upload_id === prior.id)
     return {
@@ -284,7 +291,7 @@ export async function ingestDocument(deps: Pick<CoreDeps, 'config' | 'dataDir' |
     const summary = storeGenetics(dataDir, extractGeneticsText(text, 'text'))
     const uploadId = newId('up')
     const finding = storeFindings(dataDir, [{ id: newId('find'), date: summary.generated, kind: 'genetics', text_zh: summary.headlines_zh[0] || '已记下基因报告。' }], uploadId)
-    appendJsonl(logPath(dataDir), { id: uploadId, at: new Date().toISOString(), filename, sha256: sha, fingerprint, bytes: bytes.length, checkup_day: summary.generated || null, forwarded: false } satisfies UploadLog)
+    appendJsonl(logPath(dataDir), { id: uploadId, at: new Date().toISOString(), filename, sha256: sha, fingerprint, bytes: bytes.length, checkup_day: summary.generated || null, forwarded: false, accepted: true } satisfies UploadLog)
     return {
       ok: true, forwarded: false, duplicate: false, wrong_person: false, checkup_day: summary.generated || null, indicators: null,
       findings: finding.map(publicFinding),
@@ -340,10 +347,15 @@ async function finishForward(deps: Pick<CoreDeps, 'config' | 'dataDir' | 'bus' |
   const uploadId = newId('up')
   const stored = storeFindings(dataDir, input.findings.map((row) => ({ ...row, date: row.date || day || '' })), uploadId)
   if (input.genetics) storeGenetics(dataDir, input.genetics)
-  appendJsonl(logPath(dataDir), {
-    id: uploadId, at: new Date().toISOString(), filename: input.filename, sha256: input.sha, fingerprint: input.fingerprint,
-    bytes: input.bytes.length, checkup_day: day, forwarded: Boolean(push && !push.failed),
-  } satisfies UploadLog)
+  const forwarded = Boolean(push && !push.failed)
+  // A failed push, or Mirobody not connected, must not mark the file seen. The next send is a retry, not a duplicate.
+  const accepted = forwarded || Boolean(input.genetics) || (!input.upload && stored.length > 0)
+  if (accepted) {
+    appendJsonl(logPath(dataDir), {
+      id: uploadId, at: new Date().toISOString(), filename: input.filename, sha256: input.sha, fingerprint: input.fingerprint,
+      bytes: input.bytes.length, checkup_day: day, forwarded, accepted: true,
+    } satisfies UploadLog)
+  }
   if (push && !push.failed) {
     try { deps.invalidate() } catch { /* the file is already in Mirobody */ }
   }

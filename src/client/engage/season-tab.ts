@@ -8,6 +8,8 @@ const h = React.createElement
 
 export interface SeasonView {
   needs_consent?: boolean
+  /** False until they opt in. The panel then does not push quests. */
+  pressure?: boolean
   season: null | {
     title_zh: string
     status: string
@@ -40,6 +42,13 @@ export function SeasonPanel(props: {
   onOpt: (on: boolean) => void
 }): React.ReactElement {
   const season = props.view.season
+  if (props.view.pressure !== true) {
+    return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+      h('p', { style: { margin: 0 } }, '这一季先不推。想开始时点下面。'),
+      h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onAction({ action: 'opt_in' }) }, '开始这一季'),
+      props.view.streak.frozen.length > 0 ? h(StreakLine, { streak: props.view.streak, onFreeze: props.onFreeze, busy: props.busy }) : null,
+      props.note ? h('p', { style: { margin: 0 } }, props.note) : null)
+  }
   const chapter = season?.chapters.find((row) => row.week === season.week)
   return h('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
     season ? h('div', null,

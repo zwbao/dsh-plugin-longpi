@@ -7,7 +7,9 @@ import type { ConsentRecord } from '../contracts/science.ts'
 import { healthWorkspacePaths, insideWorkspace, type WorkspaceLike } from '../guard-scope.ts'
 import { readProfile } from '../profile.ts'
 import { MINOR_PREFERENCE_ZH, isGranted, minorView } from './consents.ts'
+import { CONSENT_HOLD_ZH, heldStream, localAidText, modelEgress, payloadText, personTextOf } from './egress.ts'
 import { redactOutbound, redactText, stripWeightLoss, wordingRule } from './disclosure.ts'
+import { withConsentOffer } from '../home-bp.ts'
 import { bindPrivacy } from './index.ts'
 import { exportZip, registerPrivacyRoutes, type PrivacyRuntime } from './routes.ts'
 
@@ -201,6 +203,11 @@ export function register(ctx: Context, deps: CoreDeps): void {
       }
       if (decision.kind !== 'accept') return decision
       const gate = GATE_TOOLS.has(tool) ? gateText(deps.dataDir()) : ''
+      // A number they just asked to record is stored, and the consent is offered in the same turn.
+      if (gate && tool === 'save_self_measurement') {
+        const carried = result && typeof result === 'object' && 'value' in result && result.value != null ? result.value : ('content' in decision ? decision.content : undefined)
+        return { kind: 'accept', content: withConsentOffer(carried) }
+      }
       if (gate) return { kind: 'accept', content: [{ type: 'text', text: gate }] }
       const minor = minorView(readProfile(deps.dataDir())).minor
       const carried = 'value' in decision ? decision.value : result.isError ? undefined : result.value
@@ -227,6 +234,11 @@ export function register(ctx: Context, deps: CoreDeps): void {
         const next = { ...options }
         if (typeof next.system === 'string') next.system = redactText(next.system, name)
         if (Array.isArray(next.messages)) next.messages = redactMessages(next.messages, name)
+        const granted = isGranted(deps.dataDir(), 'data_flow_deepseek')
+        const person = personTextOf(next)
+        const decision = modelEgress(granted, payloadText(next), person)
+        if (decision === 'local_aid') return heldStream(localAidText(person))
+        if (decision === 'hold') return heldStream(CONSENT_HOLD_ZH)
         return original(next)
       }
       stream[WRAPPED] = true

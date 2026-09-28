@@ -62,7 +62,8 @@ const RANGE_ZH = '变化超出了正常波动；是否需要处理要结合参�
 const BETTER_ZH = '变化超出了正常波动，方向是好的。'
 /**
  * Usual adult ranges for the markers judged by a range (the report's own range is not in the record).
- * Men's where the sexes differ and the sex is not known, so a low value is not missed.
+ * When sex is unknown and the limits differ, only a value outside both ranges is flagged.
+ * A value between them waits for sex instead of using the men's limit.
  */
 const RANGES: Record<string, { male: [number, number]; female: [number, number] }> = {
   hb: { male: [130, 175], female: [115, 150] },
@@ -78,10 +79,51 @@ const RANGES: Record<string, { male: [number, number]; female: [number, number] 
 export function rangeFlag(key: string, value: number, sex: string): { flag: 'low' | 'high'; text_zh: string } | null {
   const range = RANGES[key]
   if (!range) return null
+  const differs = range.male[0] !== range.female[0] || range.male[1] !== range.female[1]
+  if (differs && sex !== 'male' && sex !== 'female') {
+    const lowLine = Math.min(range.male[0], range.female[0])
+    const highLine = Math.max(range.male[1], range.female[1])
+    if (value < lowLine) return { flag: 'low', text_zh: `最近一次 ${shown(value)} 低于男女都算偏低的下限 ${lowLine}，偏低。建议带着这几次体检报告咨询医生。` }
+    if (value > highLine) return { flag: 'high', text_zh: `最近一次 ${shown(value)} 高于男女都算偏高的上限 ${highLine}，偏高。建议带着这几次体检报告咨询医生。` }
+    return null
+  }
   const [low, high] = sex === 'female' ? range.female : range.male
-  const who = RANGES[key] && range.male[0] !== range.female[0] ? (sex === 'female' ? '女性' : '男性') : ''
+  const who = differs ? (sex === 'female' ? '女性' : '男性') : ''
   if (value < low) return { flag: 'low', text_zh: `最近一次 ${shown(value)} 低于${who}常用参考下限 ${low}，偏低。建议带着这几次体检报告咨询医生。` }
   if (value > high) return { flag: 'high', text_zh: `最近一次 ${shown(value)} 高于${who}常用参考上限 ${high}，偏高。建议带着这几次体检报告咨询医生。` }
+  return null
+}
+
+interface LevelRow {
+  low: number
+  high: number
+  unit: string
+  sexed: boolean
+}
+
+/** Usual adult limits for a single value. The report's own range is not stored on the series, so these are the printed limits the page can apply. */
+const LEVELS: Array<{ test: (label: string) => boolean; male: LevelRow; female: LevelRow }> = [
+  { test: (label) => /铁蛋白|ferritin/i.test(label), male: { low: 30, high: 400, unit: 'ng/mL', sexed: true }, female: { low: 15, high: 400, unit: 'ng/mL', sexed: true } },
+  { test: (label) => /血红蛋白/.test(label) && !/平均|糖化|浓度|含量/.test(label), male: { low: 130, high: 175, unit: 'g/L', sexed: true }, female: { low: 115, high: 150, unit: 'g/L', sexed: true } },
+  { test: (label) => /平均红细胞体积|^MCV\b/i.test(label), male: { low: 82, high: 100, unit: 'fL', sexed: false }, female: { low: 82, high: 100, unit: 'fL', sexed: false } },
+  { test: (label) => /红细胞分布宽度/.test(label) && !/标准差/.test(label), male: { low: 11, high: 15, unit: '%', sexed: false }, female: { low: 11, high: 15, unit: '%', sexed: false } },
+]
+
+/**
+ * A single result against the usual adult range. Null when this marker has no row here, or the value sits inside it.
+ * Sex unknown uses the male (higher) lower bound and says so, so a low value is not missed.
+ */
+export function absoluteLevel(label: string, value: number, unit: string, sex: string): { flag: 'low' | 'high'; text_zh: string } | null {
+  const row = LEVELS.find((item) => item.test(label))
+  if (!row || !Number.isFinite(value)) return null
+  const band = sex === 'female' ? row.female : row.male
+  const given = unit.replace(/\s/g, '')
+  const expected = band.unit.replace(/\s/g, '')
+  if (given && expected && given.toLowerCase() !== expected.toLowerCase() && !(expected === 'ng/mL' && /μg\/L|ug\/L/i.test(given))) return null
+  const who = band.sexed ? (sex === 'female' ? '女性' : '男性') : ''
+  const unknown = sex !== 'female' && sex !== 'male' && band.sexed ? `（档案里还没有性别，先按男性下限 ${band.low}；女性下限是 ${row.female.low}）` : ''
+  if (value < band.low) return { flag: 'low', text_zh: `最近一次 ${shown(value)} ${band.unit} 低于${who}常用参考下限 ${band.low}，偏低。${unknown}建议带着报告咨询医生。` }
+  if (value > band.high) return { flag: 'high', text_zh: `最近一次 ${shown(value)} ${band.unit} 高于${who}常用参考上限 ${band.high}，偏高。${unknown}建议带着报告咨询医生。` }
   return null
 }
 // Weight and other rows without a better direction: a real change, nothing more to say.
@@ -233,7 +275,11 @@ export async function buildChanges(context: ChangesContext): Promise<{ changes: 
     byKey.set(marker.key, entry)
   }
   const names = [...new Set([...byKey.values()].flatMap((entry) => entry.names))]
-  if (names.length === 0) return empty
+  const glucoseTreatedEarly = context.records.profile.risk.diabetes === true || currentMedications(context.records.medications).some((name) => GLUCOSE_LOWERING.test(name))
+  const watchEarly = glucoseTreatedEarly ? diabetesWatch(context.records.indicators) : []
+  if (names.length === 0) {
+    return { changes: watchEarly.map(({ ratio: _ratio, ...row }) => row), note_zh: CHANGES_NOTE_ZH, unjudged: [] }
+  }
   const window = { start: addDays(context.today, -LOOKBACK_DAYS), end: context.today, resolution: 'raw' as const }
   const chunks: string[][] = []
   for (let start = 0; start < names.length; start += READ_CHUNK) chunks.push(names.slice(start, start + READ_CHUNK))
@@ -270,5 +316,52 @@ export async function buildChanges(context: ChangesContext): Promise<{ changes: 
     if (change) found.push(change)
   }
   found.sort((a, b) => Number(b.ask_doctor) - Number(a.ask_doctor) || b.ratio - a.ratio)
-  return { changes: found.slice(0, MAX_CHANGES).map(({ ratio: _ratio, ...row }) => row), note_zh: CHANGES_NOTE_ZH, unjudged }
+  const watch = glucoseTreated ? diabetesWatch(context.records.indicators) : []
+  const seen = new Set(watch.map((row) => row.key))
+  const merged = [...watch, ...found.filter((row) => !seen.has(row.key))]
+  return { changes: merged.slice(0, MAX_CHANGES + watch.length).map(({ ratio: _ratio, ...row }) => row), note_zh: CHANGES_NOTE_ZH, unjudged }
+}
+
+const WATCH_SOURCE = { title: 'KDIGO 慢性肾病评估（白蛋白尿与 eGFR 分界）', url: 'https://kdigo.org/guidelines/ckd-evaluation-and-management/' }
+
+/** One current value a person with diabetes should see on 值得注意, even with a single draw. */
+function diabetesWatch(indicators: RecordSnapshot['indicators']): Array<RecordChange & { ratio: number }> {
+  const out: Array<RecordChange & { ratio: number }> = []
+  const textOf = (row: RecordSnapshot['indicators'][number]) => `${row.label ?? ''} ${row.name} ${row.value}`
+  const numberOf = (row: RecordSnapshot['indicators'][number]) => {
+    const value = Number(String(row.value).replace(/,/g, ''))
+    return Number.isFinite(value) ? value : null
+  }
+  const push = (key: string, label: string, value: number, unit: string, date: string, advice: string) => {
+    out.push({
+      key, label_zh: label, unit,
+      points: [{ date, value }],
+      compare: { from_date: date, from: value, to_date: date, to: value, pct: 0 },
+      band_pct: { up: 0, down: 0 },
+      direction: 'up',
+      verdict: 'unclear',
+      ask_doctor: true,
+      text_zh: advice,
+      advice_zh: advice,
+      source: WATCH_SOURCE,
+      verified: true,
+      ratio: 100,
+    })
+  }
+  for (const row of indicators) {
+    const text = textOf(row)
+    const date = (row.date || row.last_date || '').slice(0, 10)
+    const value = numberOf(row)
+    if (/血清|总蛋白|白蛋白电泳/.test(text) && !/尿/.test(text)) continue
+    if (value != null && /尿白蛋白.?肌酐|尿微量白蛋白|UACR|\bACR\b/i.test(text) && value >= 30) {
+      push('uacr', '尿白蛋白/肌酐比', value, row.unit || 'mg/g', date || '未知日期', `尿白蛋白/肌酐比 ${value} ${row.unit || 'mg/g'}（${date}）高于常用分界 30 mg/g。有糖尿病时这项要带给医生看，不是“未判断就是正常”。`)
+    } else if (/尿蛋白/.test(text) && !/肌酐|白蛋白.?肌酐|UACR/i.test(text) && /阳性|\+|↑|偏高/.test(String(row.value))) {
+      push('urine-protein', '尿蛋白', value ?? 1, row.unit || '', date || '未知日期', `尿蛋白 ${row.value}（${date}）。有糖尿病时尿蛋白要带给医生看，不是“未判断就是正常”。`)
+    } else if (value != null && value < 60 && value > 5 && /egfr|肾小球滤过/i.test(text)) {
+      push('egfr', 'eGFR', value, row.unit || 'mL/min/1.73m²', date || '未知日期', `eGFR ${value} ${row.unit || ''}（${date}）低于 60。有糖尿病时要和医生看肾功能，不是“未判断就是正常”。`)
+    } else if (/眼底|视网膜/.test(text) && /微动脉瘤|视网膜病变|新生血管|出血/.test(text)) {
+      push('retina', '眼底', value ?? 1, '', date || '未知日期', `眼底记录（${date}）：${String(row.value).slice(0, 80)}。有糖尿病时这项要带给眼科或内分泌科，不是“未判断就是正常”。`)
+    }
+  }
+  return out
 }

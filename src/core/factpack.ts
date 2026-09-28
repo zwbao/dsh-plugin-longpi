@@ -101,9 +101,21 @@ export function packFrom(input: PackInput): FactPack {
   const weekAgo = addDays(input.today, -7)
   const asked = (state.items.filter((item) => item.status === 'active' && item.kind === 'asked_topic') as Array<{ topic_key: string; last_asked: string }>)
     .filter((item) => item.last_asked >= weekAgo).map((item) => item.topic_key)
-  const care = (state.items.filter((item) => item.status === 'active' && item.kind === 'care') as Array<{ finding_id?: string; care_status: string; visit_date?: string; outcome_zh?: string; updated: string }>)
-    .map((item) => ({ finding_id: item.finding_id ?? '', care_status: item.care_status, visit_date: item.visit_date ?? null, outcome_zh: item.outcome_zh ?? null, updated: item.updated }))
-  const stop = input.care.stop.stop ? { title_zh: input.care.stop.title_zh, sentence_zh: input.care.stop.sentence_zh, needs_sex: input.needsSex } : null
+  const care = (state.items.filter((item) => item.status === 'active' && item.kind === 'care') as Array<{ finding_id?: string; care_status: string; visit_date?: string; outcome_zh?: string; updated: string; confirmed?: boolean }>)
+    .map((item) => {
+      // An unconfirmed date is a proposal. The header and the follow-up never treat it as booked.
+      const hideDate = item.care_status === 'booked' && item.confirmed === false
+      return {
+        finding_id: item.finding_id ?? '',
+        care_status: hideDate ? 'advised' : item.care_status,
+        visit_date: hideDate ? null : (item.visit_date ?? null),
+        outcome_zh: item.outcome_zh ?? null,
+        updated: item.updated,
+      }
+    })
+  const stop = input.care.stop.stop || input.needsSex
+    ? { title_zh: input.care.stop.title_zh, sentence_zh: input.care.stop.sentence_zh, needs_sex: input.needsSex }
+    : null
   const base: Omit<FactPack, 'candidates' | 'fp'> = {
     version: 1,
     today: input.today,

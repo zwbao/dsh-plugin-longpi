@@ -64,6 +64,8 @@ export interface Profile {
   age: number | null
   sex: Sex
   risk: Partial<Record<RiskFact, boolean>>
+  /** Facts they explicitly called 不确定. Missing means never asked, and is not stored as false. */
+  riskUnknown?: RiskFact[]
   focus: Focus[]
   /** The first-run product notice. Not the PIPL sensitive-information act. */
   consent: Consent | null
@@ -106,7 +108,7 @@ export function normalizeProfile(input: unknown): { ok: true; profile: Profile }
   }
   const raw = input as Record<string, unknown>
   for (const key of Object.keys(raw)) {
-    if (!['displayName', 'birthYear', 'age', 'sex', 'risk', 'focus', 'consent', 'consents', 'subject'].includes(key)) {
+    if (!['displayName', 'birthYear', 'age', 'sex', 'risk', 'riskUnknown', 'focus', 'consent', 'consents', 'subject'].includes(key)) {
       return { ok: false, error: `unknown field ${key}` }
     }
   }
@@ -138,6 +140,8 @@ export function normalizeProfile(input: unknown): { ok: true; profile: Profile }
       risk[key as RiskFact] = value
     }
   }
+  const riskUnknown = riskUnknownOf(raw.riskUnknown)
+  if (!riskUnknown.ok) return riskUnknown
   const focus = focusOf(raw.focus)
   if (!focus.ok) return focus
   const consent = consentOf(raw.consent)
@@ -148,7 +152,11 @@ export function normalizeProfile(input: unknown): { ok: true; profile: Profile }
   if (!subject.ok) return subject
   return {
     ok: true,
-    profile: { displayName, birthYear: birthYear.value, age: age.value, sex, risk, focus: focus.value, consent: consent.value, consents: consents.value, ...(subject.value ? { subject: subject.value } : {}) },
+    profile: {
+      displayName, birthYear: birthYear.value, age: age.value, sex, risk, focus: focus.value, consent: consent.value, consents: consents.value,
+      ...(riskUnknown.value.length > 0 ? { riskUnknown: riskUnknown.value } : {}),
+      ...(subject.value ? { subject: subject.value } : {}),
+    },
   }
 }
 
@@ -166,6 +174,17 @@ function subjectOf(value: unknown): { ok: true; value: Profile['subject'] } | Fa
     sex = raw.sex as Sex
   }
   return { ok: true, value: { relationship_zh: relationship, age: age.value, sex } }
+}
+
+function riskUnknownOf(value: unknown): { ok: true; value: RiskFact[] } | Failure {
+  if (value == null || value === '') return { ok: true, value: [] }
+  if (!Array.isArray(value)) return { ok: false, error: 'riskUnknown must be a list of risk facts' }
+  const out: RiskFact[] = []
+  for (const item of value) {
+    if (typeof item !== 'string' || !(RISK_FACTS as readonly string[]).includes(item)) return { ok: false, error: `unknown risk fact ${String(item)}` }
+    if (!out.includes(item as RiskFact)) out.push(item as RiskFact)
+  }
+  return { ok: true, value: out }
 }
 
 function focusOf(value: unknown): { ok: true; value: Focus[] } | Failure {
@@ -232,16 +251,26 @@ function consentsOf(value: unknown): { ok: true; value: ProfileConsents } | Fail
  */
 export function mergeProfile(current: Profile, update: Record<string, unknown>): Record<string, unknown> {
   const merged: Record<string, unknown> = { ...current, risk: { ...current.risk }, focus: [...current.focus] }
+  const unknown = new Set<RiskFact>(current.riskUnknown ?? [])
   for (const key of ['displayName', 'birthYear', 'age', 'sex', 'focus'] as const) {
     if (key in update) merged[key] = update[key]
   }
   if (update.risk && typeof update.risk === 'object' && !Array.isArray(update.risk)) {
     const risk = merged.risk as Record<string, unknown>
     for (const [key, value] of Object.entries(update.risk as Record<string, unknown>)) {
-      if (value == null || value === '') delete risk[key]
-      else risk[key] = value
+      if (!(RISK_FACTS as readonly string[]).includes(key)) continue
+      const fact = key as RiskFact
+      if (value == null || value === '') {
+        delete risk[key]
+        unknown.add(fact)
+      } else {
+        risk[key] = value
+        unknown.delete(fact)
+      }
     }
   }
+  if (unknown.size > 0) merged.riskUnknown = [...unknown]
+  else delete merged.riskUnknown
   return merged
 }
 

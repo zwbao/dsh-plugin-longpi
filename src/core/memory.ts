@@ -36,8 +36,8 @@ export function drugClassesOf(name: string): DrugClass[] {
 
 const CONDITION_RULES: Array<[ConditionFlag, RegExp]> = [
   ['pregnancy', /怀孕|孕期|妊娠|怀上了/],
-  ['pregnancy_planning', /备孕|准备要孩子|计划怀孕/],
-  ['breastfeeding', /哺乳|母乳喂养/],
+  ['pregnancy_planning', /备孕|准备怀孕|计划怀孕|准备要孩子|计划要孩子/],
+  ['breastfeeding', /哺乳|母乳/],
   ['ckd', /肾功能不全|慢性肾病|肾衰|透析|\bckd\b/i],
   ['diabetes', /(?<!前期|前)糖尿病|2型糖尿|1型糖尿/],
   ['prediabetes', /糖尿病前期|血糖偏高前期|糖耐量受损/],
@@ -51,7 +51,13 @@ const CONDITION_RULES: Array<[ConditionFlag, RegExp]> = [
 ]
 
 export function conditionFlagsOf(text: string): ConditionFlag[] {
-  return CONDITION_RULES.filter(([, pattern]) => pattern.test(text)).map(([flag]) => flag)
+  const flags = CONDITION_RULES.filter(([, pattern]) => pattern.test(text)).map(([flag]) => flag)
+  // 准备怀孕 contains 怀孕. Planning is not a current pregnancy unless they also said they are pregnant.
+  if (flags.includes('pregnancy_planning') && flags.includes('pregnancy')) {
+    const rest = text.replace(/备孕|准备怀孕|计划怀孕|准备要孩子|计划要孩子/g, '')
+    if (!/怀孕了|已怀孕|正在怀孕|我怀孕|孕期|妊娠|怀上了/.test(rest)) return flags.filter((flag) => flag !== 'pregnancy')
+  }
+  return flags
 }
 
 export function computeSafety(item: Pick<MemoryItem, 'kind'> & Partial<{ drug_class: DrugClass[]; flags: ConditionFlag[] }>): boolean {

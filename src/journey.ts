@@ -25,9 +25,12 @@ import { packFrom } from './core/factpack.ts'
 import { fallbackSurfaces } from './surfaces/fallback.ts'
 import { recordSurfaces } from './surfaces/service.ts'
 import { chooseSurfaces } from './surfaces/coach-service.ts'
+import { DAILY_WORDING, QUIET_DETAIL, QUIET_TITLE, quietenSurfaces, readQuiet, stripDailyWording } from './engage/quiet.ts'
 import { careState } from './triage/care.ts'
 import { NO_STOP } from './doctor-first.ts'
 import { currentMedications } from './situation.ts'
+import { findingsFromIndicators } from './datain/narrative.ts'
+import { noteLabsOnFile } from './engage/engine.ts'
 
 export type Stage = 'consent' | 'profile' | 'records' | 'first_result' | 'plan' | 'routine'
 export type { RecordChange } from './changes.ts'
@@ -40,6 +43,7 @@ export interface Journey {
     displayName: string; birthYear: number | null; age: number | null
     sex: 'female' | 'male' | 'other' | 'unknown'
     risk: Partial<Record<RiskFact, boolean>>
+    riskUnknown?: RiskFact[]
     focus: Focus[]
     complete: boolean
     questions: Array<{ key: 'age' | 'sex' | RiskFact; label_zh: string; unlocks_zh: string; answered: boolean; men_only?: boolean }>
@@ -208,7 +212,8 @@ function questionsOf(profile: Profile): Journey['profile']['questions'] {
     // PhenoAge does not use sex; China-PAR does (male or female). Same predicate as profileComplete.
     { key: 'sex', label_zh: '性别', unlocks_zh: CARDIO, answered: profile.sex !== 'unknown' },
     ...RISK_FACTS.map((fact) => ({
-      key: fact, label_zh: RISK_FACT_ZH[fact], unlocks_zh: CARDIO, answered: profile.risk[fact] != null,
+      key: fact, label_zh: RISK_FACT_ZH[fact], unlocks_zh: CARDIO,
+      answered: profile.risk[fact] != null || (profile.riskUnknown ?? []).includes(fact),
       ...(MEN_ONLY.has(fact) ? { men_only: true } : {}),
     })),
   ]
@@ -268,7 +273,16 @@ function selfKeyForLab(label: string): SelfKey | undefined {
   return (['waist', 'sbp'] as const).find((key) => label.includes(SELF_SPEC[key].label_zh))
 }
 
-function addonsOf(bioage: BioAge, risk: Journey['results']['risk']): Addon[] {
+function hasLab(indicators: ReadonlyArray<{ name: string; label?: string; loinc?: string; value?: string }>, kind: 'hscrp' | 'waist'): boolean {
+  return indicators.some((row) => {
+    const text = `${row.name} ${row.label ?? ''} ${row.loinc ?? ''} ${row.value ?? ''}`
+    if (kind === 'waist') return /腰围/.test(text)
+    if (/总蛋白/.test(text) && !/C反应|CRP/i.test(text)) return false
+    return row.loinc === '30522-7' || row.loinc === '1988-5' || /超敏\s*C\s*反应蛋白|hs-?CRP|C反应蛋白/i.test(text)
+  })
+}
+
+function addonsOf(bioage: BioAge, risk: Journey['results']['risk'], indicators: ReadonlyArray<{ name: string; label?: string; loinc?: string; value?: string }> = []): Addon[] {
   const list: Addon[] = []
   const add = (item: string, unlocks: string, selfKey?: SelfKey) => {
     const hit = list.find((row) => row.item_zh === item)
@@ -282,7 +296,14 @@ function addonsOf(bioage: BioAge, risk: Journey['results']['risk']): Addon[] {
   for (const label of bioage.missing) add(label, BIOAGE)
   for (const label of risk.missing_labs) add(label, CARDIO, selfKeyForLab(label))
   if (bioage.status === 'no_checkup') add('九项血检安排在同一天', BIOAGE)
-  return [...list.filter((row) => row.self_measurable), ...list.filter((row) => !row.self_measurable)]
+  const hscrp = hasLab(indicators, 'hscrp')
+  const waist = hasLab(indicators, 'waist')
+  const filtered = list.filter((row) => {
+    if (hscrp && /C反应蛋白|hs-?CRP|\bCRP\b/i.test(row.item_zh) && !/总蛋白/.test(row.item_zh)) return false
+    if (waist && /腰围/.test(row.item_zh)) return false
+    return true
+  })
+  return [...filtered.filter((row) => row.self_measurable), ...filtered.filter((row) => !row.self_measurable)]
 }
 
 function planOf(context: TrackingContext, tracking: Tracking): Journey['plan'] {
@@ -415,6 +436,10 @@ function legacyNext(stage: Stage, set: SurfaceSet, fallback: Next): Next {
 function journeyFrom(context: JourneyContext, tracking: Tracking, summary: RecordsSummary | null = null): Journey {
   const { records, today } = context
   const profile = records.profile
+  try { findingsFromIndicators(context.dataDir, records.indicators) } catch { /* the page still lists what was already stored */ }
+  try {
+    noteLabsOnFile(context.dataDir, { hscrp: hasLab(records.indicators, 'hscrp'), waist: hasLab(records.indicators, 'waist') })
+  } catch { /* unlock copy falls back to the season file */ }
   const points = tracking.bioage.points
   const latest = latestSelf(readSelf(context.dataDir))
   const bioage = bioageResult(tracking.bioage)
@@ -440,6 +465,7 @@ function journeyFrom(context: JourneyContext, tracking: Tracking, summary: Recor
       age: profile.age,
       sex: profile.sex,
       risk: { ...profile.risk },
+      ...((profile.riskUnknown ?? []).length > 0 ? { riskUnknown: [...(profile.riskUnknown ?? [])] } : {}),
       focus: [...profile.focus],
       complete: profileComplete(profile),
       questions: questionsOf(profile),
@@ -457,7 +483,7 @@ function journeyFrom(context: JourneyContext, tracking: Tracking, summary: Recor
       summary,
     },
     results: { bioage, risk },
-    addons: addonsOf(tracking.bioage, risk),
+    addons: addonsOf(tracking.bioage, risk, records.indicators),
     changes: tracking.changes,
     changes_note_zh: tracking.changes_note_zh,
     changes_unjudged: tracking.changes_unjudged,
@@ -486,7 +512,7 @@ function journeyFrom(context: JourneyContext, tracking: Tracking, summary: Recor
   const pack = packFrom({
     dataDir: context.dataDir, today, stage,
     person: { display_name: profile.displayName, age: calculatorIdentity(profile).age, sex: calculatorIdentity(profile).sex },
-    care, hits: recordStop.hits, needsSex: recordStop.needs_sex === true && care.stop.stop,
+    care, hits: recordStop.hits, needsSex: recordStop.needs_sex === true,
     medications: currentMedications(records.medications), changes: tracking.changes,
     results: { bioage: { phenoage: bioage.phenoage, advance: bioage.advance, date: bioage.date }, risk: { risk_pct: risk.risk_pct, date: risk.date } },
     plan: { exists: plan.exists, version: plan.version, days: plan.days, open_checkins: plan.checkin_items.filter((item) => item.done_today == null).length, adherence_pct: plan.adherence_pct },
@@ -497,11 +523,17 @@ function journeyFrom(context: JourneyContext, tracking: Tracking, summary: Recor
   })
   const floor = fallbackSurfaces(pack, { suggestions: stageSuggestions, status_zh: stageStatus(stage, body, stageNext) }, context.now ?? new Date())
   // The coach's set when one is valid for this pack; otherwise the floor, and the coach is asked (step 2).
-  const surfaces = chooseSurfaces(context.dataDir, floor, pack)
+  const signals = readQuiet(context.dataDir)
+  const surfaces = quietenSurfaces(chooseSurfaces(context.dataDir, floor, pack), stageNext, signals)
   recordSurfaces(context.dataDir, surfaces, pack)
+  let next = legacyNext(stage, surfaces, stageNext)
+  if (stripDailyWording(signals) && DAILY_WORDING.test(`${next.title_zh}${next.detail_zh}`)) {
+    next = { ...next, title_zh: QUIET_TITLE, detail_zh: QUIET_DETAIL }
+  }
+  const reminders = stripDailyWording(signals) ? body.reminders.filter((row) => !DAILY_WORDING.test(row.text_zh)) : body.reminders
   const journey: Journey = {
-    ...body, stage,
-    next: legacyNext(stage, surfaces, stageNext),
+    ...body, stage, reminders,
+    next,
     suggestions: surfaces.suggestions.slice(0, 3).map((row) => ({ id: row.id, text_zh: row.prompt_zh ?? row.text_zh })),
     followup: { enabled: followupOn, channels: [], next_at: null },
     surfaces,

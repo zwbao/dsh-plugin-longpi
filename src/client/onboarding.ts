@@ -10,7 +10,8 @@
 
 import React from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import { errorText } from './api.ts'
+import { errorText, getJson } from './api.ts'
+import { deepseekConsentPending } from '../privacy/pending.ts'
 import { acceptConsent, ConsentText, FirstResult, RecordsStep } from './journey-steps.ts'
 import { useModelStatus } from './model-status.ts'
 import { recordConnected } from './normalize.ts'
@@ -118,6 +119,8 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [privacyOpen, setPrivacyOpen] = React.useState(false)
+  /** undefined while the consent file is still loading. null means no DeepSeek decision yet. */
+  const [flowDecision, setFlowDecision] = React.useState<string | null | undefined>(undefined)
   const [computing, setComputing] = React.useState(false)
   const [timedOut, setTimedOut] = React.useState(false)
   const [retrying, setRetrying] = React.useState(false)
@@ -132,10 +135,25 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
   React.useEffect(() => { setSettingsOpener(props.openSection) }, [props.openSection])
 
   React.useEffect(() => {
-    if (decided.current || !journey) return
+    let live = true
+    void getJson<{ consents?: { data_flow_deepseek?: { decision?: string | null } } }>('/api/longpi/privacy').then((row) => {
+      if (live) setFlowDecision(row?.consents?.data_flow_deepseek?.decision ?? null)
+    }).catch(() => { if (live) setFlowDecision(null) })
+    return () => { live = false }
+  }, [])
+
+  React.useEffect(() => {
+    if (decided.current || !journey || flowDecision === undefined) return
     decided.current = true
     if (props.initialStep != null) {
       setStep(Math.max(0, Math.min(3, props.initialStep)))
+      return
+    }
+    // 开始 records only the product notice. A refresh must still show the DeepSeek sheet
+    // until that decision exists. Health numbers do not leave before a grant.
+    if (journey.consent.accepted && deepseekConsentPending(flowDecision)) {
+      setPrivacyOpen(true)
+      setStep(0)
       return
     }
     if (props.explicit) {
@@ -147,7 +165,7 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
       return
     }
     setStep(journey.consent.accepted ? 1 : 0)
-  }, [journey, finish])
+  }, [journey, finish, flowDecision, props.initialStep, props.explicit])
 
   React.useEffect(() => {
     if (journey || timedOut) return undefined
@@ -203,9 +221,16 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
       privacyOpen ? h('div', { className: 'lp-onb-body' },
         h('p', { className: 'lp-onb-lead' }, '下面两件事分开记，都没有预先勾选，也不是刚才的产品说明。'),
         h(SensitiveConsentScreen, {}),
-        h(DataPage, {}),
+        h(DataPage, { onDecided: (decision: 'granted' | 'declined') => { if (decision) setFlowDecision(decision) } }),
         h('div', { className: 'lp-modal-actions' },
-          h(Btn, { onClick: () => { setPrivacyOpen(false); go(1) } }, '继续填写档案'))) : null,
+          h(Btn, {
+            disabled: deepseekConsentPending(flowDecision),
+            onClick: () => {
+              if (deepseekConsentPending(flowDecision)) return
+              setPrivacyOpen(false)
+              go(1)
+            },
+          }, deepseekConsentPending(flowDecision) ? '请先选择是否发给 DeepSeek' : '继续填写档案'))) : null,
       !privacyOpen && step === 0 ? h('div', { className: 'lp-onb-body' },
         h(ModelHint, { onOpen: toSettings }),
         h(ConsentText),

@@ -36,7 +36,8 @@ const MED_FACT: Partial<Record<DrugClass, { rule: string; text: (name: string) =
 
 const CONDITION_FACT: Partial<Record<ConditionFlag, { rule: string; text: string }>> = {
   pregnancy: { rule: 'safety.condition.pregnancy', text: '你说过怀孕了：方案不安排限时进食、减重、饮酒和鱼油' },
-  pregnancy_planning: { rule: 'safety.condition.pregnancy_planning', text: '你在备孕：方案不安排限时进食和减重；补剂和药物先问医生' },
+  pregnancy_planning: { rule: 'safety.condition.pregnancy_planning', text: '你在备孕：方案不安排限时进食或断食，体重指数低于 24 时不设减重目标，避免饮酒。备孕叶酸的一般人群建议是每天 0.4 mg，这是中国备孕的常规人群指导' },
+  breastfeeding: { rule: 'safety.condition.breastfeeding', text: '你在哺乳：方案不安排限时进食或断食，体重指数低于 24 时不设减重目标，避免饮酒' },
   ckd: { rule: 'safety.condition.ckd', text: '你有慢性肾病：方案不安排未经调整的 DASH 饮食' },
   cancer_followup: { rule: 'safety.condition.cancer_followup', text: '你在肿瘤随访中：任何饮食或补剂改动先问主治医生' },
 }
@@ -55,7 +56,7 @@ export function rankTopFacts(input: TopFactInput): TopFact[] {
   const openFindings: TriageFinding[] = input.care.findings.filter((row) => !seenIds.has(row.id))
   for (const finding of openFindings) {
     const line = statusLine(finding, input.hits)
-    const text = input.needsSex && finding.id === 'finding-red-cell' ? line.replace('——', '（性别未填，先按男性下限）——') : line
+    const text = input.needsSex && finding.id === 'finding-red-cell' ? `${line}（性别还没填，男女参考范围不同，请先填写性别；介于两者之间的数值这次不转诊）` : line
     facts.push({ id: finding.id, kind: 'triage', priority: finding.priority, text_zh: text, refs: finding.numbers, source_ids: [finding.id], rule: finding.rule })
   }
   for (const { finding, care } of input.care.seen) {

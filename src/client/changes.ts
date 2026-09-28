@@ -111,7 +111,7 @@ function NotableRow(props: { row: RecordChange }): React.ReactElement {
   return h('li', { className: 'lp-notable-row' },
     h(ChangeChip, { verdict: row.verdict, askDoctor: row.ask_doctor }),
     h('span', { className: 'lp-strong' }, row.label_zh),
-    h('span', { className: 'lp-num lp-notable-values' }, `${pairText(row.compare.from, row.compare.to)} ${prettyUnits(row.unit)}`.trim()),
+    h('span', { className: 'lp-num lp-notable-values' }, `${row.compare.from === row.compare.to ? `${row.compare.to} ${prettyUnits(row.unit)}`.trim() : `${pairText(row.compare.from, row.compare.to)} ${prettyUnits(row.unit)}`.trim()}`),
     h(Spark, { row }))
 }
 
