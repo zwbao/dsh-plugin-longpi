@@ -1,7 +1,13 @@
 import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+/** Package root when this file is bundled to lib/index.js or loaded from src/. */
+function packageRoot(): string {
+  const here = dirname(fileURLToPath(import.meta.url))
+  return basename(here) === 'lib' || basename(here) === 'src' ? resolve(here, '..') : here
+}
 
 function firstExisting(candidates: string[], marker: (dir: string) => boolean): string {
   for (const candidate of candidates) {
@@ -14,9 +20,12 @@ function firstExisting(candidates: string[], marker: (dir: string) => boolean): 
 }
 
 export function resolveSkillsHome(configured: string): string {
+  const root = packageRoot()
   return firstExisting([
     configured,
     process.env.LONGEVITY_SKILLS_HOME ?? '',
+    join(root, 'node_modules', 'longevity-skills'),
+    join(root, '..', 'longevity-skills'),
     join(homedir(), 'longevity-skills'),
     join(homedir(), 'Projects', 'longevity-skills'),
   ], (dir) => existsSync(join(dir, 'skills')) && existsSync(join(dir, 'README.md')))
