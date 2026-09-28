@@ -255,6 +255,14 @@ try {
   assert.equal(sglt2.candidates.some((row) => /限时进食|time-restricted|16:8|断食/i.test(`${row.intervention_zh} ${row.id}`)), false)
   for (const row of sglt2.candidates.filter((item) => item.marker_key === 'weight')) assert.doesNotMatch(row.expected_zh, KG, row.id)
 
+  // --- 6. iron deficiency names the gastroenterologist and a time frame; a falling haemoglobin alone does not --
+  const pt = (name, value, unit, date) => ({ name, label: name, value, unit, date })
+  const ironStop = mod.clinicalStop({ sex: 'male', diabetesKnown: false, points: [pt('血红蛋白', 150, 'g/L', '2024-01-01'), pt('血红蛋白', 114, 'g/L', '2026-05-18'), pt('平均红细胞体积', 72.4, 'fL', '2026-05-18'), pt('铁蛋白', 8, 'ng/mL', '2026-05-18')] })
+  assert.match(ironStop.sentence_zh, /全科或血液科，缺铁的原因常要消化科一起查，尽量在 1 到 2 周内去/)
+  const hbOnly = mod.clinicalStop({ sex: 'male', diabetesKnown: false, points: [pt('血红蛋白', 152, 'g/L', '2023-01-01'), pt('血红蛋白', 144, 'g/L', '2024-01-01'), pt('血红蛋白', 135, 'g/L', '2025-01-01')] })
+  assert.match(hbOnly.sentence_zh, /全科或血液科，尽量在 1 到 2 周内去/)
+  assert.doesNotMatch(hbOnly.sentence_zh, /消化科/)
+
   // --- 7. 总览: each fact once, the top fact first, one body-age card ------------------------------------
   const doctorJourney = {
     next: { action: 'doctor', title_zh: '请先去看医生：血红蛋白 114 g/L 偏低，平均红细胞体积 72.4 fL 偏低，铁蛋白 8 ng/mL 偏低', detail_zh: '' },
@@ -273,7 +281,7 @@ try {
   assert.match(resultsSrc, /measuresBodyAge\(row\)/, 'body-age method results fold into the body-age card')
   assert.doesNotMatch(resultsSrc, /riskBindingNote/, 'the risk card shows no unmatched alternative next to its own number')
 
-  console.log('int-062 ok (two people blocked; one body-age number; one draw has no gap; statin fact; weight medicine without kilograms; 总览 each fact once)')
+  console.log('int-062 ok (two people blocked; one body-age number; one draw has no gap; statin fact; weight medicine without kilograms; iron names 消化科; 总览 each fact once)')
 } finally {
   mod.setMethodResults([])
   for (const server of servers) await server.close?.()

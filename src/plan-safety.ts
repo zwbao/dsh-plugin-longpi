@@ -423,7 +423,10 @@ export function clinicalStop(input: { sex: string; diabetesKnown: boolean; point
     return { stop: false, sentence_zh: '', title_zh: '', hits: [] }
   }
   const redCell = hits.some((hit) => hit.key === 'hgb' || hit.key === 'mcv' || hit.key === 'rdw' || hit.key === 'ferritin')
-  const where = redCell ? '（可以先看全科或血液科）' : ''
+  // A falling red-cell count with low ferritin or small red cells is usually iron deficiency, whose cause in an adult is
+  // often in the gut: the gastroenterologist is named too, with a time frame (the season already says 血液科或消化科).
+  const iron = hits.some((hit) => hit.key === 'ferritin' || (hit.key === 'mcv' && hit.low))
+  const where = redCell ? `（可以先看全科或血液科${iron ? '，缺铁的原因常要消化科一起查' : ''}，尽量在 1 到 2 周内去）` : ''
   const urgent = hits.some((hit) => hit.key === 'sbp') ? '血压这么高请尽快就医；如果同时有胸痛、剧烈头痛、一侧无力或说话不清，立即拨打 120。' : ''
   const selfTreat = redCell ? '在医生查明原因之前，不要自己买铁剂或补剂。' : ''
   const sentence = `请先去看医生：${hits.map((hit) => hit.text_zh).join('；')}。${urgent}请带着这几次体检报告去看医生${where}，查清原因。${selfTreat}${DOCTOR_ZH}`
