@@ -11,6 +11,9 @@
     "url": "https://github.com/zwbao/dsh-plugin-longpi/issues"
   },
   "type": "module",
+  "bin": {
+    "longpi": "bin/longpi.mjs"
+  },
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "exports": {
@@ -23,6 +26,7 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "bin",
     "lib/index.js",
     "lib/index.d.ts",
     "lib/client.js",
@@ -30,12 +34,14 @@
     "cordis.patch.yml",
     "data",
     "skills",
-    "docs/*.md",
+    "docs",
+    "scripts/pack-longevity-skills.mjs",
     "README.md",
     "README.zh.md",
     "CHANGELOG.md",
     "LICENSE",
-    "NOTICE"
+    "NOTICE",
+    "install.sh"
   ],
   "engines": {
     "node": "^22.19 || >=24"
@@ -54,6 +60,7 @@
   },
   "scripts": {
     "build": "tsdown",
+    "prepublishOnly": "npm run build",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf lib",
     "smoke": "node test/smoke.mjs",
@@ -70,6 +77,9 @@
     "mirobody"
   ],
   "license": "MIT",
+  "dependencies": {
+    "longevity-skills": "2026.39.1"
+  },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=0.1.0 || >=4.0.0",
     "@deepseek-ai/dsh-tools": ">=0.1.0",

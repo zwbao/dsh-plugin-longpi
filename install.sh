@@ -18,9 +18,28 @@
 #
 # The whole script sits in main() so that `curl | bash` has read all of it
 # before anything runs, and child processes get /dev/null as stdin.
+#
+#   bash install.sh install [--mirror cn|auto] [--with-mirobody]
+#   bash install.sh update
+#   bash install.sh status
+#   npx dsh-plugin-longpi install
+#
+# longevity-skills is resolved from node_modules first, then the git and
+# mirror fallbacks below. SKILLS_PIN_DEFAULT is the curl|bash fallback for
+# the exact dependency in package.json. Bump both together (docs/dev/packaging.md).
+
+SKILLS_PIN_DEFAULT=2026.39.1
 
 main() {
   set -euo pipefail
+
+  local command="install"
+  if [ $# -gt 0 ]; then
+    case "$1" in
+      install|update|status) command="$1"; shift ;;
+    esac
+  fi
+  COMMAND="$command"
 
   local longpi_home="${LONGPI_HOME:-$HOME/longpi}"
   local profile="web"
@@ -55,8 +74,22 @@ main() {
   fi
 
   case "$longpi_home" in "~"*) longpi_home="$HOME${longpi_home#\~}" ;; esac
+  if [ -f "$0" ]; then
+    SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  else
+    SCRIPT_DIR=""
+  fi
+  local dsh_home="${DSH_HOME:-$HOME/.dsh}"
+  if [ "$command" = status ]; then
+    do_status "$longpi_home" "$profile" "$dsh_home"
+    return
+  fi
   mkdir -p "$longpi_home"
   longpi_home="$(cd "$longpi_home" && pwd)"
+  local state="$longpi_home/install-state.json"
+  if [ "$command" = update ] && [ -z "$mirror_mode" ] && [ -f "$state" ]; then
+    mirror_mode="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("mirror") or "")' "$state" 2>/dev/null || true)"
+  fi
   LOG="$longpi_home/install.log"
   LONGPI_CACHE="$longpi_home/cache"
   printf '\n==== %s install.sh\n' "$(date '+%Y-%m-%d %H:%M:%S')" >>"$LOG"
@@ -64,7 +97,6 @@ main() {
   printf 'mirror=%s npm=%s pypi=%s github=%s docker=%s\n' \
     "${mirror_mode:-default}" "$USE_NPM_MIRROR" "$USE_PYPI_MIRROR" "$USE_GITHUB_MIRROR" "$USE_DOCKER_MIRROR" >>"$LOG"
 
-  local dsh_home="${DSH_HOME:-$HOME/.dsh}"
   local profile_dir="$dsh_home/profiles/$profile"
   local skills_dir="$longpi_home/longevity-skills"
   local venv="$longpi_home/.venv"
@@ -93,69 +125,112 @@ main() {
   ok "pnpm $(pnpm --version </dev/null), dsh $(dsh --version </dev/null 2>/dev/null | head -n 1)" \
      "pnpm $(pnpm --version </dev/null)，dsh $(dsh --version </dev/null 2>/dev/null | head -n 1)"
 
-  # 2. Skill library -------------------------------------------------------
+  # 2. Plugin --------------------------------------------------------------
+  # Before the library, so node_modules/longevity-skills shipped with the
+  # plugin (or hoisted beside it) can be the skillsHome.
+  step "Installing the plugin into DeepSeek Harness" "将插件安装到 DeepSeek Harness"
+  PLUGIN_SPEC="$plugin_spec"
+  PLUGIN_CHANGED=0
+  local installed="$profile_dir/node_modules/dsh-plugin-longpi"
+  if [ "$command" = update ]; then
+    maybe_upgrade_plugin "$installed"
+    plugin_spec="$PLUGIN_SPEC"
+  fi
+  if [ "$command" = update ] && [ "$PLUGIN_CHANGED" != 1 ] && [ -f "$installed/lib/index.js" ] && [ -f "$installed/vendor/dsh-plugin-mirobody/bridge/dsh_bridge.py" ]; then
+    info "Plugin files are already installed; not running dsh plugin add." "插件已在，跳过 dsh plugin add。"
+  else
+    local resolved_plugin
+    resolved_plugin="$(resolve_plugin_spec "$plugin_spec")" \
+      || fail_log "Could not fetch the plugin. On a network that cannot reach GitHub, set LONGPI_PLUGIN_URL to an npm pack tarball (.tgz)." \
+                  "无法取得插件。访问不了 GitHub 时，请把 LONGPI_PLUGIN_URL 设成一个 npm pack 压缩包（.tgz）。"
+    dsh plugin --profile "$profile" add "$resolved_plugin" </dev/null >>"$LOG" 2>&1 \
+      || fail_log "dsh plugin add $resolved_plugin failed." "dsh plugin add ${resolved_plugin} 失败。"
+  fi
+  [ -f "$installed/lib/index.js" ] && [ -f "$installed/vendor/dsh-plugin-mirobody/bridge/dsh_bridge.py" ] \
+    || die "The plugin files are missing from $installed." "$installed 中缺少插件文件。"
+  local plugin_version
+  plugin_version="$(node -p 'require(process.argv[1]).version' "$installed/package.json" </dev/null)"
+  ok "dsh-plugin-longpi $plugin_version (profile $profile)" "dsh-plugin-longpi ${plugin_version}（profile：${profile}）"
+
+  # 3. Skill library -------------------------------------------------------
   step "Installing the skill library" "安装方法库 longevity-skills"
-  install_skills "$skills_dir"
+  local pin
+  pin="$(read_pin "$installed/package.json" "${SCRIPT_DIR:-}/package.json")"
+  install_skills "$skills_dir" "$installed" "$profile_dir" "$pin"
   [ -f "$skills_dir/catalog.json" ] || die "$skills_dir has no catalog.json." "$skills_dir 中没有 catalog.json。"
 
-  # 3. Python environment --------------------------------------------------
+  # 4. Python environment --------------------------------------------------
   step "Preparing the Python environment" "准备 Python 环境"
-  if ! python_ok "$py"; then
-    local base
-    if [ -e "$venv" ]; then
+  local req="$skills_dir/requirements-ci.txt" req_hash="" prev_hash="" skip_pip=0
+  if [ -f "$req" ]; then
+    req_hash="$(sha256_of "$req")"
+  fi
+  if [ -f "$state" ]; then
+    prev_hash="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("requirements_sha256") or "")' "$state" 2>/dev/null || true)"
+  fi
+  if [ "$command" = update ] && [ -n "$req_hash" ] && [ "$req_hash" = "$prev_hash" ] && python_ok "$py"; then
+    skip_pip=1
+    info "requirements-ci.txt unchanged; keeping the Python environment." "requirements-ci.txt 未变，保留现有 Python 环境。"
+  fi
+  if [ "$skip_pip" != 1 ]; then
+    if [ "$command" = update ] && [ -n "$req_hash" ] && [ "$req_hash" != "$prev_hash" ] && [ -e "$venv" ]; then
       mv "$venv" "$venv.old-$(date +%Y%m%d%H%M%S)"
-      info "Moved an incompatible $venv aside." "已将不兼容的 $venv 移到一旁。"
+      info "requirements-ci.txt changed; rebuilding the Python environment." "requirements-ci.txt 已变，正在重建 Python 环境。"
     fi
-    if base="$(find_python)"; then
-      "$base" -m venv "$venv" </dev/null >>"$LOG" 2>&1 \
-        || fail_log "Could not create $venv (on Debian/Ubuntu: apt install python3-venv)." "无法创建 ${venv}（Debian/Ubuntu 需要 apt install python3-venv）。"
-    elif have uv; then
-      uv venv --quiet --python 3.12 "$venv" </dev/null >>"$LOG" 2>&1 || fail_log "uv could not create $venv." "uv 无法创建 ${venv}。"
-    else
-      die "Python 3.12 or later is required (or uv: https://docs.astral.sh/uv/)." "需要 Python 3.12 或更高版本（或安装 uv：https://docs.astral.sh/uv/）。"
+    if ! python_ok "$py"; then
+      local base=""
+      if [ -e "$venv" ]; then
+        mv "$venv" "$venv.old-$(date +%Y%m%d%H%M%S)"
+        info "Moved an incompatible $venv aside." "已将不兼容的 $venv 移到一旁。"
+      fi
+      # uv first. A system python3 -m venv is the fallback when uv cannot download a Python.
+      if ensure_uv && uv venv --quiet --python 3.12 "$venv" </dev/null >>"$LOG" 2>&1; then
+        info "Created the venv with uv (Python 3.12)." "已用 uv 创建 Python 3.12 虚拟环境。"
+      else
+        if have uv; then
+          warn "uv could not create a Python 3.12 environment; trying a system interpreter." "uv 无法创建 Python 3.12 环境，改用系统解释器。"
+        fi
+        if base="$(find_python)"; then
+          "$base" -m venv "$venv" </dev/null >>"$LOG" 2>&1 \
+            || fail_log "Could not create $venv (on Debian/Ubuntu: apt install python3-venv)." "无法创建 ${venv}（Debian/Ubuntu 需要 apt install python3-venv）。"
+        else
+          die "Python 3.12 or later is required (or uv: https://docs.astral.sh/uv/)." "需要 Python 3.12 或更高版本（或安装 uv：https://docs.astral.sh/uv/）。"
+        fi
+      fi
     fi
-  fi
-  info "Installing mirobody, numpy, scipy and openpyxl" "安装 mirobody、numpy、scipy、openpyxl"
-  if [ "$USE_PYPI_MIRROR" = 1 ]; then
-    info "pip index: ${PIP_INDEX_CN} (fallback ${PIP_INDEX_CN_FALLBACK})" "pip 源：${PIP_INDEX_CN}（备用 ${PIP_INDEX_CN_FALLBACK}）"
-  fi
-  if "$py" -m pip --version </dev/null >/dev/null 2>&1; then
-    if [ "$USE_PYPI_MIRROR" != 1 ]; then
-      { "$py" -m pip install --quiet --upgrade pip && "$py" -m pip install --quiet --upgrade mirobody numpy scipy openpyxl; } </dev/null >>"$LOG" 2>&1 \
-        || fail_log "pip could not install mirobody, numpy, scipy and openpyxl." "pip 无法安装 mirobody、numpy、scipy、openpyxl。"
+    if [ -f "$req" ]; then
+      info "Installing Python packages from requirements-ci.txt" "正在按 requirements-ci.txt 安装 Python 包"
+      install_python_requirements "$py" "$req" \
+        || fail_log "Could not install requirements-ci.txt." "无法安装 requirements-ci.txt。"
     else
-      { pip_install_quiet "$py" pip && pip_install_quiet "$py" mirobody numpy scipy openpyxl; } </dev/null >>"$LOG" 2>&1 \
-        || fail_log "pip could not install mirobody, numpy, scipy and openpyxl." "pip 无法安装 mirobody、numpy、scipy、openpyxl。"
-    fi
-  else
-    if [ "$USE_PYPI_MIRROR" != 1 ]; then
-      uv pip install --quiet --python "$py" --upgrade mirobody numpy scipy openpyxl </dev/null >>"$LOG" 2>&1 \
-        || fail_log "uv could not install mirobody, numpy, scipy and openpyxl." "uv 无法安装 mirobody、numpy、scipy、openpyxl。"
-    else
-      uv pip install --quiet --python "$py" --index-url "$PIP_INDEX_CN" --upgrade mirobody numpy scipy openpyxl </dev/null >>"$LOG" 2>&1 \
-        || uv pip install --quiet --python "$py" --index-url "$PIP_INDEX_CN_FALLBACK" --upgrade mirobody numpy scipy openpyxl </dev/null >>"$LOG" 2>&1 \
-        || fail_log "uv could not install mirobody, numpy, scipy and openpyxl." "uv 无法安装 mirobody、numpy、scipy、openpyxl。"
+      info "Installing mirobody, numpy, scipy and openpyxl" "安装 mirobody、numpy、scipy、openpyxl"
+      if [ "$USE_PYPI_MIRROR" = 1 ]; then
+        info "pip index: ${PIP_INDEX_CN} (fallback ${PIP_INDEX_CN_FALLBACK})" "pip 源：${PIP_INDEX_CN}（备用 ${PIP_INDEX_CN_FALLBACK}）"
+      fi
+      if "$py" -m pip --version </dev/null >/dev/null 2>&1; then
+        if [ "$USE_PYPI_MIRROR" != 1 ]; then
+          { "$py" -m pip install --quiet --upgrade pip && "$py" -m pip install --quiet --upgrade mirobody numpy scipy openpyxl; } </dev/null >>"$LOG" 2>&1 \
+            || fail_log "pip could not install mirobody, numpy, scipy and openpyxl." "pip 无法安装 mirobody、numpy、scipy、openpyxl。"
+        else
+          { pip_install_quiet "$py" pip && pip_install_quiet "$py" mirobody numpy scipy openpyxl; } </dev/null >>"$LOG" 2>&1 \
+            || fail_log "pip could not install mirobody, numpy, scipy and openpyxl." "pip 无法安装 mirobody、numpy、scipy、openpyxl。"
+        fi
+      else
+        if [ "$USE_PYPI_MIRROR" != 1 ]; then
+          uv pip install --quiet --python "$py" --upgrade mirobody numpy scipy openpyxl </dev/null >>"$LOG" 2>&1 \
+            || fail_log "uv could not install mirobody, numpy, scipy and openpyxl." "uv 无法安装 mirobody、numpy、scipy、openpyxl。"
+        else
+          uv pip install --quiet --python "$py" --index-url "$PIP_INDEX_CN" --upgrade mirobody numpy scipy openpyxl </dev/null >>"$LOG" 2>&1 \
+            || uv pip install --quiet --python "$py" --index-url "$PIP_INDEX_CN_FALLBACK" --upgrade mirobody numpy scipy openpyxl </dev/null >>"$LOG" 2>&1 \
+            || fail_log "uv could not install mirobody, numpy, scipy and openpyxl." "uv 无法安装 mirobody、numpy、scipy、openpyxl。"
+        fi
+      fi
     fi
   fi
   local mirobody_version
   mirobody_version="$("$py" -c 'import mirobody; print(mirobody.__version__)' </dev/null)" \
     || die "The Mirobody engine does not import in $venv." "$venv 中无法导入 Mirobody 引擎。"
   ok "$(pretty "$venv") (mirobody $mirobody_version)" "$(pretty "$venv")（mirobody ${mirobody_version}）"
-
-  # 4. Plugin --------------------------------------------------------------
-  step "Installing the plugin into DeepSeek Harness" "将插件安装到 DeepSeek Harness"
-  local resolved_plugin
-  resolved_plugin="$(resolve_plugin_spec "$plugin_spec")" \
-    || fail_log "Could not fetch the plugin. On a network that cannot reach GitHub, set LONGPI_PLUGIN_URL to an npm pack tarball (.tgz)." \
-                "无法取得插件。访问不了 GitHub 时，请把 LONGPI_PLUGIN_URL 设成一个 npm pack 压缩包（.tgz）。"
-  dsh plugin --profile "$profile" add "$resolved_plugin" </dev/null >>"$LOG" 2>&1 \
-    || fail_log "dsh plugin add $resolved_plugin failed." "dsh plugin add ${resolved_plugin} 失败。"
-  local installed="$profile_dir/node_modules/dsh-plugin-longpi"
-  [ -f "$installed/lib/index.js" ] && [ -f "$installed/vendor/dsh-plugin-mirobody/bridge/dsh_bridge.py" ] \
-    || die "The plugin files are missing from $installed." "$installed 中缺少插件文件。"
-  local plugin_version
-  plugin_version="$(node -p 'require(process.argv[1]).version' "$installed/package.json" </dev/null)"
-  ok "dsh-plugin-longpi $plugin_version (profile $profile)" "dsh-plugin-longpi ${plugin_version}（profile：${profile}）"
 
   # 5. Mirobody (optional) -------------------------------------------------
   if [ "$with_mirobody" = 1 ]; then
@@ -192,7 +267,7 @@ main() {
   step "Writing the configuration" "写入配置"
   mkdir -p "$profile_dir"
   local patch="$profile_dir/cordis.patch.yml" result
-  result="$("$py" -c "$WRITE_CONFIG" "$patch" "$skills_dir" "$py" "$set_mcp" "$mcp_url" "$mcp_token" </dev/null)" \
+  result="$("$py" -c "$WRITE_CONFIG" "$patch" "$skills_dir" "$py" "$set_mcp" "$mcp_url" "$mcp_token" "$pin" </dev/null)" \
     || die "Could not update $patch; add the dsh-plugin-longpi row by hand (docs/install.md)." "无法更新 ${patch}；请按 docs/install.zh.md 手动添加 dsh-plugin-longpi 配置。"
   ok "$(pretty "$patch")" "$(pretty "$patch")"
   local dump
@@ -201,6 +276,9 @@ main() {
     *"== dsh-plugin-longpi, patched by"*) ok "DeepSeek Harness reads the configuration" "DeepSeek Harness 已读取该配置" ;;
     *) warn "dsh --profile $profile --dump-config does not show the LongPi row; see $LOG." "dsh --profile $profile --dump-config 中没有 LongPi 配置，详见 ${LOG}。" ;;
   esac
+  local catalog_version=""
+  catalog_version="$(catalog_version_of "$skills_dir/catalog.json" 2>/dev/null || true)"
+  write_install_state "$state" "${mirror_mode:-}" "${SKILLS_ORIGIN:-}" "$req_hash" "$plugin_spec" "$pin" "$catalog_version"
 
   # 7. Summary -------------------------------------------------------------
   local skills_line
@@ -279,6 +357,14 @@ Options
   --profile NAME     DeepSeek Harness profile (default web)
   --plugin SPEC      Plugin to install (default github:zwbao/dsh-plugin-longpi)
   -h, --help         Show this help
+
+Commands
+  install            Default. dsh, pnpm, this plugin, longevity-skills, Python 3.12
+  update             Newer plugin and the longevity-skills version it depends on.
+                     Rebuilds the venv only when requirements-ci.txt changes.
+                     Reuses the mirror recorded by the last install.
+  status             Pinned skillsVersion against the running catalog. Exit 2
+                     when a result cannot be labelled verified.
 
 Environment: DSH_HOME (default ~/.dsh), LONGPI_HOME, LONGPI_MIROBODY_URL, LONGPI_MIRROR.
 Mainland mirrors (only when --mirror cn, or auto decides a host is down):
@@ -521,25 +607,44 @@ sha256_of() {
 
 # A downloaded plugin or skills tarball is installed only when its sha256 matches
 # the checksum published with that release. Local files and git clones are not hashed.
+verify_integrity() {
+  local file="$1" integrity="$2" algo b64 actual
+  algo="${integrity%%-*}"
+  b64="${integrity#*-}"
+  [ "$algo" = "sha512" ] || return 1
+  [ -n "$b64" ] || return 1
+  actual="$(openssl dgst -sha512 -binary "$file" | openssl base64 -A)"
+  [ "$actual" = "$b64" ]
+}
+
 verify_tarball() {
-  local file="$1" url="$2" expected="" label=""
+  local file="$1" url="$2" integrity="${3:-}" expected="" label=""
   case "$url" in
     *dsh-plugin-longpi*) expected="${LONGPI_PLUGIN_SHA256:-}"; label="plugin" ;;
     *longevity-skills*) expected="${LONGPI_SKILLS_SHA256:-}"; label="skills" ;;
     *) return 0 ;;
   esac
-  if [ -z "$expected" ]; then
-    die "Refusing to install the downloaded ${label} tarball without a sha256. Set LONGPI_PLUGIN_SHA256 or LONGPI_SKILLS_SHA256 to the checksum published with the release." \
-        "拒绝安装没有 sha256 的${label}压缩包。请设置 LONGPI_PLUGIN_SHA256 或 LONGPI_SKILLS_SHA256，用这次发布公布的校验和。"
+  if [ -n "$expected" ]; then
+    local actual
+    actual="$(sha256_of "$file")"
+    if [ "$actual" != "$expected" ]; then
+      rm -f "$file"
+      die "sha256 mismatch for the ${label} tarball (expected ${expected}, got ${actual})." \
+          "${label} 压缩包的 sha256 不一致（期望 ${expected}，实际 ${actual}）。没有安装。"
+    fi
+    note "sha256 ok for ${label}" "${label} 的 sha256 已核对"
+    return 0
   fi
-  local actual
-  actual="$(sha256_of "$file")"
-  if [ "$actual" != "$expected" ]; then
+  if [ -n "$integrity" ] && verify_integrity "$file" "$integrity"; then
+    note "integrity ok for ${label}" "${label} 的发布校验已核对"
+    return 0
+  fi
+  if [ -n "$integrity" ]; then
     rm -f "$file"
-    die "sha256 mismatch for the ${label} tarball (expected ${expected}, got ${actual})." \
-        "${label} 压缩包的 sha256 不一致（期望 ${expected}，实际 ${actual}）。没有安装。"
+    die "integrity mismatch for the ${label} tarball." "${label} 压缩包的发布校验不一致。没有安装。"
   fi
-  note "sha256 ok for ${label}" "${label} 的 sha256 已核对"
+  die "Refusing to install the downloaded ${label} tarball without a sha256. Set LONGPI_PLUGIN_SHA256 or LONGPI_SKILLS_SHA256 to the checksum published with the release." \
+      "拒绝安装没有 sha256 的${label}压缩包。请设置 LONGPI_PLUGIN_SHA256 或 LONGPI_SKILLS_SHA256，用这次发布公布的校验和。"
 }
 
 # Leave $marker at $dest/$marker. GitHub archives wrap one top directory; npm
@@ -742,7 +847,53 @@ resolve_plugin_spec() {
 }
 
 install_skills() {
-  local skills_dir="$1" src tarball
+  local skills_dir="$1" plugin_dir="${2:-}" profile_dir_arg="${3:-}" pin="${4:-$SKILLS_PIN_DEFAULT}" src tarball found="" sibling=""
+  if [ -n "${SCRIPT_DIR:-}" ] && [ "$(basename "$(dirname "$SCRIPT_DIR")")" = "node_modules" ]; then
+    sibling="$(dirname "$SCRIPT_DIR")/longevity-skills"
+  fi
+  found="$(find_packaged_skills \
+    "$plugin_dir/node_modules/longevity-skills" \
+    "$profile_dir_arg/node_modules/longevity-skills" \
+    "${SCRIPT_DIR:-}/node_modules/longevity-skills" \
+    "$sibling")" || found=""
+  if [ -n "$found" ]; then
+    # A packaged tree is not a git checkout. Do not fast-forward one over it.
+    link_skills "$found" "$skills_dir"
+    SKILLS_ORIGIN=package
+    ok "Skill library from node_modules ($(pretty "$found"))" "方法库来自 node_modules（$(pretty "$found")）"
+    return 0
+  fi
+  if [ -L "$skills_dir" ]; then
+    SKILLS_ORIGIN=package
+    ok "Kept packaged library $(pretty "$skills_dir")" "已保留打包的方法库 $(pretty "$skills_dir")"
+    return 0
+  fi
+  # An explicit URL or local tarball wins over git clone on every mirror mode.
+  # A local tarball is placed in the plugin's node_modules (no sha256: it is not a download).
+  if [ -n "${LONGPI_SKILLS_URL:-}" ]; then
+    src="${LONGPI_SKILLS_URL}"
+    case "$src" in
+      /*.tgz | /*.tar.gz | ./*.tgz | ./*.tar.gz)
+        local dest_nm="$plugin_dir/node_modules/longevity-skills"
+        mkdir -p "$plugin_dir/node_modules"
+        rm -rf "$dest_nm"
+        extract_marked "$src" "$dest_nm" catalog.json \
+          || fail_log "Could not unpack the longevity-skills tarball." "无法解压 longevity-skills 压缩包。"
+        link_skills "$dest_nm" "$skills_dir"
+        SKILLS_ORIGIN=package
+        ok "Skill library from ${src}" "方法库来自 ${src}"
+        return 0
+        ;;
+    esac
+    fetch_source "$src" "$skills_dir" catalog.json \
+      || fail_log "Could not fetch longevity-skills from LONGPI_SKILLS_URL." "无法从 LONGPI_SKILLS_URL 下载 longevity-skills。"
+    ok "Skill library from ${src}" "方法库来自 ${src}"
+    case "$src" in
+      *.git | git@*) SKILLS_ORIGIN=git ;;
+      *) SKILLS_ORIGIN=package ;;
+    esac
+    return 0
+  fi
   if [ "${USE_GITHUB_MIRROR:-0}" != 1 ]; then
     if [ -d "$skills_dir/.git" ]; then
       if git -C "$skills_dir" pull --ff-only --quiet </dev/null >>"$LOG" 2>&1; then
@@ -755,6 +906,7 @@ install_skills() {
         || fail_log "Could not clone longevity-skills." "无法下载 longevity-skills。"
       ok "Cloned into $(pretty "$skills_dir")" "已下载到 $(pretty "$skills_dir")"
     fi
+    SKILLS_ORIGIN=git
     return 0
   fi
   if [ -f "$skills_dir/catalog.json" ] && [ -z "${LONGPI_SKILLS_REFRESH:-}" ]; then
@@ -764,8 +916,11 @@ install_skills() {
       else
         warn "Could not fast-forward $skills_dir; kept the current checkout." "$skills_dir 无法快进更新，保留现有版本。"
       fi
+      SKILLS_ORIGIN=git
     else
+      # No .git: this is a tarball or package tree. Do not clone over it.
       ok "Kept $(pretty "$skills_dir")" "已保留 $(pretty "$skills_dir")"
+      SKILLS_ORIGIN=package
     fi
     return 0
   fi
@@ -773,17 +928,11 @@ install_skills() {
     "" | / | "$HOME") die "Refusing to replace $skills_dir." "拒绝替换 ${skills_dir}。" ;;
   esac
   rm -rf "$skills_dir"
-  src="${LONGPI_SKILLS_URL:-}"
-  if [ -n "$src" ]; then
-    fetch_source "$src" "$skills_dir" catalog.json \
-      || fail_log "Could not fetch longevity-skills from LONGPI_SKILLS_URL." "无法从 LONGPI_SKILLS_URL 下载 longevity-skills。"
-    ok "Skill library from ${src}" "方法库来自 ${src}"
-    return 0
-  fi
-  tarball="$(npm_dist_tarball longevity-skills)" || tarball=""
+  tarball="$(npm_dist_tarball "longevity-skills@${pin}")" || tarball=""
   if [ -n "$tarball" ]; then
     fetch_source "$tarball" "$skills_dir" catalog.json \
       || fail_log "Could not download the longevity-skills tarball." "无法下载 longevity-skills 压缩包。"
+    SKILLS_ORIGIN=package
     ok "Skill library from the npm tarball" "方法库来自 npm 压缩包"
     return 0
   fi
@@ -792,6 +941,7 @@ install_skills() {
   fetch_github_archive zwbao longevity-skills main "$skills_dir" catalog.json \
     || fail_log "Could not download longevity-skills. Set LONGPI_SKILLS_URL to a tarball or git URL this machine can reach (for example a Gitee import). Publishing the library to npm would make the npmmirror tarball path work with no proxy." \
                 "无法下载 longevity-skills。请把 LONGPI_SKILLS_URL 设成这台机器能访问的压缩包或 git 地址（例如导入 Gitee 后的地址）。把方法库发布到 npm 后，npmmirror 上的压缩包路径就不需要代理。"
+  SKILLS_ORIGIN=archive
   ok "Skill library from a GitHub archive proxy" "方法库来自 GitHub 归档代理"
 }
 
@@ -893,9 +1043,252 @@ docker_mirror_hint() {
   info "Example /etc/docker/daemon.json: {\"registry-mirrors\":[\"https://mirror.ccs.tencentyun.com\"]} — then restart docker and rerun with --with-mirobody." \
        "可在 /etc/docker/daemon.json 写入 {\"registry-mirrors\":[\"https://mirror.ccs.tencentyun.com\"]}，重启 Docker 后再用 --with-mirobody 运行。"
 }
+
+find_packaged_skills() {
+  local dir
+  for dir in "$@"; do
+    [ -n "$dir" ] || continue
+    [ -f "$dir/catalog.json" ] || continue
+    [ -f "$dir/package.json" ] || continue
+    if node -e 'const p=require(process.argv[1]); if(p.name!=="longevity-skills") process.exit(1)' "$dir/package.json" >/dev/null 2>&1; then
+      printf '%s\n' "$dir"
+      return 0
+    fi
+  done
+  return 1
+}
+
+link_skills() {
+  local src="$1" dest="$2" src_real dest_real
+  [ -n "$src" ] && [ -d "$src" ] || return 1
+  case "$dest" in
+    "" | / | "$HOME" | "${LONGPI_HOME:-}") die "Refusing to replace $dest." "拒绝替换 ${dest}。" ;;
+  esac
+  src_real="$(cd "$src" && pwd -P)"
+  if [ -L "$dest" ]; then
+    dest_real="$(cd "$dest" && pwd -P 2>/dev/null || true)"
+    if [ "$dest_real" = "$src_real" ]; then
+      return 0
+    fi
+    rm -f "$dest"
+  elif [ -d "$dest" ]; then
+    dest_real="$(cd "$dest" && pwd -P)"
+    if [ "$dest_real" = "$src_real" ]; then
+      return 0
+    fi
+    if [ -d "$dest/.git" ]; then
+      warn "Moving the git checkout at $dest aside so the packaged library can be used." "把 $dest 的 git 检出移到一旁，改用已打包的方法库。"
+      mv "$dest" "${dest}.git-aside-$(date +%Y%m%d%H%M%S)"
+    else
+      rm -rf "$dest"
+    fi
+  fi
+  ln -s "$src_real" "$dest"
+}
+
+read_pin() {
+  local file pin
+  for file in "$@"; do
+    [ -n "$file" ] && [ -f "$file" ] || continue
+    if pin="$(node -e 'const p=require(process.argv[1]); const raw=p.dependencies&&p.dependencies["longevity-skills"]; if(!raw) process.exit(2); const pin=String(raw).replace(/^[~^<>=\s]+/,"").trim(); if(!pin) process.exit(2); process.stdout.write(pin);' "$file" 2>/dev/null)"; then
+      printf '%s' "$pin"
+      return 0
+    fi
+  done
+  printf '%s' "$SKILLS_PIN_DEFAULT"
+}
+
+catalog_version_of() {
+  node -e 'const fs=require("fs"); const p=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); process.stdout.write(String(p.version||"").trim());' "$1"
+}
+
+ensure_uv() {
+  have uv && return 0
+  local installer="${LONGPI_CACHE:-${TMPDIR:-/tmp}}/uv-install.sh"
+  mkdir -p "$(dirname "$installer")"
+  if ! download_file "https://astral.sh/uv/install.sh" "$installer"; then
+    warn "Could not download uv; using a system Python 3.12 if one exists." "下载不了 uv，改用系统里的 Python 3.12（如果有）。"
+    return 1
+  fi
+  if ! sh "$installer" </dev/null >>"${LOG:-/dev/null}" 2>&1; then
+    warn "The uv installer failed; using a system Python 3.12 if one exists." "uv 安装失败，改用系统里的 Python 3.12（如果有）。"
+    return 1
+  fi
+  case ":${PATH:-}:" in
+    *":$HOME/.local/bin:"*) ;;
+    *) export PATH="$HOME/.local/bin:$PATH" ;;
+  esac
+  have uv
+}
+
+run_uv_pip() {
+  local py="$1"
+  shift
+  if [ "${USE_PYPI_MIRROR:-0}" != 1 ]; then
+    uv pip install --python "$py" "$@" </dev/null >>"$LOG" 2>&1
+    return
+  fi
+  if uv pip install --python "$py" --index-url "$PIP_INDEX_CN" "$@" </dev/null >>"$LOG" 2>&1; then
+    return 0
+  fi
+  echo "pip index ${PIP_INDEX_CN} failed; trying ${PIP_INDEX_CN_FALLBACK}" >>"$LOG"
+  warn "The pip index ${PIP_INDEX_CN} failed; trying ${PIP_INDEX_CN_FALLBACK}." \
+       "pip 源 ${PIP_INDEX_CN} 失败，改试 ${PIP_INDEX_CN_FALLBACK}。"
+  uv pip install --python "$py" --index-url "$PIP_INDEX_CN_FALLBACK" "$@" </dev/null >>"$LOG" 2>&1
+}
+
+install_python_requirements() {
+  local py="$1" req="$2"
+  if have uv; then
+    run_uv_pip "$py" -r "$req" || return 1
+    run_uv_pip "$py" mirobody || return 1
+    return 0
+  fi
+  if "$py" -m pip --version </dev/null >/dev/null 2>&1; then
+    if [ "${USE_PYPI_MIRROR:-0}" != 1 ]; then
+      "$py" -m pip install --quiet --upgrade pip </dev/null >>"$LOG" 2>&1 || return 1
+      "$py" -m pip install --quiet --upgrade -r "$req" mirobody </dev/null >>"$LOG" 2>&1 || return 1
+    else
+      pip_install_quiet "$py" -r "$req" mirobody </dev/null >>"$LOG" 2>&1 || return 1
+    fi
+    return 0
+  fi
+  run_uv_pip "$py" -r "$req" || return 1
+  run_uv_pip "$py" mirobody || return 1
+}
+
+npm_view_field() {
+  local spec="$1" field="$2"
+  local cmd
+  cmd=(npm view "$spec" "$field")
+  if [ "${USE_NPM_MIRROR:-0}" = 1 ]; then
+    cmd+=(--registry "$NPM_REGISTRY_CN")
+  fi
+  "${cmd[@]}" </dev/null 2>>"$LOG"
+}
+
+version_cmp() {
+  node -e 'const [a,b]=process.argv.slice(1); function parse(v){const m=/^v?(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.]+))?$/.exec(v||""); if(!m) return null; return [Number(m[1]),Number(m[2]),Number(m[3]),m[4]||null]} const pa=parse(a), pb=parse(b); let n=0; if(!pa||!pb) n=a===b?0:(a>b?1:-1); else if(pa[0]!==pb[0]) n=pa[0]>pb[0]?1:-1; else if(pa[1]!==pb[1]) n=pa[1]>pb[1]?1:-1; else if(pa[2]!==pb[2]) n=pa[2]>pb[2]?1:-1; else if(pa[3]===pb[3]) n=0; else if(pa[3]===null) n=1; else if(pb[3]===null) n=-1; else n=pa[3]>pb[3]?1:-1; process.stdout.write(String(n))' "$1" "$2"
+}
+
+maybe_upgrade_plugin() {
+  local installed="$1" current latest cmp url integrity archive spec
+  PLUGIN_CHANGED=0
+  [ "$COMMAND" = update ] || return 0
+  [ -f "$installed/package.json" ] || return 0
+  current="$(node -e 'process.stdout.write(String(require(process.argv[1]).version||""))' "$installed/package.json" 2>/dev/null || true)"
+  [ -n "$current" ] || return 0
+  latest="$(npm_view_field dsh-plugin-longpi version)" || {
+    note "npm view dsh-plugin-longpi failed; keeping the installed plugin." "npm 查不到 dsh-plugin-longpi，保留已安装的插件。"
+    return 0
+  }
+  latest="$(printf '%s\n' "$latest" | tail -n 1 | tr -d '[:space:]')"
+  [ -n "$latest" ] || return 0
+  cmp="$(version_cmp "$latest" "$current")"
+  if [ "$cmp" != 1 ]; then
+    info "Plugin $current is current (registry $latest)." "插件 ${current} 已是登记的版本（${latest}）。"
+    return 0
+  fi
+  spec="dsh-plugin-longpi@${latest}"
+  url="$(npm_view_field "$spec" dist.tarball)" || fail_log "Could not find a tarball for $spec." "找不到 ${spec} 的压缩包。"
+  url="$(printf '%s\n' "$url" | awk '/^https?:\/\/.*\.tgz$/ { line = $0 } END { print line }')"
+  [ -n "$url" ] || fail_log "No tarball URL for $spec." "没有 ${spec} 的压缩包地址。"
+  integrity="$(npm_view_field "$spec" dist.integrity 2>/dev/null || true)"
+  integrity="$(printf '%s\n' "$integrity" | awk '/^sha512-/ { line = $0 } END { print line }')"
+  mkdir -p "$LONGPI_CACHE"
+  archive="$LONGPI_CACHE/plugin-${latest}.tgz"
+  download_file "$url" "$archive" || fail_log "Could not download $url." "无法下载 ${url}。"
+  verify_tarball "$archive" "$url" "$integrity"
+  PLUGIN_SPEC="$archive"
+  PLUGIN_CHANGED=1
+  note "Updating dsh-plugin-longpi $current -> $latest" "正在更新插件 ${current} -> ${latest}"
+}
+
+write_install_state() {
+  python3 - "$@" <<'PY'
+import json, sys
+path, mirror, origin, req, spec, pin, resolved = sys.argv[1:8]
+data = {
+    "mirror": mirror,
+    "skills_origin": origin,
+    "requirements_sha256": req,
+    "plugin_spec": spec,
+    "skills_pin": pin,
+    "skills_version": resolved,
+}
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+PY
+}
+
+read_patch_value() {
+  python3 - "$1" "$2" <<'PY'
+import re, sys
+path, key = sys.argv[1], sys.argv[2]
+text = open(path, encoding="utf-8").read()
+start = text.find("# >>> dsh-plugin-longpi")
+end = text.find("# <<< dsh-plugin-longpi")
+block = text[start:end] if start >= 0 and end > start else text
+match = re.search(r"(?m)^\s+%s:\s*(.*?)\s*$" % re.escape(key), block)
+if not match:
+    sys.exit(3)
+raw = match.group(1).strip()
+if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "\"'":
+    quote = raw[0]
+    raw = raw[1:-1]
+    if quote == "'":
+        raw = raw.replace("''", "'")
+sys.stdout.write(raw)
+PY
+}
+
+version_check_json() {
+  node -e 'const version=process.argv[1]||""; const pin=process.argv[2]||""; const clean=(v)=>String(v||"").trim().replace(/^v/,""); const want=clean(pin); const running=clean(version); const matches=want?running===want:null; const verified_allowed=matches!==false; let label="verified"; let refused=false; if(!verified_allowed){label="unverified-binding"; refused=true} const mismatch=matches===false?`running catalog ${running||"(none)"} is not the pinned ${want}; a result from this pair cannot be labelled verified`:""; const mismatch_zh=matches===false?`正在使用的方法库是 ${running||"（没有版本）"}，锁定版本是 ${want}，这次不能把结果标成已核对`:""; process.stdout.write(JSON.stringify({pinned:want,catalog:running,matches,verified_allowed,label,refused_verified:refused,mismatch,mismatch_zh}))' "$1" "$2"
+}
+
+do_status() {
+  local longpi_home="$1" profile="$2" dsh_home="$3"
+  local patch="$dsh_home/profiles/$profile/cordis.patch.yml"
+  local state="$longpi_home/install-state.json"
+  if [ ! -f "$patch" ]; then
+    printf 'LongPi is not configured in %s\n' "$patch" >&2
+    return 1
+  fi
+  local skills_home="" skills_pin="" catalog="" python="" mirror="" origin="" plugin="" plugin_json json
+  skills_home="$(read_patch_value "$patch" skillsHome 2>/dev/null || true)"
+  skills_pin="$(read_patch_value "$patch" skillsVersion 2>/dev/null || true)"
+  python="$(read_patch_value "$patch" skillPython 2>/dev/null || true)"
+  if [ -n "$skills_home" ] && [ -f "$skills_home/catalog.json" ]; then
+    catalog="$(catalog_version_of "$skills_home/catalog.json")"
+  fi
+  if [ -z "$skills_pin" ]; then
+    skills_pin="$(read_pin "${SCRIPT_DIR:-}/package.json")"
+  fi
+  plugin_json="$dsh_home/profiles/$profile/node_modules/dsh-plugin-longpi/package.json"
+  if [ -f "$plugin_json" ]; then
+    plugin="$(node -e 'process.stdout.write(String(require(process.argv[1]).version||""))' "$plugin_json" 2>/dev/null || true)"
+  fi
+  if [ -f "$state" ]; then
+    mirror="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("mirror") or "")' "$state" 2>/dev/null || true)"
+    origin="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("skills_origin") or "")' "$state" 2>/dev/null || true)"
+  fi
+  json="$(version_check_json "$catalog" "$skills_pin")"
+  printf 'check=%s\n' "$json"
+  printf 'skills_home=%s\n' "$skills_home"
+  printf 'python=%s\n' "$python"
+  printf 'plugin=%s\n' "$plugin"
+  printf 'mirror=%s\n' "$mirror"
+  printf 'origin=%s\n' "$origin"
+  node -e 'const m=JSON.parse(process.argv[1]); if(m.matches===false) process.exit(2)' "$json"
+}
 WRITE_CONFIG='
 import os, re, sys, time
-path, skills_home, python_bin, set_mcp, mcp_url, mcp_token = sys.argv[1:7]
+argv = sys.argv[1:]
+if len(argv) < 6:
+    sys.exit("expected patch, skills home, python, set_mcp, mcp url, mcp token")
+path, skills_home, python_bin, set_mcp, mcp_url, mcp_token = argv[:6]
+skills_version = argv[6] if len(argv) > 6 else ""
 BEGIN = "# >>> dsh-plugin-longpi (written by install.sh; keep one value per line) >>>"
 END = "# <<< dsh-plugin-longpi <<<"
 KEYS = ["skillsHome", "skillsVersion", "mirobodyPluginHome", "pythonBin", "mirobodyHome", "mcpUrl", "mcpToken",
@@ -943,6 +1336,8 @@ if span:
 values["skillsHome"] = quote(skills_home)
 values["pythonBin"] = quote(python_bin)
 values["skillPython"] = quote(python_bin)
+if skills_version:
+    values["skillsVersion"] = quote(skills_version)
 values["mirobodyPluginHome"] = "\x27\x27"
 if set_mcp == "1":
     values["mcpUrl"] = quote(mcp_url)
