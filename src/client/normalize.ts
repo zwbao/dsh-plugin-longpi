@@ -52,6 +52,7 @@ function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback
 function profileOf(raw: Raw): Journey['profile'] {
   const risk: Partial<Record<RiskFact, boolean>> = {}
   for (const [key, value] of Object.entries(obj(raw.risk))) if (typeof value === 'boolean') risk[key as RiskFact] = value
+  const riskUnknown = strings(raw.riskUnknown).filter((key): key is RiskFact => (['smoker', 'diabetes', 'bp_treated', 'north', 'urban', 'family_history'] as readonly string[]).includes(key))
   const age = num(raw.age)
   const sex = oneOf(raw.sex, SEXES, 'unknown')
   const questions: JourneyQuestion[] = objects(raw.questions)
@@ -69,6 +70,7 @@ function profileOf(raw: Raw): Journey['profile'] {
     age,
     sex,
     risk,
+    ...(riskUnknown.length > 0 ? { riskUnknown } : {}),
     focus: strings(raw.focus).filter((key): key is Focus => FOCUS.includes(key as Focus)),
     complete: typeof raw.complete === 'boolean' ? raw.complete : age != null && (sex === 'male' || sex === 'female'),
     questions,
@@ -588,6 +590,7 @@ function indicatorRowOf(raw: Raw): IndicatorRow | null {
     ...(readError ? { read_error: readError } : {}),
     ...(raw.gate === 'too_early' || raw.gate === 'not_comparable' ? { gate: raw.gate } : {}),
     ...(str(raw.reason_zh) ? { reason_zh: str(raw.reason_zh) } : {}),
+    ...(raw.range_flag === 'low' || raw.range_flag === 'high' ? { range_flag: raw.range_flag, ...(str(raw.range_zh) ? { range_zh: str(raw.range_zh) } : {}) } : {}),
   }
 }
 

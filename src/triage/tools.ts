@@ -9,6 +9,7 @@ import { NO_STOP } from '../doctor-first.ts'
 import { buildTracking } from '../tracking.ts'
 import { jsonOut, sessionOfExec } from '../core/tool-kit.ts'
 import { lastPersonText, quoteIn } from '../core/turn-text.ts'
+import { isoDay } from '../interventions.ts'
 import { careItems, careState, logCareVisit, type CareStatus } from './care.ts'
 import { buildBrief, readBrief } from './brief.ts'
 
@@ -64,7 +65,7 @@ export function registerTriageTools(ctx: Context, deps: CoreDeps): void {
 
   ctx.tools.register(defineTool({
     name: 'log_care_visit',
-    description: 'Record what the person says about seeing the doctor for a finding: booked (with the date), visited (with what the doctor said, in their words), declined, or advised. quote is their own words from this message. A visit lets the plan go ahead with the doctor\'s conclusion noted; the doctor\'s treatment itself (iron, medicines, doses) is never put into the plan.',
+    description: 'Record what the person says about seeing the doctor for a finding. booked is stored only when quote is their own words from this message AND those words say they booked, with the date (我约了10月5日). A date you inferred, a plan to go (下周一去社区医院), or the page\'s old line is not a booking: it stays a proposal and is not shown as 已约. If they say they did not book it (没约那一天), pass that quote and the booking is deleted and stays deleted. visited: what the doctor said, in their words. declined: they will not go for now. A visit lets the plan go ahead with the doctor\'s conclusion noted; the doctor\'s treatment itself (iron, medicines, doses) is never put into the plan.',
     parameters: {
       status: { type: 'string', enum: ['booked', 'visited', 'declined', 'advised'], required: true, description: 'booked: an appointment is made; visited: they saw the doctor; declined: they will not go for now.' },
       visit_date: { type: 'string', description: 'YYYY-MM-DD of the appointment or the visit, when they said it.' },
@@ -81,7 +82,8 @@ export function registerTriageTools(ctx: Context, deps: CoreDeps): void {
       const session = sessionOfExec(exec)
       const quote = typeof args.quote === 'string' ? args.quote.trim() : ''
       const said = lastPersonText(session)
-      const confirmed = !said || !quote ? true : quoteIn(quote, said)
+      const booking = String(args.status) === 'booked'
+      const confirmed = booking ? undefined : (!said || !quote ? true : quoteIn(quote, said))
       const result = logCareVisit(deps.dataDir(), {
         status: String(args.status) as CareStatus,
         ...(typeof args.visit_date === 'string' ? { visit_date: args.visit_date.slice(0, 10) } : {}),
@@ -89,16 +91,28 @@ export function registerTriageTools(ctx: Context, deps: CoreDeps): void {
         ...(typeof args.department === 'string' ? { department_zh: args.department } : {}),
         ...(typeof args.finding_id === 'string' ? { finding_id: args.finding_id } : {}),
         ...(quote ? { quote_zh: quote } : {}),
-        via: 'chat', session_id: session, confirmed,
+        said_zh: said,
+        today: isoDay(),
+        via: 'chat', session_id: session,
+        ...(confirmed !== undefined ? { confirmed } : {}),
       }, care.findings)
       if (!result.ok) return asJson({ ok: false, error: result.error })
       deps.invalidate()
+      const booked = result.item.care_status === 'booked' && result.item.confirmed !== false && !result.cleared
       return asJson({
         ok: true,
         saved_zh: result.item.text_zh,
-        next_zh: result.item.care_status === 'visited'
-          ? '记下了。医生看过这些结果，方案现在可以只按生活方式起草；医生开的药或补铁按医生说的做，不放进方案。'
-          : result.item.care_status === 'booked' ? '记下了就诊日期。去之前可以打印医生简报；看完后告诉我医生怎么说。' : '记下了。',
+        confirmed: result.item.confirmed === true && !result.cleared,
+        ...(result.cleared ? { deleted: true } : {}),
+        next_zh: result.cleared
+          ? '已删掉这条预约。页头和随访不会再用这个日期；除非你亲口再说一次「我约了某月某日」，否则不会记回去。'
+          : result.kept
+            ? '原话里没有新的预约，已有的日期保持不动。'
+            : result.item.care_status === 'visited'
+              ? '记下了。医生看过这些结果，方案现在可以只按生活方式起草；医生开的药或补铁按医生说的做，不放进方案。'
+              : booked
+                ? '记下了就诊日期。去之前可以打印医生简报；看完后告诉我医生怎么说。'
+                : '没有记成已预约。只有你自己说出约了哪一天，才会显示在页头上。',
       })
     },
   }))

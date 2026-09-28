@@ -652,7 +652,7 @@ const EMERGENCIES: AdviceCard[] = [
     id: 'em-gi', tier: 4, kind: 'symptom', critical: true,
     aliases: [],
     pattern: /柏油|呕血|吐血|吐了一|大口血|黑便|便血|黑色.{0,8}便|黏糊/,
-    exclude: /一定是|什么是|铁剂/,
+    exclude: /一定是|什么是|(?<!没吃)(?<!没有吃)铁剂/,
     source: '消化道出血：侧卧、禁食、120 或急诊；双抗不要自行停',
     say: '请立即拨打 120。这可能是消化道出血。躺下，头偏向一侧，防止血呛进气道，不要自己开车，先别吃别喝。把药单和病历准备好，告诉医生正在吃的药（包括阿司匹林、氯吡格雷），由医生决定药怎么处理。起身时防晕倒。不要自己停双抗，不要先观察或自己吃止血药。',
     anchors: ['120', '侧', '禁'],
@@ -746,14 +746,71 @@ export function matchCards(text: string, limit = 3): AdviceCard[] {
   return out
 }
 
-/** The first matching emergency script, more specific rows first. */
+const EMERGENCY_CLAUSE = /[。！!？?；;\n\r]+/
+const FAMILY_NOW = /父母|父亲|母亲|爸|妈|爷爷|奶奶|外公|外婆|老公|老婆|丈夫|妻子|儿子|女儿|孩子|哥哥|姐姐|弟弟|妹妹|家人|家里人|家族|亲属|\b(?:mom|mother|dad|father|parents|husband|wife|son|daughter)\b/i
+const PAST_CLAUSE = /去年|前年|以前|之前|曾经|病史|年前|上周|上个月|月前|周前|小时候|年轻时|得过|患过|有过|犯过|家族史|疼过|痛过/
+const NOW_CLAUSE = /现在|正在|突然|刚才|刚刚|今天|这两天|刚|出冷汗|喘|晕|吐了|大口|嘴歪|拿不住|说话含糊|手抖|叫不醒/
+const NOW_NEGATED = /现在(?:也)?(?:没有|不|无|没)|已经好了|已经缓解/
+const HYPOTHETICAL = /^(?:假设|如果|假如|要是|万一)/
+const QUESTION_ONLY = /会不会|是不是|算不算|有没有可能|什么是|哪些症状|什么原因/
+const NEG_KEEP = /不停|不断|不住|不了|不知道|不清楚|不舒服|不对劲|受不了/g
+
+function emergencyClauses(text: string): string[] {
+  const parts = text.split(EMERGENCY_CLAUSE).map((part) => part.trim()).filter(Boolean)
+  return parts.length > 0 ? parts : [text]
+}
+
+/** A negation sitting just before the sign (没有心梗, 无胸痛, 否认胸痛, 没有胸口痛). */
+function negatedAt(clause: string, index: number): boolean {
+  const before = clause.slice(0, index).replace(NEG_KEEP, '')
+  return /(?:没有|没|无|否认|并未|不是|并不).{0,4}$/.test(before.slice(-8)) || /[无没否未不非]/.test(before.slice(-2))
+}
+
+/**
+ * The sign is happening now. A negated sign, a family history, a past event, a hypothetical,
+ * or a bare "would this be" question is not. A caregiver describing someone with them now still is.
+ */
+function clauseHasPresentSign(clause: string, pattern: RegExp): boolean {
+  if (HYPOTHETICAL.test(clause) && !/我现在真的|正在发生/.test(clause)) return false
+  if (QUESTION_ONLY.test(clause) && !NOW_CLAUSE.test(clause)) return false
+  const re = new RegExp(pattern.source, 'g')
+  for (const hit of clause.matchAll(re)) {
+    const index = hit.index ?? 0
+    if (negatedAt(clause, index)) continue
+    if (PAST_CLAUSE.test(clause) && (!NOW_CLAUSE.test(clause) || NOW_NEGATED.test(clause))) continue
+    if (FAMILY_NOW.test(clause)) {
+      const happening = NOW_CLAUSE.test(clause) || /吐了|大口血|叫不醒|嘴歪|拿不住|含糊|手抖|出冷汗|晕倒|抽搐|吞了/.test(clause)
+      if (!happening) continue
+    }
+    return true
+  }
+  return false
+}
+
+/** The first matching emergency script, more specific rows first. A negated, historical, family-history, or hypothetical mention does not match. */
 export function emergencyScript(text: string): AdviceCard | null {
   const n = normalizeAdviceText(text)
+  const parts = emergencyClauses(n)
   for (const card of EMERGENCIES) {
-    if (excluded(card, n)) continue
-    if (card.pattern && card.pattern.test(n) && (!card.require || card.require.test(n))) return card
+    if (!card.pattern) continue
+    if (card.require && !card.require.test(n)) continue
+    // Exclude words count in the clause that has the sign, so an earlier 「以前」
+    // does not hide 「现在胸口剧痛」.
+    const live = parts.some((part) => !excluded(card, part) && clauseHasPresentSign(part, card.pattern as RegExp))
+    if (live) return card
   }
   return null
+}
+
+/**
+ * A computed phenotypic age the tools already validated, with the honest framing
+ * (模型估计 / 不是变慢 / 波动). The corrector must not throw this sentence away.
+ */
+export function keepsValidatedComputation(reply: string): boolean {
+  const text = String(reply ?? '')
+  if (!/表型年龄|身体年龄|phenotypic\s*age/i.test(text)) return false
+  if (!/\d+(?:\.\d+)?\s*岁/.test(text)) return false
+  return /模型估计|算法没给|波动范围|不是衰老变慢|比实足年龄|这个数算数/.test(text)
 }
 
 export function renderSay(card: AdviceCard, text: string): string {
@@ -850,6 +907,9 @@ export function steerNeed(userText: string, reply: string): SteerNeed | null {
   const force = new Set(['fasting-plain', 'ben-heart', 'lab-egfr', 'ben-yam'])
   const critical = missing.some((card) => card.critical || force.has(card.id))
   if (!critical && !looksLikeRefusal(reply)) return null
+  // A validated phenotypic age (40.80, 模型估计) stays in the visible reply.
+  // Replacing the whole answer leaves that draft only in the folded trace.
+  if (keepsValidatedComputation(reply)) return null
   const say = missing.map((card) => safeChinese(userText, renderSay(card, userText))).filter(Boolean).join('\n')
   if (!say) return null
   return { kind: 'concrete', say, summary: 'LongPi 安全检查：把具体信息补上' }

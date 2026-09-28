@@ -27,11 +27,20 @@ export const triageCandidates: CandidateProvider = (pack) => {
   if (pack.stage === 'consent') return []
   const stop = pack.triage?.stop
   const open = (pack.triage?.findings ?? []).filter((row) => row.status !== 'visited' && row.priority !== 'should_surface')
+  if (stop?.needs_sex && open.length === 0) {
+    return [action({
+      id: 'answer-sex', kind: 'answer_profile', priority: 100, mandatory: true, fact_ids: [],
+      target: { surface: 'page', section: 'profile', prompt_zh: '帮我填写性别' },
+      title_zh: stop.title_zh || '填写性别',
+      detail_zh: stop.sentence_zh || '男女参考下限不同。先填写性别，再判断要不要看医生。这次不转诊。',
+      reason_codes: ['profile.sex_needed'],
+    })]
+  }
   if (!stop || open.length === 0) return []
   const factIds = open.map((row) => row.id)
   const care = (pack.triage?.care ?? []).filter((row) => factIds.includes(row.finding_id)).sort((a, b) => a.updated.localeCompare(b.updated)).at(-1)
   const out: NextBestAction[] = []
-  const sexNote = stop.needs_sex ? '档案里还没有性别，判断先按男性下限；填写性别后会更准。' : ''
+  const sexNote = stop.needs_sex ? '档案里还没有性别。男女参考下限不同，请先填写性别；介于两者之间的数值这次不转诊。' : ''
   const booked = care?.care_status === 'booked' && care.visit_date
   const asked = care?.care_status === 'advised' || care?.care_status === 'declined'
   const due = (booked && (care.visit_date as string) < pack.today) || (asked && addDays(care.updated.slice(0, 10), ASK_AFTER_DAYS) <= pack.today)

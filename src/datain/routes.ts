@@ -7,7 +7,7 @@ import { connectionUrlProblem, loginMirobody, maskMcpUrl, saveConnection, testCo
 import { listConditions, rememberCondition } from './conditions.ts'
 import { readGenetics } from './genetics.ts'
 import { listMedications, rememberMedication } from './meds.ts'
-import { listFindings } from './narrative.ts'
+import { findingsFromIndicators, listFindings } from './narrative.ts'
 import { ingestDocument, type SocketOpener } from './upload.ts'
 
 const CHUNK_RAW = 24 * 1024
@@ -35,6 +35,12 @@ function fail(error: string, status = 400): { ok: false; status: number; error: 
 export function registerDatainRoutes(deps: CoreDeps, open?: SocketOpener): void {
   deps.http.route('GET', '/api/longpi/findings', async () => {
     const dataDir = deps.dataDir()
+    try {
+      const context = await deps.context()
+      findingsFromIndicators(dataDir, context.records.indicators)
+    } catch {
+      // The list below is whatever was already stored.
+    }
     const findings = listFindings(dataDir).slice().reverse()
     return {
       ok: true,

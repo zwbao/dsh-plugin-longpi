@@ -6,7 +6,7 @@
 
 import { adviceBrief, emergencyScript, OWNER_HINT_EN, renderSay, safeChinese } from './advice/playbook.ts'
 import { PHARMA_DOSE, SHARED_DOSE } from './guard-dose.ts'
-import { HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH } from './plan-safety.ts'
+import { HYPO_AWAKE_ZH, HYPO_NEXT_DOSE_ZH, HYPO_UNCONSCIOUS_ZH, holdsInsulin } from './plan-safety.ts'
 
 export const LABEL_KEYS = ['acute_emergency', 'self_harm', 'med_change_request', 'personal_dose_request', 'research_question'] as const
 export type LabelKey = typeof LABEL_KEYS[number]
@@ -140,6 +140,8 @@ function acuteHit(lower: string, source: string): boolean {
 function acuteIn(clause: string): boolean {
   const lower = clause.toLowerCase()
   if (GENERIC.test(lower) && !NOW.test(lower)) return false
+  // 「问问什么是柏油便」 names the sign inside a definition.
+  if (/什么是|是什么意思|问问/.test(lower) && !NOW.test(lower)) return false
   // 「假设一个人血糖到2.0会怎样」 is a hypothetical, not an event.
   if (/^(?:假设|如果|假如)/.test(lower) && !/我现在|正在/.test(lower)) return false
   // 「否认胸闷和胸痛」: the denial covers the whole clause. A later clause can still be an emergency.
@@ -454,8 +456,8 @@ export function guidanceNote(labels: GuardLabels, options: { medicine?: boolean;
     const extra: string[] = []
     if (/孩子|儿子|女儿|儿童|宝宝/.test(said) && /岁/.test(said)) extra.push('If they are a child and awake, the first sentence uses 约 10 到 15 克 of fast sugar (glucose tablets or half a cup of juice), then recheck in 15 minutes. Do not withhold sugar.')
     if (/断食|轻断食|禁食/.test(said)) extra.push('They were fasting: also say to stop the fast now and not to restart it today. Do not explain fasting before the sugar step.')
-    if (/格列|磺脲/.test(said)) extra.push('Say that a sulfonylurea low can return for hours, so someone should stay with them and tell the prescriber. Do not tell them to stop the drug as the emergency step.')
-    if (/胰岛素/.test(said)) extra.push('Say not to stay alone and not to drive. If they become confused, call 120. Someone else may give glucagon if it was prescribed. The prescriber adjusts the insulin later; do not give a new dose.')
+    if (/格列|磺脲|胰岛素/.test(said)) extra.push(`After the 15 g step, the next sentence is exactly 「${HYPO_NEXT_DOSE_ZH}」 Do not tell them to skip, stop, hold, or delay insulin or a sulfonylurea. Do not give a new dose. For the next dose, they contact the prescribing doctor, or 120 if they will not wake or cannot swallow.`)
+    if (/胰岛素/.test(said)) extra.push('Say not to stay alone and not to drive. If they become confused, call 120. Someone else may give glucagon if it was prescribed. Do not give a new dose.')
     return {
       summary: 'LongPi 安全提示：低血糖，先说处理',
       text: [
@@ -537,13 +539,13 @@ export function correctionNote(verdict: ReplyVerdict): GuidanceNote {
     text: [
       '[LongPi safety check: added by the plugin, not written by the person.]',
       `Your reply above ${what || 'may have given a dose or advised a medicine change'}${verdict.reason ? ` (${verdict.reason.slice(0, 120)})` : ''}.`,
-      'Send a short correction now, in their language: say you should not have said that, that doses and changes to a medicine are for the doctor who prescribed it or a pharmacist, and do not repeat the amount. Call no tools.',
+      'Correct only the sentence that gave the dose or the medicine change. Keep every other sentence, especially a computed result such as 表型年龄 or 身体年龄 with 模型估计. The message you send is the same reply with that one sentence replaced, so the number stays in the visible answer and is not left behind as an unsent draft. Do not repeat the amount. Call no tools.',
     ].join('\n'),
   }
 }
 
 /** The reply to a hypoglycaemia message did not open with the first step: send it now, first. */
-export function hypoCorrectionNote(unconscious = false): GuidanceNote {
+export function hypoCorrectionNote(unconscious = false, insulinOrSu = false): GuidanceNote {
   const first = unconscious ? HYPO_UNCONSCIOUS_ZH : HYPO_AWAKE_ZH
   const then = unconscious ? HYPO_AWAKE_ZH : HYPO_UNCONSCIOUS_ZH
   return {
@@ -552,9 +554,25 @@ export function hypoCorrectionNote(unconscious = false): GuidanceNote {
       '[LongPi safety check: added by the plugin, not written by the person.]',
       'The person reported hypoglycaemia (a glucose under 3.9 mmol/L or symptoms), and your reply did not start with the first step.',
       `Send a short message now, in their language, whose first sentence is exactly 「${first}」 then 「${then}」 Then one line: after it passes, eat a normal meal or snack, and tell the doctor who prescribes their diabetes medicine about the low reading. Do not change or stop a medicine. Call no tools and draft no plan.`,
+      ...(insulinOrSu ? [`Then add exactly 「${HYPO_NEXT_DOSE_ZH}」 Do not tell them to skip or stop insulin or a sulfonylurea.`] : []),
     ].join('\n'),
   }
 }
+
+/** The reply told them not to inject insulin again, or to stop it, during a low. */
+export function insulinHoldCorrection(): GuidanceNote {
+  return {
+    summary: 'LongPi 安全检查：低血糖先处理，不改胰岛素',
+    text: [
+      '[LongPi safety check: added by the plugin, not written by the person.]',
+      'Your reply told them to skip or stop insulin. That is not first aid.',
+      'Send one short message now. Do not quote or paraphrase the earlier sentence. Do not tell them to skip, stop, hold, or delay insulin or a sulfonylurea.',
+      `The message is these two sentences and nothing else: 「${HYPO_AWAKE_ZH}」 「${HYPO_NEXT_DOSE_ZH}」`,
+    ].join('\n'),
+  }
+}
+
+export { holdsInsulin }
 
 // ---------------------------------------------------------------- compatibility
 

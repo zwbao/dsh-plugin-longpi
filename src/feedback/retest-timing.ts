@@ -50,8 +50,16 @@ export function retestAdvice(key: string): RetestAdvice {
   return { minDays: 28, earliestDays: 28, recommendedDays: 56, family: 'other', why_zh: '这项至少隔 4 周再测，才分得清波动和真实变化。' }
 }
 
-/** Dates to show. `waitedDays` is how long the person has already waited (plan days, or the gap between the two draws). */
-export function retestDates(today: string, advice: RetestAdvice, waitedDays: number | null, anchor: string | null): { earliest: string; recommended: string; why_zh: string } {
+/**
+ * Dates to show. `waitedDays` is how long the person has already waited (plan days, or the gap between the two draws).
+ * `completedOn` is the date of a draw that already happened. The window stays anchored to that draw: it does not
+ * slide forward with today, and a draw inside the minimum interval is the retest, not a reason to open the next one.
+ */
+export function retestDates(today: string, advice: RetestAdvice, waitedDays: number | null, anchor: string | null, completedOn: string | null = null): { earliest: string; recommended: string; why_zh: string } {
+  const done = completedOn && /^\d{4}-\d{2}-\d{2}/.test(completedOn) ? completedOn.slice(0, 10) : ''
+  if (done && daysBetween(done, today) >= 0 && daysBetween(done, today) < advice.minDays) {
+    return { earliest: done, recommended: done, why_zh: `复测已在 ${done} 完成。` }
+  }
   const base = (anchor && /^\d{4}-\d{2}-\d{2}/.test(anchor) ? anchor : today).slice(0, 10)
   const waited = waitedDays ?? 0
   if (waited < advice.minDays) {
@@ -60,10 +68,9 @@ export function retestDates(today: string, advice: RetestAdvice, waitedDays: num
     const extra = Math.max(0, advice.recommendedDays - advice.minDays)
     return { earliest, recommended: addDays(earliest, extra), why_zh: advice.why_zh }
   }
-  // A result already inside the noise still needs another full window before a definite answer.
+  // The next window opens on the anchor draw and stays there. It is not moved forward to today,
+  // which used to walk the suggestion past a retest the person had already done.
   const earliest = addDays(base, advice.earliestDays)
   const recommended = addDays(base, advice.recommendedDays)
-  const from = earliest < today ? today : earliest
-  const rec = recommended < from ? addDays(from, Math.max(0, advice.recommendedDays - advice.earliestDays)) : recommended
-  return { earliest: from, recommended: rec, why_zh: advice.why_zh }
+  return { earliest, recommended, why_zh: advice.why_zh }
 }

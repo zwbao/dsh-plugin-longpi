@@ -253,11 +253,12 @@ function caveat(marker: LabMarkerInput, grade: EvidenceGrade): string {
 }
 
 function schedule(marker: LabMarkerInput, advice: RetestAdvice, today: string, grade: EvidenceGrade): FeedbackMessage['retest'] {
-  const waited = grade === 'too_early' ? waitedOf(marker) : waitedOf(marker)
-  const anchor = grade === 'within_band_improving' || grade === 'within_band_flat' || grade === 'within_band_worse' || grade === 'beyond_band_better' || grade === 'beyond_band_worse'
-    ? marker.to_date ?? today
-    : today
-  const dates = retestDates(today, advice, grade === 'too_early' ? waited : (waited != null && waited >= advice.minDays ? advice.minDays : waited), anchor)
+  const waited = waitedOf(marker)
+  const comparable = grade === 'within_band_improving' || grade === 'within_band_flat' || grade === 'within_band_worse' || grade === 'beyond_band_better' || grade === 'beyond_band_worse'
+  const anchor = comparable ? marker.to_date ?? today : today
+  // A draw that already happened is the retest. Too-early stays a wait, and the window is not walked forward to today.
+  const completed = comparable ? marker.to_date ?? null : null
+  const dates = retestDates(today, advice, grade === 'too_early' ? waited : (waited != null && waited >= advice.minDays ? advice.minDays : waited), anchor, completed)
   return { earliest: dates.earliest, recommended: dates.recommended, why_zh: dates.why_zh }
 }
 
@@ -460,6 +461,15 @@ function judged(grade: EvidenceGrade): boolean {
   return grade === 'beyond_band_better' || grade === 'beyond_band_worse' || grade.startsWith('within_band')
 }
 
+/** A change the row already called past the band, including one with no good/bad direction. */
+function movedPastBand(row: FeedbackMessage): boolean {
+  if (/超出了(测量)?波动|超出正常波动/.test(row.headline_zh)) return true
+  const band = row.delta?.band
+  const value = row.delta?.value
+  if (!band || value == null) return false
+  return value > band[1] || value < band[0]
+}
+
 export function progressStory(markers: FeedbackMessage[], today: string): FeedbackMessage {
   const comparable = markers.filter((row) => judged(row.grade))
   const better = markers.filter((row) => row.grade === 'beyond_band_better' && row.tone !== 'care')
@@ -469,7 +479,9 @@ export function progressStory(markers: FeedbackMessage[], today: string): Feedba
   const n = comparable.length
   const k = improving.length
   const advice = retestAdvice('ldl')
-  const dates = retestDates(today, advice, advice.minDays, today)
+  const drawn = [...new Set(markers.flatMap((row) => row.numbers.map((item) => item.date ?? '')).filter((day) => /^\d{4}-\d{2}-\d{2}/.test(day)))].sort()
+  const latestDraw = drawn.at(-1) ?? null
+  const completedDraw = drawn.length >= 2 ? latestDraw : null
   let grade: EvidenceGrade = 'not_judgeable'
   let headline = '这次先不下结论：还没有可以对比的结果。补上复测后再看，不是没有变化。'
   let tone: FeedbackMessage['tone'] = 'neutral'
@@ -495,10 +507,14 @@ export function progressStory(markers: FeedbackMessage[], today: string): Feedba
     grade = 'within_band_flat'
     tone = 'neutral'
     headline = `这 ${n} 项都还在测量波动里，没有一项已经超出。再隔 8–12 周复查，才能确定有没有确切变化。`
+  } else if (markers.some((row) => movedPastBand(row))) {
+    tone = 'care'
+    headline = `${listZh(markers.filter((row) => movedPastBand(row)).map((row) => row.subject.label_zh))}的变化超出了正常波动。先不说变好或变差。`
   } else if (markers.some((row) => row.grade === 'too_early')) {
     grade = 'too_early'
     headline = '这几项还不到能下结论的时间。按每项自己的间隔再测，糖化血红蛋白至少要满 90 天。'
   }
+  const dates = retestDates(today, advice, advice.minDays, latestDraw, grade === 'too_early' ? null : completedDraw)
   const claims = claimsFor(grade, 'marker', false).filter((claim) => claim !== 'younger')
   return {
     id: 'fb-summary',
@@ -506,7 +522,7 @@ export function progressStory(markers: FeedbackMessage[], today: string): Feedba
     grade,
     allowed_claims: claims,
     numbers: markers.flatMap((row) => row.numbers).slice(0, 12),
-    retest: { earliest: dates.earliest, recommended: dates.recommended, why_zh: advice.why_zh },
+    retest: { earliest: dates.earliest, recommended: dates.recommended, why_zh: dates.why_zh },
     headline_zh: headline,
     body_zh: bodyOf(markers),
     tone,

@@ -158,6 +158,90 @@ declare const Config: Schema<Config>;
  */
 declare function asJson(value: unknown): JsonValue;
 //#endregion
+//#region src/plan-safety.d.ts
+declare const FISH_OIL_CAUTION = "试验用的是处方级的较高用量 EPA+DHA，鱼油可能增加出血和房颤（心房颤动）风险；这不是给你的用量，先与医生确认";
+declare const HYPO_AWAKE_ZH = "先吃 15 克快速吸收的糖（葡萄糖片或一小杯含糖果汁），15 分钟后复测；仍低于 3.9 mmol/L 就再吃 15 克。";
+declare const HYPO_UNCONSCIOUS_ZH = "昏迷、叫不醒或无法吞咽时不要喂东西，请立即拨打 120。";
+interface PanelPoint {
+  name: string;
+  label?: string;
+  loinc?: string;
+  value: number;
+  unit: string;
+  date: string;
+}
+interface SafetyClasses {
+  sglt2: boolean;
+  sglt2Name: string;
+  hypoDrugs: boolean;
+  pregnant: boolean;
+  /** Planning a pregnancy (备孕 / 准备怀孕 / 计划要孩子), or the standard 0.4 mg folic acid plan. */
+  planning: boolean;
+  breastfeeding: boolean;
+  /** Latest BMI when height and weight, or a BMI row, are on the record. */
+  bmi: number | null;
+  ckd: boolean;
+  diabetesKnown: boolean;
+}
+interface StopHit {
+  key: 'hgb' | 'mcv' | 'rdw' | 'ferritin' | 'glucose' | 'hba1c' | 'ldl' | 'sbp';
+  /** Short, for the overview title: 血红蛋白 120 g/L 偏低. */
+  short_zh: string;
+  /** The full clause with the date and, when the checkups show it, the fall across them. */
+  text_zh: string;
+  /** The latest value in the unit named, its date, and the fall when there is one (for the brief and the fact pack). */
+  value?: number;
+  unit?: string;
+  date?: string;
+  label_zh?: string;
+  low?: boolean;
+  fall?: Array<{
+    date: string;
+    value: number;
+  }>;
+}
+interface StopResult {
+  stop: boolean;
+  /**
+   * The profile has no sex and a value sits between the women's and the men's limits.
+   * That is not a referral. The page asks for sex first.
+   */
+  needs_sex?: boolean;
+  /** 请先去看医生：… — the whole reply when a plan is asked for. */
+  sentence_zh: string;
+  /** The overview's next step title. */
+  title_zh: string;
+  hits: StopHit[];
+}
+declare function medicationClasses(names: readonly string[], flags?: {
+  pregnant?: boolean | null;
+  planning?: boolean | null;
+  breastfeeding?: boolean | null;
+  bmi?: number | null;
+  ckd?: boolean | null;
+  diabetes?: boolean | null;
+}): SafetyClasses;
+/** Phrases the person has ruled out, kept so the next draft does not grow them back. */
+declare function exclusionsFromText(text: string): string[];
+/**
+ * Critical values and a red-cell pattern that need a doctor before any
+ * lifestyle plan. points holds the latest value of every indicator and, for
+ * haemoglobin and MCV, their earlier checkups. One plain sentence names each
+ * value with its number, calls a low value 偏低, and sends the person to a doctor.
+ */
+declare function clinicalStop(input: {
+  sex: string;
+  diabetesKnown: boolean;
+  points: readonly PanelPoint[];
+}): StopResult;
+interface HypoRead {
+  now: boolean;
+  unconscious: boolean;
+}
+/** A low reading or hypo symptoms happening now, not a past number told as history. */
+declare function hypoglycaemiaNow(text: string): HypoRead;
+declare function leadsWithHypoFirstStep(reply: string, unconscious?: boolean): boolean;
+//#endregion
 //#region src/guardrails.d.ts
 declare const LABEL_KEYS: readonly ["acute_emergency", "self_harm", "med_change_request", "personal_dose_request", "research_question"];
 type LabelKey = typeof LABEL_KEYS[number];
@@ -213,7 +297,7 @@ declare function guidanceNote(labels: GuardLabels, options?: {
 /** The correction steered into a turn whose reply gave a dose or advised a medicine change. */
 declare function correctionNote(verdict: ReplyVerdict): GuidanceNote;
 /** The reply to a hypoglycaemia message did not open with the first step: send it now, first. */
-declare function hypoCorrectionNote(unconscious?: boolean): GuidanceNote;
+declare function hypoCorrectionNote(unconscious?: boolean, insulinOrSu?: boolean): GuidanceNote;
 type GuardHit = {
   code: 'emergency';
   reply_zh: string;
@@ -422,7 +506,7 @@ declare function registerApprovals(ctx: Context, guard: Pick<Guard, 'inEmergency
 declare function hasDoseAmount(text: string): boolean;
 //#endregion
 //#region src/version.d.ts
-declare const PRODUCT_VERSION = "0.5.4";
+declare const PRODUCT_VERSION = "0.5.6";
 declare const TOOL_NAMES: readonly ["read_personal_situation", "list_longevity_intents", "match_longevity_skills", "read_longevity_skill", "run_longevity_skill", "query_longevity_evidence", "list_longevity_domains", "save_personal_profile", "longpi_status", "save_intervention_plan", "draft_intervention_plan", "log_intervention_checkin", "save_self_measurement", "record_medication_statement", "read_intervention_plan", "review_interventions", "model_intervention_goals", "set_followup", "send_followup_message", "read_person_memory", "remember_for_me", "note_page_issue", "read_care_navigation", "prepare_doctor_brief", "log_care_visit"];
 declare const HARNESS_SKILLS: readonly ["longpi-dispatch", "longpi-board", "longpi-boundary", "longpi-interventions"];
 /**
@@ -856,6 +940,8 @@ interface Profile {
   age: number | null;
   sex: Sex;
   risk: Partial<Record<RiskFact, boolean>>;
+  /** Facts they explicitly called 不确定. Missing means never asked, and is not stored as false. */
+  riskUnknown?: RiskFact[];
   focus: Focus[];
   /** The first-run product notice. Not the PIPL sensitive-information act. */
   consent: Consent | null;
@@ -1547,88 +1633,6 @@ declare function buildChanges(context: ChangesContext): Promise<{
   note_zh: string;
   unjudged: UnjudgedChange[];
 }>;
-//#endregion
-//#region src/plan-safety.d.ts
-declare const FISH_OIL_CAUTION = "试验用的是处方级的较高用量 EPA+DHA，鱼油可能增加出血和房颤（心房颤动）风险；这不是给你的用量，先与医生确认";
-declare const HYPO_AWAKE_ZH = "先吃 15 克快速吸收的糖（葡萄糖片或一小杯含糖果汁），15 分钟后复测；仍低于 3.9 mmol/L 就再吃 15 克。";
-declare const HYPO_UNCONSCIOUS_ZH = "昏迷、叫不醒或无法吞咽时不要喂东西，请立即拨打 120。";
-interface PanelPoint {
-  name: string;
-  label?: string;
-  loinc?: string;
-  value: number;
-  unit: string;
-  date: string;
-}
-interface SafetyClasses {
-  sglt2: boolean;
-  sglt2Name: string;
-  hypoDrugs: boolean;
-  pregnant: boolean;
-  ckd: boolean;
-  diabetesKnown: boolean;
-}
-interface StopHit {
-  key: 'hgb' | 'mcv' | 'rdw' | 'ferritin' | 'glucose' | 'hba1c' | 'ldl' | 'sbp';
-  /** Short, for the overview title: 血红蛋白 120 g/L 偏低. */
-  short_zh: string;
-  /** The full clause with the date and, when the checkups show it, the fall across them. */
-  text_zh: string;
-  /** The latest value in the unit named, its date, and the fall when there is one (for the brief and the fact pack). */
-  value?: number;
-  unit?: string;
-  date?: string;
-  label_zh?: string;
-  low?: boolean;
-  fall?: Array<{
-    date: string;
-    value: number;
-  }>;
-}
-interface StopResult {
-  stop: boolean;
-  /**
-   * The profile has no sex and a value is below the men's limit but not the women's: the stop uses the
-   * men's limit (conservative) and asks for the sex, which settles it.
-   */
-  needs_sex?: boolean;
-  /** 请先去看医生：… — the whole reply when a plan is asked for. */
-  sentence_zh: string;
-  /** The overview's next step title. */
-  title_zh: string;
-  hits: StopHit[];
-}
-declare function medicationClasses(names: readonly string[], flags?: {
-  pregnant?: boolean | null;
-  ckd?: boolean | null;
-  diabetes?: boolean | null;
-}): SafetyClasses;
-/** Phrases the person has ruled out, kept so the next draft does not grow them back. */
-declare function exclusionsFromText(text: string): string[];
-/**
- * Critical values and a red-cell pattern that need a doctor before any
- * lifestyle plan. points holds the latest value of every indicator and, for
- * haemoglobin and MCV, their earlier checkups. One plain sentence names each
- * value with its number, calls a low value 偏低, and sends the person to a doctor.
- */
-declare function clinicalStop(input: {
-  sex: string;
-  diabetesKnown: boolean;
-  points: readonly PanelPoint[];
-}): StopResult;
-interface HypoRead {
-  now: boolean;
-  unconscious: boolean;
-}
-/** A low reading or hypo symptoms happening now, not a past number told as history. */
-declare function hypoglycaemiaNow(text: string): HypoRead;
-/**
- * Whether a reply to a hypoglycaemia message leads with the first step: within
- * its first three sentences, one names about 15 g of fast sugar before any
- * sentence sends them to a doctor, a medicine or a plan. When they cannot be
- * woken, 120 comes first instead.
- */
-declare function leadsWithHypoFirstStep(reply: string, unconscious?: boolean): boolean;
 //#endregion
 //#region src/interventions.d.ts
 declare const CATEGORIES: readonly ["diet", "exercise", "sleep", "supplement", "drug", "behavior", "weight", "other"];
@@ -2390,6 +2394,9 @@ interface IndicatorEntry {
   gate?: 'too_early' | 'not_comparable';
   /** The 太早 or 不可比 sentence. The indicators page shows it next to the chip. */
   reason_zh?: string;
+  /** A single value outside the usual adult range. Shown even when the change itself is unjudged. */
+  range_flag?: 'low' | 'high';
+  range_zh?: string;
 }
 interface IndicatorsResponse {
   /** partial: some series could not be read; their rows carry read_error. */
@@ -3200,6 +3207,7 @@ interface Journey {
     age: number | null;
     sex: 'female' | 'male' | 'other' | 'unknown';
     risk: Partial<Record<RiskFact, boolean>>;
+    riskUnknown?: RiskFact[];
     focus: Focus[];
     complete: boolean;
     questions: Array<{
@@ -3483,6 +3491,7 @@ interface PlanBrief {
     medications: string[];
     notes_zh: string[];
     stop_zh?: string;
+    no_weight_loss?: boolean;
   };
   /** Evidence ids and titles the person already refused. */
   excluded_ids?: string[];
@@ -3561,7 +3570,7 @@ declare function expectedText(row: EffectRow): string;
  */
 /** The Chinese reply for this draft. The model sends it and does not call another tool first. */
 /** Walking, meal quality, sleep, and smoking or alcohol. No fast, no large weight target, no supplement, no iron. */
-declare function softHoldDraft(today: string): PlanDraft;
+declare function softHoldDraft(today: string, notes?: readonly string[]): PlanDraft;
 declare function replyForDraft(brief: PlanBrief, draft: PlanDraft | null): string;
 /**
  * Keep the draft's date while the labs and medicines are the same. A new day,
@@ -3588,6 +3597,122 @@ declare function acceptedPlan(brief: PlanBrief, posted: unknown, today: string):
   error: string;
   problems: string[];
 };
+//#endregion
+//#region src/advice/playbook.d.ts
+type AdviceKind = 'supplement' | 'diagnosis_first' | 'prescription' | 'symptom' | 'plan' | 'lab' | 'benign';
+interface AdviceExtra {
+  when: RegExp;
+  say: string;
+  anchors?: string[];
+  /** When this extra matches, the card's base paragraph is left out. */
+  replaces?: boolean;
+}
+interface AdviceCard {
+  id: string;
+  tier: 1 | 2 | 3 | 4;
+  kind: AdviceKind;
+  /** Substring aliases, already lower-case. Longer wins. Ignored when `pattern` is set. */
+  aliases: string[];
+  pattern?: RegExp;
+  /** When `pattern` matches, this must match too. */
+  require?: RegExp;
+  exclude?: RegExp;
+  source: string;
+  say: string;
+  anchors: string[];
+  /** Emergency: each inner list is OR; every group must show up in the first sentences. */
+  lead?: string[][];
+  extras?: AdviceExtra[];
+  /** Missing anchors are corrected even when the reply is not a bare refusal. */
+  critical?: boolean;
+  ownerHint?: boolean;
+}
+/** The first matching emergency script, more specific rows first. A negated, historical, family-history, or hypothetical mention does not match. */
+declare function emergencyScript(text: string): AdviceCard | null;
+/**
+ * A computed phenotypic age the tools already validated, with the honest framing
+ * (模型估计 / 不是变慢 / 波动). The corrector must not throw this sentence away.
+ */
+declare function keepsValidatedComputation(reply: string): boolean;
+interface SteerNeed {
+  kind: 'emergency' | 'concrete' | 'fasting';
+  say: string;
+  summary: string;
+}
+declare function steerNeed(userText: string, reply: string): SteerNeed | null;
+//#endregion
+//#region src/triage/care.d.ts
+type CareStatus = CareItem['care_status'];
+declare function careItems(dataDir: string): CareItem[];
+declare function careFor(dataDir: string, findingId: string): CareItem | null;
+interface VisitInput {
+  finding_id?: string;
+  status: CareStatus;
+  visit_date?: string;
+  department_zh?: string;
+  outcome_zh?: string;
+  quote_zh?: string;
+  /** The person's own message this turn, for the verbatim check. */
+  said_zh?: string;
+  /** Civil day used to resolve 下周一. */
+  today?: string;
+  via: 'chat' | 'page';
+  session_id?: string;
+  confirmed?: boolean;
+}
+/** Whether their words name this calendar day (2026-10-05, 10月5日, or 下周一 when that is the day). */
+declare function dateSaid(quote: string, visitDate: string, today?: string): boolean;
+/** They are denying a booking (没约那一天, 页头说我已约). */
+declare function deniesBooking(quote: string): boolean;
+/**
+ * A booking is theirs only when the quote is their words, says they booked, and names the date.
+ * 「下周一去社区医院」 is a plan, not a booking. 「页头说我已约 10 月 5 日」 is a denial.
+ */
+declare function affirmsBooking(quote: string, said: string, visitDate: string, today?: string): boolean;
+/**
+ * Record a booking, a visit or a decision not to go. Without a finding id it applies to the first open
+ * finding. Supersedes the finding's previous care item, so the history stays in memory_log.
+ */
+declare function logCareVisit(dataDir: string, input: VisitInput, findings: readonly TriageFinding[]): {
+  ok: true;
+  item: CareItem;
+  cleared?: boolean;
+  kept?: boolean;
+} | {
+  ok: false;
+  error: string;
+};
+interface CareState {
+  /** The stop after visits: findings a doctor has seen since their values are taken out. */
+  stop: StopResult;
+  findings: TriageFinding[];
+  /** Findings a doctor has seen, with what they said. */
+  seen: Array<{
+    finding: TriageFinding;
+    care: CareItem;
+  }>;
+}
+/**
+ * The record's stop with the person's visits applied. A finding counts as seen when a visit is logged on
+ * or after the date of its newest value; a checkup after the visit that still shows it opens it again.
+ */
+declare function careState(dataDir: string, stop: StopResult, today: string): CareState;
+/** What the doctor said, for the plan's notes: one line per finding seen. */
+declare function seenNotes(state: CareState): string[];
+//#endregion
+//#region src/privacy/pending.d.ts
+/** True until the person has granted or declined sending health chat to DeepSeek. A missing decision is still required. */
+declare function deepseekConsentPending(decision: string | null | undefined): boolean;
+//#endregion
+//#region src/privacy/egress.d.ts
+declare const CONSENT_HOLD_ZH = "还没有同意把健康对话发给 DeepSeek，所以这次不把健康信息发出去。请在开始页或档案里选择「我知道了，同意把健康对话发给 DeepSeek」。";
+/**
+ * `blob` is the whole call (system prompt included). `personText` is only what the person typed.
+ * A symptom in the persona or a safety note does not count as their emergency.
+ */
+declare function modelEgress(granted: boolean, blob: string, personText?: string): 'send' | 'hold' | 'local_aid';
+/** First aid from the local scripts. Nothing in `text` is sent to the model. */
+declare function localAidText(text: string): string;
 //#endregion
 //#region src/doctor-first.d.ts
 declare function buildDoctorFirst(context: {
@@ -4478,50 +4603,6 @@ declare function appendJsonl(path: string, row: unknown): void;
 /** Every parseable line; a torn line is skipped. */
 declare function readJsonl<T>(path: string, keep?: (raw: unknown) => T | null): T[];
 //#endregion
-//#region src/triage/care.d.ts
-type CareStatus = CareItem['care_status'];
-declare function careItems(dataDir: string): CareItem[];
-declare function careFor(dataDir: string, findingId: string): CareItem | null;
-interface VisitInput {
-  finding_id?: string;
-  status: CareStatus;
-  visit_date?: string;
-  department_zh?: string;
-  outcome_zh?: string;
-  quote_zh?: string;
-  via: 'chat' | 'page';
-  session_id?: string;
-  confirmed?: boolean;
-}
-/**
- * Record a booking, a visit or a decision not to go. Without a finding id it applies to the first open
- * finding. Supersedes the finding's previous care item, so the history stays in memory_log.
- */
-declare function logCareVisit(dataDir: string, input: VisitInput, findings: readonly TriageFinding[]): {
-  ok: true;
-  item: CareItem;
-} | {
-  ok: false;
-  error: string;
-};
-interface CareState {
-  /** The stop after visits: findings a doctor has seen since their values are taken out. */
-  stop: StopResult;
-  findings: TriageFinding[];
-  /** Findings a doctor has seen, with what they said. */
-  seen: Array<{
-    finding: TriageFinding;
-    care: CareItem;
-  }>;
-}
-/**
- * The record's stop with the person's visits applied. A finding counts as seen when a visit is logged on
- * or after the date of its newest value; a checkup after the visit that still shows it opens it again.
- */
-declare function careState(dataDir: string, stop: StopResult, today: string): CareState;
-/** What the doctor said, for the plan's notes: one line per finding seen. */
-declare function seenNotes(state: CareState): string[];
-//#endregion
 //#region src/core/topfacts.d.ts
 interface TopFactInput {
   care: CareState;
@@ -4976,4 +5057,4 @@ declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { AGENT_DEFAULTS, AGENT_PROFILE_IDS, type ActionKind, type AdviceTier, type AdviceTierResult, type AgentConfig, type AgentProfile, type AgentProfileId, type AgentRoute, type AgentRunRecord, type AskedTopicItem, BASE_RULES, BRIEF_PROMPT_ZH, BUDGET_DEFAULTS, type BootstrapResult, type Bus, CHANGES_NOTE_ZH, CIVIL_TZ, CLASSIFIER_SYSTEM, COACH_PROMPT, COACH_SCHEMA, CONNECTION_FILE, CONNECTION_TEST_MS, CONNECTION_UNAVAILABLE, CONSENT_VERSION, type CandidateProvider, type CareItem, type Claim, type CodexCard, type ConditionFlag, type ConditionItem, Config, type ConnectionGuard, type ConnectionSource, type ConnectionStatus, type ConnectionTest, type Consent, type ConsentRecord, type CoreDeps, DATA_FILES, DEFAULT_FOLLOWUP, DISTILL_PREFILTER, DOCTOR_PROMPT_ZH, DRAFT_CATEGORIES, type DistributiveOmit, type DoctorBrief, type DraftCategory, type DraftItem, type DrawGrant, type DrawResult, type DropTable, type DrugClass, EMERGENCY_LINE_ZH, EMPTY_PROFILE, EVENT_OWNERS, type EvidenceGrade, type ExclusionItem, FACT_PRIORITY_RANK, FISH_OIL_CAUTION, FOCUS, FOCUS_ZH, FOLLOWUP_DAMAGED, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type FactPack, type FactPriority, type FamilyHistoryItem, type FeedbackMessage, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, GROUP_KEYS, GROUP_ZH, GUARD_COUNTERS, GUARD_SCOPES, GUARD_TIMEOUT_MS, type GoalItem, type GroupKey, type Guard, type GuardCall, type GuardHit, type GuardLabels, type GuardScope, HARNESS_SKILLS, HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH, type HealthEvent, type HealthEventPayloads, type HealthEventSource, type HealthEventType, HealthSessions, type Id, type IndicatorChange, type IndicatorDetail, type IndicatorEntry, type IndicatorSource, type IndicatorsResponse, type IsoDay, type IsoTime, JUDGE_SYSTEM, type Journey, LABEL_KEYS, type LifeEventItem, type LlmCall, type LlmLike, type LocalStatResult, MANDATORY_PROVIDERS, MEMORY_VERSION, MODULES, type MedicationItem, type MemoryApi, type MemoryApplyResult, type MemoryItem, type MemoryKind, type MemoryOp, type ModuleId, NO_READ_BACK, type NewMemoryItem, type NextBestAction, type NoteItem, type NumberRef, ORCHESTRATOR_RULES, type ObjectJsonSchema, PHENOAGE_SKILL, PRODUCT_VERSION, PROFILE_DAMAGED, PROMPT_SECTIONS, type PageState, type PersonMemory, type PlanBrief, type PlanDraft, type PlanDraftItem, type PlanDraftV2, type PlanPrefs, type PreferenceItem, type PreferenceKey, type Profile, type Provenance, type Quest, type QuestKind, READ_BACK_MS, RESERVED_ROUTES, RESERVED_SKILLS, RESERVED_TOOL_NAMES, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type Rarity, type RecordChange, type RecordSnapshot, type RecordStatus, type RecordsSummary, type ReplyVerdict, type RiskFact, type RouteHandler, SAFETY_CONDITION_FLAGS, SAFETY_DRUG_CLASSES, SELF_ALIASES, SELF_HARM_LINE_ZH, SELF_KEYS, SELF_SPEC, SURFACES_DEFAULTS, type SavedConnection, type ScienceMode, type Season, type SelfKey, type SelfRow, type SendResult, type Specialists, type Stage, type StopHit, type StopResult, type StreakState, type StudyManifest, type SurfaceCard, type SurfaceKind, type SurfaceSet, TOOL_NAMES, type TokenUsage, type TopFact, type TransparencyLogEntry, type TriageFinding, type UnjudgedChange, type Unlock, VISIT_PROMPT_ZH, type ValidatorRule, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, WRITE_TOOLS, type WorkspaceLike, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, agentConfig, allowedNumbers, anchorOf, appendFollowupLog, appendJsonl, apply, asJson, bootstrapWorkspace, bridgeEnv, briefOptionsOf, buildBoard, buildBrief, buildCalendar, buildChanges, buildDoctorFirst, buildIndicators, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, candidateProviders, candidatesFor, careFor, careItems, careState, cellNumber, checkDay, checkReply, checkinStatus, checkupMarkerFor, chooseSurfaces, classifyMessage, clearConnection, clinicalStop, coachFallback, coachInflight, coachInput, coachProfile, collectCandidates, commandExcerpt, computeSafety, conditionFlagsOf, connectionKey, connectionSource, connectionTokenProblem, connectionUrlProblem, correctionNote, countGuard, createBudget, createBus, createGuard, createHttp, createLlmCall, createMemory, createSse, currentBus, currentPlan, currentSurfaces, daysBetween, decideFollowup, deleteSelf, describeItem, describePlan, desktopCommand, desktopSupported, detectIntents, distillerProfile, domainSummary, dosePattern, draftPlan, drinkingFromText, drugClassesOf, effectiveConfig, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, exclusionsFromText, expandMarkerNames, expectedText, factorFor, fallbackSurfaces, findingsFrom, firstJsonObject, fixScheduleText, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, forgetExclusion, goalProblems, greetingZh, groupOf, guardRoute, guidanceNote, hardKeyOf, hasDose, hasDoseAmount, healthWorkspacePaths, heldUntil, hitRefs, holdPlanDraft, homeBloodPressure, hypoCorrectionNote, hypoglycaemiaNow, inQuiet, indicatorDetail, indicatorFor, indicatorsFromTable, inject, insideWorkspace, invalidateIndicators, invalidateRecords, invalidateTracking, isJsonRequest, isMedicationRecordRequest, isoDay, isoWeek, isoWeekday, itemFrom, journeyCandidates, lastPersonText, latestOutputs, latestSelf, leadsWithHypoFirstStep, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, logCareVisit, manifestSummary, markerFor, markerGroupKeys, maskMcpUrl, maskUrl, matchSkills, matchesInputName, medicationClasses, memoryFor, mentionedEntities, mentionsMedicine, mergeProfile, mergeSelf, migrateLegacy, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, numberKeysIn, oddsSumToOne, orchestratorPrompt, organismOf, organismsAsked, packFp, packFrom, pageStateOf, parseCompact, parseFrontmatter, parseLabels, parseNumber, parseReadme, parseVerdict, patterns, personText, personaLines, planApprovalReason, planDraftHeld, planKey, pluginMessage, preGuard, presentMedications, profileComplete, publicFollowup, quoteIn, rangeFlag, rankActions, rankTopFacts, rcvBand, readBrief, readCheckIns, readConnection, readFailed, readFollowup, readFollowupLog, readGuardStats, readHistory, readJson, readJsonl, readPageState, readPlanPrefs, readPlans, readProfile, readReceipts, readResultFile, readSelf, readStatements, readiness, recordOutputs, recordReadable, recordSurfaces, recordsSummary, regenerate, registerApprovals, registerCandidates, registerModules, registerOrchestrator, registerValidator, releasePlanDraft, rememberExclusions, rememberFromWords, rememberMedications, rememberPersonText, rememberedMedications, replyForDraft, replyRuleCheck, reportExcerpt, resetCoachCache, resetReadBacks, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, routeFor, ruleLabels, runReady, runRegistered, runSkill, runValidators, runnableFrom, runtimeCall, sameMeasure, saveConnection, savePlan, screeningTopics, seenNotes, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, sessionKey, setBus, setCoach, setConsent, setDrinking, setFollowupDeps, setPlanExclusion, settleDraft, skillEnv, snapshotText, softHoldDraft, stageMeasurements, stageNow, startFollowup, statusLine, stripDoses, suggestNext, summarizeIndicators, summarizeMedications, supplementFieldInputs, tableOf, testConnection, togetherZh, tokenKey, touchesHealth, trackingGeneration, triageCandidates, triageFindings, turnText, unansweredOf, unitFactor, validateCoach, validateDistilled, validatorRules, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeJsonAtomic, writeProfile, writeStats, youngerAllowed };
+export { AGENT_DEFAULTS, AGENT_PROFILE_IDS, type ActionKind, type AdviceTier, type AdviceTierResult, type AgentConfig, type AgentProfile, type AgentProfileId, type AgentRoute, type AgentRunRecord, type AskedTopicItem, BASE_RULES, BRIEF_PROMPT_ZH, BUDGET_DEFAULTS, type BootstrapResult, type Bus, CHANGES_NOTE_ZH, CIVIL_TZ, CLASSIFIER_SYSTEM, COACH_PROMPT, COACH_SCHEMA, CONNECTION_FILE, CONNECTION_TEST_MS, CONNECTION_UNAVAILABLE, CONSENT_HOLD_ZH, CONSENT_VERSION, type CandidateProvider, type CareItem, type Claim, type CodexCard, type ConditionFlag, type ConditionItem, Config, type ConnectionGuard, type ConnectionSource, type ConnectionStatus, type ConnectionTest, type Consent, type ConsentRecord, type CoreDeps, DATA_FILES, DEFAULT_FOLLOWUP, DISTILL_PREFILTER, DOCTOR_PROMPT_ZH, DRAFT_CATEGORIES, type DistributiveOmit, type DoctorBrief, type DraftCategory, type DraftItem, type DrawGrant, type DrawResult, type DropTable, type DrugClass, EMERGENCY_LINE_ZH, EMPTY_PROFILE, EVENT_OWNERS, type EvidenceGrade, type ExclusionItem, FACT_PRIORITY_RANK, FISH_OIL_CAUTION, FOCUS, FOCUS_ZH, FOLLOWUP_DAMAGED, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type FactPack, type FactPriority, type FamilyHistoryItem, type FeedbackMessage, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, GROUP_KEYS, GROUP_ZH, GUARD_COUNTERS, GUARD_SCOPES, GUARD_TIMEOUT_MS, type GoalItem, type GroupKey, type Guard, type GuardCall, type GuardHit, type GuardLabels, type GuardScope, HARNESS_SKILLS, HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH, type HealthEvent, type HealthEventPayloads, type HealthEventSource, type HealthEventType, HealthSessions, type Id, type IndicatorChange, type IndicatorDetail, type IndicatorEntry, type IndicatorSource, type IndicatorsResponse, type IsoDay, type IsoTime, JUDGE_SYSTEM, type Journey, LABEL_KEYS, type LifeEventItem, type LlmCall, type LlmLike, type LocalStatResult, MANDATORY_PROVIDERS, MEMORY_VERSION, MODULES, type MedicationItem, type MemoryApi, type MemoryApplyResult, type MemoryItem, type MemoryKind, type MemoryOp, type ModuleId, NO_READ_BACK, type NewMemoryItem, type NextBestAction, type NoteItem, type NumberRef, ORCHESTRATOR_RULES, type ObjectJsonSchema, PHENOAGE_SKILL, PRODUCT_VERSION, PROFILE_DAMAGED, PROMPT_SECTIONS, type PageState, type PersonMemory, type PlanBrief, type PlanDraft, type PlanDraftItem, type PlanDraftV2, type PlanPrefs, type PreferenceItem, type PreferenceKey, type Profile, type Provenance, type Quest, type QuestKind, READ_BACK_MS, RESERVED_ROUTES, RESERVED_SKILLS, RESERVED_TOOL_NAMES, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type Rarity, type RecordChange, type RecordSnapshot, type RecordStatus, type RecordsSummary, type ReplyVerdict, type RiskFact, type RouteHandler, SAFETY_CONDITION_FLAGS, SAFETY_DRUG_CLASSES, SELF_ALIASES, SELF_HARM_LINE_ZH, SELF_KEYS, SELF_SPEC, SURFACES_DEFAULTS, type SavedConnection, type ScienceMode, type Season, type SelfKey, type SelfRow, type SendResult, type Specialists, type Stage, type StopHit, type StopResult, type StreakState, type StudyManifest, type SurfaceCard, type SurfaceKind, type SurfaceSet, TOOL_NAMES, type TokenUsage, type TopFact, type TransparencyLogEntry, type TriageFinding, type UnjudgedChange, type Unlock, VISIT_PROMPT_ZH, type ValidatorRule, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, WRITE_TOOLS, type WorkspaceLike, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, affirmsBooking, agentConfig, allowedNumbers, anchorOf, appendFollowupLog, appendJsonl, apply, asJson, bootstrapWorkspace, bridgeEnv, briefOptionsOf, buildBoard, buildBrief, buildCalendar, buildChanges, buildDoctorFirst, buildIndicators, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, candidateProviders, candidatesFor, careFor, careItems, careState, cellNumber, checkDay, checkReply, checkinStatus, checkupMarkerFor, chooseSurfaces, classifyMessage, clearConnection, clinicalStop, coachFallback, coachInflight, coachInput, coachProfile, collectCandidates, commandExcerpt, computeSafety, conditionFlagsOf, connectionKey, connectionSource, connectionTokenProblem, connectionUrlProblem, correctionNote, countGuard, createBudget, createBus, createGuard, createHttp, createLlmCall, createMemory, createSse, currentBus, currentPlan, currentSurfaces, dateSaid, daysBetween, decideFollowup, deepseekConsentPending, deleteSelf, deniesBooking, describeItem, describePlan, desktopCommand, desktopSupported, detectIntents, distillerProfile, domainSummary, dosePattern, draftPlan, drinkingFromText, drugClassesOf, effectiveConfig, effectsFor, emergencyScript, escapeText, estimatedAge, evaluateMarker, evaluatePlan, exclusionsFromText, expandMarkerNames, expectedText, factorFor, fallbackSurfaces, findingsFrom, firstJsonObject, fixScheduleText, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, forgetExclusion, goalProblems, greetingZh, groupOf, guardRoute, guidanceNote, hardKeyOf, hasDose, hasDoseAmount, healthWorkspacePaths, heldUntil, hitRefs, holdPlanDraft, homeBloodPressure, hypoCorrectionNote, hypoglycaemiaNow, inQuiet, indicatorDetail, indicatorFor, indicatorsFromTable, inject, insideWorkspace, invalidateIndicators, invalidateRecords, invalidateTracking, isJsonRequest, isMedicationRecordRequest, isoDay, isoWeek, isoWeekday, itemFrom, journeyCandidates, keepsValidatedComputation, lastPersonText, latestOutputs, latestSelf, leadsWithHypoFirstStep, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, localAidText, logCareVisit, manifestSummary, markerFor, markerGroupKeys, maskMcpUrl, maskUrl, matchSkills, matchesInputName, medicationClasses, memoryFor, mentionedEntities, mentionsMedicine, mergeProfile, mergeSelf, migrateLegacy, modelEgress, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, numberKeysIn, oddsSumToOne, orchestratorPrompt, organismOf, organismsAsked, packFp, packFrom, pageStateOf, parseCompact, parseFrontmatter, parseLabels, parseNumber, parseReadme, parseVerdict, patterns, personText, personaLines, planApprovalReason, planDraftHeld, planKey, pluginMessage, preGuard, presentMedications, profileComplete, publicFollowup, quoteIn, rangeFlag, rankActions, rankTopFacts, rcvBand, readBrief, readCheckIns, readConnection, readFailed, readFollowup, readFollowupLog, readGuardStats, readHistory, readJson, readJsonl, readPageState, readPlanPrefs, readPlans, readProfile, readReceipts, readResultFile, readSelf, readStatements, readiness, recordOutputs, recordReadable, recordSurfaces, recordsSummary, regenerate, registerApprovals, registerCandidates, registerModules, registerOrchestrator, registerValidator, releasePlanDraft, rememberExclusions, rememberFromWords, rememberMedications, rememberPersonText, rememberedMedications, replyForDraft, replyRuleCheck, reportExcerpt, resetCoachCache, resetReadBacks, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, routeFor, ruleLabels, runReady, runRegistered, runSkill, runValidators, runnableFrom, runtimeCall, sameMeasure, saveConnection, savePlan, screeningTopics, seenNotes, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, sessionKey, setBus, setCoach, setConsent, setDrinking, setFollowupDeps, setPlanExclusion, settleDraft, skillEnv, snapshotText, softHoldDraft, stageMeasurements, stageNow, startFollowup, statusLine, steerNeed, stripDoses, suggestNext, summarizeIndicators, summarizeMedications, supplementFieldInputs, tableOf, testConnection, togetherZh, tokenKey, touchesHealth, trackingGeneration, triageCandidates, triageFindings, turnText, unansweredOf, unitFactor, validateCoach, validateDistilled, validatorRules, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeJsonAtomic, writeProfile, writeStats, youngerAllowed };

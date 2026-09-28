@@ -10,16 +10,20 @@ import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { UserMessage } from '@deepseek-ai/dsh-llm'
 import {
-  correctionNote, extractUserText, guidanceNote, hypoCorrectionNote, isMedicationRecordRequest, LABEL_KEYS, mentionsMedicine, noLabels, rememberedMedications, replyRuleCheck, ruleLabels,
+  correctionNote, extractUserText, guidanceNote, hypoCorrectionNote, insulinHoldCorrection, isMedicationRecordRequest, LABEL_KEYS, mentionsMedicine, noLabels, rememberedMedications, replyRuleCheck, ruleLabels,
   type GuardLabels, type GuidanceNote, type ReplyVerdict,
 } from './guardrails.ts'
-import { adviceBrief, fastingGap, matchCards, renderSay, safeChinese, steerNeed } from './advice/playbook.ts'
+import { adviceBrief, emergencyScript, fastingGap, keepsValidatedComputation, matchCards, renderSay, safeChinese, steerNeed } from './advice/playbook.ts'
 import { mountAdvice } from './advice/register.ts'
 import { hasDoseAmount } from './guard-dose.ts'
 import { holdPlanDraft, releasePlanDraft, sessionKey } from './plan-hold.ts'
 import { rememberPersonText } from './core/turn-text.ts'
 import { rememberFromWords } from './core/remember-rules.ts'
-import { exclusionsFromText, hypoglycaemiaNow, leadsWithHypoFirstStep } from './plan-safety.ts'
+import { exclusionsFromText, holdsInsulin, hypoglycaemiaNow, leadsWithHypoFirstStep } from './plan-safety.ts'
+import { CONSENT_GRANT_ZH, ensureHomeBp, homeBpCorrection, homeBpNote, replyConfirmsHomeBp, statedHomePressure } from './home-bp.ts'
+import { rememberAvoidance } from './engage/quiet.ts'
+import { recordConsent } from './privacy/consents.ts'
+import { disclosureCopy } from './privacy/disclosure.ts'
 import { rememberExclusions, drinkingFromText, setDrinking } from './plan-prefs.ts'
 import { HealthSessions, insideWorkspace, touchesHealth, type GuardScope } from './guard-scope.ts'
 import { isoDay } from './interventions.ts'
@@ -609,7 +613,10 @@ export function createGuard(ctx: Context, options: GuardOptions): Guard {
         const result: Classified = modelAsked
           ? await classifyMessage(text, { call: callFor(agent), medications: rememberedMedications(), timeoutMs, ...(payload.signal ? { signal: payload.signal } : {}) })
           : { labels: ruleLabels(text), source: 'rules', llm: 'skipped' }
-        const { labels } = result
+        const labels = result.labels
+        // The model sometimes reads 「父母没有心梗」 as a heart attack. Rules and the
+        // present-symptom check both have to agree before that label stands.
+        if (labels.acute_emergency && !ruleLabels(text).acute_emergency && !emergencyScript(text)) labels.acute_emergency = false
         rememberPersonText(sessionKey(agent), text)
         const hypo = hypoglycaemiaNow(text)
         // Per session: a low reading in one chat does not hold drafts in another.
@@ -630,8 +637,16 @@ export function createGuard(ctx: Context, options: GuardOptions): Guard {
         if (modelAsked) {
           try {
             rememberFromWords(options.dataDir(), text, sessionKey(agent))
+            rememberAvoidance(options.dataDir(), text)
           } catch {
             // an unwritable data dir must not block the message
+          }
+          if (text.includes(CONSENT_GRANT_ZH)) {
+            try {
+              recordConsent(options.dataDir(), { scope: 'pipl_sensitive', decision: 'granted', textVersion: disclosureCopy().version, mode: 'off' })
+            } catch {
+              // the offer can be repeated; a failed write does not block the turn
+            }
           }
         }
         // Whether they drink, in their own words, decides whether an alcohol item may be drafted.
@@ -666,6 +681,11 @@ export function createGuard(ctx: Context, options: GuardOptions): Guard {
               ].join('\n'),
             }
           }
+        }
+        const bp = statedHomePressure(text)
+        if (bp) {
+          const extra = homeBpNote(bp)
+          note = note ? { summary: note.summary, text: `${note.text}\n${extra.text}` } : extra
         }
         if (note && text && note.text.includes(text)) note = { ...note, text: note.text.split(text).join('') }
         count({
@@ -704,10 +724,27 @@ export function createGuard(ctx: Context, options: GuardOptions): Guard {
         remember(checked, replyKey)
         // A low blood sugar is answered with the first step first; a reply that buried it gets it sent now.
         const hypo = hypoglycaemiaNow(userText)
+        const insulinOrSu = /胰岛素|格列|磺脲/.test(userText)
+        if (hypo.now && holdsInsulin(reply)) {
+          count({ output_checked: 1, output_steered: 1 })
+          remember(steered, turnKey)
+          agent.steer(noteMessage(insulinHoldCorrection()))
+          keepFlag = true
+          return
+        }
         if (hypo.now && !leadsWithHypoFirstStep(reply, hypo.unconscious)) {
           count({ output_checked: 1, output_steered: 1 })
           remember(steered, turnKey)
-          agent.steer(noteMessage(hypoCorrectionNote(hypo.unconscious)))
+          agent.steer(noteMessage(hypoCorrectionNote(hypo.unconscious, insulinOrSu)))
+          keepFlag = true
+          return
+        }
+        const bp = statedHomePressure(userText)
+        if (bp && !replyConfirmsHomeBp(reply, bp)) {
+          try { ensureHomeBp(options.dataDir(), bp, isoDay()) } catch { /* the note still tells them the numbers */ }
+          count({ output_checked: 1, output_steered: 1 })
+          remember(steered, turnKey)
+          agent.steer(noteMessage(homeBpCorrection(bp)))
           keepFlag = true
           return
         }
@@ -746,11 +783,15 @@ export function createGuard(ctx: Context, options: GuardOptions): Guard {
         if (needed && (needed.kind === 'concrete' || needed.kind === 'fasting') && !payload.signal?.aborted) {
           count({ output_steered: 1 })
           remember(steered, turnKey)
+          const keepComputation = keepsValidatedComputation(reply)
           agent.steer(noteMessage({
             summary: needed.summary,
             text: [
               '[LongPi safety check: added by the plugin, not written by the person.]',
-              'The reply withheld the practical answer. Send one short message now that gives it. If a lab needs a doctor, one sentence is enough; do not refuse the diet, exercise, or sleep question. Do not give an individual prescription dose. Do not say to start, stop, or switch a prescription. Do not call tools.',
+              keepComputation
+                ? 'Add one sentence. Keep the computed result (表型年龄 / 身体年龄, the number, and 模型估计) exactly. Do not send a new answer that drops it, and do not leave that result only in the previous draft.'
+                : 'Add the missing point as one sentence. Keep every sentence that is already right. Do not replace the reply with a different essay, and do not leave the earlier text as an unsent draft.',
+              'If a lab needs a doctor, one sentence is enough. Do not give an individual prescription dose. Do not say to start, stop, or switch a prescription. Do not call tools.',
               needed.say,
             ].join('\n'),
           }))

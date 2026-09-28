@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.5.6
+
+Owner-facing / 给使用者
+
+否定、家族史、过去的事和假设不再被当成正在发生的急症。「父母没有心梗」「没有胸痛」不会叫你打 120；现在胸口剧痛，或身边的人突然嘴歪，仍然先给急救。只有你自己说出已经约了、约好或挂号，并且这句话里有那一天，才会记成已预约。下周一去医院是建议，页头不写日期；说没约那一天，这条就撤掉，之后只重复页上的日期也不会再写回来。已经算对的表型年龄留在回答里，不会被改成铁剂说明。点了开始再刷新，DeepSeek 的同意页还在；没同意之前，健康内容不会发给模型，急症用本机的急救说明回答。性别还没填时，血红蛋白或铁蛋白落在男女下限之间，先问性别，不转血液科；两边都偏低仍然请看医生。
+
+一批指标读到一半被截断时，改成一项一项再读。九项血检齐了，身体年龄可以出现在页上。铁蛋白 8.0 ng/mL 在指标行标为偏低。变化已经超出正常波动时，不再写「多半是测量和生理波动」，「太早」只出现一次，已经做完的复测留在它自己的日期上。档案里已经有 hs-CRP 或腰围，就不再反复要求补这项。没送到 Mirobody 的上传不算看过，同一份可以再发。已经在记录里的 TI-RADS、BI-RADS、超声和总检会出现在档案。有糖尿病时，尿白蛋白/肌酐达到 30 mg/g、尿蛋白、eGFR 低于 60、眼底的微动脉瘤，算值得注意。指尖血糖、瞬感血糖和静脉空腹血糖分开，不混成一条。在对话里记下的药会出现在档案里。记得的体重或脂肪肝目标会写进等就诊期间的草稿。保存方案时核对用药最多等 8 秒。「我没有在备孕」不算怀孕或备孕。明确说不确定的，记成不确定，不记成否。年龄不在 35 到 74 岁时，风险卡写明 China-PAR 是由这个年龄段推导的。
+
+English, same release
+
+A negation, a family history, a past episode, or a hypothetical is not treated as an emergency happening now. 「父母没有心梗」 and 「没有胸痛」 do not call 120. Chest pain now, or a person with them who suddenly cannot speak clearly, still gets first aid. A visit is stored as booked only when your own message says you booked it (约了, 约好, 挂号) and names that day. A proposal such as going to the clinic next Monday stays unconfirmed, with no date on the header. Saying you did not book that day removes it, and a later message that only repeats the date on the page does not put it back. A reply that already states a phenotypic age with a number keeps that sentence. After 开始, a refresh still shows the DeepSeek consent until you grant or decline it. Until then, health text is not sent to the model; an emergency is answered from the local first-aid script. When sex is unknown, haemoglobin or ferritin between the women's and men's lower limits asks for sex and does not refer you to haematology. A value below both limits is still a doctor step.
+
+A history batch that comes back cut is read again, one indicator at a time, so body age can finish once the nine inputs are on file. Ferritin 8.0 ng/mL is marked low on its indicator row. A change past the noise band no longer says it is mostly measurement noise, 「太早」 is printed once, and a completed retest stays on its own date. An hs-CRP or waist already on the record is not asked for again. An upload that did not reach Mirobody is not marked seen, so the same file can be sent again. TI-RADS, BI-RADS, ultrasound text, and the summary already stored in Mirobody show on the record list. For someone with diabetes, urine albumin/creatinine at or above 30 mg/g, urine protein, an eGFR under 60, and a retinal note are flagged. Finger-stick, sensor, and venous fasting glucose stay separate series. A medicine stated in chat shows on the record list. A remembered weight or fatty-liver goal is copied into the while-you-wait draft. Saving a plan waits at most 8 seconds for the medicine list. 「我没有在备孕」 does not set pregnancy or planning. An explicit 不确定 stays unknown and is not stored as no. Outside ages 35–74, the risk card says China-PAR was derived from that age range.
+
+## 0.5.5
+
+Owner-facing / 给使用者
+
+低参与、或说过「别天天提醒我」的人，首页不再出现打卡、每天、每晚、提醒我，这一季的任务也不推，除非自己点「开始这一季」。低血糖时先按 15 克处理；下一次胰岛素或磺脲类的剂量，联系开药的医生，人叫不醒或无法吞咽时拨打 120。不会说「不要再打胰岛素」或「把胰岛素停了」。还没同意处理健康信息时，如果要记一次家庭血压，同一条回复里先给出单独同意，然后把数字记下。备孕（包括准备怀孕、计划要孩子）和哺乳与怀孕一样：方案不安排限时进食或断食，体重指数低于 24 时不设减重目标，酒写避免而不是减少。备孕另有一句中国常规人群指导：叶酸每天 0.4 mg。用药计划里已经是这个剂量时，健康页的草稿同样这么处理。
+
+English, same release
+
+A low-engagement person, or someone who asked not to be reminded every day, does not see daily check-in wording or a season push on the home until they opt in. Hypoglycaemia still starts with the 15 g step. The next insulin or sulfonylurea dose is for the prescribing doctor, or 120 if they will not wake. The reply does not say to stop or skip insulin. A home blood pressure they ask to record before the health-data consent is stored in that turn, and the consent is offered in the same reply. Planning a pregnancy (备孕, 准备怀孕, 计划要孩子) and breastfeeding are treated like pregnancy: no time-restricted eating or fasting, no weight-loss target when BMI is under 24, and alcohol is avoided rather than reduced. Pregnancy planning also states the China population guidance, folic acid 0.4 mg a day. A medication plan that is already that dose gets the same page draft.
+
 ## 0.5.4
 
 Owner-facing / 给使用者

@@ -60,8 +60,12 @@ export function mountEngageRoutes(register: (path: string, handler: Handler) => 
     void readBody(req).then((body) => {
       const row = isRecord(body) ? body : {}
       const action = row.action
+      if (action === 'opt_in' || action === 'opt_out') {
+        sendJson(res, 200, prefsEngage(dataDir(), { pressure: action === 'opt_in' }))
+        return
+      }
       if (action !== 'care_visit' && action !== 'addon' && action !== 'retest' && action !== 'next_season') {
-        sendJson(res, 400, { ok: false, error: 'action 只能是 care_visit、addon、retest 或 next_season。' })
+        sendJson(res, 400, { ok: false, error: 'action 只能是 care_visit、addon、retest、next_season、opt_in 或 opt_out。' })
         return
       }
       const result = action === 'care_visit'

@@ -10,11 +10,13 @@
 import { hasDose, stripDoses } from './dose.ts'
 import { drinkingFromText, fingerprint, readPlanPrefs, rememberExclusions, setDrinking, writePlanPrefs } from './plan-prefs.ts'
 import {
-  egfrBelowCkd, exclusionsFromText, FISH_OIL, FISH_OIL_CAUTION, flagsFromText, interventionBlocked,
-  medicationClasses, TIME_RESTRICTED,
+  bodyMassIndex, BREASTFEEDING_NOTE_ZH, egfrBelowCkd, exclusionsFromText, FISH_OIL, FISH_OIL_CAUTION, flagsFromText,
+  FOLIC_PLANNING_NOTE_ZH, holdWeightLoss, interventionBlocked, medicationClasses, PLANNING_NOTE_ZH, preconceptionFolic,
+  reproductiveDenied, reproductiveFromText, TIME_RESTRICTED,
 } from './plan-safety.ts'
 import { NO_STOP, panelPoints } from './doctor-first.ts'
 import { memoryFor } from './core/memory.ts'
+import { rememberFromWords } from './core/remember-rules.ts'
 import { careState, seenChangeKeys, seenNotes } from './triage/care.ts'
 import { buildTracking, type ModelCard, type TrackingContext } from './tracking.ts'
 import { CATEGORY_ZH, currentPlan, type Category } from './interventions.ts'
@@ -66,7 +68,7 @@ export interface PlanBrief {
     /** Forms the evidence row lists (快走、骑车…), for exercise items. */
     examples_zh: string[]
   }>
-  safety: { medications: string[]; notes_zh: string[]; stop_zh?: string }
+  safety: { medications: string[]; notes_zh: string[]; stop_zh?: string; no_weight_loss?: boolean }
   /** Evidence ids and titles the person already refused. */
   excluded_ids?: string[]
   excluded_phrases?: string[]
@@ -162,6 +164,13 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
   const notes: string[] = [...goalsFromMemory.notes]
   const prefs = readPlanPrefs(context.dataDir)
   const said = flagsFromText(options.constraints ?? '')
+  if ((options.constraints ?? '').trim()) {
+    try {
+      rememberFromWords(context.dataDir, options.constraints ?? '')
+    } catch {
+      // an unwritable data dir must not block the draft
+    }
+  }
   if (said.pregnant || said.ckd) {
     writePlanPrefs(context.dataDir, { ...prefs, pregnant: said.pregnant || prefs.pregnant, ckd: said.ckd || prefs.ckd })
   }
@@ -172,10 +181,17 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
   const excluded = readPlanPrefs(context.dataDir)
   const current = currentMedications(medications)
   // Conditions they told LongPi (memory; unconfirmed ones count too, since they only add caution).
-  const remembered = safeConditions(context.dataDir)
+  const remembered = rememberedReproductive(context.dataDir)
+  const folic = preconceptionFolic(medications)
+  const planning = said.planning || remembered.planning || folic
+  const breastfeeding = said.breastfeeding || remembered.breastfeeding
+  const bmi = bodyMassIndex(indicators)
   const classes = medicationClasses(current, {
-    pregnant: said.pregnant || stored.pregnant === true || remembered.includes('pregnancy') || remembered.includes('pregnancy_planning'),
-    ckd: said.ckd || stored.ckd === true || remembered.includes('ckd'),
+    pregnant: said.pregnant || stored.pregnant === true || remembered.pregnant,
+    planning,
+    breastfeeding,
+    bmi,
+    ckd: said.ckd || stored.ckd === true || remembered.ckd,
     diabetes: profile.risk.diabetes,
   })
   if (egfrBelowCkd(panelPoints(indicators))) classes.ckd = true
@@ -198,7 +214,7 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
   // for blood pressure themselves.
   const sbp = latestFor('sbp', indicators, reference.biovar)
   const dbp = latestFor('dbp', indicators, reference.biovar)
-  const conditionFlags = remembered
+  const conditionFlags = safeConditions(context.dataDir)
   const hypertensive = profile.risk.bp_treated === true || current.some((name) => ANTIHYPERTENSIVE.test(name)) || conditionFlags.includes('hypertension')
   const normotensive = !hypertensive && sbp != null && sbp.value < NORMAL_SBP && (dbp == null || dbp.value < NORMAL_DBP)
   const priorities = normotensive ? allPriorities.filter((row) => !BP_KEYS.includes(row.marker_key) || row.why_zh === ASKED_WHY) : allPriorities
@@ -219,8 +235,18 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
   if (profile.risk.smoker === false && reference.effects.some((row) => SMOKING_CESSATION.test(interventionText(row)) && priorities.some((p) => covers(row.marker_key ?? '', p.marker_key)))) {
     notes.push('你说过不吸烟，所以没有列出戒烟。')
   }
-  if (!stop.stop && drinks !== true && reference.effects.some((row) => ALCOHOL.test(interventionText(row)) && priorities.some((p) => covers(row.marker_key ?? '', p.marker_key)))) {
+  const reproductive = classes.pregnant || classes.planning || classes.breastfeeding
+  if (!stop.stop && !reproductive && drinks !== true && reference.effects.some((row) => ALCOHOL.test(interventionText(row)) && priorities.some((p) => covers(row.marker_key ?? '', p.marker_key)))) {
     notes.push(drinks === false ? '你说过不喝酒，所以没有列出减少饮酒。' : '还不知道你是否喝酒，所以没有列出减少饮酒；如果你喝酒，告诉我大概多久喝一次、一次多少。')
+  }
+  if (classes.planning) {
+    const line = remembered.planning || said.planning ? PLANNING_NOTE_ZH : FOLIC_PLANNING_NOTE_ZH
+    notes.push(line)
+    screen.notes.push(line)
+  }
+  if (classes.breastfeeding) {
+    notes.push(BREASTFEEDING_NOTE_ZH)
+    screen.notes.push(BREASTFEEDING_NOTE_ZH)
   }
   const plan = currentPlan(context.dataDir)
   const past = plan
@@ -236,12 +262,15 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
     })
     : []
   const metrics = ['dailySteps', 'dailyTotalSleepTime'].filter((name) => indicators.some((row) => row.name === name && row.source !== 'self'))
+  if (!notes.some((line) => line.startsWith('你说过的目标') && /脂肪肝|公斤|\bkg\b|体重/i.test(line))) {
+    notes.push('还没有记下体重目标或脂肪肝。如果有，直接告诉我，例如「体重目标 75 公斤」或「想管脂肪肝」。')
+  }
   return {
     today: context.today,
     focus,
     priorities,
     candidates,
-    safety: { medications: current, notes_zh: screen.notes, ...(stop.stop ? { stop_zh: stop.sentence_zh } : {}) },
+    safety: { medications: current, notes_zh: screen.notes, ...(stop.stop ? { stop_zh: stop.sentence_zh } : {}), ...(holdWeightLoss(classes) ? { no_weight_loss: true } : {}) },
     excluded_ids: excluded.excluded_ids,
     excluded_phrases: excluded.excluded_phrases,
     past_items: past,
@@ -284,6 +313,38 @@ function safeConditions(dataDir: string): string[] {
   } catch {
     return []
   }
+}
+
+/** Pregnancy, planning, or breastfeeding from a condition flag or from anything they said (a goal counts). */
+function rememberedReproductive(dataDir: string): { pregnant: boolean; planning: boolean; breastfeeding: boolean; ckd: boolean } {
+  const out = { pregnant: false, planning: false, breastfeeding: false, ckd: false }
+  const denied = { pregnant: false, planning: false, breastfeeding: false }
+  try {
+    const memory = memoryFor(dataDir)
+    const flags = memory.safetyFlags().conditions
+    out.pregnant = flags.includes('pregnancy')
+    out.planning = flags.includes('pregnancy_planning')
+    out.breastfeeding = flags.includes('breastfeeding')
+    out.ckd = flags.includes('ckd')
+    for (const item of memory.read().items) {
+      if (item.status !== 'active') continue
+      const said = reproductiveFromText(item.text_zh)
+      const no = reproductiveDenied(item.text_zh)
+      denied.pregnant = denied.pregnant || no.pregnant
+      denied.planning = denied.planning || no.planning
+      denied.breastfeeding = denied.breastfeeding || no.breastfeeding
+      out.pregnant = out.pregnant || said.pregnant
+      out.planning = out.planning || said.planning
+      out.breastfeeding = out.breastfeeding || said.breastfeeding
+    }
+  } catch {
+    // memory unreadable: the draft still uses what they passed this turn
+  }
+  // 「我没有在备孕」 stored as pregnancy_planning, or a goal that only says the overview did not mention it, is not a reason.
+  if (denied.pregnant) out.pregnant = false
+  if (denied.planning) out.planning = false
+  if (denied.breastfeeding) out.breastfeeding = false
+  return out
 }
 
 function prioritiesOf(input: {
@@ -385,6 +446,9 @@ interface Screen {
   sglt2: boolean
   sglt2Name: string
   pregnant: boolean
+  planning: boolean
+  breastfeeding: boolean
+  bmi: number | null
   ckd: boolean
   antithrombotic: boolean
   /** Their own answer; null = never asked, so no alcohol item. */
@@ -404,6 +468,9 @@ function safetyScreen(risk: Partial<Record<string, boolean>>, medications: reado
     sglt2: classes.sglt2,
     sglt2Name: classes.sglt2Name,
     pregnant: classes.pregnant,
+    planning: classes.planning,
+    breastfeeding: classes.breastfeeding,
+    bmi: classes.bmi,
     ckd: classes.ckd,
     antithrombotic: current.some((name) => ANTITHROMBOTIC.test(name)),
     drinks,
@@ -456,7 +523,7 @@ function candidatesOf(priorities: Priority[], effects: readonly EffectRow[], bio
     const index = priorities.findIndex((row) => covers(key, row.marker_key))
     return index < 0 ? Number.POSITIVE_INFINITY : index
   }
-  const classes = medicationClasses(screen.current, { pregnant: screen.pregnant, ckd: screen.ckd, diabetes: screen.glucoseRisk })
+  const classes = medicationClasses(screen.current, { pregnant: screen.pregnant, planning: screen.planning, breastfeeding: screen.breastfeeding, bmi: screen.bmi, ckd: screen.ckd, diabetes: screen.glucoseRisk })
   classes.sglt2 = screen.sglt2
   classes.sglt2Name = screen.sglt2Name
   classes.hypoDrugs = screen.hypoDrugs
@@ -644,12 +711,21 @@ function itemFor(group: Group, brief: PlanBrief, today: string): DraftItem {
  */
 /** The Chinese reply for this draft. The model sends it and does not call another tool first. */
 /** Walking, meal quality, sleep, and smoking or alcohol. No fast, no large weight target, no supplement, no iron. */
-export function softHoldDraft(today: string): PlanDraft {
+export function softHoldDraft(today: string, notes: readonly string[] = []): PlanDraft {
   const item = (id: string, category: DraftCategory, title: string, detail: string): DraftItem => ({
     id, category, category_zh: CATEGORY_ZH[category], title, detail, start: today, markers: [], target: null,
     evidence: { effect_id: id, expected_zh: '这不是试验效应，是等医生看过之前可以做的事。', doi: '', verified: false, population: '一般成人' },
     needs_doctor: false, cautions_zh: [],
   })
+  const said = notes.filter((line) => line.startsWith('你说过的目标'))
+  const weight = said.find((line) => /公斤|\bkg\b|体重/i.test(line))
+  const liver = said.some((line) => /脂肪肝/.test(line))
+  const extra = ['请先去看医生。等看过之前，先做上面这几件。']
+  if (weight) extra.push(`${weight}。等就诊期间先不减重。`)
+  if (liver) extra.push('饮食这一项也覆盖你说过的脂肪肝，不另设体重目标。')
+  if (!weight && !liver) {
+    extra.push(notes.find((line) => line.startsWith('还没有记下体重目标')) ?? '还没有记下体重目标或脂肪肝。如果有，直接告诉我，例如「体重目标 75 公斤」或「想管脂肪肝」。')
+  }
   return {
     title: `等就诊期间可以先做的事（${today}）`,
     items: [
@@ -659,7 +735,7 @@ export function softHoldDraft(today: string): PlanDraft {
       item('hold-smoke', 'behavior', '如果吸烟，先把戒烟和医生说；如果喝酒，先少喝', '不吸烟、不喝酒的人不用做这一项。'),
     ],
     goals: [],
-    notes_zh: ['请先去看医生。等看过之前，先做上面这几件。'],
+    notes_zh: extra,
   }
 }
 
@@ -674,7 +750,8 @@ export function replyForDraft(brief: PlanBrief, draft: PlanDraft | null): string
     return `${item.category_zh}：${item.title}${caution}。${item.evidence.expected_zh}`
   })
   const dated = draft.title.match(/\d{4}-\d{2}-\d{2}/)
-  return [`这是草稿，还没有保存。日期是 ${dated ? dated[0] : brief.today}。`, ...lines].join('\n')
+  const repro = [...brief.notes_zh, ...brief.safety.notes_zh].filter((line) => /你在备孕|按备孕处理|你在哺乳|避免饮酒|0\.4 mg/.test(line))
+  return [`这是草稿，还没有保存。日期是 ${dated ? dated[0] : brief.today}。`, ...new Set(repro), ...lines].join('\n')
 }
 
 /**
@@ -698,7 +775,7 @@ export function settleDraft(dataDir: string, brief: PlanBrief, today: string, op
 }
 
 export function draftPlan(brief: PlanBrief, opts: { today: string; maxItems?: number }): PlanDraft | null {
-  if (brief.safety.stop_zh) return softHoldDraft(opts.today)
+  if (brief.safety.stop_zh) return softHoldDraft(opts.today, [...brief.notes_zh, ...brief.safety.notes_zh])
   const maxItems = Math.max(1, Math.min(5, Math.round(opts.maxItems ?? 3)))
   const rankOf = (key: string) => brief.priorities.findIndex((row) => row.marker_key === key)
   const phrases = brief.excluded_phrases ?? []
@@ -823,6 +900,7 @@ function goalsFor(brief: PlanBrief, chosen: Group[], implausible: string[] = [])
   const out: Goal[] = []
   for (const priority of brief.priorities) {
     if (priority.value == null) continue
+    if (brief.safety.no_weight_loss && priority.marker_key === 'weight') continue
     let skipped = false
     for (const group of chosen) {
       const rows = group.rows.filter((item) => item.marker_key === priority.marker_key && item.verified && item.effect_in_record_unit != null)

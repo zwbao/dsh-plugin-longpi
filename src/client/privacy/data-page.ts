@@ -26,7 +26,7 @@ function List(props: { title: string; lines: string[] }): React.ReactElement {
     h('ul', { className: 'lp-privacy' }, ...props.lines.map((line) => h('li', { key: line }, line))))
 }
 
-export function DataPage(_props: Record<string, unknown>): React.ReactElement {
+export function DataPage(props: { onDecided?: (decision: 'granted' | 'declined') => void } & Record<string, unknown>): React.ReactElement {
   const [status, setStatus] = React.useState<Status | null>(null)
   const [phrase, setPhrase] = React.useState('')
   const [error, setError] = React.useState<string | null>(null)
@@ -39,7 +39,11 @@ export function DataPage(_props: Record<string, unknown>): React.ReactElement {
 
   const act = (body: Record<string, unknown>) => {
     setError(null)
-    void postJson('/api/longpi/privacy/consent', body).then(() => { setNote('已记下'); load() }).catch((err: unknown) => setError(errorText(err, '没有记下')))
+    void postJson('/api/longpi/privacy/consent', body).then(() => {
+      setNote('已记下')
+      if (body.scope === 'data_flow_deepseek' && (body.decision === 'granted' || body.decision === 'declined')) props.onDecided?.(body.decision)
+      load()
+    }).catch((err: unknown) => setError(errorText(err, '没有记下')))
   }
 
   const copy = status?.copy

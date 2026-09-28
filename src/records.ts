@@ -1008,11 +1008,24 @@ export async function loadSeries(
           })
         }
       }
-      // Cut: a series still full after its older readings were read again, or a table Mirobody marked cut (by its
-      // limit or its text cap) with no series to pin it on.
+      // Cut: a series still full after its older readings were read again, or a table Mirobody marked cut.
+      // A batch marked cut with no series at the row cap is usually the text cap (or a flag that cannot be
+      // pinned). Read each indicator alone so a small lab series is whole, and only a series that is still
+      // cut on its own stays cut. PhenoAge's history uses this path.
       const marked = table.meta.truncated || (payload && typeof payload === 'object' && (payload as { truncated?: unknown }).truncated === true)
         || textOf(payload).includes('\n… cut at ')
-      out.cut.push(...(full.length > 0 ? stillCut : marked ? chunk : []))
+      if (marked && full.length === 0 && chunk.length > 1) {
+        for (const name of chunk) delete out.series[name]
+        for (const name of chunk) {
+          const one = await loadSeries(config, [name], options)
+          for (const [key, series] of Object.entries(one.series)) out.series[key] = series
+          if (one.error) out.error ??= one.error
+          out.failed.push(...one.failed)
+          out.cut.push(...one.cut)
+        }
+      } else {
+        out.cut.push(...(full.length > 0 ? stillCut : marked ? chunk : []))
+      }
     }
     out.failed = [...new Set(out.failed)]
     out.cut = [...new Set(out.cut)].filter((name) => !out.failed.includes(name))
