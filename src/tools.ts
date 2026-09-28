@@ -18,6 +18,7 @@ import { asJson } from './json.ts'
 import { memoryFor } from './core/memory.ts'
 import { mcpHost } from './mcp.ts'
 import { latestOutputs } from './history.ts'
+import { applyVersionPin } from './pin.ts'
 import { loadEvidenceLexicon, mentionedEntities } from './intents.ts'
 import { runnableFrom } from './measurements.ts'
 import { isoDay } from './interventions.ts'
@@ -106,29 +107,9 @@ export interface VersionCheck {
   mismatch_zh: string
 }
 
-function cleanVersion(value: string | undefined): string {
-  return (value ?? '').trim().replace(/^v/, '')
-}
-
 // A pinned catalog that is not the running one cannot be labelled verified.
 export function versionCheck(catalog: Catalog, pinned: string, proposed?: LibraryResultLabel): VersionCheck {
-  const want = cleanVersion(pinned)
-  const running = cleanVersion(catalog.version)
-  const matches = want ? running === want : null
-  const verified_allowed = matches !== false
-  let label: LibraryResultLabel | null = proposed ?? null
-  let refused_verified = false
-  if (proposed === 'verified' && !verified_allowed) {
-    label = 'unverified-binding'
-    refused_verified = true
-  }
-  const mismatch = matches === false
-    ? `running catalog ${running || '(none)'} is not the pinned ${want}; a result from this pair cannot be labelled verified`
-    : ''
-  const mismatch_zh = matches === false
-    ? `正在使用的方法库是 ${running || '（没有版本）'}，锁定版本是 ${want}，这次不能把结果标成已核对`
-    : ''
-  return { pinned: want, catalog: running, matches, verified_allowed, label, refused_verified, mismatch, mismatch_zh }
+  return applyVersionPin(catalog.version, pinned, proposed)
 }
 
 export function registerTools(ctx: Context, config: () => Config, mount: MountState): void {
@@ -742,13 +723,20 @@ function pageOf(read: JourneyRead, dataDir: string) {
       suggestions_zh: surfaces.suggestions.map((row) => row.prompt_zh ?? row.text_zh),
     },
     top_facts: triage.top_facts.slice(0, 5).map(({ id, kind, priority, text_zh }) => ({ id, kind, priority, text_zh })),
+    method_results: (read.journey.method_results ?? []).map((row) => ({
+      skill: row.skill,
+      label: row.label,
+      limits_zh: row.limits_zh,
+      outputs: row.outputs,
+      inputs_used: row.inputs_used,
+    })),
     care: {
       findings: triage.findings.map(({ id, title_zh, department_zh, status }) => ({ id, title_zh, department_zh, status })),
       answers: triage.care,
       needs_sex: triage.needs_sex,
     },
     memory_zh: memory,
-    page_how_to_read: 'page is what the LongPi page shows the person now; top_facts are ranked by rule. When top_facts[0] is must_surface, say it first in one or two sentences with its numbers. Do not contradict the page silently; if it is wrong, say why and call note_page_issue. memory_zh is what they told LongPi before: do not ask it again. When care.needs_sex is true, ask their sex (the limits differ for men and women).',
+    page_how_to_read: 'page is what the LongPi page shows the person now; top_facts are ranked by rule. method_results is the same labeled list the page renders. Quote a number only with its label. Do not say the person got younger unless that label is verified and the change is beyond the noise band. When top_facts[0] is must_surface, say it first in one or two sentences with its numbers. Do not contradict the page silently; if it is wrong, say why and call note_page_issue. memory_zh is what they told LongPi before: do not ask it again. When care.needs_sex is true, ask their sex (the limits differ for men and women).',
   }
 }
 

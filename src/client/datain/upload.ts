@@ -21,14 +21,22 @@ function fileToBuffer(file: File): Promise<ArrayBuffer> {
   return file.arrayBuffer()
 }
 
+type StoreKind = '' | 'methylation' | 'taxa' | 'proteins' | 'conditions'
+
 export function ReportUpload(props: { onDone?: () => void }): React.ReactElement {
   const [busy, setBusy] = React.useState(false)
   const [status, setStatus] = React.useState('')
   const [error, setError] = React.useState('')
+  const [kind, setKind] = React.useState<StoreKind>('')
+  const [confirmStore, setConfirmStore] = React.useState(false)
 
   async function send(file: File): Promise<void> {
     if (file.size > 32 * 1024 * 1024) {
       setError('超过 32 MB。叙述版基因报告请发到健康对话，不要从这里整本上传。')
+      return
+    }
+    if (kind && !confirmStore) {
+      setError('请先确认：这份表只留在这台电脑上，不送进体检记录。')
       return
     }
     setBusy(true)
@@ -38,6 +46,7 @@ export function ReportUpload(props: { onDone?: () => void }): React.ReactElement
       const bytes = new Uint8Array(await fileToBuffer(file))
       const started = await postJson<UploadAnswer>('/api/longpi/upload', {
         op: 'start', filename: file.name, content_type: file.type || 'application/octet-stream', size: bytes.length,
+        ...(kind ? { type: kind, confirm: true } : {}),
       })
       const id = started.id
       const total = started.total ?? 1
@@ -62,8 +71,25 @@ export function ReportUpload(props: { onDone?: () => void }): React.ReactElement
   }
 
   return h('div', { id: 'lp-report-upload' },
+    h('label', { className: 'lp-fine', htmlFor: 'lp-upload-kind' }, '文件类型'),
+    h('select', {
+      id: 'lp-upload-kind', className: 'lp-input', value: kind, disabled: busy,
+      onChange: (event: React.ChangeEvent<HTMLSelectElement>) => setKind(event.target.value as StoreKind),
+    },
+      h('option', { value: '' }, '体检报告（PDF 或照片）'),
+      h('option', { value: 'methylation' }, '甲基化位点表'),
+      h('option', { value: 'taxa' }, '菌群表'),
+      h('option', { value: 'proteins' }, '蛋白表'),
+      h('option', { value: 'conditions' }, '诊断编码')),
+    kind ? h('label', { className: 'lp-check', htmlFor: 'lp-upload-confirm' },
+      h('input', {
+        id: 'lp-upload-confirm', type: 'checkbox', checked: confirmStore, disabled: busy,
+        onChange: (event: React.ChangeEvent<HTMLInputElement>) => setConfirmStore(event.target.checked),
+      }),
+      '确认后记在这台电脑上，不送进体检记录') : null,
     h('input', {
-      id: 'lp-report-file', type: 'file', className: 'lp-input', accept: 'application/pdf,image/jpeg,image/png,image/webp,text/plain',
+      id: 'lp-report-file', type: 'file', className: 'lp-input',
+      accept: 'application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv,.csv,.tsv,.txt,.json',
       disabled: busy,
       onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0]

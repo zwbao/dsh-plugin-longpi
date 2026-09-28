@@ -1,4 +1,4 @@
-export const PRODUCT_VERSION = '0.6.0-dev.0'
+export const PRODUCT_VERSION = '0.6.0'
 export const PRODUCT_NAME = 'dsh-plugin-longpi'
 
 export const TOOL_NAMES = [
@@ -61,7 +61,7 @@ export const RESERVED_ROUTES = {
   M4: ['GET /api/longpi/feedback'],
   M5: ['GET /api/longpi/surfaces'],
   M6: ['GET /api/longpi/season', 'POST /api/longpi/season', 'POST /api/longpi/streak-freeze', 'GET /api/longpi/codex', 'POST /api/longpi/codex/draw', 'GET /api/longpi/weekly', 'POST /api/longpi/nudges'],
-  M7: ['POST /api/longpi/upload', 'GET /api/longpi/findings', 'GET /api/longpi/meds', 'POST /api/longpi/meds', 'GET /api/longpi/conditions', 'POST /api/longpi/conditions'],
+  M7: ['POST /api/longpi/upload', 'GET /api/longpi/findings', 'GET /api/longpi/meds', 'POST /api/longpi/meds', 'GET /api/longpi/conditions', 'POST /api/longpi/conditions', 'GET /api/longpi/stores'],
   M8: ['GET /api/longpi/science/studies', 'POST /api/longpi/science/consent', 'POST /api/longpi/science/withdraw', 'POST /api/longpi/science/run', 'GET /api/longpi/science/translog', 'GET /api/longpi/science/community'],
   M11: ['GET /api/longpi/privacy', 'POST /api/longpi/privacy/consent', 'GET /api/longpi/privacy/export', 'POST /api/longpi/privacy/delete'],
 } as const

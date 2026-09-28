@@ -4,10 +4,12 @@ import { join } from 'node:path'
 import { ABDOMINAL_CT_SKILL, assessBinding, isCoronaryName, methodFromReport, type BindingReport, type RecordView } from './bind.ts'
 import type { Catalog, SkillCard } from './catalog.ts'
 import { loadCatalog } from './catalog.ts'
-import type { BindingProposal, MethodResult } from './contracts/library.ts'
+import type { BindingProposal, MethodResult, StoreKind } from './contracts/library.ts'
+import { recordMethodResult } from './core/method-results.ts'
 import { speciesZh } from './skills-provider.ts'
 import { readResultFile, recordOutputs, type OutputValue } from './history.ts'
 import { stageMeasurements, type MeasurementIn, type Problem } from './measurements.ts'
+import { isStoreKind, writeNarrowCsv } from './stores/index.ts'
 
 const FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/
 const OUT_PATH = /^out\/?$|^out\/[A-Za-z0-9][A-Za-z0-9._-]{0,80}$/
@@ -133,6 +135,21 @@ function fail(skill: string, revision: string, error_kind: string, error: string
 }
 
 /** A script that exits 0 without a value did not produce a personal number. */
+/** Manifest keys from a typed store, not a file the model pasted. The 256KB cap on model files stays. */
+function narrowFromStore(request: RunRequest, report: BindingReport | null, card: SkillCard): StagedFile | null {
+  if (!report) return null
+  const sourced = report.inputs_used.filter((item) => item.source_row_id.startsWith('store:'))
+  if (sourced.length === 0 || !card.entry?.measurements_flag) return null
+  const header = card.entry.measurements_header?.length ? card.entry.measurements_header : ['marker', 'value', 'unit']
+  if (header.join(',') !== 'marker,value,unit') return null
+  const kind = sourced[0]?.source_row_id.split(':')[1]
+  if (!isStoreKind(kind)) return null
+  const keys = card.inputs.filter((spec) => (spec.from ?? 'measurements') === 'measurements').map((spec) => spec.key)
+  const narrow = writeNarrowCsv(request.dataDir, { kind: kind as StoreKind, keys })
+  if (!narrow.ok || narrow.rows === 0) return null
+  return { name: MEASUREMENTS_FILE, text: narrow.text }
+}
+
 function labelAfterRun(report: BindingReport, outputs: Record<string, OutputValue>): BindingReport {
   if (report.label === 'evidence-only') return report
   const produced = Object.values(outputs).some((item) => item && item.value != null && item.value !== '')
@@ -322,6 +339,8 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
     if (bindingReport.measurements.length > 0) measurements = bindingReport.measurements
     if (bindingReport.args.length > 0) boundArgs = [...request.args, ...bindingReport.args]
   }
+  const storeFile = narrowFromStore(request, bindingReport, card)
+  if (storeFile) measurements = undefined
   if (boundArgs.length > 40) {
     return fail(request.name, catalog.revision, 'invalid_arguments', 'at most 40 arguments', 'Pass only the flags the skill command lists.')
   }
@@ -348,6 +367,19 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
   let args = [...boundArgs]
   const inputKeys: string[] = []
   const conversions: Conversion[] = []
+  if (storeFile) {
+    if (files.some((file) => file.name === MEASUREMENTS_FILE)) {
+      return fail(request.name, catalog.revision, 'invalid_arguments', `${MEASUREMENTS_FILE} is staged by the harness`, 'Pass measurements or files, not both for the same table.')
+    }
+    files.push(storeFile)
+    const flag = card.entry?.measurements_flag
+    if (flag) {
+      const at = args.indexOf(flag)
+      if (at >= 0) args.splice(at, 2)
+      args.push(flag, MEASUREMENTS_FILE)
+    }
+    inputKeys.push(...(bindingReport?.inputs_used.map((item) => item.input) ?? []))
+  }
   if (card.name === ABDOMINAL_CT_SKILL) {
     const named = (measurements ?? []).find((item) => isCoronaryName(String(item.key)))
     const filed = files.map((file) => coronaryCell(file.text)).find((item) => item)
@@ -482,7 +514,10 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
         : 'No out/report.md was written. Say so. Do not invent the missing readout.',
     ...(bindingReport ? { method: methodFromReport(request.name, labelAfterRun(bindingReport, outputs), outputs) } : {}),
   }
-  if (payload.method) payload.hint = `${payload.hint} ${payload.method.limits_zh}`
+  if (payload.method) {
+    payload.hint = `${payload.hint} ${payload.method.limits_zh}`
+    recordMethodResult(payload.method)
+  }
   remember(request.dataDir, {
     at: new Date().toISOString(),
     skill: request.name,

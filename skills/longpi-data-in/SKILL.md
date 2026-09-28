@@ -21,6 +21,10 @@ description: 把体检报告、用药和诊断送进 LongPi。报告文件用 fo
 对方说「请记一下」某种药：用已有的 `record_medication_statement`，照抄药名、剂量和次数，然后把 `read_back` 说回去。不建议加减药。
 对方说自己有某种病或医生的诊断：用 `record_condition`。Mirobody 的诊断接口会返回 405，所以记在这台电脑上。复述 `read_back`。这不是确认诊断。
 
+## 甲基化、菌群、蛋白、诊断编码
+
+这类表不是体检数字。`forward_report` 带 `type`：`methylation`、`taxa`、`proteins` 或 `conditions`，以及可选的 `sample_date` 和 `site`（`gut` 或 `oral`）。对方在对话里附上文件，就算确认。表留在这台电脑上，不送进体检记录，也不把整张表放进对话。没有 `type` 的 PDF 仍按体检报告交给 Mirobody。时钟年龄（单位是岁）不是甲基化 β 值。
+
 ## 基因
 
 微基因的叙述版 PDF（上千页）不要当体检报告上传，也不要把全文贴进对话。`forward_report` 会在本机摘关键位点，并说明这是消费级报告、不是诊断、不能据此换药。

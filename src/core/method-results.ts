@@ -13,6 +13,12 @@ export function setMethodResults(rows: readonly MethodResult[]): void {
   current = parseMethodResults(rows)
 }
 
+/** Keep one row per skill. A later run of the same skill replaces the earlier label. */
+export function recordMethodResult(row: MethodResult): void {
+  const rest = current.filter((item) => item.skill !== row.skill)
+  current = parseMethodResults([...rest, row])
+}
+
 export function clearMethodResults(): void {
   current = []
 }

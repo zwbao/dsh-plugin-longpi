@@ -4,8 +4,10 @@
 // the run. Labels: verified, unverified-binding, evidence-only.
 
 import { loadCatalog, type InputSpec, type SkillCard } from './catalog.ts'
-import type { BindingInput, BindingIssue, BindingProposal, BindingValidation, MethodInputUsed, MethodResult, ProvenanceKind, ResultLabel } from './contracts/library.ts'
+import type { BindingInput, BindingIssue, BindingProposal, BindingValidation, ConditionRow, MethodInputUsed, MethodResult, ProvenanceKind, ProteinRow, ResultLabel, StoreKind, TaxaRow } from './contracts/library.ts'
 import { readStore } from './contracts/library.ts'
+import { conditionMatches } from './stores/conditions.ts'
+import { applyVersionPin } from './pin.ts'
 import type { OutputValue } from './history.ts'
 import { aliasIndex, candidatesFor, resolveInput, stageMeasurements, unitFactor, type MeasurementIn, type RecordIndicator } from './measurements.ts'
 import { libraryHome } from './skills-provider.ts'
@@ -218,22 +220,93 @@ function close(left: number, right: number): boolean {
   return Math.abs(left - right) <= 1e-6 * Math.max(1, Math.abs(left), Math.abs(right))
 }
 
-function pinAllowsVerified(pinned: string | undefined, version: string): boolean {
-  const want = (pinned ?? '').trim().replace(/^v/, '')
-  if (!want) return true
-  return want === version
+function rowsOf<K extends StoreKind>(kind: K) {
+  try {
+    return readStore(kind)
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('not implemented')) return []
+    throw error
+  }
 }
 
 function storeProbe(key: string): number | null {
   if (!/^cg\d+$/i.test(key)) return null
-  try {
-    const rows = readStore('methylation')
-    const hit = [...rows].reverse().find((row) => row.probe_id.toLowerCase() === key.toLowerCase())
-    return hit ? hit.beta : null
-  } catch (error) {
-    if (error instanceof Error && error.message.includes('not implemented')) return null
-    throw error
+  const hit = [...rowsOf('methylation')].reverse().find((row) => row.probe_id.toLowerCase() === key.toLowerCase())
+  return hit ? hit.beta : null
+}
+
+function storeCondition(key: string): ConditionRow | null {
+  return [...rowsOf('conditions')].reverse().find((row) => conditionMatches(row.code, key)) ?? null
+}
+
+function storeGenus(key: string): TaxaRow | null {
+  const name = key.trim().toLowerCase()
+  if (!name || name.length < 4) return null
+  return [...rowsOf('taxa')].reverse().find((row) => row.genus.toLowerCase() === name) ?? null
+}
+
+function storeProtein(key: string): ProteinRow | null {
+  const name = key.trim().toLowerCase()
+  if (!name) return null
+  return [...rowsOf('proteins')].reverse().find((row) => row.symbol.toLowerCase() === name || row.id.toLowerCase() === name) ?? null
+}
+
+/** A store row for this manifest key, or null when the store is off or has no match. */
+function storeBinding(spec: InputSpec): BindingInput | null {
+  if (/^cg\d+$/i.test(spec.key)) {
+    const beta = storeProbe(spec.key)
+    if (beta == null) return null
+    return { source_row_id: `store:methylation:${spec.key}`, value: beta, unit: '1', provenance: 'methylation_clock', quote: spec.key }
   }
+  const condition = storeCondition(spec.key)
+  if (condition) {
+    return {
+      source_row_id: `store:conditions:${condition.code}`,
+      value: 1,
+      unit: spec.unit || 'score',
+      provenance: 'questionnaire',
+      quote: `${condition.code} ${condition.display}`.trim(),
+    }
+  }
+  const genus = storeGenus(spec.key)
+  if (genus && !spec.loinc?.length) {
+    return {
+      source_row_id: `store:taxa:${genus.site}:${genus.genus}`,
+      value: genus.relative_abundance,
+      unit: spec.unit || '1',
+      provenance: 'routine_lab',
+      quote: `${genus.site} ${genus.genus} ${genus.relative_abundance}`,
+    }
+  }
+  const protein = storeProtein(spec.key)
+  if (protein && !spec.loinc?.length) {
+    return {
+      source_row_id: `store:proteins:${protein.symbol || protein.id}`,
+      value: protein.value,
+      unit: protein.unit_or_z || spec.unit || '',
+      provenance: 'routine_lab',
+      quote: `${protein.symbol || protein.id} ${protein.value} ${protein.unit_or_z}`.trim(),
+    }
+  }
+  return null
+}
+
+function numberFromStore(source: string, key: string): number | null {
+  const parts = source.split(':')
+  const kind = parts[1]
+  if (kind === 'methylation') return storeProbe(parts[2] || key)
+  if (kind === 'conditions') return storeCondition(parts[2] || key) ? 1 : null
+  if (kind === 'taxa') {
+    const site = parts[2]
+    const genus = parts.slice(3).join(':') || key
+    const row = rowsOf('taxa').find((item) => item.genus.toLowerCase() === genus.toLowerCase() && (!site || item.site === site))
+    return row ? row.relative_abundance : null
+  }
+  if (kind === 'proteins') {
+    const row = storeProtein(parts.slice(2).join(':') || key)
+    return row ? row.value : null
+  }
+  return null
 }
 
 function findSpec(card: SkillCard, key: string): InputSpec | undefined {
@@ -284,8 +357,8 @@ function limitsFor(card: SkillCard, label: ResultLabel): string {
 function labelFor(card: SkillCard, used: readonly Accepted[], version: string, pinned: string | undefined): ResultLabel {
   if (card.tier === 'C' || card.tier === 'tool' || !card.script || card.inputsStatus === 'none') return 'evidence-only'
   const backed = used.length > 0 && used.every((item) => item.backing !== 'name')
-  if (card.inputsStatus === 'verified' && backed && pinAllowsVerified(pinned, version)) return 'verified'
-  return 'unverified-binding'
+  const proposed: ResultLabel = card.inputsStatus === 'verified' && backed ? 'verified' : 'unverified-binding'
+  return applyVersionPin(version, pinned ?? '', proposed).label ?? proposed
 }
 
 function blockReason(card: SkillCard, ok: boolean, issues: readonly BindingIssue[], label: ResultLabel): string | null {
@@ -358,20 +431,23 @@ function rowInput(card: SkillCard, spec: InputSpec, view: RecordView): BindingIn
 export function proposeFromRecord(card: SkillCard, view: RecordView): BindingProposal {
   const inputs: Record<string, BindingInput> = {}
   const profile = view.profile
+  const claimedOutputs = new Set<string>()
   for (const spec of card.inputs) {
     const fromProfile = profile ? profileInput(spec, profile) : null
     if (fromProfile && (spec.from === 'profile' || spec.from === 'argument' || spec.key === 'waist_cm')) {
       inputs[spec.key] = fromProfile
       continue
     }
-    const fromOutput = outputInput(spec, view.outputs ?? {})
+    const outputKey = spec.output_of?.[0] ?? ''
+    const fromOutput = outputKey && claimedOutputs.has(outputKey) ? null : outputInput(spec, view.outputs ?? {})
     if (fromOutput) {
+      if (outputKey) claimedOutputs.add(outputKey)
       inputs[spec.key] = fromOutput
       continue
     }
-    const beta = storeProbe(spec.key)
-    if (beta != null) {
-      inputs[spec.key] = { source_row_id: `store:methylation:${spec.key}`, value: beta, unit: '1', provenance: 'methylation_clock', quote: spec.key }
+    const stored = storeBinding(spec)
+    if (stored) {
+      inputs[spec.key] = stored
       continue
     }
     const fromRow = rowInput(card, spec, view)
@@ -450,15 +526,14 @@ export function assessBinding(proposal: BindingProposal, view: RecordView | null
       if ('issue' in filled || 'skip' in filled) continue
       accepted.set(spec.key, filled.accepted)
     }
-    for (const spec of card.inputs) {
-      if (accepted.has(spec.key) || !/^cg\d+$/i.test(spec.key)) continue
-      const beta = storeProbe(spec.key)
-      if (beta == null) continue
-      const synthesized: BindingInput = { source_row_id: `store:methylation:${spec.key}`, value: beta, unit: '1', provenance: 'methylation_clock', quote: spec.key }
-      const filled = acceptOne(card, spec, synthesized, view, sex)
-      if ('issue' in filled || 'skip' in filled) continue
-      accepted.set(spec.key, filled.accepted)
-    }
+  }
+  for (const spec of card.inputs) {
+    if (accepted.has(spec.key)) continue
+    const synthesized = storeBinding(spec)
+    if (!synthesized) continue
+    const filled = acceptOne(card, spec, synthesized, view, sex)
+    if ('issue' in filled || 'skip' in filled) continue
+    accepted.set(spec.key, filled.accepted)
   }
 
   for (const spec of card.inputs) {
@@ -472,7 +547,9 @@ export function assessBinding(proposal: BindingProposal, view: RecordView | null
   const failedRequired = issues.some((issue) => blocking.has(issue.input)) || coronaryBlock
   const ok = !failedRequired
   const used = [...accepted.values()]
-  const label = labelFor(card, used, catalog.version, view?.pinnedVersion)
+  const proposedLabel = labelFor(card, used, catalog.version, view?.pinnedVersion)
+  // A required failure is not a verified result, even when the rows that did bind were code-backed.
+  const label = ok || proposedLabel !== 'verified' ? proposedLabel : 'unverified-binding'
   const keptIssues = ok ? issues.filter((issue) => !blocking.has(issue.input) || issue.kind !== 'missing') : issues
   return {
     ok,
@@ -581,9 +658,9 @@ function acceptMeasurement(card: SkillCard, spec: InputSpec, input: BindingInput
       }
       backing = 'output'
     } else if (input.source_row_id.startsWith('store:')) {
-      const beta = storeProbe(spec.key)
-      if (beta == null || !close(number ?? NaN, beta)) {
-        return { issue: { input: spec.key, kind: 'provenance', detail: `${spec.label_zh}不在甲基化存储里。` } }
+      const stored = numberFromStore(input.source_row_id, spec.key)
+      if (stored == null || !close(number ?? NaN, stored)) {
+        return { issue: { input: spec.key, kind: 'provenance', detail: `${spec.label_zh}不在已保存的数据里。` } }
       }
       backing = 'store'
     } else if (input.provenance !== 'profile' && view.indicators) {

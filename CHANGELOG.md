@@ -1,10 +1,26 @@
 # Changelog
 
-## Unreleased — 0.6.0 library-first
+## 0.6.0
 
-Contract revision `0.6.0-dev.0`. The page still computes what 0.5.6 computed. Shared types are in `src/contracts/library.ts`. Lane file ownership is `docs/dev/0.6.0-lanes.md`. Installing the plugin is meant to install dsh and the whole longevity-skills library; dsh's agent drives that library. The plugin supplies data, checks a binding (unit, range, provenance), labels a result verified, unverified-binding, or evidence-only, and keeps the safety rules. It does not select, rank away, hide, or gate a method.
+给使用者
 
-合同修订 `0.6.0-dev.0`。页面上算出的数与 0.5.6 相同。共享类型在 `src/contracts/library.ts`，各条线的文件归属在 `docs/dev/0.6.0-lanes.md`。
+安装这一版会装上 dsh、完整的 longevity-skills 方法库，以及 Python 3.12 环境。对话里能打开方法库里的每一个方法。插件不替你挑选、不把方法藏起来、也不用关键词把门关上。它核对单位、范围和来源，把结果标成已核对、绑定未核对或仅证据。甲基化报告里的 PhenoAge 不会被当成血检表型年龄。冠脉钙化积分不会被当成腹主动脉钙化。看医生、急症和用药安全仍然排在方法结果前面。一次检查，或变化还在正常波动里，不会说你变年轻了。
+
+甲基化位点、菌群、蛋白和诊断编码可以留在这台电脑上。确认之后才写入，不送进体检记录，也不把整张表放进对话。
+
+English, same release
+
+Installing this version installs dsh, the whole longevity-skills library, and a Python 3.12 environment. Every method in the library can be opened in chat. The plugin does not pick, hide, or keyword-gate a method. It checks units, ranges, and provenance, and labels a result verified, unverified-binding, or evidence-only. A methylation PhenoAge is not a blood phenotypic age. A coronary calcium score is not abdominal aortic calcium. A doctor step, an emergency, and medicine safety still rank above method results. One draw, or a move inside the noise band, is not "you got younger".
+
+Methylation probes, taxa, protein panels, and diagnosis codes can stay on this computer. They are written only after confirmation, are not sent to the checkup record, and the table is not pasted into the chat.
+
+What landed
+
+- Packaging: `longpi install`, `longpi update`, and `longpi status`. The plugin depends on exact `longevity-skills@2026.39.1`. There is no postinstall. dsh and pnpm stay global CLIs.
+- The skill provider lists the whole catalog. Tier C is evidence, with the species in the first line, and is not run as this person's number.
+- A binding is checked before a script runs. A pin that does not match the running catalog cannot be labelled verified.
+- Methylation, taxa, proteins, and conditions have local stores. A run fed from a store writes only the manifest's keys.
+- The fact pack and the page show labeled method results under the existing safety facts. Phenotypic age and China-PAR stay when the record has them.
 
 ## 0.5.6
 

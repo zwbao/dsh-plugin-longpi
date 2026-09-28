@@ -16,6 +16,7 @@ import { CONSENT_VERSION, FOCUS, FOCUS_ZH, RISK_FACTS, RISK_FACT_ZH, type Focus,
 import { calculatorIdentity } from './subject.ts'
 import { loadReference } from './reference.ts'
 import { latestSelf, readSelf, SELF_KEYS, SELF_SPEC, type SelfKey } from './selfmeasure.ts'
+import { collectMethodResults, collectOnJourney, publishMethodResults } from './method-collect.ts'
 import { buildTracking, PHENOAGE_SKILL, trackingGeneration, type BioAge, type Tracking, type TrackingContext } from './tracking.ts'
 import { PRODUCT_VERSION } from './version.ts'
 import type { SurfaceSet } from './contracts/surfaces.ts'
@@ -147,7 +148,28 @@ export async function buildJourney(context: JourneyContext): Promise<Journey> {
 /** The journey and the tracking it was built from (retest dates, bands, adherence calendars). */
 export async function buildJourneyFull(context: JourneyContext): Promise<{ journey: Journey; tracking: Tracking }> {
   // The summary's reads run beside the skill runs and have their own deadline; a failure leaves it null.
-  const [tracking, summary] = await Promise.all([buildTracking(context), recordsSummary(context).catch(() => null)])
+  const collect = collectOnJourney()
+    ? collectMethodResults({
+      home: context.skillsHome,
+      dataDir: context.dataDir,
+      pinnedVersion: context.config.skillsVersion,
+      profile: {
+        age: context.records.profile.age,
+        sex: context.records.profile.sex,
+        risk: context.records.profile.risk,
+      },
+      indicators: context.records.indicators,
+      python: context.config.skillPython,
+      timeoutMs: context.config.skillTimeoutMs,
+      runtimes: context.config.skillRuntimes,
+    }).then((rows) => ({ ok: true as const, rows })).catch(() => ({ ok: false as const, rows: [] }))
+    : Promise.resolve(null)
+  const [tracking, summary, ran] = await Promise.all([
+    buildTracking(context),
+    recordsSummary(context).catch(() => null),
+    collect,
+  ])
+  if (ran?.ok) publishMethodResults(ran.rows)
   const journey = journeyFrom(context, tracking, summary)
   lastBuilt = { at: Date.now(), journey }
   return { journey, tracking }
