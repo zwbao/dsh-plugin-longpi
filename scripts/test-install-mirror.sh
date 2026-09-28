@@ -232,22 +232,65 @@ case "$sub" in
     ;;
   view)
     name=""
+    field=""
     seen=0
     for a in "$@"; do
-      if [ "$seen" = 1 ]; then
-        name="$a"
-        break
+      if [ "$seen" = 2 ]; then
+        seen=1
+        continue
       fi
-      [ "$a" = "view" ] && seen=1
+      case "$a" in
+        view) seen=1; continue ;;
+        --registry) seen=2; continue ;;
+        --*) continue ;;
+      esac
+      if [ "$seen" = 1 ]; then
+        if [ -z "$name" ]; then
+          name="$a"
+        elif [ -z "$field" ]; then
+          field="$a"
+        fi
+      fi
     done
-    if [ "$name" = "dsh-plugin-longpi" ] && [ -n "${LONGPI_NPM_TARBALL:-}" ]; then
-      printf '%s\n' "$LONGPI_NPM_TARBALL"
-      exit 0
-    fi
-    if [ "$name" = "longevity-skills" ] && [ -n "${LONGPI_SKILLS_TARBALL:-}" ]; then
-      printf '%s\n' "$LONGPI_SKILLS_TARBALL"
-      exit 0
-    fi
+    base="${name%%@*}"
+    case "$base" in
+      dsh-plugin-longpi)
+        case "$field" in
+          version)
+            printf '%s\n' "${LONGPI_PLUGIN_VERSION:-0.5.2}"
+            exit 0
+            ;;
+          dist.integrity)
+            if [ -n "${LONGPI_PLUGIN_INTEGRITY:-}" ]; then
+              printf '%s\n' "$LONGPI_PLUGIN_INTEGRITY"
+              exit 0
+            fi
+            ;;
+          dependencies.longevity-skills)
+            printf '%s\n' "${LONGPI_PLUGIN_SKILLS_DEP:-2026.39.1}"
+            exit 0
+            ;;
+        esac
+        if [ -n "${LONGPI_NPM_TARBALL:-}" ]; then
+          printf '%s\n' "$LONGPI_NPM_TARBALL"
+          exit 0
+        fi
+        ;;
+      longevity-skills)
+        case "$field" in
+          dist.integrity)
+            if [ -n "${LONGPI_SKILLS_INTEGRITY:-}" ]; then
+              printf '%s\n' "$LONGPI_SKILLS_INTEGRITY"
+              exit 0
+            fi
+            ;;
+        esac
+        if [ -n "${LONGPI_SKILLS_TARBALL:-}" ]; then
+          printf '%s\n' "$LONGPI_SKILLS_TARBALL"
+          exit 0
+        fi
+        ;;
+    esac
     echo "npm error 404 '$name' is not in this registry" >&2
     exit 1
     ;;
@@ -325,7 +368,18 @@ if [ "${1:-}" = "plugin" ]; then
       prev=""
     fi
   done
+  if [ "${LONGPI_DSH_FAIL_ONCE:-}" = 1 ] && [ ! -f "$HOME/.longpi-dsh-failed-once" ]; then
+    echo 1 >"$HOME/.longpi-dsh-failed-once"
+    echo "ERR_PNPM_FETCH_404 longevity-skills" >&2
+    exit 1
+  fi
   root="${DSH_HOME:-$HOME/.dsh}/profiles/${profile}/node_modules/dsh-plugin-longpi"
+  if [ -d "$spec" ] && [ -f "$spec/package.json" ]; then
+    rm -rf "$root"
+    mkdir -p "$(dirname "$root")"
+    cp -R "$spec"/. "$root"/
+    exit 0
+  fi
   mkdir -p "$root/lib" "$root/vendor/dsh-plugin-mirobody/bridge"
   printf '%s\n' '{"version":"0.5.2"}' >"$root/package.json"
   printf '%s\n' 'ok' >"$root/lib/index.js"
@@ -344,6 +398,35 @@ cat >"$SHIM_SRC/pnpm" <<'EOF'
 echo "pnpm $*" >>"$LONGPI_FAKE_LOG"
 if [ "${1:-}" = "--version" ] || [ "${1:-}" = "-v" ]; then
   echo "10.0.0"
+  exit 0
+fi
+exit 0
+EOF
+
+cat >"$SHIM_SRC/uv" <<'EOF'
+#!/usr/bin/env bash
+echo "uv $*" >>"$LONGPI_FAKE_LOG"
+if [ "${1:-}" = "venv" ]; then
+  if [ "${LONGPI_UV_VENV_FAIL:-}" = 1 ]; then
+    echo "uv venv failed" >&2
+    exit 1
+  fi
+  dest=""
+  prev=""
+  for a in "$@"; do
+    case "$prev" in
+      --python) prev=""; continue ;;
+    esac
+    case "$a" in
+      --python) prev="--python"; continue ;;
+      --*) continue ;;
+      venv) continue ;;
+      *) dest="$a" ;;
+    esac
+  done
+  mkdir -p "$dest/bin"
+  cp "$(command -v python3.12)" "$dest/bin/python"
+  chmod +x "$dest/bin/python"
   exit 0
 fi
 exit 0
@@ -387,7 +470,12 @@ run_case() {
   if [ "${HIDE_TOOLS:-}" != 1 ]; then
     cp "$SHIM_SRC/pnpm" "$SHIM_SRC/dsh" "$shim/"
   fi
+  if [ "${HAVE_UV:-}" = 1 ]; then
+    cp "$SHIM_SRC/uv" "$shim/uv"
+  fi
   chmod +x "$shim"/*
+  # After chmod: chmod follows symlinks and would change the real node binary.
+  ln -sfn "$NODE_BIN" "$shim/node"
   TRACE="$base/trace.log"
   OUT="$base/out"
   ERR="$base/err"
@@ -400,7 +488,7 @@ run_case() {
   export HOME="$base/home"
   export DSH_HOME="$base/home/.dsh"
   export LONGPI_HOME="$base/longpi"
-  export PATH="$shim:/usr/bin:/bin:/usr/sbin:/sbin:$NODE_DIR"
+  export PATH="$shim:/usr/bin:/bin:/usr/sbin:/sbin"
   # A caller-supplied map or tarball env is already exported.
   set +e
   /bin/bash "$INSTALL" --home "$LONGPI_HOME" "$@" >"$OUT" 2>"$ERR"
@@ -531,7 +619,7 @@ export LONGPI_SKILLS_SHA256="$SKILLS_SHA"
 HIDE_TOOLS=1
 run_case cn-npm --mirror cn
 need "$OUT" "npm=1 pypi=1 github=1 docker=1"
-need "$TRACE" "npm view longevity-skills dist.tarball --registry https://registry.npmmirror.com"
+need "$TRACE" "npm view longevity-skills@2026.39.1 dist.tarball --registry https://registry.npmmirror.com"
 need "$TRACE" "npm view dsh-plugin-longpi dist.tarball --registry https://registry.npmmirror.com"
 need "$TRACE" "--registry https://registry.npmmirror.com"
 need "$TRACE" "pip -m pip install --quiet --upgrade -i https://mirrors.cloud.tencent.com/pypi/simple --trusted-host mirrors.cloud.tencent.com mirobody numpy scipy openpyxl"
@@ -656,6 +744,130 @@ set -e
 [ "$bad_code" != 0 ] || fail "--mirror somewhere should fail"
 grep -E -q 'cn or auto|cn 或 auto' "$BAD_OUT" || fail "bad mirror message was: $(cat "$BAD_OUT")"
 printf 'ok bad-mirror\n'
+PASS=$((PASS + 1))
+
+# --- 11. packaged library in node_modules, update, version pin -------------
+unset LONGPI_BLOCK LONGPI_NPM_TARBALL LONGPI_SKILLS_TARBALL LONGPI_URL_MAP \
+  LONGPI_SKILLS_URL LONGPI_PLUGIN_URL LONGPI_PLUGIN_SHA256 LONGPI_SKILLS_SHA256 \
+  LONGPI_MIROBODY_SOURCE LONGPI_NO_LFS LONGPI_WHEEL_BUNDLE LONGPI_PIP_FAIL \
+  LONGPI_GITHUB_MIRROR LONGPI_MIRROR LONGPI_PLUGIN_VERSION LONGPI_UV_VENV_FAIL || true
+HAVE_UV=
+export LANG=C LC_ALL=C
+PKG="$FIX/plugin-with-skills"
+rm -rf "$PKG"
+mkdir -p "$PKG/lib" "$PKG/vendor/dsh-plugin-mirobody/bridge" "$PKG/node_modules/longevity-skills"
+printf '%s\n' '{"name":"dsh-plugin-longpi","version":"0.6.0-dev.0","dependencies":{"longevity-skills":"2026.39.1"}}' >"$PKG/package.json"
+printf '%s\n' 'ok' >"$PKG/lib/index.js"
+printf '%s\n' 'ok' >"$PKG/vendor/dsh-plugin-mirobody/bridge/dsh_bridge.py"
+printf '%s\n' '{"name":"longevity-skills","version":"2026.39.0"}' >"$PKG/node_modules/longevity-skills/package.json"
+printf '%s\n' '{"schema":"longevity-catalog/1","version":"2026.39.0","skills":[]}' >"$PKG/node_modules/longevity-skills/catalog.json"
+printf '%s\n' 'pytest>=8' >"$PKG/node_modules/longevity-skills/requirements-ci.txt"
+HIDE_TOOLS=
+run_case node-modules --plugin "$PKG"
+forbid "$TRACE" "git clone"
+forbid "$TRACE" "git -C"
+need "$LONGPI_HOME/longevity-skills/catalog.json" "2026.39.0"
+need "$TRACE" "requirements-ci.txt"
+need "$DSH_HOME/profiles/web/cordis.patch.yml" "skillsVersion: '2026.39.1'"
+python3 - "$LONGPI_HOME/longevity-skills" <<'PY' || fail "library is not the node_modules package"
+import os, sys
+real = os.path.realpath(sys.argv[1])
+if "node_modules/longevity-skills" not in real.replace("\\", "/"):
+    sys.stderr.write(real + "\n")
+    sys.exit(1)
+PY
+req_hits=$(grep -c 'requirements-ci.txt' "$TRACE" || true)
+UPDATE_OUT="$(mktemp)"
+/bin/bash "$INSTALL" update --home "$LONGPI_HOME" --profile web >"$UPDATE_OUT" 2>&1 \
+  || fail "update failed: $(cat "$UPDATE_OUT")"
+need "$UPDATE_OUT" "requirements-ci.txt unchanged"
+req_hits_after=$(grep -c 'requirements-ci.txt' "$TRACE" || true)
+[ "$req_hits" = "$req_hits_after" ] || fail "update rebuilt the venv though requirements-ci.txt did not change ($req_hits -> $req_hits_after)"
+forbid "$TRACE" "git pull"
+printf '%s\n' 'numpy>=1.21' >>"$LONGPI_HOME/longevity-skills/requirements-ci.txt"
+/bin/bash "$INSTALL" update --home "$LONGPI_HOME" --profile web >"$UPDATE_OUT" 2>&1 \
+  || fail "update after requirements change failed: $(cat "$UPDATE_OUT")"
+need "$UPDATE_OUT" "requirements-ci.txt changed"
+req_hits_rebuilt=$(grep -c 'requirements-ci.txt' "$TRACE" || true)
+[ "$req_hits_rebuilt" -gt "$req_hits_after" ] || fail "update did not reinstall after requirements-ci.txt changed"
+STATUS_OUT="$(mktemp)"
+set +e
+/bin/bash "$INSTALL" status --home "$LONGPI_HOME" --profile web >"$STATUS_OUT" 2>&1
+status_code=$?
+set -e
+[ "$status_code" = 2 ] || fail "status should exit 2 when the catalog is not the pin (got $status_code): $(cat "$STATUS_OUT")"
+need "$STATUS_OUT" '"matches":false'
+need "$STATUS_OUT" '"verified_allowed":false'
+need "$STATUS_OUT" '"label":"unverified-binding"'
+need "$STATUS_OUT" '"refused_verified":true'
+need "$STATUS_OUT" "cannot be labelled verified"
+printf 'ok node-modules-update-status\n'
+PASS=$((PASS + 1))
+
+# --- 12. catalog version equals the pin: verified stays allowed ------------
+MATCH="$FIX/plugin-match"
+rm -rf "$MATCH"
+mkdir -p "$MATCH/lib" "$MATCH/vendor/dsh-plugin-mirobody/bridge" "$MATCH/node_modules/longevity-skills"
+cp "$PKG/package.json" "$MATCH/package.json"
+cp "$PKG/lib/index.js" "$MATCH/lib/index.js"
+cp "$PKG/vendor/dsh-plugin-mirobody/bridge/dsh_bridge.py" "$MATCH/vendor/dsh-plugin-mirobody/bridge/dsh_bridge.py"
+printf '%s\n' '{"name":"longevity-skills","version":"2026.39.1"}' >"$MATCH/node_modules/longevity-skills/package.json"
+printf '%s\n' '{"schema":"longevity-catalog/1","version":"2026.39.1","skills":[]}' >"$MATCH/node_modules/longevity-skills/catalog.json"
+printf '%s\n' 'pytest>=8' >"$MATCH/node_modules/longevity-skills/requirements-ci.txt"
+run_case node-modules-match --plugin "$MATCH"
+STATUS_OUT="$(mktemp)"
+/bin/bash "$INSTALL" status --home "$LONGPI_HOME" --profile web >"$STATUS_OUT" 2>&1 \
+  || fail "status should exit 0 when the catalog matches the pin: $(cat "$STATUS_OUT")"
+need "$STATUS_OUT" '"matches":true'
+need "$STATUS_OUT" '"label":"verified"'
+need "$STATUS_OUT" '"refused_verified":false'
+printf 'ok version-match\n'
+PASS=$((PASS + 1))
+
+# --- 13. uv creates the venv and installs requirements-ci.txt --------------
+HAVE_UV=1
+run_case uv-requirements --plugin "$MATCH"
+need "$TRACE" "uv venv --quiet --python 3.12"
+need "$TRACE" "uv pip install"
+need "$TRACE" "requirements-ci.txt"
+forbid "$TRACE" "mirobody numpy scipy openpyxl"
+HAVE_UV=
+printf 'ok uv-requirements\n'
+PASS=$((PASS + 1))
+
+# --- 14. uv cannot make the venv: system Python is the fallback ------------
+HAVE_UV=1
+export LONGPI_UV_VENV_FAIL=1
+run_case uv-fallback --plugin "$MATCH"
+need "$ERR" "trying a system interpreter"
+need "$TRACE" "requirements-ci.txt"
+unset LONGPI_UV_VENV_FAIL
+HAVE_UV=
+printf 'ok uv-fallback\n'
+PASS=$((PASS + 1))
+
+# --- 15. update reuses the mirror recorded by install ----------------------
+export LONGPI_PLUGIN_VERSION=0.6.0-dev.0
+run_case mirror-recorded --mirror cn --plugin "$MATCH"
+need "$LONGPI_HOME/install-state.json" '"mirror": "cn"'
+/bin/bash "$INSTALL" update --home "$LONGPI_HOME" --profile web >"$UPDATE_OUT" 2>&1 \
+  || fail "update with a recorded mirror failed: $(cat "$UPDATE_OUT")"
+need "$TRACE" "npm view dsh-plugin-longpi version --registry https://registry.npmmirror.com"
+forbid "$TRACE" "git pull"
+unset LONGPI_PLUGIN_VERSION
+printf 'ok mirror-recorded\n'
+PASS=$((PASS + 1))
+
+# --- 16. registry 404 for the pin: add the local tarball, then place the library
+export LONGPI_DSH_FAIL_ONCE=1
+export LONGPI_SKILLS_URL="$LOCAL_SKILLS"
+HIDE_TOOLS=
+run_case plugin-offline --plugin "$LOCAL_PLUGIN"
+need "$ERR" "without fetching longevity-skills"
+need "$TRACE" "dsh plugin --profile web add"
+need "$LONGPI_HOME/longevity-skills/catalog.json" '"id":"local"'
+unset LONGPI_DSH_FAIL_ONCE LONGPI_SKILLS_URL
+printf 'ok plugin-offline\n'
 PASS=$((PASS + 1))
 
 echo "fake-network: ${PASS} cases passed"

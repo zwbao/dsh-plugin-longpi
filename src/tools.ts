@@ -60,10 +60,45 @@ export function manifestSummary(card: SkillCard) {
   }
 }
 
-export function versionCheck(catalog: Catalog, pinned: string): { pinned: string; catalog: string; matches: boolean | null } {
-  const want = pinned.trim().replace(/^v/, '')
-  if (!want) return { pinned: '', catalog: catalog.version, matches: null }
-  return { pinned: want, catalog: catalog.version, matches: catalog.version === want }
+export type LibraryResultLabel = 'verified' | 'unverified-binding' | 'evidence-only'
+
+export interface VersionCheck {
+  pinned: string
+  catalog: string
+  /** Null when no pin is set. */
+  matches: boolean | null
+  /** False only when a pin is set and the running catalog is a different version. */
+  verified_allowed: boolean
+  /** The proposed label after the pin is applied. Null when the caller did not propose one. */
+  label: LibraryResultLabel | null
+  refused_verified: boolean
+  mismatch: string
+  mismatch_zh: string
+}
+
+function cleanVersion(value: string | undefined): string {
+  return (value ?? '').trim().replace(/^v/, '')
+}
+
+// A pinned catalog that is not the running one cannot be labelled verified.
+export function versionCheck(catalog: Catalog, pinned: string, proposed?: LibraryResultLabel): VersionCheck {
+  const want = cleanVersion(pinned)
+  const running = cleanVersion(catalog.version)
+  const matches = want ? running === want : null
+  const verified_allowed = matches !== false
+  let label: LibraryResultLabel | null = proposed ?? null
+  let refused_verified = false
+  if (proposed === 'verified' && !verified_allowed) {
+    label = 'unverified-binding'
+    refused_verified = true
+  }
+  const mismatch = matches === false
+    ? `running catalog ${running || '(none)'} is not the pinned ${want}; a result from this pair cannot be labelled verified`
+    : ''
+  const mismatch_zh = matches === false
+    ? `正在使用的方法库是 ${running || '（没有版本）'}，锁定版本是 ${want}，这次不能把结果标成已核对`
+    : ''
+  return { pinned: want, catalog: running, matches, verified_allowed, label, refused_verified, mismatch, mismatch_zh }
 }
 
 export function registerTools(ctx: Context, config: () => Config, mount: MountState): void {
@@ -468,7 +503,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
 
   ctx.tools.register(defineTool({
     name: 'longpi_status',
-    description: 'Report whether the longevity-skills checkout and the Mirobody engine are available, which library version is loaded, which skill runtimes are configured, and the onboarding stage (consent, profile, records, first_result, plan, routine) as last known. Use this when a skill or a record tool failed: it reads no record and runs no skill. Does not return the chart or any token.',
+    description: 'Report whether the longevity-skills checkout and the Mirobody engine are available, which library version is loaded, which skill runtimes are configured, and the onboarding stage (consent, profile, records, first_result, plan, routine) as last known. Use this when a skill or a record tool failed: it reads no record and runs no skill. Does not return the chart or any token. When skills.pin.matches is false, do not label a result verified; skills.pin.mismatch is the reason and skills.pin.label is what versionCheck assigns to a verified result.',
     parameters: {},
     output: jsonOut,
     timeoutMs: 60000,
@@ -497,7 +532,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
             C: catalog.cards.filter((card) => card.tier === 'C').length,
             tool: catalog.cards.filter((card) => card.tier === 'tool').length,
           },
-          pin: versionCheck(catalog, current.skillsVersion),
+          pin: versionCheck(catalog, current.skillsVersion, 'verified'),
           runtimes: needed.map((name) => ({ name, configured: Boolean(current.skillRuntimes?.[name]?.trim()) })),
           error: catalog.error,
         },

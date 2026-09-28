@@ -896,11 +896,21 @@ declare function manifestSummary(card: SkillCard): {
   outputs: OutputSpec[];
   runtime: string;
 };
-declare function versionCheck(catalog: Catalog, pinned: string): {
+type LibraryResultLabel = 'verified' | 'unverified-binding' | 'evidence-only';
+interface VersionCheck {
   pinned: string;
   catalog: string;
+  /** Null when no pin is set. */
   matches: boolean | null;
-};
+  /** False only when a pin is set and the running catalog is a different version. */
+  verified_allowed: boolean;
+  /** The proposed label after the pin is applied. Null when the caller did not propose one. */
+  label: LibraryResultLabel | null;
+  refused_verified: boolean;
+  mismatch: string;
+  mismatch_zh: string;
+}
+declare function versionCheck(catalog: Catalog, pinned: string, proposed?: LibraryResultLabel): VersionCheck;
 //#endregion
 //#region src/profile.d.ts
 declare const SEXES: readonly ["female", "male", "other", "unknown"];
