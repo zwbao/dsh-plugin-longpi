@@ -26,7 +26,7 @@ export const name = 'dsh-plugin-longpi'
 export const inject = ['tools']
 export { asJson } from './json.ts'
 export { Config }
-export { preGuard, wrapGuardMessage, rememberMedications, rememberedMedications, ruleLabels, replyRuleCheck, guidanceNote, correctionNote, mentionsMedicine, LABEL_KEYS, SELF_HARM_LINE_ZH, EMERGENCY_LINE_ZH } from './guardrails.ts'
+export { preGuard, wrapGuardMessage, rememberMedications, rememberedMedications, ruleLabels, replyRuleCheck, guidanceNote, correctionNote, hypoCorrectionNote, isMedicationRecordRequest, mentionsMedicine, LABEL_KEYS, SELF_HARM_LINE_ZH, EMERGENCY_LINE_ZH } from './guardrails.ts'
 export type { GuardHit, GuardLabels, ReplyVerdict } from './guardrails.ts'
 export { createGuard, classifyMessage, checkReply, parseLabels, parseVerdict, runtimeCall, routeFor, personText, turnText, countGuard, readGuardStats, CLASSIFIER_SYSTEM, JUDGE_SYSTEM, GUARD_TIMEOUT_MS, GUARD_COUNTERS } from './guard-llm.ts'
 export type { Guard, GuardCall, LlmLike } from './guard-llm.ts'
@@ -70,7 +70,12 @@ export {
 } from './followup.ts'
 export type { FollowupSettings, FollowupState, FollowupLogRow, FollowupDeps, SendResult } from './followup.ts'
 export { followupTextProblem, followupApprovalReason } from './tools-followup.ts'
-export { briefOptionsOf, buildPlanBrief, draftPlan, acceptedPlan, expectedText, DRAFT_CATEGORIES } from './planner.ts'
+export { briefOptionsOf, buildPlanBrief, draftPlan, settleDraft, replyForDraft, acceptedPlan, expectedText, DRAFT_CATEGORIES } from './planner.ts'
+export { clinicalStop, hypoglycaemiaNow, leadsWithHypoFirstStep, exclusionsFromText, medicationClasses, HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH, FISH_OIL_CAUTION, type StopResult, type StopHit } from './plan-safety.ts'
+export { buildDoctorFirst } from './doctor-first.ts'
+export { planDraftHeld, holdPlanDraft, releasePlanDraft } from './plan-hold.ts'
+export { readPlanPrefs, setPlanExclusion, rememberExclusions } from './plan-prefs.ts'
+export { presentMedications, fixScheduleText, readStatements } from './meds-stated.ts'
 export type { PlanBrief, PlanDraft, DraftItem } from './planner.ts'
 export { guardRoute, isJsonRequest, CONNECTION_UNAVAILABLE } from './routes.ts'
 export {

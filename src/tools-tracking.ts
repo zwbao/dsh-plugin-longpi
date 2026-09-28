@@ -14,7 +14,10 @@ import { resolveDataDir, resolveSkillsHome } from './paths.ts'
 import { invalidateRecords, loadRecords } from './records.ts'
 import { addSelf, SELF_KEYS, SELF_SPEC } from './selfmeasure.ts'
 import { buildTracking, describeItem, describePlan, goalProblems, invalidateTracking, modelGoals } from './tracking.ts'
-import { briefOptionsOf, buildPlanBrief, draftPlan } from './planner.ts'
+import { addStatement } from './meds-stated.ts'
+import { planDraftHeld } from './plan-hold.ts'
+import { HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH } from './plan-safety.ts'
+import { briefOptionsOf, buildPlanBrief, replyForDraft, settleDraft } from './planner.ts'
 import { FOCUS } from './profile.ts'
 
 function jsonText(value: unknown): [{ type: 'text'; text: string }] {
@@ -39,7 +42,19 @@ const HOW_TO_READ = [
   'suggestions are the next steps to offer for the saved plan. A change to the plan is a new draft (draft_intervention_plan), read back and confirmed like any plan. Never add a medicine or a dose.',
 ]
 
-const DRAFT_HOW_TO_USE = 'If brief.notes_zh says the record has changes beyond normal fluctuation (超出正常波动), say that first: suggest they have a doctor look at those changes before starting the plan, name no cause, and suggest no supplement or dose for them. Tailor the draft with the person (their preferences, constraints, what they already do). State each item\'s evidence (trial average, population, DOI) and that individual results vary. Supplements are options to confirm with a doctor, without a dose. Never start, stop or change a prescription medicine or any dose. Read the plan back with save_intervention_plan confirm=false (pass each item\'s category, title, detail, start, markers and target, and the goals\' marker, value and unit, not the evidence fields) and save only after they agree.'
+const DRAFT_HOW_TO_USE = 'Send reply_zh as your reply, in the person\'s language, then stop: do not call another tool in this turn (no save_intervention_plan, no query_longevity_evidence, no bash, no read). If brief.safety.stop_zh is set, that sentence is the whole reply and there is no draft: say plainly to see a doctor about those values. If brief.notes_zh says the record has changes beyond normal fluctuation (超出正常波动), say that first: suggest they have a doctor look at those changes before starting the plan, name no cause, and suggest no supplement or dose for them. Items the person excluded stay excluded in every later draft. State each item\'s evidence only as reply_zh does, and that individual results vary. Supplements are options to confirm with a doctor, without a dose. Never start, stop or change a prescription medicine or any dose. Save later, only after they agree: save_intervention_plan confirm=false, read it back, then confirm=true.'
+/** Past this the tool answers anyway (the build goes on in the background and the next call picks it up). */
+const DRAFT_DEADLINE_MS = 60_000
+
+function stoppedReply(sentence: string, today: string, stop = true) {
+  return {
+    brief: { today, focus: [], priorities: [], candidates: [], safety: { medications: [], notes_zh: [], ...(stop ? { stop_zh: sentence } : {}) }, past_items: [], metrics: [], notes_zh: [sentence], boundary_zh: '' },
+    draft: null,
+    reply_zh: sentence,
+    do_not_call_tools: true,
+    how_to_use: DRAFT_HOW_TO_USE,
+  }
+}
 
 export function registerTrackingTools(ctx: Context, config: () => Config, mount: MountState): void {
   const where = () => {
@@ -170,21 +185,34 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
       max_items: { type: 'integer', description: 'At most this many items, 1–5. Default 3; fewer is easier to keep and to judge.' },
     },
     output: jsonOut,
-    timeoutMs: 180000,
+    timeoutMs: DRAFT_DEADLINE_MS + 15_000,
     isConcurrencySafe: () => true,
     async execute(args) {
+      if (planDraftHeld()) {
+        const sentence = `${HYPO_AWAKE_ZH}${HYPO_UNCONSCIOUS_ZH}`
+        return asJson(stoppedReply(sentence, isoDay()))
+      }
       const { current, dataDir, skillsHome } = where()
       const catalog = loadCatalog(skillsHome)
-      const records = await loadRecords(current, dataDir, mount.pluginHome)
       const today = isoDay()
-      const brief = await buildPlanBrief({ config: current, dataDir, skillsHome, catalog, records, today, mount }, briefOptionsOf(args.focus, args.markers))
       const constraints = typeof args.constraints === 'string' ? args.constraints.trim().slice(0, 500) : ''
-      return asJson({
-        brief,
-        draft: draftPlan(brief, { today, ...(Number.isFinite(Number(args.max_items)) && args.max_items != null ? { maxItems: Number(args.max_items) } : {}) }),
-        ...(constraints ? { constraints } : {}),
-        how_to_use: DRAFT_HOW_TO_USE,
-      })
+      const work = (async () => {
+        const records = await loadRecords(current, dataDir, mount.pluginHome)
+        const brief = await buildPlanBrief({ config: current, dataDir, skillsHome, catalog, records, today, mount }, { ...briefOptionsOf(args.focus, args.markers), ...(constraints ? { constraints } : {}) })
+        const maxItems = Number.isFinite(Number(args.max_items)) && args.max_items != null ? Number(args.max_items) : undefined
+        const draft = settleDraft(dataDir, brief, today, maxItems != null ? { maxItems } : {})
+        return { brief, draft, reply_zh: replyForDraft(brief, draft), ...(constraints ? { constraints } : {}), do_not_call_tools: true, how_to_use: DRAFT_HOW_TO_USE }
+      })()
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const winner = await Promise.race([
+        work.then((value) => ({ kind: 'ok' as const, value })),
+        new Promise<{ kind: 'timeout' }>((resolve) => { timer = setTimeout(() => resolve({ kind: 'timeout' }), DRAFT_DEADLINE_MS) }),
+      ])
+      if (timer) clearTimeout(timer)
+      if (winner.kind === 'timeout') {
+        return asJson(stoppedReply('这次起草超过了 1 分钟还没有完成（首次计算结果比较慢）。请过一两分钟再说一次“帮我制定一份改善方案”。', today, false))
+      }
+      return asJson(winner.value)
     },
   }))
 
@@ -262,6 +290,33 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
         problems: result.problems,
         note: 'Saved locally (self_measurements.jsonl), not written to Mirobody. Read back each saved value with its unit and date. Home blood pressure counts as the mean of the last 7 days of readings.',
       })
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'record_medication_statement',
+    description: 'Remember a prescription the person asked you to write down (请记一下). Pass only the name, dose, and frequency they just said. This does not start, stop, or change a medicine and does not tell them what to take. Saves locally, not as a dose log.',
+    parameters: {
+      name: { type: 'string', required: true, description: 'The medicine name they said.' },
+      dose_text: { type: 'string', description: 'The dose they said, as words (10 mg, 0.5 g). Empty if they gave none.' },
+      frequency_text: { type: 'string', description: 'How often they said (每天早上一次, 一天三次). Empty if they gave none.' },
+      since: { type: 'string', description: 'YYYY-MM-DD if they gave a start date. Omit otherwise.' },
+    },
+    output: jsonOut,
+    timeoutMs: 10000,
+    isConcurrencySafe: () => false,
+    async execute(args) {
+      const name = typeof args.name === 'string' ? args.name.trim() : ''
+      if (!name || name.length > 80) return asJson({ ok: false, error: '需要对方说出的药名。' })
+      const since = typeof args.since === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.since) ? args.since : ''
+      const saved = addStatement(where().dataDir, {
+        name,
+        dose_text: typeof args.dose_text === 'string' ? args.dose_text.trim().slice(0, 80) : '',
+        frequency_text: typeof args.frequency_text === 'string' ? args.frequency_text.trim().slice(0, 80) : '',
+        since,
+      })
+      const line = `你记下的：${saved.name}${saved.dose_text ? ` ${saved.dose_text}` : ''}${saved.frequency_text ? ` ${saved.frequency_text}` : ''}${saved.since ? `，${saved.since} 起` : ''}`
+      return asJson({ ok: true, read_back: line, note: 'Read read_back back. This is a record of what they said, not advice to take it.' })
     },
   }))
 

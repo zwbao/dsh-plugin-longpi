@@ -4,6 +4,7 @@ import { discoverPython, runBridgeStatus, type BridgeStatus } from './bridge.ts'
 import { callMcpTool, mcpHost, redact, type McpCallResult } from './mcp.ts'
 import { readProfile, estimatedAge, type Profile } from './profile.ts'
 import { rememberMedications } from './guardrails.ts'
+import { presentMedications, readStatements } from './meds-stated.ts'
 import { loincCode, summarizeIndicators, summarizeMedications, type IndicatorRow, type MedicationRow } from './situation.ts'
 import { cellNumber, tableOf } from './compact.ts'
 import { readSelf, selfIndicators, selfKeyOf, SELF_ALIASES, SELF_DEVICE_NAMES, SELF_KEYS, SELF_SPEC, SELF_SUFFIX, type SelfKey } from './selfmeasure.ts'
@@ -39,6 +40,8 @@ export interface RecordSnapshot {
   mcp: { configured: boolean; host: string; token_set: boolean }
   indicators: IndicatorRow[]
   medications: MedicationRow[]
+  /** Current regimen first, older plans labelled 较早. Empty until a medication read succeeds. */
+  medication_summary_zh: string[]
   /** partial: the record was read, but some reads failed or came back cut (read_errors says which). */
   record_status: RecordStatus
   record_error: string
@@ -75,7 +78,7 @@ function payloadOf(result: McpCallResult): unknown {
   return result.result ?? result.text ?? null
 }
 
-type Remote = Omit<RecordSnapshot, 'profile' | 'estimated_age'>
+type Remote = Omit<RecordSnapshot, 'profile' | 'estimated_age' | 'medication_summary_zh'>
 
 const cache = new Map<string, { at: number; ttl: number; value: Promise<unknown> }>()
 
@@ -121,7 +124,10 @@ export async function loadRecords(config: Config, dataDir: string, pluginHome: s
     estimated_age: estimatedAge(profile.birthYear, new Date().getFullYear()),
     ...remote,
     indicators: mergeSelf(remote.indicators.map((row) => ({ ...row })), selfIndicators(readSelf(dataDir))),
-    medications: remote.medications.map((row) => ({ ...row })),
+    ...(() => {
+      const presented = presentMedications(remote.medications, readStatements(dataDir))
+      return { medications: presented.rows, medication_summary_zh: presented.lines }
+    })(),
     read_errors: [...remote.read_errors],
     missing_reads: [...remote.missing_reads],
     probed_inputs: [...remote.probed_inputs],

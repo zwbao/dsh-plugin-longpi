@@ -8,6 +8,8 @@
 import { createHash } from 'node:crypto'
 import type { Catalog, SkillCard } from './catalog.ts'
 import { buildChanges, CHANGES_NOTE_ZH, type RecordChange, type UnjudgedChange } from './changes.ts'
+import { buildDoctorFirst, NO_STOP } from './doctor-first.ts'
+import type { StopResult } from './plan-safety.ts'
 import type { Config } from './config.ts'
 import { adherenceFor, evaluatePlan, resolveMarkers, suggestNext, type Adherence, type ItemSummary, type LeverHint, type ResolvedMarker, type Suggestion } from './evaluate.ts'
 import { readHistory, type HistoryRow } from './history.ts'
@@ -117,6 +119,8 @@ export interface Tracking {
   changes_note_zh: string
   /** Markers not judged because their readings did not come back whole: unknown, never "no change". */
   changes_unjudged: UnjudgedChange[]
+  /** A critical value or red-cell pattern: see a doctor before any plan (plan-safety.ts). */
+  doctor_first: StopResult
 }
 
 /** settled: when the compute finished (null while it runs). The TTL runs from then, so a slow compute is never started twice. */
@@ -179,16 +183,19 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
     changes: [] as RecordChange[], note_zh: CHANGES_NOTE_ZH,
     unjudged: [{ label_zh: '记录里的变化', reason_zh: `读取失败：${error instanceof Error ? error.message.slice(0, 200) : '原因未知'}，这次没有判断。` }],
   }))
+  // Critical values and the red-cell pattern: read alongside, never failing the rest.
+  const doctorRead = buildDoctorFirst(context).catch(() => NO_STOP)
   const bioage = await ensureBioAge(context, reference)
   const goals = plan?.goals ?? []
   const models = await modelCards(context, reference, goals)
   const levers = models.find((card) => card.model === 'phenoage')?.levers ?? []
   const { changes, note_zh: changesNote, unjudged } = await changesRead
+  const doctorFirst = await doctorRead
   if (unjudged.length > 0) errors.push(`没有判断变化：${unjudged.map((row) => row.label_zh).join('、')}（读取失败或不完整）`)
   if (!plan) {
     return {
       status: 'no_plan', today: context.today, plan: null, versions, items: [], suggestions: [], charts: [], bioage, models,
-      checkins: [], reference: referenceStats(reference), errors, changes, changes_note_zh: changesNote, changes_unjudged: unjudged,
+      checkins: [], reference: referenceStats(reference), errors, changes, changes_note_zh: changesNote, changes_unjudged: unjudged, doctor_first: doctorFirst,
     }
   }
 
@@ -256,7 +263,7 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
   const charts = chartsFor(judged, resolvedList, series, reference, goals)
   return {
     status: 'ok', today: context.today, plan, versions, items, suggestions, charts, bioage, models,
-    checkins: checkins.slice(-30).reverse(), reference: referenceStats(reference), errors, changes, changes_note_zh: changesNote, changes_unjudged: unjudged,
+    checkins: checkins.slice(-30).reverse(), reference: referenceStats(reference), errors, changes, changes_note_zh: changesNote, changes_unjudged: unjudged, doctor_first: doctorFirst,
   }
 }
 

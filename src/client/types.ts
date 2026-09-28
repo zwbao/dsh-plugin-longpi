@@ -7,7 +7,7 @@ export type Focus = 'bioage' | 'cardio' | 'glucose' | 'weight' | 'sleep' | 'plan
 export type SelfKey = 'waist' | 'sbp' | 'dbp' | 'weight'
 export type RiskFact = 'smoker' | 'diabetes' | 'bp_treated' | 'north' | 'urban' | 'family_history'
 export type Sex = 'female' | 'male' | 'other' | 'unknown'
-export type NextAction = 'consent' | 'profile' | 'records' | 'addons' | 'plan' | 'checkin' | 'review' | 'open'
+export type NextAction = 'consent' | 'profile' | 'records' | 'addons' | 'plan' | 'checkin' | 'review' | 'open' | 'doctor'
 
 export interface JourneyQuestion {
   key: 'age' | 'sex' | RiskFact
@@ -236,7 +236,7 @@ export interface PlanBrief {
     needs_doctor: boolean
     cautions_zh: string[]
   }>
-  safety: { medications: string[]; notes_zh: string[] }
+  safety: { medications: string[]; notes_zh: string[]; stop_zh?: string }
   past_items: Array<{ title: string; category: string; verdicts: string[]; adherence_pct: number | null }>
   /** Why a focus or a priority got no item, and a record change to show a doctor first. */
   notes_zh: string[]

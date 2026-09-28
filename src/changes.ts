@@ -153,7 +153,10 @@ function changeOf(marker: BiovarMarker, points: Point[], z: number, glucoseTreat
   // Fasting glucose falling is never called good news; HbA1c falling is, unless the person is treated for diabetes.
   const glucoseFall = direction === 'down' && GLUCOSE_KEYS.includes(marker.key) && (glucoseTreated || marker.key === 'glucose')
   const verdict = glucoseFall ? 'unclear' : verdictOf(marker.better, direction)
-  const askDoctor = verdict === 'worse' || (verdict === 'unclear' && marker.better === 'range') || (glucoseFall && glucoseTreated)
+  // A white-cell count that stays inside the usual adult range is not a reason to send someone to a doctor
+  // just because it cleared a tight desirable-CVA band (about ±31%).
+  const wbcInside = marker.key === 'wbc' && [pick.from.value, pick.to.value].every((value) => value >= 3.5 && value <= 9.5)
+  const askDoctor = !wbcInside && (verdict === 'worse' || (verdict === 'unclear' && marker.better === 'range') || (glucoseFall && glucoseTreated))
   const up = round1(band.up * 100)
   const down = marker.log_normal ? round1(band.down * 100) : -up
   // Log-normal rows (CRP, triglycerides) have an asymmetric band: both sides are shown.

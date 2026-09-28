@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.5.2
+
+Safety fixes from a 60-day field test with real-browser diaries (the owner's own checkups, and a woman with type 2 diabetes on metformin and dapagliflozin), plus the data-path fixes found on the way. Every fix has a regression test (`test/plan-safety.mjs` is new); verified live in DeepSeek Harness 0.1.5-rc.3 against Mirobody.
+
+**See a doctor first**
+- **No plan while the record needs a doctor.** The plan is not drafted when the record shows one of these: haemoglobin below the lower limit (men 130, women 115 g/L); MCV below 80 fL; haemoglobin or MCV falling across checkups; RDW-CV above 15 %; ferritin below the common lower limit; fasting glucose ≥ 7.0 mmol/L or HbA1c ≥ 6.5 % with no diagnosis or glucose-lowering medicine on record; LDL-C ≥ 4.9 mmol/L; systolic ≥ 180 mmHg.
+  - The overview's next step becomes 「请先去看医生：…」 with the person's numbers, dates and the fall across checkups (for example 152 → 138 → 124). The same sentence is the chat reply to 「帮我制定一份改善方案」, and `read_personal_situation` returns it as `doctor_first_zh`.
+  - A value below the range is called 偏低 and one above it 偏高. The model is told never to answer 不能评 or 只报数 about it, and still names no cause and suggests no iron, supplement or dose.
+  - Mirobody keeps no reference ranges, so these fixed limits are used. 血小板分布宽度 (PDW) and RDW-SD no longer count as RDW-CV.
+- A white-cell count that stays within 3.5–9.5 is no longer sent to a doctor just for crossing its tight band.
+
+**Medicines that rule plan items out**
+- **SGLT2 inhibitors** (达格列净, 恩格列净 …): no time-restricted eating, fasting or very-low-carb items. The caution names euglycaemic ketoacidosis (正常血糖性酮症酸中毒), what it feels like, and says to ask the prescriber about pausing when eating much less.
+- **Insulin or sulfonylureas** (including 消渴丸): exercise, weight, fasting and calorie-restriction items carry a hypoglycaemia caution. A stopped medicine does not count.
+- Pregnancy (when stated) removes time-restricted eating, weight loss, alcohol items and fish oil. Stated kidney disease, or an eGFR below 60, removes unmodified DASH. The fish-oil caution (bleeding, atrial fibrillation) is kept, with no amount in it.
+
+**Low blood sugar**
+- A reading under 3.9 mmol/L, or tremor or cold sweat with a low reading, is answered first with the standard step: 15 g of fast sugar, recheck in 15 minutes, repeat if still low, and call 120 without feeding anyone who cannot be woken or swallow. If a reply does not open with this step, the guard sends a correction. No plan is drafted in that turn. The 15 g step is not treated as a dose.
+
+**Plan drafts**
+- What the person rules out (不要限时进食, 不要低碳) is saved, whether it was passed to the draft tool or only said in chat, and stays out of every later draft and the page draft.
+- The draft keeps its date while the record and medicines stay the same. A new day alone no longer re-dates it.
+- `draft_intervention_plan` gives a ready `reply_zh`, answers within 60 s even on a cold start, and tells the model to call no other tool in that turn, so the turn no longer hangs. It honours `max_items`.
+- A prescription the person asks to remember (请记一下) is saved with `record_medication_statement` and read back. The medication summary shows one current line per drug and never shows `0x/day`.
+
+**Data path (since 0.5.1)**
+- A complete catalogue that Mirobody 1.5.0 marks truncated is read as complete. Owner-style names (空腹血葡萄糖, 红细胞分布宽度-变异系数) bind to their inputs. A CRP with no unit is refused.
+- Check-ins and reminders use the China civil day. A failed reminder is retried. A damaged profile.json is never replaced with an empty one.
+- Home blood pressure is judged on the mean of the daily means. An older lab change is not shown when a newer result's unit cannot be converted. 4 个单位 counts as a medicine amount.
+- The guard still catches emergencies and bad replies when the safety model is down. Wearable day buckets with no name count toward adherence.
+
 ## 0.5.1
 
 Fixes from an external review of 0.5.0, checked claim by claim against the code, plus a safety judgement made by the model and a reorganised health page. Tested end to end in DeepSeek Harness 0.1.5-rc.3 with real chats.

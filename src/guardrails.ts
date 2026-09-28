@@ -5,6 +5,7 @@
 // never replaces the person's words: the plugin appends one note for the model (guidanceNote).
 
 import { PHARMA_DOSE, SHARED_DOSE } from './guard-dose.ts'
+import { HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH } from './plan-safety.ts'
 
 export const LABEL_KEYS = ['acute_emergency', 'self_harm', 'med_change_request', 'personal_dose_request', 'research_question'] as const
 export type LabelKey = typeof LABEL_KEYS[number]
@@ -335,7 +336,17 @@ export function ruleLabels(input: string): GuardLabels {
 // ---------------------------------------------------------------- the reply check
 
 const RESEARCH_LINE = /研究|试验|论文|文献|受试者|参与者|研究中|人群|平均|\b(?:trials?|stud(?:y|ies)|participants|papers?|researchers|cohort)\b/i
-const RECORD_LINE = /记录|用药计划|处方上|医嘱|按医嘱|\b(?:record(?:ed)?|prescribed by)\b/i
+const RECORD_LINE = /记录|记下了|已记下|记下来了|用药计划|处方上|医嘱|按医嘱|\b(?:record(?:ed)?|prescribed by)\b/i
+
+/** "请记一下" is a request to store a prescription, not a request to start or stop it. */
+export function isMedicationRecordRequest(text: string): boolean {
+  const raw = String(text ?? '').normalize('NFKC')
+  if (!/请记一下|帮我记|记一下|记下|帮我记录|记录一下/.test(raw)) return false
+  // A check-in (鱼油吃了, 快走40分钟) or a question is not a prescription to remember.
+  if (/打卡|吃了|做了|完成|停了|走了|跑了|停掉|停用|换药|加量|减量|能不能|可不可以|要不要|还要继续|吗[？?]?\s*$/.test(raw)) return false
+  if (!mentionsMedicine(raw)) return false
+  return /医生|处方|开的|开了|改成|换成|调成|mg|毫克|\d\s*g\b|克|片|粒|每天|每日|一天|每晚|每早|早上|晚上|qd|bid|tid/i.test(raw)
+}
 // Reading back what they already take (你目前在吃阿托伐他汀 20 mg), unless the same sentence advises.
 const READ_BACK = /目前在吃|目前服用|正在吃|正在服用|你在吃|您在吃|你说的|您说的|你提到的|\byou(?:'re| are) (?:currently |already )?(?:taking|on)\b|\byou currently take\b/i
 const DIRECTIVE = /你|您|建议|可以|每天|每日|每次|一次|早晚|睡前|饭后|饭前|起步|先从|\b(?:you|your|take|daily|per day|twice|once)\b/i
@@ -390,6 +401,7 @@ export function replyRuleCheck(reply: string): ReplyVerdict {
     if (RESEARCH_LINE.test(lower) || RECORD_LINE.test(lower)) continue
     const medicine = mentionsMedicine(lower)
     const doseHere = givesDose(lower, medicine)
+    if (/15\s*(?:克|g(?![a-z]))/.test(lower) && /糖|果汁|碳水/.test(lower) && /复测|15\s*分钟|3\.9|低血糖/.test(lower)) continue
     if (!verdict.personal_dose && doseHere) verdict.personal_dose = true
     if (!verdict.med_change_advice && medicine && !defers(lower)) {
       const plain = replyPlain(lower)
@@ -427,8 +439,21 @@ const NOTE_HEAD = '[LongPi safety note: added by the plugin, not written by the 
  * a medicine or dose request gets the doctor; a research question about a medicine keeps its normal
  * answer without a personal dose.
  */
-export function guidanceNote(labels: GuardLabels, options: { medicine?: boolean } = {}): GuidanceNote | null {
+export function guidanceNote(labels: GuardLabels, options: { medicine?: boolean; hypoglycaemia?: boolean; unconscious?: boolean; record?: boolean } = {}): GuidanceNote | null {
   const why = labels.reason ? ` (${labels.reason.slice(0, 120)})` : ''
+  if (options.hypoglycaemia) {
+    const first = options.unconscious ? HYPO_UNCONSCIOUS_ZH : HYPO_AWAKE_ZH
+    return {
+      summary: 'LongPi 安全提示：低血糖，先说处理',
+      text: [
+        NOTE_HEAD,
+        'The message above reports hypoglycaemia symptoms or a glucose under 3.9 mmol/L.',
+        `The first sentence of the reply must be 「${first}」 Then add 「${options.unconscious ? HYPO_AWAKE_ZH : HYPO_UNCONSCIOUS_ZH}」`,
+        'Then, briefly: once the reading is back above 3.9 and they feel better, eat the next meal or a snack with starch; tell the doctor who prescribes their diabetes medicine about this low reading.',
+        'Say the first step before a doctor referral, a plan, or any other sentence. Do not draft a plan and do not call tools in this turn. Do not start, stop, or change a medicine. This 15 g step is first aid, not a prescription dose.',
+      ].join('\n'),
+    }
+  }
   if (labels.acute_emergency) {
     return {
       summary: 'LongPi 安全提示：可能是急症，先提醒拨打 120',
@@ -449,6 +474,16 @@ export function guidanceNote(labels: GuardLabels, options: { medicine?: boolean 
         `The message above may mean the person is thinking about harming themselves${why}.`,
         `Begin with care and this line, in their language: 「${SELF_HARM_LINE_ZH}」 Give no other phone number.`,
         'Then stay kind, short and present: ask whether they are safe right now. Run no skill. No dose, no diagnosis.',
+      ].join('\n'),
+    }
+  }
+  if (options.record) {
+    return {
+      summary: 'LongPi 安全提示：记下对方说的处方',
+      text: [
+        NOTE_HEAD,
+        'The message asks you to remember a prescription they were already given (请记一下). That is a record, not a request to start or stop a medicine.',
+        'Call record_medication_statement with the name, dose, and frequency exactly as they said them. Then read that line back. Do not advise a change and do not invent a dose they did not say.',
       ].join('\n'),
     }
   }
@@ -487,6 +522,20 @@ export function correctionNote(verdict: ReplyVerdict): GuidanceNote {
       '[LongPi safety check: added by the plugin, not written by the person.]',
       `Your reply above ${what || 'may have given a dose or advised a medicine change'}${verdict.reason ? ` (${verdict.reason.slice(0, 120)})` : ''}.`,
       'Send a short correction now, in their language: say you should not have said that, that doses and changes to a medicine are for the doctor who prescribed it or a pharmacist, and do not repeat the amount. Call no tools.',
+    ].join('\n'),
+  }
+}
+
+/** The reply to a hypoglycaemia message did not open with the first step: send it now, first. */
+export function hypoCorrectionNote(unconscious = false): GuidanceNote {
+  const first = unconscious ? HYPO_UNCONSCIOUS_ZH : HYPO_AWAKE_ZH
+  const then = unconscious ? HYPO_AWAKE_ZH : HYPO_UNCONSCIOUS_ZH
+  return {
+    summary: 'LongPi 安全检查：低血糖先说处理',
+    text: [
+      '[LongPi safety check: added by the plugin, not written by the person.]',
+      'The person reported hypoglycaemia (a glucose under 3.9 mmol/L or symptoms), and your reply did not start with the first step.',
+      `Send a short message now, in their language, whose first sentence is exactly 「${first}」 then 「${then}」 Then one line: after it passes, eat a normal meal or snack, and tell the doctor who prescribes their diabetes medicine about the low reading. Do not change or stop a medicine. Call no tools and draft no plan.`,
     ].join('\n'),
   }
 }

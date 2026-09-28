@@ -1,0 +1,359 @@
+// Who must not be handed a lifestyle draft, and which items are unsafe for the
+// medicines they already take. Numbers are the thresholds in the field-test
+// clinical review (male haemoglobin, MCV, RDW-CV, undiagnosed diabetes-range
+// glucose, LDL-C, office SBP). A known diagnosis is the person's own yes, or a
+// current glucose-lowering medicine — a lab on its own is not "the doctor knows".
+
+export const FISH_OIL_CAUTION = '试验用的是处方级的较高用量 EPA+DHA，鱼油可能增加出血和房颤（心房颤动）风险；这不是给你的用量，先与医生确认'
+export const HYPO_AWAKE_ZH = '先吃 15 克快速吸收的糖（葡萄糖片或一小杯含糖果汁），15 分钟后复测；仍低于 3.9 mmol/L 就再吃 15 克。'
+export const HYPO_UNCONSCIOUS_ZH = '昏迷、叫不醒或无法吞咽时不要喂东西，请立即拨打 120。'
+export const DOCTOR_ZH = '在医生看过之前，LongPi 不起草生活方式方案。'
+
+export const SGLT2 = /列净|gliflozin|dapagliflozin|empagliflozin|canagliflozin|ertugliflozin/i
+export const INSULIN_SU = /胰岛素|\binsulin\b|格列(?!净)|磺脲|消渴丸|glibenclamide|glimepiride|gliclazide|glipizide|glyburide/i
+export const TIME_RESTRICTED = /限时进食|time-restricted|16:8|轻断食|断食/i
+export const VERY_LOW_CARB = /生酮|极低碳|低碳水|低碳饮食|ketogenic|\bketo\b|very-low-carb|低碳/i
+export const FISH_OIL = /鱼油|omega-?3|ω-?3|\bepa\b|\bdha\b/i
+export const DASH = /DASH|得舒/i
+const PREGNANT_WORDS = /怀孕|孕期|妊娠/
+const CKD_WORDS = /肾功能不全|慢性肾病|透析|\bckd\b/i
+
+export interface PanelPoint {
+  name: string
+  label?: string
+  loinc?: string
+  value: number
+  unit: string
+  date: string
+}
+
+export interface SafetyClasses {
+  sglt2: boolean
+  sglt2Name: string
+  hypoDrugs: boolean
+  pregnant: boolean
+  ckd: boolean
+  diabetesKnown: boolean
+}
+
+export interface StopHit {
+  key: 'hgb' | 'mcv' | 'rdw' | 'ferritin' | 'glucose' | 'hba1c' | 'ldl' | 'sbp'
+  /** Short, for the overview title: 血红蛋白 120 g/L 偏低. */
+  short_zh: string
+  /** The full clause with the date and, when the checkups show it, the fall across them. */
+  text_zh: string
+}
+
+export interface StopResult {
+  stop: boolean
+  /** 请先去看医生：… — the whole reply when a plan is asked for. */
+  sentence_zh: string
+  /** The overview's next step title. */
+  title_zh: string
+  hits: StopHit[]
+}
+
+export function medicationClasses(names: readonly string[], flags: { pregnant?: boolean | null; ckd?: boolean | null; diabetes?: boolean | null } = {}): SafetyClasses {
+  const sglt2Name = names.find((name) => SGLT2.test(name)) ?? ''
+  return {
+    sglt2: sglt2Name !== '',
+    sglt2Name,
+    hypoDrugs: names.some((name) => INSULIN_SU.test(name)),
+    pregnant: flags.pregnant === true,
+    ckd: flags.ckd === true,
+    diabetesKnown: flags.diabetes === true || names.some((name) => /二甲双胍|列汀|列净|胰岛素|阿卡波糖|鲁肽|降糖|metformin|insulin|gliptin|gliflozin|glutide|glipizide|gliclazide|glimepiride|acarbose/i.test(name)),
+  }
+}
+
+export function flagsFromText(text: string): { pregnant: boolean; ckd: boolean } {
+  return { pregnant: PREGNANT_WORDS.test(text), ckd: CKD_WORDS.test(text) }
+}
+
+/** Phrases the person has ruled out, kept so the next draft does not grow them back. */
+export function exclusionsFromText(text: string): string[] {
+  const out: string[] = []
+  if (/不要限时|不限时|别限时|不用限时|不接受限时|去掉限时|丢掉限时|不做限时|不准限时|拒绝限时|不要断食|不断食|不要轻断食|不要\s*16:8|不要\s*16：8/.test(text)) out.push('限时进食')
+  if (/不要生酮|不生酮|不要低碳|不低碳|不要极低碳|不极低碳/.test(text)) out.push('低碳')
+  return out
+}
+
+export function interventionBlocked(text: string, category: string, id: string, classes: SafetyClasses, excludedIds: readonly string[], excludedPhrases: readonly string[]): boolean {
+  if (excludedIds.includes(id)) return true
+  if (excludedPhrases.some((phrase) => text.includes(phrase) || (phrase === '低碳' && VERY_LOW_CARB.test(text)) || (phrase === '限时进食' && TIME_RESTRICTED.test(text)))) return true
+  if (classes.sglt2 && (TIME_RESTRICTED.test(text) || VERY_LOW_CARB.test(text))) return true
+  if (classes.pregnant && (TIME_RESTRICTED.test(text) || VERY_LOW_CARB.test(text) || category === 'weight' || /减重|热量限制|饮酒|酒精/.test(text) || FISH_OIL.test(text))) return true
+  if (classes.ckd && DASH.test(text)) return true
+  return false
+}
+
+function textOf(point: PanelPoint): string {
+  return `${point.name} ${point.label ?? ''}`
+}
+
+function newest(points: PanelPoint[]): PanelPoint | null {
+  return points.reduce<PanelPoint | null>((best, row) => (!best || row.date > best.date ? row : best), null)
+}
+
+function hbValue(point: PanelPoint): number {
+  return /dl/i.test(point.unit) && point.value < 30 ? point.value * 10 : point.value
+}
+
+function glucoseMmol(point: PanelPoint): number {
+  return /mg/i.test(point.unit) || point.value > 25 ? point.value / 18 : point.value
+}
+
+function ldlMmol(point: PanelPoint): number {
+  return /mg/i.test(point.unit) || point.value > 15 ? point.value / 38.67 : point.value
+}
+
+function hba1cPct(point: PanelPoint): number | null {
+  if (/mmol\/mol/i.test(point.unit)) return (point.value / 10.929) + 2.15
+  if (point.value > 20) return null
+  return point.value
+}
+
+function ferritinNgMl(point: PanelPoint): number {
+  return /pmol/i.test(point.unit) ? point.value / 2.247 : point.value
+}
+
+function isHb(point: PanelPoint): boolean {
+  if (point.loinc === '718-7') return true
+  const name = textOf(point)
+  if (/糖化|平均|压积|MCH|浓度|含量|尿|A1c/i.test(name)) return false
+  return /血红蛋白|^\s*(?:Hb|HGB)\b|Hemoglobin/i.test(name)
+}
+
+function isMcv(point: PanelPoint): boolean {
+  return point.loinc === '787-2' || point.loinc === '30428-7' || /平均红细胞体积|^\s*MCV\b/i.test(textOf(point))
+}
+
+function isRdwCv(point: PanelPoint): boolean {
+  const name = textOf(point)
+  // 血小板分布宽度 (PDW) and the SD form in fL are other measurements.
+  if (/标准差|RDW-?SD|血小板|PDW|PLT/i.test(name) || /fl/i.test(point.unit)) return false
+  return point.loinc === '788-0' || point.loinc === '30385-9' || /红细胞分布宽度|RDW/i.test(name)
+}
+
+function isFerritin(point: PanelPoint): boolean {
+  return point.loinc === '2276-4' || /铁蛋白|ferritin/i.test(textOf(point))
+}
+
+function isGlucose(point: PanelPoint): boolean {
+  const name = textOf(point)
+  if (/尿|糖化|负荷|餐后|随机/.test(name)) return false
+  return point.loinc === '14771-0' || point.loinc === '1558-6' || /空腹血糖|空腹葡萄糖|空腹血葡萄糖/.test(name)
+}
+
+function isHba1c(point: PanelPoint): boolean {
+  return point.loinc === '4548-4' || /糖化血红蛋白|HbA1c|A1[Cc]/.test(textOf(point))
+}
+
+function isLdl(point: PanelPoint): boolean {
+  return point.loinc === '2089-1' || point.loinc === '13457-7' || /低密度脂蛋白|^\s*LDL/i.test(textOf(point))
+}
+
+function isSbp(point: PanelPoint): boolean {
+  const name = textOf(point)
+  if (/舒张|DBP/i.test(name)) return false
+  return point.loinc === '8480-6' || /收缩压|^\s*SBP\b/i.test(name)
+}
+
+function isEgfr(point: PanelPoint): boolean {
+  return /egfr|肾小球滤过/i.test(textOf(point))
+}
+
+/** Rows the red-cell trend is read from (their earlier checkups too). */
+export function trendRow(point: Pick<PanelPoint, 'name' | 'label' | 'loinc' | 'unit'>): boolean {
+  const row = { ...point, value: 0, date: '' }
+  return isHb(row) || isMcv(row)
+}
+
+function num(value: number): string {
+  return String(Number(value.toFixed(2)))
+}
+
+/** One value per checkup day (the last of the day), oldest first. */
+function byDay(points: readonly PanelPoint[], valueOf: (point: PanelPoint) => number): Array<{ date: string; value: number }> {
+  const days = new Map<string, number>()
+  for (const row of [...points].filter((item) => item.date).sort((a, b) => a.date.localeCompare(b.date))) days.set(row.date.slice(0, 10), valueOf(row))
+  return [...days].map(([date, value]) => ({ date, value }))
+}
+
+/**
+ * A fall across checkups: the last three each lower than the one before and
+ * together down by at least minPct, or any two down by twice that.
+ */
+function progressiveFall(days: Array<{ date: string; value: number }>, minPct: number): Array<{ date: string; value: number }> | null {
+  if (days.length < 2) return null
+  const recent = days.slice(-3)
+  const last = recent.at(-1) as { date: string; value: number }
+  const falling = recent.every((row, index) => index === 0 || row.value < (recent[index - 1] as { value: number }).value)
+  const drop = (from: number) => (from - last.value) / from
+  if (recent.length >= 3 && falling && drop((recent[0] as { value: number }).value) >= minPct) return recent
+  const peak = days.slice(0, -1).reduce((best, row) => (row.value > best.value ? row : best), days[0] as { date: string; value: number })
+  if (drop(peak.value) >= minPct * 2) return [peak, last]
+  return null
+}
+
+function trendText(rows: Array<{ date: string; value: number }> | null): string {
+  if (!rows) return ''
+  return `，${rows.length} 次体检 ${rows.map((row) => num(row.value)).join(' → ')}（${rows[0]?.date} 到 ${rows.at(-1)?.date}）一路下降`
+}
+
+function dated(point: PanelPoint): string {
+  return point.date ? `（${point.date.slice(0, 10)}）` : ''
+}
+
+/** Lower limits used when the report's own range is not in the record (Mirobody keeps no ranges). */
+const HB_LOW = { male: 130, female: 115, unknown: 120 } as const
+const FERRITIN_LOW = { male: 30, female: 15, unknown: 15 } as const
+
+/**
+ * Critical values and a red-cell pattern that need a doctor before any
+ * lifestyle plan. points holds the latest value of every indicator and, for
+ * haemoglobin and MCV, their earlier checkups. One plain sentence names each
+ * value with its number, calls a low value 偏低, and sends the person to a doctor.
+ */
+export function clinicalStop(input: { sex: string; diabetesKnown: boolean; points: readonly PanelPoint[] }): StopResult {
+  const hits: StopHit[] = []
+  const sex = input.sex === 'male' ? 'male' : input.sex === 'female' ? 'female' : 'unknown'
+  const sexZh = sex === 'male' ? '男性' : sex === 'female' ? '女性' : '成人'
+  const hb = input.points.filter(isHb)
+  const mcv = input.points.filter(isMcv)
+  const latestHb = newest(hb)
+  const latestMcv = newest(mcv)
+  const latestRdw = newest(input.points.filter(isRdwCv))
+  const latestFerritin = newest(input.points.filter(isFerritin))
+  const hbFall = progressiveFall(byDay(hb, hbValue), 0.1)
+  const mcvFall = progressiveFall(byDay(mcv, (row) => row.value), 0.08)
+  if (latestHb) {
+    const value = hbValue(latestHb)
+    const low = value < HB_LOW[sex]
+    if (low || hbFall) {
+      hits.push({
+        key: 'hgb',
+        short_zh: `血红蛋白 ${num(value)} g/L ${low ? '偏低' : '在下降'}`,
+        text_zh: `血红蛋白 ${num(value)} g/L${dated(latestHb)}${low ? `偏低，低于${sexZh}参考下限 ${HB_LOW[sex]}` : ''}${trendText(hbFall)}`,
+      })
+    }
+  }
+  if (latestMcv) {
+    const low = latestMcv.value < 80
+    if (low || mcvFall) {
+      hits.push({
+        key: 'mcv',
+        short_zh: `平均红细胞体积 ${num(latestMcv.value)} fL ${low ? '偏低' : '在下降'}`,
+        text_zh: `平均红细胞体积（MCV）${num(latestMcv.value)} fL${dated(latestMcv)}${low ? '偏低，低于 80' : ''}${trendText(mcvFall)}`,
+      })
+    }
+  }
+  if (latestRdw && latestRdw.value > 15) {
+    hits.push({
+      key: 'rdw',
+      short_zh: `红细胞分布宽度 ${num(latestRdw.value)}% 偏高`,
+      text_zh: `红细胞分布宽度（RDW-CV）${num(latestRdw.value)}%${dated(latestRdw)}偏高，高于常用参考上限 15%`,
+    })
+  }
+  if (latestFerritin) {
+    const value = ferritinNgMl(latestFerritin)
+    if (value > 0 && value < FERRITIN_LOW[sex]) {
+      hits.push({
+        key: 'ferritin',
+        short_zh: `铁蛋白 ${num(value)} ng/mL 偏低`,
+        text_zh: `铁蛋白 ${num(value)} ng/mL${dated(latestFerritin)}偏低，低于${sexZh}常用参考下限 ${FERRITIN_LOW[sex]}`,
+      })
+    }
+  }
+  if (!input.diabetesKnown) {
+    const glucose = newest(input.points.filter(isGlucose))
+    const a1c = newest(input.points.filter(isHba1c))
+    if (glucose && glucoseMmol(glucose) >= 7) {
+      hits.push({
+        key: 'glucose',
+        short_zh: `空腹血糖 ${num(glucoseMmol(glucose))} mmol/L 偏高`,
+        text_zh: `空腹血糖 ${num(glucoseMmol(glucose))} mmol/L${dated(glucose)}偏高，达到糖尿病诊断范围（≥7.0），记录里还没有医生已经知道这件事`,
+      })
+    }
+    const pct = a1c ? hba1cPct(a1c) : null
+    if (a1c && pct != null && pct >= 6.5) {
+      hits.push({
+        key: 'hba1c',
+        short_zh: `糖化血红蛋白 ${num(pct)}% 偏高`,
+        text_zh: `糖化血红蛋白 ${num(pct)}%${dated(a1c)}偏高，达到糖尿病诊断范围（≥6.5%），记录里还没有医生已经知道这件事`,
+      })
+    }
+  }
+  const ldl = newest(input.points.filter(isLdl))
+  if (ldl && ldlMmol(ldl) >= 4.9) {
+    hits.push({
+      key: 'ldl',
+      short_zh: `低密度脂蛋白胆固醇 ${num(ldlMmol(ldl))} mmol/L 很高`,
+      text_zh: `低密度脂蛋白胆固醇 ${num(ldlMmol(ldl))} mmol/L${dated(ldl)}很高（≥4.9），需要医生评估`,
+    })
+  }
+  const sbp = newest(input.points.filter(isSbp))
+  if (sbp && sbp.value >= 180) {
+    hits.push({
+      key: 'sbp',
+      short_zh: `收缩压 ${num(sbp.value)} mmHg 很高`,
+      text_zh: `收缩压 ${num(sbp.value)} mmHg${dated(sbp)}很高（≥180）`,
+    })
+  }
+  if (hits.length === 0) return { stop: false, sentence_zh: '', title_zh: '', hits: [] }
+  const redCell = hits.some((hit) => hit.key === 'hgb' || hit.key === 'mcv' || hit.key === 'rdw' || hit.key === 'ferritin')
+  const where = redCell ? '（可以先看全科或血液科）' : ''
+  const urgent = hits.some((hit) => hit.key === 'sbp') ? '血压这么高请尽快就医；如果同时有胸痛、剧烈头痛、一侧无力或说话不清，立即拨打 120。' : ''
+  const selfTreat = redCell ? '在医生查明原因之前，不要自己买铁剂或补剂。' : ''
+  const sentence = `请先去看医生：${hits.map((hit) => hit.text_zh).join('；')}。${urgent}请带着这几次体检报告去看医生${where}，查清原因。${selfTreat}${DOCTOR_ZH}`
+  return { stop: true, sentence_zh: sentence, title_zh: `请先去看医生：${hits.map((hit) => hit.short_zh).slice(0, 3).join('，')}`, hits }
+}
+
+export function egfrBelowCkd(points: readonly PanelPoint[]): boolean {
+  const latest = newest(points.filter(isEgfr))
+  return latest != null && latest.value < 60 && latest.value > 0
+}
+
+export interface HypoRead {
+  now: boolean
+  unconscious: boolean
+}
+
+/** A low reading or hypo symptoms happening now, not a past number told as history. */
+export function hypoglycaemiaNow(text: string): HypoRead {
+  const raw = String(text ?? '').normalize('NFKC')
+  const unconscious = /昏迷|叫不醒|无法吞咽|不省人事|喂不进/.test(raw)
+  const symptoms = /手抖|手在抖|手一直抖|手有点抖|发抖|哆嗦|出冷汗|冒冷汗|心慌|心悸|虚汗|快晕|头晕眼花|饿得发慌/.test(raw)
+  const lows: number[] = []
+  for (const hit of raw.matchAll(/(\d+(?:\.\d+)?)/g)) {
+    const value = Number(hit[1])
+    if (!(value > 0 && value < 3.9)) continue
+    const at = hit.index ?? 0
+    const around = raw.slice(Math.max(0, at - 16), at + hit[0].length + 18)
+    if (!/血糖|指尖|mmol|毫摩|手指/.test(around)) continue
+    const clauseStart = Math.max(raw.lastIndexOf('。', at), raw.lastIndexOf('\n', at), raw.lastIndexOf('；', at))
+    const clause = raw.slice(clauseStart + 1, at + 24)
+    const past = /去年|前年|那年|以前|曾经|20[0-2]\d|病史/.test(clause)
+    const current = /刚才|刚刚|现在|今天|这会儿|早上|上午|中午|下午|晚上|饭前|午饭前|午餐前|中午前|餐前|手抖|在抖|出冷汗|心慌/.test(clause) || symptoms
+    if (past && !current) continue
+    lows.push(value)
+  }
+  const named = /低血糖/.test(raw) && !/怎么办才能|怎么预防|如何预防|会不会|风险/.test(raw) && (symptoms || /刚才|刚刚|现在|今天|又/.test(raw))
+  const now = lows.length > 0 || named || (unconscious && /低血糖|血糖/.test(raw))
+  return { now, unconscious: now && unconscious }
+}
+
+/**
+ * Whether a reply to a hypoglycaemia message leads with the first step: within
+ * its first three sentences, one names about 15 g of fast sugar before any
+ * sentence sends them to a doctor, a medicine or a plan. When they cannot be
+ * woken, 120 comes first instead.
+ */
+export function leadsWithHypoFirstStep(reply: string, unconscious = false): boolean {
+  const plain = String(reply ?? '').replace(/\*\*|__|`/g, '').split('\n').map((line) => line.replace(/^[\s#>*\-•]+|^\d+[.、)）]\s*/g, '').trim()).filter(Boolean).join('\n')
+  const sentences = plain.split(/[。！!；;\n]/).map((part) => part.trim()).filter(Boolean).slice(0, 3)
+  for (const sentence of sentences) {
+    if (unconscious ? /120/.test(sentence) : /15\s*(?:克|g(?![a-z]))/i.test(sentence) && /糖|果汁|碳水|葡萄糖/.test(sentence)) return true
+    if (/医生|医院|就医|门诊|药|方案|计划/.test(sentence)) return false
+  }
+  return false
+}

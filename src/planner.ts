@@ -8,6 +8,12 @@
 // saved: the person tailors the draft in chat or accepts it on the page.
 
 import { hasDose, stripDoses } from './dose.ts'
+import { fingerprint, readPlanPrefs, rememberExclusions, writePlanPrefs } from './plan-prefs.ts'
+import {
+  egfrBelowCkd, exclusionsFromText, FISH_OIL, FISH_OIL_CAUTION, flagsFromText, interventionBlocked,
+  medicationClasses, TIME_RESTRICTED,
+} from './plan-safety.ts'
+import { NO_STOP, panelPoints } from './doctor-first.ts'
 import { buildTracking, type ModelCard, type TrackingContext } from './tracking.ts'
 import { CATEGORY_ZH, currentPlan, type Category } from './interventions.ts'
 import type { MountState } from './mirobody.ts'
@@ -58,7 +64,10 @@ export interface PlanBrief {
     /** Forms the evidence row lists (快走、骑车…), for exercise items. */
     examples_zh: string[]
   }>
-  safety: { medications: string[]; notes_zh: string[] }
+  safety: { medications: string[]; notes_zh: string[]; stop_zh?: string }
+  /** Evidence ids and titles the person already refused. */
+  excluded_ids?: string[]
+  excluded_phrases?: string[]
   past_items: Array<{ title: string; category: string; verdicts: string[]; adherence_pct: number | null }>
   /** Daily wearable metrics on record (dailySteps, dailyTotalSleepTime): a target is only offered for these. */
   metrics: string[]
@@ -115,8 +124,6 @@ const DESIGN_ZH: Record<string, string> = { 'meta-analysis': '荟萃分析', rct
 // A conservative screen, not an exhaustive interaction check: name fragments of common medicine classes.
 const ANTIHYPERTENSIVE = /地平|普利|沙坦|洛尔|噻嗪|吲达帕胺|螺内酯|呋塞米|托拉塞米|降压|amlodipine|nifedipine|felodipine|pril\b|sartan|olol\b|thiazide|indapamide|spironolactone|furosemide/i
 const ANTITHROMBOTIC = /阿司匹林|氯吡格雷|替格瑞洛|华法林|沙班|达比加群|肝素|抗凝|抗血小板|aspirin|clopidogrel|ticagrelor|prasugrel|warfarin|xaban\b|dabigatran|heparin/i
-const FISH_OIL = /鱼油|omega-?3|ω-?3|\bepa\b|\bdha\b/i
-const TIME_RESTRICTED = /限时进食|time-restricted|16:8|轻断食/i
 const SMOKING_CESSATION = /戒烟|smoking cessation|quit smoking/i
 
 export interface BriefOptions {
@@ -124,6 +131,8 @@ export interface BriefOptions {
   focus?: readonly Focus[]
   /** Markers the person asked to improve, by name or key; they come first. */
   markers?: readonly string[]
+  /** Limits they just stated (不要限时进食, 怀孕). Saved, and applied to this draft. */
+  constraints?: string
 }
 
 /**
@@ -142,20 +151,40 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
   const { profile, indicators, medications } = context.records
   const focus = [...(options.focus ?? profile.focus)]
   const notes: string[] = []
-  // A change to show a doctor comes before any plan.
-  const toDoctor = tracking.changes.filter((row) => row.ask_doctor).map((row) => row.label_zh)
-  if (toDoctor.length > 0) notes.push(`记录里有超出正常波动的变化（${toDoctor.join('、')}），建议先请医生看过再开始方案。`)
+  const prefs = readPlanPrefs(context.dataDir)
+  const said = flagsFromText(options.constraints ?? '')
+  if (said.pregnant || said.ckd) {
+    writePlanPrefs(context.dataDir, { ...prefs, pregnant: said.pregnant || prefs.pregnant, ckd: said.ckd || prefs.ckd })
+  }
+  const stored = readPlanPrefs(context.dataDir)
+  if ((options.constraints ?? '').trim()) rememberExclusions(context.dataDir, exclusionsFromText(options.constraints ?? ''))
+  const excluded = readPlanPrefs(context.dataDir)
+  const current = currentMedications(medications)
+  const classes = medicationClasses(current, {
+    pregnant: said.pregnant || stored.pregnant === true,
+    ckd: said.ckd || stored.ckd === true,
+    diabetes: profile.risk.diabetes,
+  })
+  if (egfrBelowCkd(panelPoints(indicators))) classes.ckd = true
+  // Computed once with the tracking (doctor-first.ts): the overview and the chat say the same.
+  const stop = tracking.doctor_first ?? NO_STOP
+  if (stop.stop) notes.push(stop.sentence_zh)
+  else {
+    const toDoctor = tracking.changes.filter((row) => row.ask_doctor).map((row) => row.label_zh)
+    if (toDoctor.length > 0) notes.push(`记录里有超出正常波动的变化（${toDoctor.join('、')}），建议先请医生看过再开始方案。`)
+  }
   const priorities = prioritiesOf({
     focus, asked: options.markers ?? [], models: tracking.models, biovar: reference.biovar, indicators, notes,
   })
-  const current = currentMedications(medications)
-  const screen = safetyScreen(profile.risk, medications, current)
-  const candidates = candidatesOf(priorities, reference.effects, reference.biovar, screen, profile.risk.smoker === false)
-  for (const row of priorities) {
-    if (!candidates.some((item) => covers(item.marker_key, row.marker_key))) notes.push(`${row.label_zh}：方法库里还没有针对它的干预证据，这份草稿不含它的项目。`)
-  }
-  if (focus.includes('sleep') && !candidates.some((row) => row.category === 'sleep')) {
-    notes.push('睡眠：方法库里还没有核对过的睡眠干预证据，这份草稿不含睡眠项目。')
+  const screen = safetyScreen(profile.risk, medications, current, classes)
+  const candidates = stop.stop ? [] : candidatesOf(priorities, reference.effects, reference.biovar, screen, profile.risk.smoker === false, excluded.excluded_ids, excluded.excluded_phrases)
+  if (!stop.stop) {
+    for (const row of priorities) {
+      if (!candidates.some((item) => covers(item.marker_key, row.marker_key))) notes.push(`${row.label_zh}：方法库里还没有针对它的干预证据，这份草稿不含它的项目。`)
+    }
+    if (focus.includes('sleep') && !candidates.some((row) => row.category === 'sleep')) {
+      notes.push('睡眠：方法库里还没有核对过的睡眠干预证据，这份草稿不含睡眠项目。')
+    }
   }
   if (profile.risk.smoker === false && reference.effects.some((row) => SMOKING_CESSATION.test(interventionText(row)) && priorities.some((p) => covers(row.marker_key ?? '', p.marker_key)))) {
     notes.push('你说过不吸烟，所以没有列出戒烟。')
@@ -179,7 +208,9 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
     focus,
     priorities,
     candidates,
-    safety: { medications: current, notes_zh: screen.notes },
+    safety: { medications: current, notes_zh: screen.notes, ...(stop.stop ? { stop_zh: stop.sentence_zh } : {}) },
+    excluded_ids: excluded.excluded_ids,
+    excluded_phrases: excluded.excluded_phrases,
     past_items: past,
     metrics,
     notes_zh: notes,
@@ -284,25 +315,39 @@ interface Screen {
   onMedication: boolean
   bpTreated: boolean
   glucoseRisk: boolean
+  hypoDrugs: boolean
+  sglt2: boolean
+  sglt2Name: string
+  pregnant: boolean
+  ckd: boolean
   antithrombotic: boolean
   current: string[]
   notes: string[]
 }
 
-function safetyScreen(risk: Partial<Record<string, boolean>>, medications: readonly MedicationRow[], current: string[]): Screen {
+function safetyScreen(risk: Partial<Record<string, boolean>>, medications: readonly MedicationRow[], current: string[], classes: ReturnType<typeof medicationClasses>): Screen {
   const names = current.join('、')
   const notes: string[] = []
   const screen: Screen = {
     onMedication: current.length > 0,
     bpTreated: risk.bp_treated === true || current.some((name) => ANTIHYPERTENSIVE.test(name)),
     glucoseRisk: risk.diabetes === true || current.some((name) => GLUCOSE_LOWERING.test(name)),
+    hypoDrugs: classes.hypoDrugs,
+    sglt2: classes.sglt2,
+    sglt2Name: classes.sglt2Name,
+    pregnant: classes.pregnant,
+    ckd: classes.ckd,
     antithrombotic: current.some((name) => ANTITHROMBOTIC.test(name)),
     current,
     notes,
   }
   if (screen.onMedication) notes.push(`你的用药计划里有：${names}。饮食和补剂项目开始前，先与医生确认。`)
   if (screen.bpTreated) notes.push('你在用降压药：运动强度先与医生确认。')
-  if (screen.glucoseRisk) notes.push('你有糖尿病或在用降糖药：限时进食这类项目有低血糖风险，先与医生确认。')
+  if (screen.sglt2) notes.push(`你在用${screen.sglt2Name}（SGLT2 抑制剂）。进食明显减少、断食或极低碳饮食时，它可以引起正常血糖性酮症酸中毒（euglycaemic ketoacidosis）：血糖不高，但会恶心、呕吐、腹痛、乏力、呼吸深快，需要立即就医。所以这份草稿不安排限时进食、断食或极低碳饮食；生病或吃得明显少时，先问开药的医生要不要暂停。`)
+  if (screen.hypoDrugs) notes.push('你在用胰岛素或磺脲类：运动、少吃和减重都有低血糖风险，先与医生确认。')
+  else if (screen.glucoseRisk && !screen.sglt2) notes.push('你有糖尿病或在用降糖药：限时进食、少吃这类饮食改动有低血糖风险，先与医生确认。')
+  if (screen.pregnant) notes.push('怀孕时不安排限时进食、减重、饮酒和鱼油。')
+  if (screen.ckd) notes.push('肾功能不全时不安排未经调整的 DASH 饮食（钾含量高），需要肾脏专科或营养师看过。')
   if (screen.antithrombotic) notes.push('你在用抗凝或抗血小板药：鱼油可能增加出血风险，先与医生确认。')
   notes.push(`这只是几类常见情况的简单筛查，并不完整${medications.length > 0 ? '' : '（记录里没有用药计划）'}；任何改变开始前都可以先问医生。LongPi 不会建议开始、停止或调整任何药物。`)
   return screen
@@ -317,8 +362,10 @@ function cautionsFor(row: EffectRow, screen: Screen): string[] {
   const text = interventionText(row)
   if (screen.onMedication && (row.category === 'diet' || row.category === 'supplement')) out.push('你正在服药，开始前先与医生确认')
   if (screen.bpTreated && row.category === 'exercise') out.push('血压用药期间，运动强度先与医生确认')
-  if (screen.glucoseRisk && TIME_RESTRICTED.test(text)) out.push('有低血糖风险，先与医生确认')
+  if (screen.hypoDrugs && (row.category === 'exercise' || row.category === 'weight' || TIME_RESTRICTED.test(text) || /减重|节食|热量限制/.test(text))) out.push('你在用胰岛素或磺脲类，这项有低血糖风险，先与医生确认')
+  else if (screen.glucoseRisk && TIME_RESTRICTED.test(text)) out.push('有低血糖风险，先与医生确认')
   if (screen.antithrombotic && FISH_OIL.test(text)) out.push('可能增加出血风险，先与医生确认')
+  if (FISH_OIL.test(text)) out.push(FISH_OIL_CAUTION)
   const taking = row.category === 'supplement' ? screen.current.find((name) => sameThing(name, row)) : undefined
   if (taking) out.push(`你的用药计划里已经有「${taking}」`)
   return out
@@ -335,14 +382,19 @@ function covers(have: string, want: string): boolean {
   return have === want || (have === 'weight' && want === 'waist')
 }
 
-function candidatesOf(priorities: Priority[], effects: readonly EffectRow[], biovar: Biovar, screen: Screen, nonSmoker: boolean): Candidate[] {
+function candidatesOf(priorities: Priority[], effects: readonly EffectRow[], biovar: Biovar, screen: Screen, nonSmoker: boolean, excludedIds: readonly string[] = [], excludedPhrases: readonly string[] = []): Candidate[] {
   const rank = (key: string) => {
     const index = priorities.findIndex((row) => covers(key, row.marker_key))
     return index < 0 ? Number.POSITIVE_INFINITY : index
   }
+  const classes = medicationClasses(screen.current, { pregnant: screen.pregnant, ckd: screen.ckd, diabetes: screen.glucoseRisk })
+  classes.sglt2 = screen.sglt2
+  classes.sglt2Name = screen.sglt2Name
+  classes.hypoDrugs = screen.hypoDrugs
   const rows = effects.filter((row) => row.marker_key && (DRAFT_CATEGORIES as readonly string[]).includes(row.category)
     && priorities.some((p) => covers(row.marker_key as string, p.marker_key))
-    && !(nonSmoker && SMOKING_CESSATION.test(interventionText(row))))
+    && !(nonSmoker && SMOKING_CESSATION.test(interventionText(row)))
+    && !interventionBlocked(interventionText(row), row.category, row.id, classes, excludedIds, excludedPhrases))
   const out = rows.map((row): Candidate & { magnitude: number } => {
     const key = row.marker_key as string
     const marker = biovar.markers.find((item) => item.key === key) ?? null
@@ -463,7 +515,10 @@ function noteWithoutAmounts(note: string): string {
 
 function detailFor(group: Group, primary: Candidate): string {
   const evidence = `证据：${primary.expected_zh}，DOI ${primary.doi}。个人效果因人而异。`
-  if (group.category === 'supplement') return clipText(`${SUPPLEMENT_DETAIL}${evidence}`, DETAIL_MAX)
+  if (group.category === 'supplement') {
+    const fish = FISH_OIL.test(primary.intervention_zh) ? `${FISH_OIL_CAUTION}。` : ''
+    return clipText(`${SUPPLEMENT_DETAIL}${fish}${evidence}`, DETAIL_MAX)
+  }
   const examples = primary.examples_zh.length > 0 ? `，形式可选${primary.examples_zh.join('、')}` : ''
   const behavior = `${CATEGORY_ZH[group.category as Category]}：${primary.intervention_zh}${examples}。`
   const room = DETAIL_MAX - [...behavior].length - [...evidence].length
@@ -517,10 +572,49 @@ function itemFor(group: Group, brief: PlanBrief, today: string): DraftItem {
  * effects: one item per intervention, at most one supplement, different categories first. Deterministic;
  * saves nothing. Null when there is nothing evidence-backed to propose.
  */
+/** The Chinese reply for this draft. The model sends it and does not call another tool first. */
+export function replyForDraft(brief: PlanBrief, draft: PlanDraft | null): string {
+  if (brief.safety.stop_zh) return brief.safety.stop_zh
+  if (!draft) return brief.notes_zh[0] || '现在还起草不了方案。'
+  const lines = draft.items.map((item) => {
+    const caution = item.cautions_zh.length > 0 ? `（${item.cautions_zh.join('；')}）` : ''
+    return `${item.category_zh}：${item.title}${caution}。${item.evidence.expected_zh}`
+  })
+  const dated = draft.title.match(/\d{4}-\d{2}-\d{2}/)
+  return [`这是草稿，还没有保存。日期是 ${dated ? dated[0] : brief.today}。`, ...lines].join('\n')
+}
+
+/**
+ * Keep the draft's date while the labs and medicines are the same. A new day,
+ * by itself, does not retitle the draft. A new exclusion regenerates the items
+ * and keeps the date.
+ */
+export function settleDraft(dataDir: string, brief: PlanBrief, today: string, opts: { maxItems?: number } = {}): PlanDraft | null {
+  const prefs = readPlanPrefs(dataDir)
+  const clinical = fingerprint({
+    stop: brief.safety.stop_zh ?? '',
+    meds: brief.safety.medications,
+    priorities: brief.priorities.map((row) => [row.marker_key, row.value, row.date]),
+  })
+  const content = fingerprint({ clinical, ids: brief.excluded_ids ?? [], phrases: brief.excluded_phrases ?? [], max: opts.maxItems ?? null, candidates: brief.candidates.map((row) => row.id), focus: brief.focus })
+  if (prefs.content_fp === content && prefs.draft && typeof prefs.draft === 'object') return prefs.draft as PlanDraft
+  if (brief.safety.stop_zh) {
+    writePlanPrefs(dataDir, { ...prefs, clinical_fp: clinical, content_fp: content, drafted_on: prefs.drafted_on || today, draft: null })
+    return null
+  }
+  const draftedOn = prefs.clinical_fp === clinical && prefs.drafted_on ? prefs.drafted_on : today
+  const draft = draftPlan(brief, { today: draftedOn, ...(opts.maxItems != null ? { maxItems: opts.maxItems } : {}) })
+  writePlanPrefs(dataDir, { ...prefs, clinical_fp: clinical, content_fp: content, drafted_on: draft ? draftedOn : prefs.drafted_on, draft })
+  return draft
+}
+
 export function draftPlan(brief: PlanBrief, opts: { today: string; maxItems?: number }): PlanDraft | null {
+  if (brief.safety.stop_zh) return null
   const maxItems = Math.max(1, Math.min(5, Math.round(opts.maxItems ?? 3)))
   const rankOf = (key: string) => brief.priorities.findIndex((row) => row.marker_key === key)
-  const groups = groupsOf(brief)
+  const phrases = brief.excluded_phrases ?? []
+  const ids = new Set(brief.excluded_ids ?? [])
+  const groups = new Map([...groupsOf(brief)].filter(([key, group]) => !phrases.some((phrase) => key.includes(phrase) || (phrase === '限时进食' && TIME_RESTRICTED.test(key)) || (phrase === '低碳' && /低碳|生酮/.test(key))) && !group.rows.some((row) => ids.has(row.id))))
   const size = brief.priorities.length
   const chosen: Group[] = []
   const covered = new Set<string>()

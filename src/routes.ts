@@ -14,7 +14,8 @@ import { loadEvidenceLexicon } from './intents.ts'
 import { buildStats } from './stats.ts'
 import { PRODUCT_NAME, PRODUCT_VERSION } from './version.ts'
 import { addCheckIns, currentPlan, isoDay, normalizePlan, savePlan } from './interventions.ts'
-import { acceptedPlan, briefOptionsOf, buildPlanBrief, draftPlan } from './planner.ts'
+import { setPlanExclusion } from './plan-prefs.ts'
+import { acceptedPlan, briefOptionsOf, buildPlanBrief, settleDraft } from './planner.ts'
 import { buildReport, readiness, runReady } from './overview.ts'
 import { invalidateRecords } from './records.ts'
 import { buildTracking, invalidateTracking } from './tracking.ts'
@@ -364,8 +365,35 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
         void (async () => {
           const input = await journeyContext()
           const brief = await buildPlanBrief(input)
-          sendJson(res, 200, { brief, draft: draftPlan(brief, { today: input.today }) })
+          sendJson(res, 200, { brief, draft: settleDraft(input.dataDir, brief, input.today) })
         })().catch(() => sendJson(res, 500, { ok: false, error: 'plan draft failed' }))
+      },
+    })
+
+    web.register({
+      kind: 'exact',
+      path: '/api/longpi/plan-draft/exclude',
+      handler: (req, res) => {
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { ok: false, error: 'POST only' })
+          return
+        }
+        void (async () => {
+          const body = await readJson(req, 8_000)
+          const value = body.ok && body.value && typeof body.value === 'object' ? body.value as Record<string, unknown> : null
+          if (!value || typeof value.excluded !== 'boolean') {
+            sendJson(res, 400, { ok: false, error: 'body must be {"id","title","excluded":true|false}' })
+            return
+          }
+          const input = await journeyContext()
+          const prefs = setPlanExclusion(input.dataDir, {
+            id: typeof value.id === 'string' ? value.id : '',
+            title: typeof value.title === 'string' ? value.title : '',
+            excluded: value.excluded,
+          })
+          const brief = await buildPlanBrief(input)
+          sendJson(res, 200, { ok: true, excluded_ids: prefs.excluded_ids, excluded_phrases: prefs.excluded_phrases, draft: settleDraft(input.dataDir, brief, input.today) })
+        })().catch(() => sendJson(res, 400, { ok: false, error: 'exclude failed' }))
       },
     })
 

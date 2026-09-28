@@ -63,7 +63,12 @@ export interface Journey {
   plan: { exists: boolean; title: string; version: number | null; items: number; started: string | null; days: number | null; checkin_items: Array<{ id: string; title: string; done_today: boolean | null }>; streak: number; adherence_pct: number | null }
   reminders: Array<{ kind: 'retest' | 'checkin'; text_zh: string; date: string | null; due: boolean }>
   stage: Stage
-  next: { stage: Stage; title_zh: string; detail_zh: string; action: 'consent' | 'profile' | 'records' | 'addons' | 'plan' | 'checkin' | 'review' | 'open' }
+  /**
+   * A critical value or red-cell pattern (plan-safety.ts): see a doctor before any plan. When stop is true the
+   * next step is this, whatever the stage after the profile, and no plan is drafted.
+   */
+  doctor_first: { stop: boolean; title_zh: string; sentence_zh: string; hits: Array<{ key: string; short_zh: string; text_zh: string }> }
+  next: { stage: Stage; title_zh: string; detail_zh: string; action: 'consent' | 'profile' | 'records' | 'addons' | 'plan' | 'checkin' | 'review' | 'open' | 'doctor' }
   suggestions: Array<{ id: string; text_zh: string }>
   boundary_zh: string
   /** Follow-up reminders: on or off, the channels in use, and the next planned send (local ISO). */
@@ -302,6 +307,10 @@ function stageOf(journey: Pick<Journey, 'consent' | 'profile' | 'records' | 'res
 
 function nextOf(stage: Stage, journey: Body): Next {
   const step = (title: string, detail: string, action: Next['action']): Next => ({ stage, title_zh: title, detail_zh: detail, action })
+  // A critical value or a falling red-cell count goes to a doctor before any plan, check-in or retest.
+  if (journey.doctor_first.stop && stage !== 'consent' && stage !== 'profile' && stage !== 'records') {
+    return step(journey.doctor_first.title_zh, journey.doctor_first.sentence_zh, 'doctor')
+  }
   switch (stage) {
     case 'consent':
       return step('开始使用 LongPi', '先了解 LongPi 做什么、数据放在哪里。', 'consent')
@@ -349,7 +358,11 @@ function suggestionsOf(stage: Stage, journey: Body, followupOn: boolean): Journe
     picks.push({ id: 'plan-effect', text_zh: '我的方案有没有效果？' })
   }
   // Changes for a doctor come before everything else once the person is past consent and profile.
-  if (stage !== 'consent' && stage !== 'profile' && journey.changes.some((row) => row.ask_doctor)) {
+  if (stage !== 'consent' && stage !== 'profile' && journey.doctor_first.stop) {
+    const plan = picks.findIndex((row) => row.id === 'draft-plan')
+    if (plan >= 0) picks.splice(plan, 1)
+    picks.unshift({ id: 'doctor-first', text_zh: '这些偏低的指标意味着什么？看医生前要准备什么？' })
+  } else if (stage !== 'consent' && stage !== 'profile' && journey.changes.some((row) => row.ask_doctor)) {
     picks.unshift({ id: 'record-changes', text_zh: '我的记录里哪些变化需要注意？' })
   }
   const seen = new Set<string>()
@@ -402,6 +415,12 @@ function journeyFrom(context: JourneyContext, tracking: Tracking, summary: Recor
     changes: tracking.changes,
     changes_note_zh: tracking.changes_note_zh,
     changes_unjudged: tracking.changes_unjudged,
+    doctor_first: {
+      stop: tracking.doctor_first?.stop === true,
+      title_zh: tracking.doctor_first?.title_zh ?? '',
+      sentence_zh: tracking.doctor_first?.sentence_zh ?? '',
+      hits: (tracking.doctor_first?.hits ?? []).map((hit) => ({ ...hit })),
+    },
     self: {
       latest: SELF_KEYS.flatMap((key) => {
         const row = latest[key]

@@ -5,6 +5,7 @@ import type { Config } from './config.ts'
 import { matchSkills, domainSummary } from './match.ts'
 import type { MountState } from './mirobody.ts'
 import { clampMatches, resolveDataDir, resolveSkillsHome } from './paths.ts'
+import { setClinicalFlags } from './plan-prefs.ts'
 import { normalizeProfile, readProfile, writeProfile, estimatedAge, FOCUS, RISK_FACTS, type Profile } from './profile.ts'
 import { loadRecords, readFlags, type RecordSnapshot } from './records.ts'
 import { readReceipts, runSkill } from './runner.ts'
@@ -120,6 +121,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
         indicators: records.indicators.slice(0, 120),
         indicator_count: records.indicators.length,
         medications: records.medications,
+        medication_summary_zh: records.medication_summary_zh,
         earlier_readouts: outputs,
         runnable_now: dispatch.matches.map((item) => ({ name: item.name, blurb: item.blurb })),
         almost_runnable: dispatch.near.map((item) => ({ name: item.name, missing: item.runnable.missing })),
@@ -132,7 +134,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
         records_summary: read.journey?.records.summary ?? null,
         ...onboardingOf(read, records.profile, input.dataDir),
         ...recordChangesOf(read),
-        note: 'Medication doses are what the record says. They are not an instruction to change a dose. A missing indicator was not on file, unless record_status is partial: then read_errors says which reads failed, and an indicator in missing_reads (or any indicator, when the catalogue was cut) is unknown because it was not read. Never say such an indicator was not measured; say the read failed and suggest trying again later. Indicators named ...（自测） are measurements the person entered themselves (source self), used only when newer than the record. earlier_readouts are outputs of skills already run for this person; cite them with their date. onboarding says where the person is, the first results or what blocks them, and what to add at the next checkup.',
+        note: 'Quote medication_summary_zh for medicines. A line starting 当前 or 你记下的 is what they take now; a line starting 较早 is not. Never say 0x/day. Never print record_status, a skill id, or a tool name. Medication doses are what the record says, not an instruction to change a dose. A missing indicator was not on file, unless record_status is partial: then read_errors says which reads failed, and an indicator in missing_reads (or any indicator, when the catalogue was cut) is unknown because it was not read. Never say such an indicator was not measured; say the read failed and suggest trying again later. Indicators named ...（自测） are measurements the person entered themselves (source self), used only when newer than the record. earlier_readouts are outputs of skills already run for this person; cite them with their date. onboarding says where the person is, the first results or what blocks them, and what to add at the next checkup.',
       })
     },
   }))
@@ -405,6 +407,8 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
       north: { oneOf: [{ type: 'boolean' }, { type: 'null' }], description: 'They live in northern China (north of the Yangtze); false for southern China. null clears it: they are unsure or do not know.' },
       urban: { oneOf: [{ type: 'boolean' }, { type: 'null' }], description: 'They live in a city; false for a rural area. null clears it: they are unsure or do not know.' },
       family_history: { oneOf: [{ type: 'boolean' }, { type: 'null' }], description: 'A parent or sibling had a heart attack or stroke. null clears it: they are unsure or do not know.' },
+      pregnant: { oneOf: [{ type: 'boolean' }, { type: 'null' }], description: 'They said they are pregnant. null clears it. Never infer it.' },
+      ckd: { oneOf: [{ type: 'boolean' }, { type: 'null' }], description: 'They said they have chronic kidney disease. null clears it. Never infer it from a lab.' },
     },
     output: jsonOut,
     timeoutMs: 10000,
@@ -433,6 +437,10 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
       }
       const normalized = normalizeProfile(next)
       if (!normalized.ok) return asJson({ ok: false, error: normalized.error })
+      const flags: { pregnant?: boolean | null; ckd?: boolean | null } = {}
+      if (typeof args.pregnant === 'boolean' || args.pregnant === null) flags.pregnant = args.pregnant
+      if (typeof args.ckd === 'boolean' || args.ckd === null) flags.ckd = args.ckd
+      if (Object.keys(flags).length > 0) setClinicalFlags(dataDir, flags)
       try {
         writeProfile(dataDir, normalized.profile)
       } catch (error) {
@@ -543,7 +551,12 @@ function recordChangesOf(read: JourneyRead) {
   if (!read.journey) {
     return { record_changes: [], record_changes_how_to_read: 'Changes between checkups are still being read; do not guess them. Call read_personal_situation again later.' }
   }
+  const doctor = read.journey.doctor_first
   return {
+    ...(doctor.stop ? {
+      doctor_first_zh: doctor.sentence_zh,
+      doctor_first_how_to_read: 'Say doctor_first_zh first and plainly, before any result or plan, with its numbers: these values need a doctor before a lifestyle plan, and no plan is drafted until then. A value below the reference range is 偏低 and one above it is 偏高: say so. Naming a low value is not a diagnosis, so never answer 不能评, 不解读 or 只报数 about it, and never say that going to a doctor is optional or a common choice to skip. Do not name a cause, and never suggest iron, a supplement, a drug or a dose.',
+    } : {}),
     record_changes: read.journey.changes.map(({ points, ...row }) => ({ ...row, n_points: points.length })),
     record_changes_unjudged: read.journey.changes_unjudged,
     record_changes_note_zh: read.journey.changes_note_zh,

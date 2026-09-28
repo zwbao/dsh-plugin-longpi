@@ -84,6 +84,8 @@ function ctaOf(action: NextAction, props: OverviewProps): Cta | null {
       return { label: '记录今天', run: () => props.goTab('overview', { id: 'lp-today' }) }
     case 'review':
       return { label: '看方案效果', run: () => props.goTab('plan') }
+    case 'doctor':
+      return { label: '看这些指标', run: () => props.goTab('indicators') }
     default:
       return null
   }
@@ -127,8 +129,10 @@ export function Overview(props: OverviewProps): React.ReactElement {
   const { journey } = props
   return h('div', { className: 'lp-tab-body lp-overview' },
     h(PartialNote, { journey }),
+    // A value to show a doctor comes before the day's check-ins and the results.
+    journey.next.action === 'doctor' ? h(NextCard, props) : null,
     journey.plan.exists ? h(TodayCard, { journey, tracking: props.tracking, onNotice: props.onNotice }) : null,
     h(ResultsRow, { journey, tracking: props.tracking, onAction: props.onAction, onNotice: props.onNotice }),
-    h(NextCard, props),
+    journey.next.action === 'doctor' ? null : h(NextCard, props),
     h(NotableChanges, { journey, onOpenIndicators: () => props.goTab('indicators', { filter: 'changed' }) }))
 }
