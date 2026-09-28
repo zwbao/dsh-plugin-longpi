@@ -14,9 +14,11 @@ import {
   type GuardLabels, type GuidanceNote, type ReplyVerdict,
 } from './guardrails.ts'
 import { hasDoseAmount } from './guard-dose.ts'
-import { holdPlanDraft, releasePlanDraft } from './plan-hold.ts'
+import { holdPlanDraft, releasePlanDraft, sessionKey } from './plan-hold.ts'
+import { rememberPersonText } from './core/turn-text.ts'
+import { rememberFromWords } from './core/remember-rules.ts'
 import { exclusionsFromText, hypoglycaemiaNow, leadsWithHypoFirstStep } from './plan-safety.ts'
-import { rememberExclusions } from './plan-prefs.ts'
+import { rememberExclusions, drinkingFromText, setDrinking } from './plan-prefs.ts'
 import { HealthSessions, insideWorkspace, touchesHealth, type GuardScope } from './guard-scope.ts'
 import { isoDay } from './interventions.ts'
 
@@ -602,9 +604,11 @@ export function createGuard(ctx: Context, options: GuardOptions): Guard {
           ? await classifyMessage(text, { call: callFor(agent), medications: rememberedMedications(), timeoutMs, ...(payload.signal ? { signal: payload.signal } : {}) })
           : { labels: ruleLabels(text), source: 'rules', llm: 'skipped' }
         const { labels } = result
+        rememberPersonText(sessionKey(agent), text)
         const hypo = hypoglycaemiaNow(text)
-        if (hypo.now) holdPlanDraft()
-        else releasePlanDraft()
+        // Per session: a low reading in one chat does not hold drafts in another.
+        if (hypo.now) holdPlanDraft(sessionKey(agent))
+        else releasePlanDraft(sessionKey(agent))
         // 不要限时进食 said anywhere in the chat holds for every later draft, whether or not the model passes it on.
         const ruledOut = exclusionsFromText(text)
         if (ruledOut.length > 0) {
@@ -612,6 +616,25 @@ export function createGuard(ctx: Context, options: GuardOptions): Guard {
             rememberExclusions(options.dataDir(), ruledOut)
           } catch {
             // an unwritable data dir must not block the message
+          }
+        }
+        // Pregnancy (planning) and a close relative's breast cancer, said in the first person, go to memory at once
+        // (restrictive: they only add caution and a screening topic).
+        // Only where the guard treats the talk as health (LongPi's workspace or a health message), never in a coding session.
+        if (modelAsked) {
+          try {
+            rememberFromWords(options.dataDir(), text, sessionKey(agent))
+          } catch {
+            // an unwritable data dir must not block the message
+          }
+        }
+        // Whether they drink, in their own words, decides whether an alcohol item may be drafted.
+        const drinking = modelAsked ? drinkingFromText(text) : null
+        if (drinking != null) {
+          try {
+            setDrinking(options.dataDir(), drinking)
+          } catch {
+            // as above
           }
         }
         if (agent && typeof agent === 'object') {

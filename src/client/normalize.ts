@@ -9,6 +9,7 @@ import type {
   Addon, CheckState, Connection, ConnectionResult, DraftCategory, DraftGoal, DraftItem, Focus, FollowupKind, FollowupLogRow, FollowupResponse,
   FollowupSettings, GroupKey, IndicatorChange, IndicatorDetail, IndicatorRow, IndicatorsResponse, Journey, JourneyQuestion, NextAction, PlanBrief,
   PlanDraftResponse, RecordChange, RecordsSummary, Reminder, RiskFact, SelfKey, SelfKeySpec, SelfLatest, Sex, Stage, WebhookKind, Weekday,
+  JourneySurfaces, JourneyTriage, SurfaceCardView,
 } from './types.ts'
 
 type Raw = Record<string, unknown>
@@ -293,6 +294,36 @@ export function normalizeJourney(input: unknown): Journey {
     changes_unjudged: objects(raw.changes_unjudged)
       .filter((row) => str(row.label_zh))
       .map((row) => ({ label_zh: str(row.label_zh), reason_zh: str(row.reason_zh) })),
+    surfaces: surfacesOf(raw.surfaces),
+    triage: triageOf(obj(raw.triage)),
+  }
+}
+
+function cardOf(value: unknown): SurfaceCardView {
+  const raw = obj(value)
+  return { id: str(raw.id), text_zh: str(raw.text_zh), detail_zh: str(raw.detail_zh), fact_ids: strings(raw.fact_ids), tone: str(raw.tone), source: str(raw.source), prompt_zh: str(raw.prompt_zh) }
+}
+
+/** The surfaces the server ranked (0.5.3); null from an older server. */
+export function surfacesOf(value: unknown): JourneySurfaces | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const raw = value as Raw
+  const next = obj(raw.next)
+  const action = obj(next.action)
+  return {
+    source: str(raw.source),
+    greeting: cardOf(raw.greeting),
+    status: cardOf(raw.status),
+    next: { kind: str(action.kind), mandatory: action.mandatory === true, card: cardOf(next.card) },
+    suggestions: objects(raw.suggestions).map(cardOf).filter((row) => row.text_zh),
+  }
+}
+
+function triageOf(raw: Raw): JourneyTriage {
+  return {
+    findings: objects(raw.findings).map((row) => ({ id: str(row.id), title_zh: str(row.title_zh), department_zh: str(row.department_zh), status: str(row.status) })).filter((row) => row.id),
+    care: objects(raw.care).map((row) => ({ finding_id: str(row.finding_id), care_status: str(row.care_status), visit_date: strOrNull(row.visit_date), outcome_zh: strOrNull(row.outcome_zh) })),
+    needs_sex: raw.needs_sex === true,
   }
 }
 
@@ -418,6 +449,7 @@ export function normalizePlanDraft(input: unknown): PlanDraftResponse {
     brief: briefOf(obj(raw.brief)),
     // A draft with no usable item is no draft: the card then explains why instead.
     draft: draft && items.length > 0 ? { title: str(draft.title), items, goals, notes_zh: strings(draft.notes_zh) } : null,
+    removed_items: objects(raw.removed_items).map((row) => ({ id: str(row.id), title: str(row.title) })).filter((row) => row.id || row.title),
   }
 }
 

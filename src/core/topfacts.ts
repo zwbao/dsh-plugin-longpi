@@ -1,0 +1,93 @@
+// Top facts (AA §2.4): what matters most for this person, ranked by rule tables — triage findings first,
+// then medicines and conditions that change what is safe, then care follow-up, then goals. No model ranks.
+
+import type { NumberRef } from '../contracts/common.ts'
+import { FACT_PRIORITY_RANK, type TopFact } from '../contracts/factpack.ts'
+import type { ConditionFlag, DrugClass } from '../contracts/memory.ts'
+import type { TriageFinding } from '../contracts/triage.ts'
+import type { RecordChange } from '../changes.ts'
+import type { StopHit } from '../plan-safety.ts'
+import { statusLine } from '../triage/rules.ts'
+import { outcomeText, type CareState } from '../triage/care.ts'
+
+const KIND_ORDER: Record<TopFact['kind'], number> = { triage: 0, safety_med: 1, safety_condition: 2, screening: 3, care_followup: 4, milestone: 5, goal: 6 }
+
+export interface TopFactInput {
+  care: CareState
+  hits: readonly StopHit[]
+  /** Current medicines by name with their classes (record and memory). */
+  meds: Array<{ name: string; classes: DrugClass[] }>
+  conditions: ConditionFlag[]
+  changes: readonly RecordChange[]
+  goals: Array<{ id: string; text_zh: string }>
+  /** Screening topics (M1, triage/screening.ts), already ranked. */
+  screening?: TopFact[]
+  /** The stop used the men's limits because no sex is on file. */
+  needsSex?: boolean
+}
+
+const MED_FACT: Partial<Record<DrugClass, { rule: string; text: (name: string) => string }>> = {
+  glp1ra: { rule: 'safety.med.glp1ra', text: (name) => `你在用${name}（GLP-1 类药物）：体重和血糖的变化主要来自药物，剂量怎么调听开药的医生` },
+  sglt2i: { rule: 'safety.med.sglt2i', text: (name) => `你在用${name}（SGLT2 抑制剂）：方案不安排限时进食、断食或极低碳饮食；吃得明显少或生病时先问开药的医生` },
+  insulin: { rule: 'safety.med.insulin', text: (name) => `你在用${name}（胰岛素）：运动、少吃和减重都要防低血糖` },
+  sulfonylurea: { rule: 'safety.med.sulfonylurea', text: (name) => `你在用${name}（磺脲类）：运动、少吃和减重都要防低血糖` },
+  anticoagulant: { rule: 'safety.med.anticoagulant', text: (name) => `你在用${name}（抗凝药）：鱼油等补剂可能增加出血风险，先问医生` },
+}
+
+const CONDITION_FACT: Partial<Record<ConditionFlag, { rule: string; text: string }>> = {
+  pregnancy: { rule: 'safety.condition.pregnancy', text: '你说过怀孕了：方案不安排限时进食、减重、饮酒和鱼油' },
+  pregnancy_planning: { rule: 'safety.condition.pregnancy_planning', text: '你在备孕：方案不安排限时进食和减重；补剂和药物先问医生' },
+  ckd: { rule: 'safety.condition.ckd', text: '你有慢性肾病：方案不安排未经调整的 DASH 饮食' },
+  cancer_followup: { rule: 'safety.condition.cancer_followup', text: '你在肿瘤随访中：任何饮食或补剂改动先问主治医生' },
+}
+
+function changeRefs(row: RecordChange): NumberRef[] {
+  const text = (value: number) => (row.unit === '%' ? `${Number(value.toPrecision(4))}%` : `${Number(value.toPrecision(4))} ${row.unit}`)
+  return [
+    { key: `${row.key}@${row.compare.from_date}`, label_zh: row.label_zh, value: row.compare.from, unit: row.unit, date: row.compare.from_date, source: 'record', text: text(row.compare.from) },
+    { key: `${row.key}@${row.compare.to_date}`, label_zh: row.label_zh, value: row.compare.to, unit: row.unit, date: row.compare.to_date, source: 'record', text: text(row.compare.to) },
+  ]
+}
+
+export function rankTopFacts(input: TopFactInput): TopFact[] {
+  const facts: TopFact[] = []
+  const seenIds = new Set(input.care.seen.map((row) => row.finding.id))
+  const openFindings: TriageFinding[] = input.care.findings.filter((row) => !seenIds.has(row.id))
+  for (const finding of openFindings) {
+    const line = statusLine(finding, input.hits)
+    const text = input.needsSex && finding.id === 'finding-red-cell' ? line.replace('——', '（性别未填，先按男性下限）——') : line
+    facts.push({ id: finding.id, kind: 'triage', priority: finding.priority, text_zh: text, refs: finding.numbers, source_ids: [finding.id], rule: finding.rule })
+  }
+  for (const { finding, care } of input.care.seen) {
+    facts.push({
+      id: `care-${finding.id}`, kind: 'care_followup', priority: 'should_surface',
+      text_zh: `医生已经看过${finding.title_zh.replace(/ 偏低| 偏高| 在下降/g, '')}${care.visit_date ? `（${care.visit_date}）` : ''}${care.outcome_zh ? `：${outcomeText(care.outcome_zh)}` : ''}`,
+      refs: [], source_ids: [finding.id, care.id], rule: 'care.visited',
+    })
+  }
+  const medSeen = new Set<DrugClass>()
+  for (const med of input.meds) {
+    for (const cls of med.classes) {
+      const spec = MED_FACT[cls]
+      if (!spec || medSeen.has(cls)) continue
+      medSeen.add(cls)
+      facts.push({ id: `safety-${cls}`, kind: 'safety_med', priority: 'must_surface', text_zh: spec.text(med.name), refs: [], source_ids: [], rule: spec.rule })
+    }
+  }
+  for (const flag of input.conditions) {
+    const spec = CONDITION_FACT[flag]
+    if (spec) facts.push({ id: `condition-${flag}`, kind: 'safety_condition', priority: 'must_surface', text_zh: spec.text, refs: [], source_ids: [], rule: spec.rule })
+  }
+  // Changes beyond normal fluctuation for a doctor that no finding already covers (e.g. MCHC 339 → 321). The
+  // red-cell indices (Hct, MCH, MCHC, RBC) belong to the red-cell finding when it is open: one fact, not four.
+  const covered = new Set(input.care.findings.flatMap((row) => row.numbers.map((ref) => ref.label_zh)))
+  // Seen by a doctor counts too: the care follow-up fact says so instead.
+  const redCellOpen = input.care.findings.some((row) => row.id === 'finding-red-cell')
+  const RED_CELL_KEYS = ['hb', 'hct', 'mcv', 'mch', 'mchc', 'rbc']
+  for (const row of input.changes.filter((item) => item.ask_doctor && !covered.has(item.label_zh) && !(redCellOpen && RED_CELL_KEYS.includes(item.key))).slice(0, 2)) {
+    facts.push({ id: `change-${row.key}`, kind: 'triage', priority: 'should_surface', text_zh: `${row.text_zh.replace(/，超出正常波动.*$/, '')}，变化超出正常波动，可以问问医生`, refs: changeRefs(row), source_ids: [], rule: 'changes.ask_doctor' })
+  }
+  for (const fact of input.screening ?? []) facts.push(fact)
+  for (const goal of input.goals.slice(0, 2)) facts.push({ id: `goal-${goal.id}`, kind: 'goal', priority: 'context', text_zh: `你的目标：${goal.text_zh}`, refs: [], source_ids: [goal.id], rule: 'memory.goal' })
+  return facts.sort((a, b) => FACT_PRIORITY_RANK[a.priority] - FACT_PRIORITY_RANK[b.priority] || KIND_ORDER[a.kind] - KIND_ORDER[b.kind])
+}

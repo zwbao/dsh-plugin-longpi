@@ -159,17 +159,18 @@ try {
   // The mounted Mirobody plugin registers a pre-step listener too; LongPi's own is the one registered outermost.
   const ownPreStep = host.listeners['agent/pre-step'].filter((_listener, index) => host.options['agent/pre-step'][index]?.prepend === true)
   assert.equal(ownPreStep.length, 1, 'one outermost LongPi pre-step listener')
-  assert.equal(host.listeners['agent/turn-stopping'].length, 1, 'one turn-stopping listener')
+  assert.equal(host.listeners['agent/turn-stopping'].length, 2, 'the guard\'s reply check, and the memory distiller (0.5.3, background)')
   assert.equal(host.listeners['tools/pre-execute'].length, 2, 'set_followup and the plan save each have one')
-  assert.equal(host.listeners['tools/post-execute'].length, 1)
-  const persona = host.prompts.find((section) => section.name === 'longpi:persona')
-  const personaText = typeof persona.text === 'function' ? persona.text() : persona.text
+  assert.equal(host.listeners['tools/post-execute'].length, 2, 'the plan save read-back, and the HealthEvent hooks (0.5.3)')
+  // 0.5.3: the persona is agent-scoped (agents/orchestrator.ts), not a global section.
+  assert.equal(host.prompts.some((section) => section.name === 'longpi:persona'), false, 'no global persona')
+  const personaText = mod.orchestratorPrompt({ mounted: false, peer: false, error: '', pluginHome: '' })
   assert.match(personaText, /only symptoms the speaker has right now count/)
   assert.match(personaText, /keep asking the China-PAR family question/)
   assert.match(personaText, /a parent or sibling with a heart attack or stroke/, 'the profile question stays')
 
   const preStep = ownPreStep[0]
-  const turnStopping = host.listeners['agent/turn-stopping'][0]
+  const turnStopping = host.listeners['agent/turn-stopping'].at(-1)
   const preExecute = host.listeners['tools/pre-execute'][1]
   const postExecute = host.listeners['tools/post-execute'][0]
   const agent = fakeAgent()

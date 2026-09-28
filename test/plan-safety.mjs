@@ -44,8 +44,15 @@ function configFor(dataDir, mcpUrl = '') {
   }
 }
 
+function seedSuitability(dataDir) {
+  mod.memoryFor(dataDir).apply([{ op: 'add', item: { kind: 'condition', name_zh: '高血压', flags: ['hypertension'], state: 'current', text_zh: '高血压', confirmed: true, provenance: { kind: 'page', at: NOW.toISOString(), by: 'M0' } } }], 'M0')
+  mod.setDrinking(dataDir, true)
+}
+
 function profileIn(dataDir, extra = {}) {
   mod.writeProfile(dataDir, { age: 36, sex: 'male', risk: FACTS, focus: ['bioage', 'cardio', 'weight'], consent: { version: mod.CONSENT_VERSION, accepted_at: NOW.toISOString() }, ...extra })
+  // 0.5.3: BP-lowering and alcohol items need hypertension on record and a stated drinking habit; this person has both.
+  if (extra.seed !== false) seedSuitability(dataDir)
 }
 
 async function contextOf(config, patch = (records) => records) {
@@ -311,15 +318,25 @@ try {
   assert.match(out.messages[0].content[0].text, new RegExp(`The first sentence of the reply must be 「${firstAid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}」`))
   assert.match(out.messages[0].content[0].text, /Do not draft a plan/)
   assert.match(out.messages[0].content[0].text, /eat the next meal or a snack/)
-  assert.equal(mod.planDraftHeld(), true)
+  assert.equal(mod.planDraftHeld('s'), true, 'the session the low reading came in is held')
+  assert.equal(mod.planDraftHeld('other-session'), false, 'another session is not held (0.5.3: per session, not process-wide)')
+  assert.equal(mod.planDraftHeld(), false, 'nor is a caller without a session')
   const heldHost = fakeHost()
   await mod.apply(heldHost.ctx, configFor(tempDir('held'), plain.url))
-  const held = await heldHost.tools.get('draft_intervention_plan').execute({})
+  const held = await heldHost.tools.get('draft_intervention_plan').execute({}, { agent: fakeAgent() })
   assert.equal(held.draft, null)
   assert.ok(held.reply_zh.startsWith(firstAid), 'a draft asked for in that turn answers with the first step')
+  const elsewhere = await heldHost.tools.get('draft_intervention_plan').execute({}, { agent: { ...fakeAgent(), session: { id: 'other-session', requestHeader: () => undefined } } })
+  assert.ok(!String(elsewhere.reply_zh ?? '').startsWith(firstAid), 'a draft in another session is not answered with the hypoglycaemia step')
   heldHost.dispose()
   await guard.preStep({ agent: fakeAgent(), messages: [userMessage('好了，谢谢')], signal: new AbortController().signal }, async () => ({ kind: 'enter', messages: [] }))
-  assert.equal(mod.planDraftHeld(), false, 'the next message releases the hold')
+  assert.equal(mod.planDraftHeld('s'), false, 'the next message releases the hold')
+  mod.holdPlanDraft('a', 60_000)
+  mod.holdPlanDraft('b', 60_000)
+  mod.releasePlanDraft('a')
+  assert.equal(mod.planDraftHeld('a'), false)
+  assert.equal(mod.planDraftHeld('b'), true, 'releasing one session leaves the other held')
+  mod.releasePlanDraft('b')
 
   // the reply check: a reply that does not open with the step gets it sent first
   const signal = new AbortController().signal

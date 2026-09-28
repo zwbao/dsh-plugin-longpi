@@ -121,7 +121,7 @@ function ResultFigures(props: { journey: Journey }): React.ReactElement {
       bioage.status === 'ok'
         ? h('div', null,
           h('div', { className: 'lp-first-figure' }, fmt(bioage.phenoage), h('span', { className: 'lp-bignum-unit' }, '岁')),
-          h('div', { className: 'lp-caption' }, versusAge(bioage.advance)),
+          h('div', { className: 'lp-caption' }, versusAge(bioage.advance, bioage.checkups)),
           bioage.caveat_zh ? h('p', { className: 'lp-caption lp-first-caveat', role: 'note' }, bioage.caveat_zh) : null)
         : h('div', null, h('div', { className: 'lp-first-wait' }, '还不能计算'), h('p', { className: 'lp-blocker' }, bioage.blocker_zh))),
     h('div', { className: 'lp-first-cell' },

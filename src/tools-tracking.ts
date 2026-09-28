@@ -15,7 +15,7 @@ import { invalidateRecords, loadRecords } from './records.ts'
 import { addSelf, SELF_KEYS, SELF_SPEC } from './selfmeasure.ts'
 import { buildTracking, describeItem, describePlan, goalProblems, invalidateTracking, modelGoals } from './tracking.ts'
 import { addStatement } from './meds-stated.ts'
-import { planDraftHeld } from './plan-hold.ts'
+import { planDraftHeld, sessionKey } from './plan-hold.ts'
 import { HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH } from './plan-safety.ts'
 import { briefOptionsOf, buildPlanBrief, replyForDraft, settleDraft } from './planner.ts'
 import { FOCUS } from './profile.ts'
@@ -187,8 +187,8 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
     output: jsonOut,
     timeoutMs: DRAFT_DEADLINE_MS + 15_000,
     isConcurrencySafe: () => true,
-    async execute(args) {
-      if (planDraftHeld()) {
+    async execute(args, exec) {
+      if (planDraftHeld(sessionKey((exec as { agent?: unknown } | undefined)?.agent))) {
         const sentence = `${HYPO_AWAKE_ZH}${HYPO_UNCONSCIOUS_ZH}`
         return asJson(stoppedReply(sentence, isoDay()))
       }

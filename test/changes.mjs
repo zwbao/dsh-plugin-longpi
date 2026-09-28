@@ -333,7 +333,7 @@ try {
   // --- 4. the tools and the prompt, through the plugin's own apply ------------------------
   const host = fakeHost()
   await mod.apply(host.ctx, fallingConfig)
-  const prompt = host.prompts.map((row) => (typeof row.text === 'function' ? row.text() : row.text)).join('\n')
+  const prompt = mod.orchestratorPrompt({ mounted: true, peer: false, error: '', pluginHome: '' })
   assert.match(prompt, /record_changes/)
   assert.match(prompt, /ask_doctor true, say so early and plainly/)
   assert.match(prompt, /Never suggest a supplement \(iron included\), a drug or a dose/)

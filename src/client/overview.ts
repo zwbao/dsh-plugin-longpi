@@ -12,6 +12,7 @@ import { ResultsRow, type ResultTarget } from './results.ts'
 import type { PageTab, ViewRequest } from './store.ts'
 import type { Journey, NextAction, Tracking } from './types.ts'
 import { Btn } from './ui.ts'
+import { CareCard } from './triage/care-card.ts'
 
 const h = React.createElement
 
@@ -129,8 +130,8 @@ export function Overview(props: OverviewProps): React.ReactElement {
   const { journey } = props
   return h('div', { className: 'lp-tab-body lp-overview' },
     h(PartialNote, { journey }),
-    // A value to show a doctor comes before the day's check-ins and the results.
-    journey.next.action === 'doctor' ? h(NextCard, props) : null,
+    // A value to show a doctor comes before the day's check-ins and the results (M1: with the brief and the visit answers).
+    journey.next.action === 'doctor' ? h(CareCard, { journey, onNotice: props.onNotice, onIndicators: () => props.goTab('indicators', { filter: 'changed' }), onProfile: props.openOnboarding }) : null,
     journey.plan.exists ? h(TodayCard, { journey, tracking: props.tracking, onNotice: props.onNotice }) : null,
     h(ResultsRow, { journey, tracking: props.tracking, onAction: props.onAction, onNotice: props.onNotice }),
     journey.next.action === 'doctor' ? null : h(NextCard, props),

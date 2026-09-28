@@ -117,7 +117,7 @@ export function BodyAgeCard(props: {
     story = `从 ${chineseMonth(first.date)}到现在，相对实足年龄${moved}`
     story += band != null ? (Math.abs(delta) > band ? '，超出个体正常波动。' : '，还在个体正常波动以内。') : '。'
   }
-  const versus = versusAge(advance)
+  const versus = versusAge(advance, count)
   const info = h(React.Fragment, null,
     h('span', { className: 'lp-info-line' }, BIOAGE_INFO),
     band != null ? h('span', { className: 'lp-info-line' }, `浅色带是第一次检查的个体正常波动（±${fmt(band)} 岁${partial ? `，未含${bio?.band_missing?.join('、')}` : ''}），落在带外才算真实变化。`) : null,

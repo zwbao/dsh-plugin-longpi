@@ -152,7 +152,7 @@ function joinUnlocks(journey: Journey): string {
 function figures(journey: Journey): React.ReactNode[][] {
   const { bioage, risk } = journey.results
   const body: React.ReactNode[] | null = bioage.status === 'ok' && bioage.phenoage != null
-    ? ['身体年龄 ', h('b', { key: 'b', title: ESTIMATE }, `${fmt(bioage.phenoage)} 岁`), versusAge(bioage.advance) ? `，${versusAge(bioage.advance)}` : '']
+    ? ['身体年龄 ', h('b', { key: 'b', title: ESTIMATE }, `${fmt(bioage.phenoage)} 岁`), versusAge(bioage.advance, bioage.checkups) ? `，${versusAge(bioage.advance, bioage.checkups)}` : '']
     : null
   const heart: React.ReactNode[] | null = risk.status === 'ok' && risk.risk_pct != null
     ? ['心血管 10 年风险 ', h('b', { key: 'b', title: ESTIMATE }, `${riskText(risk.risk_pct)}%`), risk.category_zh ? `（${risk.category_zh}）` : '']
@@ -167,13 +167,22 @@ function figures(journey: Journey): React.ReactNode[][] {
 function titleOf(journey: Journey): string {
   if (journey.stage === 'consent' || journey.stage === 'profile') return '你好，我是 LongPi'
   const name = journey.profile.displayName.trim()
-  return `${greeting(new Date())}${name ? `，${name}` : ''}`
+  // The coach writes the greeting without the name (D10); the name is added here, on this machine.
+  const written = journey.surfaces?.greeting.source === 'model' ? journey.surfaces.greeting.text_zh.replace(/[，,。！!]+$/, '') : ''
+  return `${written || greeting(new Date())}${name ? `，${name}` : ''}`
 }
 
 /** One sentence per stage (spec D.1). Every figure comes from the journey; nothing is estimated here. */
 function Status(props: { journey: Journey; open: () => void }): React.ReactElement {
   const { journey, open } = props
   const parts: React.ReactNode[] = []
+  const status = journey.surfaces?.status
+  // 0.5.3: the fact-ranked status leads when a fact must surface (the red-cell trend, a medicine that changes
+  // what is safe), at any stage after consent; the stage sentence is the floor otherwise.
+  if (status && status.fact_ids.length > 0 && status.text_zh && journey.stage !== 'consent') {
+    parts.push(h('span', { key: 't', className: status.tone === 'care' ? 'lp-hero-care' : undefined }, status.text_zh), h(Sep, { key: 's' }), h(Go, { key: 'go', label: journey.next.action === 'doctor' ? '看怎么准备' : '健康页', onClick: open }))
+    return h('p', { className: 'lp-hero-status' }, ...parts)
+  }
   if (journey.stage === 'consent' || journey.stage === 'profile') {
     parts.push('花 2 分钟建档，算出你的身体年龄和心血管风险', h(Sep, { key: 's' }), h(Go, { key: 'go', label: '开始建档', onClick: open }))
   } else if (journey.stage === 'records') {

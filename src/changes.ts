@@ -35,6 +35,8 @@ export interface RecordChange {
   advice_zh: string
   /** The row's own caveat, when it has one. */
   caveat_zh?: string
+  /** 0.5.3 (M1): the latest value is outside the usual adult range: named low or high, never "cannot judge". */
+  range_flag?: 'low' | 'high'
   /** Where the within-person variation comes from (the row's cvi_source). */
   source: { title: string; url: string; doi?: string }
   verified: boolean
@@ -58,6 +60,30 @@ const WORSE_ZH = '建议带着这几次体检报告咨询医生，看看是否�
 // A 'range' marker (haemoglobin, MCV, white cells) can be fine or not either way; only the lab's reference range tells.
 const RANGE_ZH = '变化超出了正常波动；是否需要处理要结合参考范围判断，建议带着这几次体检报告咨询医生。'
 const BETTER_ZH = '变化超出了正常波动，方向是好的。'
+/**
+ * Usual adult ranges for the markers judged by a range (the report's own range is not in the record).
+ * Men's where the sexes differ and the sex is not known, so a low value is not missed.
+ */
+const RANGES: Record<string, { male: [number, number]; female: [number, number] }> = {
+  hb: { male: [130, 175], female: [115, 150] },
+  hct: { male: [0.40, 0.50], female: [0.35, 0.45] },
+  rbc: { male: [4.3, 5.8], female: [3.8, 5.1] },
+  mcv: { male: [82, 100], female: [82, 100] },
+  mch: { male: [27, 34], female: [27, 34] },
+  mchc: { male: [316, 354], female: [316, 354] },
+  wbc: { male: [3.5, 9.5], female: [3.5, 9.5] },
+}
+
+/** Low or high against the usual range, with the words for it; null inside it or for other markers. */
+export function rangeFlag(key: string, value: number, sex: string): { flag: 'low' | 'high'; text_zh: string } | null {
+  const range = RANGES[key]
+  if (!range) return null
+  const [low, high] = sex === 'female' ? range.female : range.male
+  const who = RANGES[key] && range.male[0] !== range.female[0] ? (sex === 'female' ? '女性' : '男性') : ''
+  if (value < low) return { flag: 'low', text_zh: `最近一次 ${shown(value)} 低于${who}常用参考下限 ${low}，偏低。建议带着这几次体检报告咨询医生。` }
+  if (value > high) return { flag: 'high', text_zh: `最近一次 ${shown(value)} 高于${who}常用参考上限 ${high}，偏高。建议带着这几次体检报告咨询医生。` }
+  return null
+}
 // Weight and other rows without a better direction: a real change, nothing more to say.
 const NEUTRAL_ZH = '变化超出了正常波动。'
 // A fall in these can go too far (low blood glucose), above all on a glucose-lowering medicine.
@@ -141,7 +167,7 @@ function verdictOf(better: BiovarMarker['better'], direction: RecordChange['dire
   return 'unclear'
 }
 
-function changeOf(marker: BiovarMarker, points: Point[], z: number, glucoseTreated: boolean): (RecordChange & { ratio: number }) | null {
+function changeOf(marker: BiovarMarker, points: Point[], z: number, glucoseTreated: boolean, sex = 'unknown'): (RecordChange & { ratio: number }) | null {
   if (points.length < 2) return null
   const last = points.at(-1) as Point
   const band = rcvBand(marker, z)
@@ -159,6 +185,7 @@ function changeOf(marker: BiovarMarker, points: Point[], z: number, glucoseTreat
   const askDoctor = !wbcInside && (verdict === 'worse' || (verdict === 'unclear' && marker.better === 'range') || (glucoseFall && glucoseTreated))
   const up = round1(band.up * 100)
   const down = marker.log_normal ? round1(band.down * 100) : -up
+  const range = marker.better === 'range' ? rangeFlag(marker.key, last.value, sex) : null
   // Log-normal rows (CRP, triglycerides) have an asymmetric band: both sides are shown.
   const bandText = marker.log_normal ? `${down.toFixed(1)}% 至 +${up.toFixed(1)}%` : `±${up.toFixed(1)}%`
   return {
@@ -172,7 +199,8 @@ function changeOf(marker: BiovarMarker, points: Point[], z: number, glucoseTreat
     verdict,
     ask_doctor: askDoctor,
     text_zh: `${marker.label_zh} ${marker.unit === '%' ? `${shown(pick.from.value)}%` : shown(pick.from.value)} → ${withUnit(pick.to.value, marker.unit)}（${pick.from.date} → ${pick.to.date}），${direction === 'down' ? '下降' : '上升'} ${Math.abs(pick.pct).toFixed(1)}%，超出正常波动（${bandText}）`,
-    advice_zh: verdict === 'worse' ? WORSE_ZH : verdict === 'better' ? BETTER_ZH : glucoseFall && askDoctor ? GLUCOSE_FALL_ZH : askDoctor ? RANGE_ZH : NEUTRAL_ZH,
+    advice_zh: verdict === 'worse' ? WORSE_ZH : verdict === 'better' ? BETTER_ZH : glucoseFall && askDoctor ? GLUCOSE_FALL_ZH : askDoctor ? (range ? range.text_zh : RANGE_ZH) : NEUTRAL_ZH,
+    ...(askDoctor && range ? { range_flag: range.flag } : {}),
     ...(marker.caveat_zh ? { caveat_zh: marker.caveat_zh } : {}),
     source: { title: marker.cvi_source.title, url: marker.cvi_source.url, ...(marker.cvi_source.doi ? { doi: marker.cvi_source.doi } : {}) },
     verified: marker.verified,
@@ -238,7 +266,7 @@ export async function buildChanges(context: ChangesContext): Promise<{ changes: 
       unjudged.push({ label_zh: marker.label_zh, reason_zh: `有一次较新的结果单位无法换算成 ${marker.unit}，这次没有判断它的变化。` })
       continue
     }
-    const change = changeOf(marker, daily.points, biovar.z, glucoseTreated)
+    const change = changeOf(marker, daily.points, biovar.z, glucoseTreated, profile.sex)
     if (change) found.push(change)
   }
   found.sort((a, b) => Number(b.ask_doctor) - Number(a.ask_doctor) || b.ratio - a.ratio)

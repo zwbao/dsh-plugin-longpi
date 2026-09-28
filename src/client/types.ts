@@ -145,6 +145,24 @@ export interface Journey {
   changes_note_zh: string
   /** A2 §R 3c: markers not judged because their series read failed or was cut short. */
   changes_unjudged: Array<{ label_zh: string; reason_zh: string }>
+  /** 0.5.3: the fact-ranked surfaces the page, the home and the chat all read. Older servers: null. */
+  surfaces: JourneySurfaces | null
+  /** 0.5.3 (M1): findings for a doctor and what the person answered about going. Older servers: empty. */
+  triage: JourneyTriage
+}
+
+export interface SurfaceCardView { id: string; text_zh: string; detail_zh: string; fact_ids: string[]; tone: string; source: string; prompt_zh: string }
+export interface JourneySurfaces {
+  source: string
+  greeting: SurfaceCardView
+  status: SurfaceCardView
+  next: { kind: string; mandatory: boolean; card: SurfaceCardView }
+  suggestions: SurfaceCardView[]
+}
+export interface JourneyTriage {
+  findings: Array<{ id: string; title_zh: string; department_zh: string; status: string }>
+  care: Array<{ finding_id: string; care_status: string; visit_date: string | null; outcome_zh: string | null }>
+  needs_sex: boolean
 }
 
 // --- connection (A1 §C: GET/POST/DELETE /api/longpi/connection) ---------------------------------
@@ -270,6 +288,8 @@ export interface PlanDraft {
 export interface PlanDraftResponse {
   brief: PlanBrief
   draft: PlanDraft | null
+  /** Items taken out on the page (0.5.3): kept on the server so 恢复 works after a reload. Older servers: []. */
+  removed_items: Array<{ id: string; title: string }>
 }
 
 export type AcceptResponse =

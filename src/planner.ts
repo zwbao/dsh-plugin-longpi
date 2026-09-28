@@ -8,12 +8,14 @@
 // saved: the person tailors the draft in chat or accepts it on the page.
 
 import { hasDose, stripDoses } from './dose.ts'
-import { fingerprint, readPlanPrefs, rememberExclusions, writePlanPrefs } from './plan-prefs.ts'
+import { drinkingFromText, fingerprint, readPlanPrefs, rememberExclusions, setDrinking, writePlanPrefs } from './plan-prefs.ts'
 import {
   egfrBelowCkd, exclusionsFromText, FISH_OIL, FISH_OIL_CAUTION, flagsFromText, interventionBlocked,
   medicationClasses, TIME_RESTRICTED,
 } from './plan-safety.ts'
 import { NO_STOP, panelPoints } from './doctor-first.ts'
+import { memoryFor } from './core/memory.ts'
+import { careState, seenChangeKeys, seenNotes } from './triage/care.ts'
 import { buildTracking, type ModelCard, type TrackingContext } from './tracking.ts'
 import { CATEGORY_ZH, currentPlan, type Category } from './interventions.ts'
 import type { MountState } from './mirobody.ts'
@@ -125,6 +127,12 @@ const DESIGN_ZH: Record<string, string> = { 'meta-analysis': '荟萃分析', rct
 const ANTIHYPERTENSIVE = /地平|普利|沙坦|洛尔|噻嗪|吲达帕胺|螺内酯|呋塞米|托拉塞米|降压|amlodipine|nifedipine|felodipine|pril\b|sartan|olol\b|thiazide|indapamide|spironolactone|furosemide/i
 const ANTITHROMBOTIC = /阿司匹林|氯吡格雷|替格瑞洛|华法林|沙班|达比加群|肝素|抗凝|抗血小板|aspirin|clopidogrel|ticagrelor|prasugrel|warfarin|xaban\b|dabigatran|heparin/i
 const SMOKING_CESSATION = /戒烟|smoking cessation|quit smoking/i
+const ALCOHOL = /饮酒|少喝酒|减酒|限酒|酒精|alcohol/i
+/** Office systolic below this, with no treated or stated hypertension, is normal: no BP-lowering item (FINDINGS 47/58/69). */
+const NORMAL_SBP = 130
+const NORMAL_DBP = 85
+const BP_KEYS = ['sbp', 'dbp']
+const ASKED_WHY = '你指定要改善的指标'
 
 export interface BriefOptions {
   /** Focus for this draft only (the saved profile is not changed). */
@@ -156,27 +164,48 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
   if (said.pregnant || said.ckd) {
     writePlanPrefs(context.dataDir, { ...prefs, pregnant: said.pregnant || prefs.pregnant, ckd: said.ckd || prefs.ckd })
   }
+  const saidDrinking = drinkingFromText(options.constraints ?? '')
+  if (saidDrinking != null) setDrinking(context.dataDir, saidDrinking)
   const stored = readPlanPrefs(context.dataDir)
   if ((options.constraints ?? '').trim()) rememberExclusions(context.dataDir, exclusionsFromText(options.constraints ?? ''))
   const excluded = readPlanPrefs(context.dataDir)
   const current = currentMedications(medications)
+  // Conditions they told LongPi (memory; unconfirmed ones count too, since they only add caution).
+  const remembered = safeConditions(context.dataDir)
   const classes = medicationClasses(current, {
-    pregnant: said.pregnant || stored.pregnant === true,
-    ckd: said.ckd || stored.ckd === true,
+    pregnant: said.pregnant || stored.pregnant === true || remembered.includes('pregnancy') || remembered.includes('pregnancy_planning'),
+    ckd: said.ckd || stored.ckd === true || remembered.includes('ckd'),
     diabetes: profile.risk.diabetes,
   })
   if (egfrBelowCkd(panelPoints(indicators))) classes.ckd = true
-  // Computed once with the tracking (doctor-first.ts): the overview and the chat say the same.
-  const stop = tracking.doctor_first ?? NO_STOP
+  // Computed once with the tracking (doctor-first.ts): the overview and the chat say the same. A finding a
+  // doctor has seen since (M1, a logged visit) no longer stops the plan; what the doctor said is noted.
+  const care = careState(context.dataDir, tracking.doctor_first ?? NO_STOP, context.today)
+  const stop = care.stop
+  notes.push(...seenNotes(care))
   if (stop.stop) notes.push(stop.sentence_zh)
   else {
-    const toDoctor = tracking.changes.filter((row) => row.ask_doctor).map((row) => row.label_zh)
+    // A change a doctor has already seen (a logged visit) is not sent to the doctor again.
+    const seenKeys = seenChangeKeys(care)
+    const toDoctor = tracking.changes.filter((row) => row.ask_doctor && !seenKeys.has(row.key)).map((row) => row.label_zh)
     if (toDoctor.length > 0) notes.push(`记录里有超出正常波动的变化（${toDoctor.join('、')}），建议先请医生看过再开始方案。`)
   }
-  const priorities = prioritiesOf({
+  const allPriorities = prioritiesOf({
     focus, asked: options.markers ?? [], models: tracking.models, biovar: reference.biovar, indicators, notes,
   })
-  const screen = safetyScreen(profile.risk, medications, current, classes)
+  // Normal blood pressure and no hypertension known: no salt, DASH or other BP-lowering item unless they asked
+  // for blood pressure themselves.
+  const sbp = latestFor('sbp', indicators, reference.biovar)
+  const dbp = latestFor('dbp', indicators, reference.biovar)
+  const conditionFlags = remembered
+  const hypertensive = profile.risk.bp_treated === true || current.some((name) => ANTIHYPERTENSIVE.test(name)) || conditionFlags.includes('hypertension')
+  const normotensive = !hypertensive && sbp != null && sbp.value < NORMAL_SBP && (dbp == null || dbp.value < NORMAL_DBP)
+  const priorities = normotensive ? allPriorities.filter((row) => !BP_KEYS.includes(row.marker_key) || row.why_zh === ASKED_WHY) : allPriorities
+  if (normotensive && priorities.length < allPriorities.length) {
+    notes.push(`你的血压在正常范围（收缩压 ${Number(sbp.value.toFixed(1))} mmHg${dbp ? `，舒张压 ${Number(dbp.value.toFixed(1))} mmHg` : ''}，也没有高血压或降压药记录），这份草稿不安排减盐、DASH 饮食这类降压项目。`)
+  }
+  const drinks = stored.drinks
+  const screen = safetyScreen(profile.risk, medications, current, classes, drinks)
   const candidates = stop.stop ? [] : candidatesOf(priorities, reference.effects, reference.biovar, screen, profile.risk.smoker === false, excluded.excluded_ids, excluded.excluded_phrases)
   if (!stop.stop) {
     for (const row of priorities) {
@@ -188,6 +217,9 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
   }
   if (profile.risk.smoker === false && reference.effects.some((row) => SMOKING_CESSATION.test(interventionText(row)) && priorities.some((p) => covers(row.marker_key ?? '', p.marker_key)))) {
     notes.push('你说过不吸烟，所以没有列出戒烟。')
+  }
+  if (!stop.stop && drinks !== true && reference.effects.some((row) => ALCOHOL.test(interventionText(row)) && priorities.some((p) => covers(row.marker_key ?? '', p.marker_key)))) {
+    notes.push(drinks === false ? '你说过不喝酒，所以没有列出减少饮酒。' : '还不知道你是否喝酒，所以没有列出减少饮酒；如果你喝酒，告诉我大概多久喝一次、一次多少。')
   }
   const plan = currentPlan(context.dataDir)
   const past = plan
@@ -219,6 +251,15 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
 }
 
 // --- priorities ----------------------------------------------------------------
+
+/** Condition flags the person stated (memory), for the suitability checks; none when memory cannot be read. */
+function safeConditions(dataDir: string): string[] {
+  try {
+    return memoryFor(dataDir).safetyFlags().conditions
+  } catch {
+    return []
+  }
+}
 
 function prioritiesOf(input: {
   focus: Focus[]
@@ -321,11 +362,13 @@ interface Screen {
   pregnant: boolean
   ckd: boolean
   antithrombotic: boolean
+  /** Their own answer; null = never asked, so no alcohol item. */
+  drinks: boolean | null
   current: string[]
   notes: string[]
 }
 
-function safetyScreen(risk: Partial<Record<string, boolean>>, medications: readonly MedicationRow[], current: string[], classes: ReturnType<typeof medicationClasses>): Screen {
+function safetyScreen(risk: Partial<Record<string, boolean>>, medications: readonly MedicationRow[], current: string[], classes: ReturnType<typeof medicationClasses>, drinks: boolean | null = null): Screen {
   const names = current.join('、')
   const notes: string[] = []
   const screen: Screen = {
@@ -338,6 +381,7 @@ function safetyScreen(risk: Partial<Record<string, boolean>>, medications: reado
     pregnant: classes.pregnant,
     ckd: classes.ckd,
     antithrombotic: current.some((name) => ANTITHROMBOTIC.test(name)),
+    drinks,
     current,
     notes,
   }
@@ -394,6 +438,7 @@ function candidatesOf(priorities: Priority[], effects: readonly EffectRow[], bio
   const rows = effects.filter((row) => row.marker_key && (DRAFT_CATEGORIES as readonly string[]).includes(row.category)
     && priorities.some((p) => covers(row.marker_key as string, p.marker_key))
     && !(nonSmoker && SMOKING_CESSATION.test(interventionText(row)))
+    && !(screen.drinks !== true && ALCOHOL.test(interventionText(row)))
     && !interventionBlocked(interventionText(row), row.category, row.id, classes, excludedIds, excludedPhrases))
   const out = rows.map((row): Candidate & { magnitude: number } => {
     const key = row.marker_key as string

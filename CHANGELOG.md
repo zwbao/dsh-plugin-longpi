@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.5.3
+
+The agent core (AA steps 0–2) and triage with a doctor brief (M1): one fact pack under the page and the chat, the most important fact first on both, model-written surfaces held to deterministic checks, per-person memory, and the follow-up after "see a doctor". Plus four 0.5.2 open items. Tests: `test/agent-core.mjs`, `test/surfaces-coach.mjs`, `test/contracts.mjs` (new); `npm test` now runs every test file.
+
+**First screen: the most important fact first (fact pack, step 1)**
+- One `FactPack` per person ranks top facts by rule: a doctor-first finding, then medicines and conditions that change what is safe (SGLT2 inhibitor, insulin, sulfonylurea, GLP-1, anticoagulant, pregnancy or planning one, kidney disease), then screening topics and care follow-up.
+- The home status, the next step and the suggestions come from it, at any stage after consent (a doctor step no longer waits for the profile to be finished). The owner's record opens with 「血红蛋白 152→138→124 g/L 偏低 … ——请先去看医生（全科或血液科）」; plan prompts are held back while a doctor comes first.
+- The chat reads the same state: `read_personal_situation` returns `page`, `top_facts`, `care` and `memory_zh`, and at the first step of each health turn a snapshot of the page (最重要的事（必须先说）…) is added when it changed.
+- LongPi's persona and orchestrator rules are added only to agents in the 健康对话 workspace; other sessions get neither the persona nor the write tools (D5). The dead `schedule_create` instruction is gone.
+
+**Model-written surfaces, checked (step 2)**
+- A coach (deepseek-flash, effort off) writes the greeting, status, next-step wording and 2–4 suggestions from the fact pack only; the page never waits for it and shows the fact-ranked floor meanwhile. The person's name is never sent (D10); the page adds it.
+- Every model card passes a deterministic post-filter: numbers only from the fact pack, no diagnosis, cure, dose or medicine change, no 年轻 without graded evidence, the mandatory step first, the top fact named, exclusions and SGLT2 rules kept, no tool names or English. One repair, then a per-card fallback.
+- Daily token caps (200k in / 20k out) fall back silently; `/api/longpi/usage` shows the ledger. The page listens on `/api/longpi/events` and refreshes when the chat changes something.
+
+**Memory**
+- `memory.json` keeps goals, exclusions, conditions, medicines, family history, life events and doctor visits across sessions, with who said it. Plan exclusions and medication statements from 0.5.2 are imported. `remember_for_me` (confirmed when the quote is really in the person's message), `read_person_memory`; after a health turn a distiller proposes items from the person's own words, kept unconfirmed (they only add caution) and announced with 我记下了 … 说"撤销"即可取消.
+
+**Doctor first, then the visit (M1)**
+- Findings for a doctor (red cells and iron, undiagnosed diabetes-range glucose, very high LDL-C or systolic) say which department, what to ask and what to request. Values below the usual range are called 偏低 on the changes card too.
+- A one-page doctor brief: multi-year trend table, medicines and conditions, questions, tests; printable and saved as markdown, the name line left blank (`prepare_doctor_brief`, 医生简报 on the page).
+- "约了吗？医生怎么说？": a booking, a visit (with what the doctor said) or a decision not to go is kept (`log_care_visit`, the page's 已预约 / 看完了 / 暂时不去). After the visit date the next step asks how it went; after a visit the plan may go ahead with the doctor's conclusion noted, and treatment (iron, medicines) stays out of the plan.
+- Screening topics by age and sex, earlier breast screening and genetic counselling when a mother or sister had breast cancer.
+
+**0.5.2 open items**
+- The page's 去掉 is saved on the server (`/api/longpi/plan-draft/exclude`, also in memory), so a removed item stays out after a reload and in chat drafts; 恢复 puts it back.
+- With no sex on file, haemoglobin and ferritin use the men's limits (130 g/L, 30 ng/mL), say so, and ask for the sex, so a man with HGB 121–129 is not missed.
+- The hypoglycaemia draft hold is per session, not process-wide.
+- No salt, DASH or other BP-lowering item for SBP < 130 with no hypertension on record; no alcohol item unless the person said they drink (and why, in the notes).
+- Body age from a single blood draw is shown as a model estimate (「单次血检的模型估计，低于实足年龄 X 岁，只作参考」), never as 「比实足年龄年轻」.
+
 ## 0.5.2
 
 Safety fixes from a 60-day field test with real-browser diaries (the owner's own checkups, and a woman with type 2 diabetes on metformin and dapagliflozin), plus the data-path fixes found on the way. Every fix has a regression test (`test/plan-safety.mjs` is new); verified live in DeepSeek Harness 0.1.5-rc.3 against Mirobody.

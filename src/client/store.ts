@@ -141,6 +141,30 @@ function startTimers(): void {
   window.addEventListener('focus', revive)
   document.addEventListener('visibilitychange', revive)
   window.setInterval(() => { for (const key of inUse()) void load(key) }, POLL_MS)
+  listenForChanges()
+}
+
+/**
+ * 0.5.3: the server says when something changed (a chat turn saved a check-in, the coach wrote new
+ * surfaces, a visit was logged): what is on screen loads again at once. The 10-minute poll stays.
+ */
+function listenForChanges(): void {
+  if (typeof EventSource === 'undefined') return
+  let source: EventSource | null = null
+  const open = () => {
+    try {
+      source = new EventSource('/api/longpi/events')
+      const reload = () => { for (const key of inUse()) void load(key, 'fresh') }
+      for (const type of ['surfaces', 'memory', 'triage', 'changed']) source.addEventListener(type, reload)
+      source.onerror = () => {
+        // An older server (404) or a restart: the browser retries on its own; give up after a 404.
+        if (source && source.readyState === EventSource.CLOSED) source = null
+      }
+    } catch {
+      source = null
+    }
+  }
+  open()
 }
 
 /**
@@ -248,6 +272,18 @@ export function putConnection(value: Connection): void {
   const entry = entries.connection
   entry.seq += 1
   entry.data = value
+  entry.error = null
+  entry.loading = false
+  entry.inflight = null
+  entry.at = Date.now()
+  emit()
+}
+
+/** The exclude route answers with the draft as it now is: take it as is. */
+export function putPlanDraft(raw: unknown): void {
+  const entry = entries.planDraft
+  entry.seq += 1
+  entry.data = normalizePlanDraft(raw)
   entry.error = null
   entry.loading = false
   entry.inflight = null

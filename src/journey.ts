@@ -15,8 +15,18 @@ import type { RecordStatus } from './records.ts'
 import { CONSENT_VERSION, FOCUS, FOCUS_ZH, RISK_FACTS, RISK_FACT_ZH, type Focus, type Profile, type RiskFact } from './profile.ts'
 import { loadReference } from './reference.ts'
 import { latestSelf, readSelf, SELF_KEYS, SELF_SPEC, type SelfKey } from './selfmeasure.ts'
-import { buildTracking, PHENOAGE_SKILL, type BioAge, type Tracking, type TrackingContext } from './tracking.ts'
+import { buildTracking, PHENOAGE_SKILL, trackingGeneration, type BioAge, type Tracking, type TrackingContext } from './tracking.ts'
 import { PRODUCT_VERSION } from './version.ts'
+import type { SurfaceSet } from './contracts/surfaces.ts'
+import type { TriageFinding } from './contracts/triage.ts'
+import type { FactPack } from './contracts/factpack.ts'
+import { packFrom } from './core/factpack.ts'
+import { fallbackSurfaces } from './surfaces/fallback.ts'
+import { recordSurfaces } from './surfaces/service.ts'
+import { chooseSurfaces } from './surfaces/coach-service.ts'
+import { careState } from './triage/care.ts'
+import { NO_STOP } from './doctor-first.ts'
+import { currentMedications } from './situation.ts'
 
 export type Stage = 'consent' | 'profile' | 'records' | 'first_result' | 'plan' | 'routine'
 export type { RecordChange } from './changes.ts'
@@ -73,10 +83,22 @@ export interface Journey {
   boundary_zh: string
   /** Follow-up reminders: on or off, the channels in use, and the next planned send (local ISO). */
   followup: { enabled: boolean; channels: Array<'desktop' | 'webhook'>; next_at: string | null }
+  /**
+   * 0.5.3: the fact-ranked surfaces (status, next step, suggestions) the page, the home and the chat all read.
+   * next and suggestions above are this set in the older shape.
+   */
+  surfaces: SurfaceSet
+  /** 0.5.3 (M1): the findings for a doctor, what the person answered about going, and whether sex is needed. */
+  triage: {
+    findings: TriageFinding[]
+    care: FactPack['triage']['care']
+    needs_sex: boolean
+    top_facts: FactPack['top_facts']
+  }
 }
 
 type Next = Journey['next']
-type Body = Omit<Journey, 'stage' | 'next' | 'suggestions' | 'followup'>
+type Body = Omit<Journey, 'stage' | 'next' | 'suggestions' | 'followup' | 'surfaces' | 'triage'>
 /** What a journey is built from; now (default the clock) only times the next follow-up. */
 export type JourneyContext = TrackingContext & { mount: MountState; now?: Date }
 type Addon = Journey['addons'][number]
@@ -307,10 +329,8 @@ function stageOf(journey: Pick<Journey, 'consent' | 'profile' | 'records' | 'res
 
 function nextOf(stage: Stage, journey: Body): Next {
   const step = (title: string, detail: string, action: Next['action']): Next => ({ stage, title_zh: title, detail_zh: detail, action })
-  // A critical value or a falling red-cell count goes to a doctor before any plan, check-in or retest.
-  if (journey.doctor_first.stop && stage !== 'consent' && stage !== 'profile' && stage !== 'records') {
-    return step(journey.doctor_first.title_zh, journey.doctor_first.sentence_zh, 'doctor')
-  }
+  // A doctor first is no longer decided here: triage (M1) proposes it as a mandatory action and the
+  // fact-ranked floor (surfaces/fallback.ts) puts it ahead of this stage step, at any stage after consent.
   switch (stage) {
     case 'consent':
       return step('开始使用 LongPi', '先了解 LongPi 做什么、数据放在哪里。', 'consent')
@@ -357,16 +377,36 @@ function suggestionsOf(stage: Stage, journey: Body, followupOn: boolean): Journe
     if (!followupOn) picks.push({ id: 'followup-on', text_zh: '每天晚上提醒我打卡' })
     picks.push({ id: 'plan-effect', text_zh: '我的方案有没有效果？' })
   }
-  // Changes for a doctor come before everything else once the person is past consent and profile.
-  if (stage !== 'consent' && stage !== 'profile' && journey.doctor_first.stop) {
-    const plan = picks.findIndex((row) => row.id === 'draft-plan')
-    if (plan >= 0) picks.splice(plan, 1)
-    picks.unshift({ id: 'doctor-first', text_zh: '这些偏低的指标意味着什么？看医生前要准备什么？' })
-  } else if (stage !== 'consent' && stage !== 'profile' && journey.changes.some((row) => row.ask_doctor)) {
+  // A doctor first (M1) puts its own prompts ahead of these (surfaces/fallback.ts); other changes for a
+  // doctor still come first here.
+  if (stage !== 'consent' && stage !== 'profile' && !journey.doctor_first.stop && journey.changes.some((row) => row.ask_doctor)) {
     picks.unshift({ id: 'record-changes', text_zh: '我的记录里哪些变化需要注意？' })
   }
   const seen = new Set<string>()
   return picks.filter((row) => !seen.has(row.text_zh) && seen.add(row.text_zh)).slice(0, 3)
+}
+
+/** The stage's one-line status (the home hero's wording), for the chat snapshot when no fact must surface. */
+function stageStatus(stage: Stage, journey: Body, next: Next): string {
+  if (stage === 'consent' || stage === 'profile') return '花 2 分钟建档，算出你的身体年龄和心血管风险'
+  if (stage === 'records') return journey.records.status === 'error' ? '体检记录读取失败，暂时算不出结果' : '连接体检记录后，就能算出你的身体年龄'
+  if (stage === 'first_result' && journey.addons.length > 0) return `还差 ${journey.addons.length} 项检查：${journey.addons.slice(0, 3).map((row) => row.item_zh).join('、')}`
+  const { bioage, risk } = journey.results
+  const parts: string[] = []
+  if (bioage.status === 'ok' && bioage.phenoage != null) parts.push(`身体年龄 ${Number(bioage.phenoage.toFixed(1))} 岁（模型估计）`)
+  if (risk.status === 'ok' && risk.risk_pct != null) parts.push(`心血管 10 年风险 ${Number(risk.risk_pct.toFixed(1))}%`)
+  return parts.length > 0 ? parts.join('，') : next.detail_zh
+}
+
+/** The surfaces' next step in the journey's older shape (the client's closed action list), in the card's words. */
+function legacyNext(stage: Stage, set: SurfaceSet, fallback: Next): Next {
+  const action = set.next.action
+  const title = set.next.card.text_zh || action.title_zh
+  const detail = set.next.card.detail_zh ?? action.detail_zh
+  if (action.kind === 'see_doctor' || action.kind === 'log_visit_outcome' || action.kind === 'prepare_brief') return { stage, title_zh: title, detail_zh: detail, action: 'doctor' }
+  if (action.id.startsWith('stage-')) return { ...fallback, title_zh: title, detail_zh: detail }
+  if (action.kind === 'answer_profile') return { stage, title_zh: title, detail_zh: detail, action: 'profile' }
+  return fallback
 }
 
 function journeyFrom(context: JourneyContext, tracking: Tracking, summary: RecordsSummary | null = null): Journey {
@@ -379,6 +419,9 @@ function journeyFrom(context: JourneyContext, tracking: Tracking, summary: Recor
   if (caveat) bioage.caveat_zh = caveat
   const risk = riskResult(tracking)
   const plan = planOf(context, tracking)
+  // The record's stop with the person's doctor visits applied (M1): a finding a doctor saw no longer stops.
+  const recordStop = tracking.doctor_first ?? NO_STOP
+  const care = careState(context.dataDir, recordStop, today)
   const body: Body = {
     version: PRODUCT_VERSION,
     today,
@@ -416,10 +459,10 @@ function journeyFrom(context: JourneyContext, tracking: Tracking, summary: Recor
     changes_note_zh: tracking.changes_note_zh,
     changes_unjudged: tracking.changes_unjudged,
     doctor_first: {
-      stop: tracking.doctor_first?.stop === true,
-      title_zh: tracking.doctor_first?.title_zh ?? '',
-      sentence_zh: tracking.doctor_first?.sentence_zh ?? '',
-      hits: (tracking.doctor_first?.hits ?? []).map((hit) => ({ ...hit })),
+      stop: care.stop.stop === true,
+      title_zh: care.stop.title_zh ?? '',
+      sentence_zh: care.stop.sentence_zh ?? '',
+      hits: (care.stop.hits ?? []).map((hit) => ({ key: hit.key, short_zh: hit.short_zh, text_zh: hit.text_zh })),
     },
     self: {
       latest: SELF_KEYS.flatMap((key) => {
@@ -434,8 +477,32 @@ function journeyFrom(context: JourneyContext, tracking: Tracking, summary: Recor
   }
   const stage = stageOf(body)
   const followupOn = readFollowup(context.dataDir).enabled
+  const stageNext = nextOf(stage, body)
+  const stageSuggestions = suggestionsOf(stage, body, followupOn)
+  // One fact pack and one fact-ranked set of surfaces; next and suggestions below are that set.
+  const pack = packFrom({
+    dataDir: context.dataDir, today, stage,
+    person: { display_name: profile.displayName, age: profile.age, sex: profile.sex },
+    care, hits: recordStop.hits, needsSex: recordStop.needs_sex === true && care.stop.stop,
+    medications: currentMedications(records.medications), changes: tracking.changes,
+    results: { bioage: { phenoage: bioage.phenoage, advance: bioage.advance, date: bioage.date }, risk: { risk_pct: risk.risk_pct, date: risk.date } },
+    plan: { exists: plan.exists, version: plan.version, days: plan.days, open_checkins: plan.checkin_items.filter((item) => item.done_today == null).length, adherence_pct: plan.adherence_pct },
+    self: body.self.latest.map((row) => ({ key: row.key, label_zh: row.label_zh, value: row.value, unit: row.unit, date: row.date })),
+    stageNext: { title_zh: stageNext.title_zh, detail_zh: stageNext.detail_zh, action: stageNext.action },
+    emptyRecord: body.records.indicator_count === 0,
+    tracking, trackingGeneration: trackingGeneration(),
+  })
+  const floor = fallbackSurfaces(pack, { suggestions: stageSuggestions, status_zh: stageStatus(stage, body, stageNext) }, context.now ?? new Date())
+  // The coach's set when one is valid for this pack; otherwise the floor, and the coach is asked (step 2).
+  const surfaces = chooseSurfaces(context.dataDir, floor, pack)
+  recordSurfaces(context.dataDir, surfaces, pack)
   const journey: Journey = {
-    ...body, stage, next: nextOf(stage, body), suggestions: suggestionsOf(stage, body, followupOn), followup: { enabled: followupOn, channels: [], next_at: null },
+    ...body, stage,
+    next: legacyNext(stage, surfaces, stageNext),
+    suggestions: surfaces.suggestions.slice(0, 3).map((row) => ({ id: row.id, text_zh: row.prompt_zh ?? row.text_zh })),
+    followup: { enabled: followupOn, channels: [], next_at: null },
+    surfaces,
+    triage: { findings: care.findings, care: pack.triage.care, needs_sex: pack.triage.stop?.needs_sex === true, top_facts: pack.top_facts },
   }
   journey.followup = followupSummary(context.dataDir, followupStateOf(journey, tracking), context.now ?? new Date())
   return journey
