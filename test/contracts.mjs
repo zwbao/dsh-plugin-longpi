@@ -88,11 +88,13 @@ function walk(dir) {
 }
 for (const file of walk(join(root, '..', 'src'))) assert.doesNotMatch(readFileSync(file, 'utf8'), /session\.append\(/, `${file} appends a session event`)
 
-// 0.6.0 C1: the library hooks throw until a lane registers, and a lane can plug in without editing index.ts.
+// 0.6.0 C1: list, bind, and store throw until that lane registers. L4 registers
+// methodResults; with nothing recorded the list is empty, and a lane can still
+// plug in without editing index.ts.
 assert.throws(() => mod.listSkillIndex(), /not implemented in C1/)
 assert.throws(() => mod.validateBinding({ skill: 'x', inputs: {} }), /not implemented in C1/)
 assert.throws(() => mod.readStore('methylation'), /not implemented in C1/)
-assert.throws(() => mod.methodResults(), /not implemented in C1/)
+assert.deepEqual(mod.methodResults(), [])
 assert.deepEqual(mod.registeredMethodResults(), [])
 const offRead = mod.registerLibraryHooks({
   readStore: (kind) => (kind === 'conditions' ? [{ code: 'E55', system: 'ICD-10', display: '维生素 D 缺乏', onset: null, source: 'fixture' }] : []),

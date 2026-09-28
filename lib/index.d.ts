@@ -3486,6 +3486,8 @@ interface Journey {
     needs_sex: boolean;
     top_facts: FactPack['top_facts'];
   };
+  /** Labeled library results for this generation. Empty until one is recorded. */
+  method_results: MethodResult[];
 }
 /** What a journey is built from; now (default the clock) only times the next follow-up. */
 type JourneyContext = TrackingContext & {
@@ -4744,6 +4746,12 @@ interface TopFactInput {
   screening?: TopFact[];
   /** The stop used the men's limits because no sex is on file. */
   needsSex?: boolean;
+  /**
+   * Labeled method results for this generation. Omitted means the registered
+   * hook, which is empty until a run is recorded. They rank under triage and
+   * safety: an emergency, a critical pattern, and a safety medicine stay first.
+   */
+  methods?: readonly MethodResult[];
 }
 declare function rankTopFacts(input: TopFactInput): TopFact[];
 //#endregion

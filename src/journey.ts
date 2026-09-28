@@ -21,6 +21,7 @@ import { PRODUCT_VERSION } from './version.ts'
 import type { SurfaceSet } from './contracts/surfaces.ts'
 import type { TriageFinding } from './contracts/triage.ts'
 import type { FactPack } from './contracts/factpack.ts'
+import type { MethodResult } from './contracts/library.ts'
 import { packFrom } from './core/factpack.ts'
 import { fallbackSurfaces } from './surfaces/fallback.ts'
 import { recordSurfaces } from './surfaces/service.ts'
@@ -100,10 +101,12 @@ export interface Journey {
     needs_sex: boolean
     top_facts: FactPack['top_facts']
   }
+  /** Labeled library results for this generation. Empty until one is recorded. */
+  method_results: MethodResult[]
 }
 
 type Next = Journey['next']
-type Body = Omit<Journey, 'stage' | 'next' | 'suggestions' | 'followup' | 'surfaces' | 'triage'>
+type Body = Omit<Journey, 'stage' | 'next' | 'suggestions' | 'followup' | 'surfaces' | 'triage' | 'method_results'>
 /** What a journey is built from; now (default the clock) only times the next follow-up. */
 export type JourneyContext = TrackingContext & { mount: MountState; now?: Date }
 type Addon = Journey['addons'][number]
@@ -538,6 +541,7 @@ function journeyFrom(context: JourneyContext, tracking: Tracking, summary: Recor
     followup: { enabled: followupOn, channels: [], next_at: null },
     surfaces,
     triage: { findings: care.findings, care: pack.triage.care, needs_sex: pack.triage.stop?.needs_sex === true, top_facts: pack.top_facts },
+    method_results: pack.method_results,
   }
   journey.followup = followupSummary(context.dataDir, followupStateOf(journey, tracking), context.now ?? new Date())
   return journey

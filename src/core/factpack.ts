@@ -6,6 +6,7 @@ import { createHash } from 'node:crypto'
 import type { NumberRef } from '../contracts/common.ts'
 import type { FactPack, Stage } from '../contracts/factpack.ts'
 import { registeredMethodResults } from '../contracts/library.ts'
+import { titleOf } from './method-view.ts'
 import type { ExclusionItem, GoalItem } from '../contracts/memory.ts'
 import type { NextBestAction } from '../contracts/surfaces.ts'
 import type { RecordChange } from '../changes.ts'
@@ -67,6 +68,25 @@ function numbersOf(input: PackInput): NumberRef[] {
   for (const row of input.self) add({ key: `self.${row.key}`, label_zh: row.label_zh, value: row.value, unit: row.unit, date: row.date, source: 'self', text: numberText(row.value, row.unit) })
   if (input.plan.adherence_pct != null) add({ key: 'plan.adherence', label_zh: '方案执行率', value: input.plan.adherence_pct, unit: '%', date: input.today, source: 'derived', text: `${input.plan.adherence_pct}%` })
   if (input.plan.days != null) add({ key: 'plan.days', label_zh: '方案天数', value: input.plan.days, unit: '天', date: input.today, source: 'derived', text: `${input.plan.days} 天` })
+  // Personal method outputs, so a surface can quote them. Evidence-only rows have no personal number.
+  registeredMethodResults().forEach((row, index) => {
+    if (row.label === 'evidence-only') return
+    let n = 0
+    for (const item of row.outputs) {
+      if (typeof item.value !== 'number' || !Number.isFinite(item.value)) continue
+      n += 1
+      const day = /^\d{4}-\d{2}-\d{2}/.test(row.ran_at) ? row.ran_at.slice(0, 10) : null
+      add({
+        key: n === 1 ? `method.${index + 1}` : `method.${index + 1}.${n}`,
+        label_zh: titleOf(row.skill),
+        value: item.value,
+        unit: item.unit,
+        date: day,
+        source: 'skill',
+        text: numberText(item.value, item.unit),
+      })
+    }
+  })
   return out
 }
 

@@ -3,6 +3,7 @@
 
 import { FACT_PRIORITY_RANK, type FactPack } from '../contracts/factpack.ts'
 import type { NextBestAction, SurfaceCard, SurfaceSet } from '../contracts/surfaces.ts'
+import { verifiedMention } from '../core/method-view.ts'
 import { rankActions } from './nba.ts'
 
 export interface StageHints {
@@ -36,9 +37,18 @@ export function fallbackSurfaces(pack: FactPack, hints: StageHints = { suggestio
   const ranked = rankActions(pack.candidates, pack)
   const top = pack.top_facts[0]
   const urgent = top && FACT_PRIORITY_RANK[top.priority] <= FACT_PRIORITY_RANK.must_surface
+  // A verified result is named when the model is down. It does not replace an
+  // emergency, a critical pattern, or a safety fact that already leads.
+  const mention = verifiedMention(pack.method_results)
+  const statusText = urgent ? top.text_zh : [hints.status_zh, mention].filter(Boolean).join(' ')
   const status = urgent
-    ? card('status', 'status', top.text_zh, { fact_ids: [top.id], number_keys: numberKeysIn(top.text_zh, pack), tone: top.kind === 'triage' ? 'care' : 'neutral' })
-    : card('status', 'status', hints.status_zh)
+    ? card('status', 'status', statusText, {
+      fact_ids: [top.id],
+      number_keys: numberKeysIn(statusText, pack),
+      tone: top.kind === 'triage' ? 'care' : 'neutral',
+      ...(mention ? { detail_zh: mention } : {}),
+    })
+    : card('status', 'status', statusText, mention ? { detail_zh: mention, number_keys: numberKeysIn(statusText, pack) } : {})
   const lead: NextBestAction = ranked[0] ?? {
     id: 'open-page', kind: 'read_result', provider: 'M5', priority: 0, mandatory: false, reason_codes: [], fact_ids: [], target: { surface: 'page' }, title_zh: '打开健康页看看', detail_zh: '',
   }
