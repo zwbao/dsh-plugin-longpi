@@ -1,4 +1,4 @@
-export const PRODUCT_VERSION = '0.5.1'
+export const PRODUCT_VERSION = '0.5.2'
 export const PRODUCT_NAME = 'dsh-plugin-longpi'
 
 export const TOOL_NAMES = [
@@ -15,6 +15,7 @@ export const TOOL_NAMES = [
   'draft_intervention_plan',
   'log_intervention_checkin',
   'save_self_measurement',
+  'record_medication_statement',
   'read_intervention_plan',
   'review_interventions',
   'model_intervention_goals',

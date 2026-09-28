@@ -133,6 +133,8 @@ declare function mentionsMedicine(text: string): boolean;
  * not a record of what the person already did.
  */
 declare function ruleLabels(input: string): GuardLabels;
+/** "请记一下" is a request to store a prescription, not a request to start or stop it. */
+declare function isMedicationRecordRequest(text: string): boolean;
 interface ReplyVerdict {
   personal_dose: boolean;
   med_change_advice: boolean;
@@ -160,9 +162,14 @@ interface GuidanceNote {
  */
 declare function guidanceNote(labels: GuardLabels, options?: {
   medicine?: boolean;
+  hypoglycaemia?: boolean;
+  unconscious?: boolean;
+  record?: boolean;
 }): GuidanceNote | null;
 /** The correction steered into a turn whose reply gave a dose or advised a medicine change. */
 declare function correctionNote(verdict: ReplyVerdict): GuidanceNote;
+/** The reply to a hypoglycaemia message did not open with the first step: send it now, first. */
+declare function hypoCorrectionNote(unconscious?: boolean): GuidanceNote;
 type GuardHit = {
   code: 'emergency';
   reply_zh: string;
@@ -369,8 +376,8 @@ declare function registerApprovals(ctx: Context, guard: Pick<Guard, 'inEmergency
 declare function hasDoseAmount(text: string): boolean;
 //#endregion
 //#region src/version.d.ts
-declare const PRODUCT_VERSION = "0.5.1";
-declare const TOOL_NAMES: readonly ["read_personal_situation", "list_longevity_intents", "match_longevity_skills", "read_longevity_skill", "run_longevity_skill", "query_longevity_evidence", "list_longevity_domains", "save_personal_profile", "longpi_status", "save_intervention_plan", "draft_intervention_plan", "log_intervention_checkin", "save_self_measurement", "read_intervention_plan", "review_interventions", "model_intervention_goals", "set_followup", "send_followup_message"];
+declare const PRODUCT_VERSION = "0.5.2";
+declare const TOOL_NAMES: readonly ["read_personal_situation", "list_longevity_intents", "match_longevity_skills", "read_longevity_skill", "run_longevity_skill", "query_longevity_evidence", "list_longevity_domains", "save_personal_profile", "longpi_status", "save_intervention_plan", "draft_intervention_plan", "log_intervention_checkin", "save_self_measurement", "record_medication_statement", "read_intervention_plan", "review_interventions", "model_intervention_goals", "set_followup", "send_followup_message"];
 declare const HARNESS_SKILLS: readonly ["longpi-dispatch", "longpi-board", "longpi-boundary", "longpi-interventions"];
 //#endregion
 //#region src/catalog.d.ts
@@ -924,6 +931,8 @@ interface RecordSnapshot {
   };
   indicators: IndicatorRow[];
   medications: MedicationRow[];
+  /** Current regimen first, older plans labelled 较早. Empty until a medication read succeeds. */
+  medication_summary_zh: string[];
   /** partial: the record was read, but some reads failed or came back cut (read_errors says which). */
   record_status: RecordStatus;
   record_error: string;
@@ -1396,6 +1405,73 @@ declare function buildChanges(context: ChangesContext): Promise<{
   unjudged: UnjudgedChange[];
 }>;
 //#endregion
+//#region src/plan-safety.d.ts
+declare const FISH_OIL_CAUTION = "试验用的是处方级的较高用量 EPA+DHA，鱼油可能增加出血和房颤（心房颤动）风险；这不是给你的用量，先与医生确认";
+declare const HYPO_AWAKE_ZH = "先吃 15 克快速吸收的糖（葡萄糖片或一小杯含糖果汁），15 分钟后复测；仍低于 3.9 mmol/L 就再吃 15 克。";
+declare const HYPO_UNCONSCIOUS_ZH = "昏迷、叫不醒或无法吞咽时不要喂东西，请立即拨打 120。";
+interface PanelPoint {
+  name: string;
+  label?: string;
+  loinc?: string;
+  value: number;
+  unit: string;
+  date: string;
+}
+interface SafetyClasses {
+  sglt2: boolean;
+  sglt2Name: string;
+  hypoDrugs: boolean;
+  pregnant: boolean;
+  ckd: boolean;
+  diabetesKnown: boolean;
+}
+interface StopHit {
+  key: 'hgb' | 'mcv' | 'rdw' | 'ferritin' | 'glucose' | 'hba1c' | 'ldl' | 'sbp';
+  /** Short, for the overview title: 血红蛋白 120 g/L 偏低. */
+  short_zh: string;
+  /** The full clause with the date and, when the checkups show it, the fall across them. */
+  text_zh: string;
+}
+interface StopResult {
+  stop: boolean;
+  /** 请先去看医生：… — the whole reply when a plan is asked for. */
+  sentence_zh: string;
+  /** The overview's next step title. */
+  title_zh: string;
+  hits: StopHit[];
+}
+declare function medicationClasses(names: readonly string[], flags?: {
+  pregnant?: boolean | null;
+  ckd?: boolean | null;
+  diabetes?: boolean | null;
+}): SafetyClasses;
+/** Phrases the person has ruled out, kept so the next draft does not grow them back. */
+declare function exclusionsFromText(text: string): string[];
+/**
+ * Critical values and a red-cell pattern that need a doctor before any
+ * lifestyle plan. points holds the latest value of every indicator and, for
+ * haemoglobin and MCV, their earlier checkups. One plain sentence names each
+ * value with its number, calls a low value 偏低, and sends the person to a doctor.
+ */
+declare function clinicalStop(input: {
+  sex: string;
+  diabetesKnown: boolean;
+  points: readonly PanelPoint[];
+}): StopResult;
+interface HypoRead {
+  now: boolean;
+  unconscious: boolean;
+}
+/** A low reading or hypo symptoms happening now, not a past number told as history. */
+declare function hypoglycaemiaNow(text: string): HypoRead;
+/**
+ * Whether a reply to a hypoglycaemia message leads with the first step: within
+ * its first three sentences, one names about 15 g of fast sugar before any
+ * sentence sends them to a doctor, a medicine or a plan. When they cannot be
+ * woken, 120 comes first instead.
+ */
+declare function leadsWithHypoFirstStep(reply: string, unconscious?: boolean): boolean;
+//#endregion
 //#region src/interventions.d.ts
 declare const CATEGORIES: readonly ["diet", "exercise", "sleep", "supplement", "drug", "behavior", "weight", "other"];
 type Category = typeof CATEGORIES[number];
@@ -1763,6 +1839,8 @@ interface Tracking {
   changes_note_zh: string;
   /** Markers not judged because their readings did not come back whole: unknown, never "no change". */
   changes_unjudged: UnjudgedChange[];
+  /** A critical value or red-cell pattern: see a doctor before any plan (plan-safety.ts). */
+  doctor_first: StopResult;
 }
 declare function invalidateTracking(): void;
 /** Bumped by every invalidateTracking (a check-in, a self measurement, a plan or profile save): readers keeping their own copy refresh on a change. */
@@ -2332,11 +2410,25 @@ interface Journey {
     due: boolean;
   }>;
   stage: Stage;
+  /**
+   * A critical value or red-cell pattern (plan-safety.ts): see a doctor before any plan. When stop is true the
+   * next step is this, whatever the stage after the profile, and no plan is drafted.
+   */
+  doctor_first: {
+    stop: boolean;
+    title_zh: string;
+    sentence_zh: string;
+    hits: Array<{
+      key: string;
+      short_zh: string;
+      text_zh: string;
+    }>;
+  };
   next: {
     stage: Stage;
     title_zh: string;
     detail_zh: string;
-    action: 'consent' | 'profile' | 'records' | 'addons' | 'plan' | 'checkin' | 'review' | 'open';
+    action: 'consent' | 'profile' | 'records' | 'addons' | 'plan' | 'checkin' | 'review' | 'open' | 'doctor';
   };
   suggestions: Array<{
     id: string;
@@ -2475,7 +2567,11 @@ interface PlanBrief {
   safety: {
     medications: string[];
     notes_zh: string[];
+    stop_zh?: string;
   };
+  /** Evidence ids and titles the person already refused. */
+  excluded_ids?: string[];
+  excluded_phrases?: string[];
   past_items: Array<{
     title: string;
     category: string;
@@ -2531,6 +2627,8 @@ interface BriefOptions {
   focus?: readonly Focus[];
   /** Markers the person asked to improve, by name or key; they come first. */
   markers?: readonly string[];
+  /** Limits they just stated (不要限时进食, 怀孕). Saved, and applied to this draft. */
+  constraints?: string;
 }
 /**
  * A draft's focus and markers as the tool and the accept route both read them: unknown focus values are
@@ -2546,6 +2644,16 @@ declare function expectedText(row: EffectRow): string;
  * effects: one item per intervention, at most one supplement, different categories first. Deterministic;
  * saves nothing. Null when there is nothing evidence-backed to propose.
  */
+/** The Chinese reply for this draft. The model sends it and does not call another tool first. */
+declare function replyForDraft(brief: PlanBrief, draft: PlanDraft | null): string;
+/**
+ * Keep the draft's date while the labs and medicines are the same. A new day,
+ * by itself, does not retitle the draft. A new exclusion regenerates the items
+ * and keeps the date.
+ */
+declare function settleDraft(dataDir: string, brief: PlanBrief, today: string, opts?: {
+  maxItems?: number;
+}): PlanDraft | null;
 declare function draftPlan(brief: PlanBrief, opts: {
   today: string;
   maxItems?: number;
@@ -2562,6 +2670,58 @@ declare function acceptedPlan(brief: PlanBrief, posted: unknown, today: string):
   ok: false;
   error: string;
   problems: string[];
+};
+//#endregion
+//#region src/doctor-first.d.ts
+declare function buildDoctorFirst(context: {
+  config: Config;
+  records: RecordSnapshot;
+  today: string;
+}): Promise<StopResult>;
+//#endregion
+//#region src/plan-hold.d.ts
+declare function holdPlanDraft(ms?: number, now?: number): void;
+declare function releasePlanDraft(): void;
+declare function planDraftHeld(now?: number): boolean;
+//#endregion
+//#region src/plan-prefs.d.ts
+interface PlanPrefs {
+  excluded_ids: string[];
+  excluded_phrases: string[];
+  pregnant: boolean | null;
+  ckd: boolean | null;
+  drafted_on: string;
+  clinical_fp: string;
+  content_fp: string;
+  draft: unknown;
+}
+declare function readPlanPrefs(dataDir: string): PlanPrefs;
+/** Drop or restore one drafted item. The title is stored as a phrase so the same intervention cannot regrow under another evidence id. */
+declare function setPlanExclusion(dataDir: string, item: {
+  id?: string;
+  title?: string;
+  excluded: boolean;
+}): PlanPrefs;
+declare function rememberExclusions(dataDir: string, phrases: readonly string[]): PlanPrefs;
+//#endregion
+//#region src/meds-stated.d.ts
+interface StatedMedication {
+  name: string;
+  dose_text: string;
+  frequency_text: string;
+  since: string;
+  at: string;
+}
+declare function readStatements(dataDir: string): StatedMedication[];
+/** Mirobody prints a once-daily plan as "0x/day" (period of 1 day, count left at 0). */
+declare function fixScheduleText(text: string): string;
+/**
+ * One current line per drug. A statement the person just asked to remember
+ * wins. An older or ended plan stays on a second line so it is not read as today's dose.
+ */
+declare function presentMedications(rows: readonly MedicationRow[], stated?: readonly StatedMedication[]): {
+  rows: MedicationRow[];
+  lines: string[];
 };
 //#endregion
 //#region src/connection.d.ts
@@ -2704,4 +2864,4 @@ declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { type BootstrapResult, CHANGES_NOTE_ZH, CIVIL_TZ, CLASSIFIER_SYSTEM, CONNECTION_FILE, CONNECTION_TEST_MS, CONNECTION_UNAVAILABLE, CONSENT_VERSION, Config, type ConnectionGuard, type ConnectionSource, type ConnectionStatus, type ConnectionTest, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMERGENCY_LINE_ZH, EMPTY_PROFILE, FOCUS, FOCUS_ZH, FOLLOWUP_DAMAGED, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, GROUP_KEYS, GROUP_ZH, GUARD_COUNTERS, GUARD_SCOPES, GUARD_TIMEOUT_MS, type GroupKey, type Guard, type GuardCall, type GuardHit, type GuardLabels, type GuardScope, HARNESS_SKILLS, HealthSessions, type IndicatorChange, type IndicatorDetail, type IndicatorEntry, type IndicatorSource, type IndicatorsResponse, JUDGE_SYSTEM, type Journey, LABEL_KEYS, type LlmLike, NO_READ_BACK, PHENOAGE_SKILL, PRODUCT_VERSION, PROFILE_DAMAGED, type PlanBrief, type PlanDraft, type Profile, READ_BACK_MS, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RecordChange, type RecordSnapshot, type RecordStatus, type RecordsSummary, type ReplyVerdict, type RiskFact, SELF_ALIASES, SELF_HARM_LINE_ZH, SELF_KEYS, SELF_SPEC, type SavedConnection, type SelfKey, type SelfRow, type SendResult, type Stage, TOOL_NAMES, type UnjudgedChange, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, type WorkspaceLike, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, asJson, bootstrapWorkspace, bridgeEnv, briefOptionsOf, buildBoard, buildCalendar, buildChanges, buildIndicators, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, candidatesFor, cellNumber, checkReply, checkinStatus, checkupMarkerFor, classifyMessage, clearConnection, commandExcerpt, connectionKey, connectionSource, connectionTokenProblem, connectionUrlProblem, correctionNote, countGuard, createGuard, currentPlan, daysBetween, decideFollowup, deleteSelf, describeItem, describePlan, desktopCommand, desktopSupported, detectIntents, domainSummary, dosePattern, draftPlan, effectiveConfig, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, expandMarkerNames, expectedText, factorFor, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, goalProblems, groupOf, guardRoute, guidanceNote, hasDose, hasDoseAmount, healthWorkspacePaths, heldUntil, homeBloodPressure, inQuiet, indicatorDetail, indicatorFor, indicatorsFromTable, inject, insideWorkspace, invalidateIndicators, invalidateRecords, invalidateTracking, isJsonRequest, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, markerGroupKeys, maskMcpUrl, maskUrl, matchSkills, matchesInputName, mentionedEntities, mentionsMedicine, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseLabels, parseNumber, parseReadme, parseVerdict, personText, planApprovalReason, planKey, preGuard, profileComplete, publicFollowup, rcvBand, readCheckIns, readConnection, readFailed, readFollowup, readFollowupLog, readGuardStats, readHistory, readPlans, readProfile, readReceipts, readResultFile, readSelf, readiness, recordOutputs, recordReadable, recordsSummary, registerApprovals, rememberMedications, rememberedMedications, replyRuleCheck, reportExcerpt, resetReadBacks, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, routeFor, ruleLabels, runReady, runSkill, runnableFrom, runtimeCall, sameMeasure, saveConnection, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, skillEnv, stageMeasurements, stageNow, startFollowup, stripDoses, suggestNext, summarizeIndicators, summarizeMedications, supplementFieldInputs, tableOf, testConnection, togetherZh, tokenKey, touchesHealth, trackingGeneration, turnText, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };
+export { type BootstrapResult, CHANGES_NOTE_ZH, CIVIL_TZ, CLASSIFIER_SYSTEM, CONNECTION_FILE, CONNECTION_TEST_MS, CONNECTION_UNAVAILABLE, CONSENT_VERSION, Config, type ConnectionGuard, type ConnectionSource, type ConnectionStatus, type ConnectionTest, type Consent, DEFAULT_FOLLOWUP, DRAFT_CATEGORIES, type DraftItem, EMERGENCY_LINE_ZH, EMPTY_PROFILE, FISH_OIL_CAUTION, FOCUS, FOCUS_ZH, FOLLOWUP_DAMAGED, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, GROUP_KEYS, GROUP_ZH, GUARD_COUNTERS, GUARD_SCOPES, GUARD_TIMEOUT_MS, type GroupKey, type Guard, type GuardCall, type GuardHit, type GuardLabels, type GuardScope, HARNESS_SKILLS, HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH, HealthSessions, type IndicatorChange, type IndicatorDetail, type IndicatorEntry, type IndicatorSource, type IndicatorsResponse, JUDGE_SYSTEM, type Journey, LABEL_KEYS, type LlmLike, NO_READ_BACK, PHENOAGE_SKILL, PRODUCT_VERSION, PROFILE_DAMAGED, type PlanBrief, type PlanDraft, type Profile, READ_BACK_MS, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RecordChange, type RecordSnapshot, type RecordStatus, type RecordsSummary, type ReplyVerdict, type RiskFact, SELF_ALIASES, SELF_HARM_LINE_ZH, SELF_KEYS, SELF_SPEC, type SavedConnection, type SelfKey, type SelfRow, type SendResult, type Stage, type StopHit, type StopResult, TOOL_NAMES, type UnjudgedChange, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, type WorkspaceLike, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, appendFollowupLog, apply, asJson, bootstrapWorkspace, bridgeEnv, briefOptionsOf, buildBoard, buildCalendar, buildChanges, buildDoctorFirst, buildIndicators, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, candidatesFor, cellNumber, checkReply, checkinStatus, checkupMarkerFor, classifyMessage, clearConnection, clinicalStop, commandExcerpt, connectionKey, connectionSource, connectionTokenProblem, connectionUrlProblem, correctionNote, countGuard, createGuard, currentPlan, daysBetween, decideFollowup, deleteSelf, describeItem, describePlan, desktopCommand, desktopSupported, detectIntents, domainSummary, dosePattern, draftPlan, effectiveConfig, effectsFor, escapeText, estimatedAge, evaluateMarker, evaluatePlan, exclusionsFromText, expandMarkerNames, expectedText, factorFor, fixScheduleText, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, goalProblems, groupOf, guardRoute, guidanceNote, hasDose, hasDoseAmount, healthWorkspacePaths, heldUntil, holdPlanDraft, homeBloodPressure, hypoCorrectionNote, hypoglycaemiaNow, inQuiet, indicatorDetail, indicatorFor, indicatorsFromTable, inject, insideWorkspace, invalidateIndicators, invalidateRecords, invalidateTracking, isJsonRequest, isMedicationRecordRequest, isoDay, isoWeek, isoWeekday, latestOutputs, latestSelf, leadsWithHypoFirstStep, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, manifestSummary, markerFor, markerGroupKeys, maskMcpUrl, maskUrl, matchSkills, matchesInputName, medicationClasses, mentionedEntities, mentionsMedicine, mergeProfile, mergeSelf, modelGoals, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, organismOf, organismsAsked, parseCompact, parseFrontmatter, parseLabels, parseNumber, parseReadme, parseVerdict, personText, planApprovalReason, planDraftHeld, planKey, preGuard, presentMedications, profileComplete, publicFollowup, rcvBand, readCheckIns, readConnection, readFailed, readFollowup, readFollowupLog, readGuardStats, readHistory, readPlanPrefs, readPlans, readProfile, readReceipts, readResultFile, readSelf, readStatements, readiness, recordOutputs, recordReadable, recordsSummary, registerApprovals, releasePlanDraft, rememberExclusions, rememberMedications, rememberedMedications, replyForDraft, replyRuleCheck, reportExcerpt, resetReadBacks, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, routeFor, ruleLabels, runReady, runSkill, runnableFrom, runtimeCall, sameMeasure, saveConnection, savePlan, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, setConsent, setFollowupDeps, setPlanExclusion, settleDraft, skillEnv, stageMeasurements, stageNow, startFollowup, stripDoses, suggestNext, summarizeIndicators, summarizeMedications, supplementFieldInputs, tableOf, testConnection, togetherZh, tokenKey, touchesHealth, trackingGeneration, turnText, unansweredOf, unitFactor, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeProfile, writeStats };

@@ -290,15 +290,16 @@ export function PlanDraftCard(props: { journey: Journey; onNotice: Notify; onPro
   }
   if (!data.draft) {
     // The reasons first (no evidence for a focus, a change to show a doctor); the medication screen is fine print.
-    const reasons = data.brief.notes_zh
-    const fine = [...new Set([...reasons.slice(1), ...data.brief.safety.notes_zh, data.brief.boundary_zh].filter(Boolean))]
+    const stop = data.brief.safety.stop_zh ?? ''
+    const reasons = stop ? [stop, ...data.brief.notes_zh.filter((text) => text !== stop)] : data.brief.notes_zh
+    const fine = stop ? [data.brief.boundary_zh].filter(Boolean) : [...new Set([...reasons.slice(1), ...data.brief.safety.notes_zh, data.brief.boundary_zh].filter(Boolean))]
     return h('div', { className: 'lp-card lp-draft' },
       h('div', { className: 'lp-kicker' }, '方案草稿'),
-      h('h3', { className: 'lp-h3 lp-draft-title' }, '现在还起草不了方案'),
+      h('h3', { className: 'lp-h3 lp-draft-title' }, stop ? '请先去看医生，再做方案' : '现在还起草不了方案'),
       h('p', { className: 'lp-muted' }, reasons[0] || '你的记录里还没有能对上研究证据的指标。'),
       ...fine.map((text) => h('p', { key: text, className: 'lp-fine' }, text)),
-      h(Priorities, { brief: data.brief, open: true }),
-      h('div', { className: 'lp-form-actions lp-draft-actions' }, h(Hint, { onPrompt: props.onPrompt })))
+      stop ? null : h(Priorities, { brief: data.brief, open: true }),
+      stop ? null : h('div', { className: 'lp-form-actions lp-draft-actions' }, h(Hint, { onPrompt: props.onPrompt })))
   }
   return h(Draft, { data, draft: data.draft, journey: props.journey, onNotice: props.onNotice, onPrompt: props.onPrompt })
 }

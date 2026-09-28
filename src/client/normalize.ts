@@ -14,7 +14,7 @@ import type {
 type Raw = Record<string, unknown>
 
 const STAGES: readonly Stage[] = ['consent', 'profile', 'records', 'first_result', 'plan', 'routine']
-const ACTIONS: readonly NextAction[] = ['consent', 'profile', 'records', 'addons', 'plan', 'checkin', 'review', 'open']
+const ACTIONS: readonly NextAction[] = ['consent', 'profile', 'records', 'addons', 'plan', 'checkin', 'review', 'open', 'doctor']
 const SEXES: readonly Sex[] = ['female', 'male', 'other', 'unknown']
 const SELF_KEYS: readonly SelfKey[] = ['waist', 'sbp', 'dbp', 'weight']
 const FOCUS: readonly Focus[] = ['bioage', 'cardio', 'glucose', 'weight', 'sleep', 'plan']
@@ -389,7 +389,7 @@ function briefOf(raw: Raw): PlanBrief {
         cautions_zh: strings(row.cautions_zh),
       }
     }),
-    safety: { medications: strings(safety.medications), notes_zh: strings(safety.notes_zh) },
+    safety: { medications: strings(safety.medications), notes_zh: strings(safety.notes_zh), ...(str(safety.stop_zh) ? { stop_zh: str(safety.stop_zh) } : {}) },
     past_items: objects(raw.past_items).filter((row) => str(row.title)).map((row) => ({
       title: str(row.title),
       category: str(row.category),

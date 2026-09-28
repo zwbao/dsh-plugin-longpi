@@ -480,7 +480,7 @@ try {
   const host = fakeHost()
   await mod.apply(host.ctx, configFor(routeDir))
   for (const name of mod.TOOL_NAMES) assert.ok(host.tools.has(name), `tool ${name} is registered`)
-  assert.equal(mod.TOOL_NAMES.length, 18)
+  assert.equal(mod.TOOL_NAMES.length, 19)
   assert.equal(host.effects, 1, 'the follow-up scheduler runs as one Cordis effect')
   const prompt = host.prompts.map((row) => (typeof row.text === 'function' ? row.text() : row.text)).join('\n')
   assert.match(prompt, /save_self_measurement/)
@@ -762,7 +762,14 @@ try {
   assert.deepEqual(falseStep.journey.results.risk.missing_labs, ['腰围'])
   assert.match(falseStep.journey.results.risk.blocker_zh, /腰围还没有测过，现在量一下填上就能算/)
   assert.equal(falseStep.journey.results.risk.blocker_zh.includes('读取失败'), false)
-  assert.equal(falseStep.journey.next.title_zh, '还差 2 项检查')
+  // The owner's MCV 65 and RDW-CV 19 go to a doctor before the add-ons or a plan (0.5.2).
+  assert.equal(falseStep.journey.next.action, 'doctor')
+  assert.equal(falseStep.journey.next.title_zh, '请先去看医生：平均红细胞体积 68 fL 偏低，红细胞分布宽度 18% 偏高')
+  assert.match(falseStep.journey.next.detail_zh, /平均红细胞体积（MCV）68 fL（2026-02-11）偏低，低于 80/)
+  assert.doesNotMatch(falseStep.journey.next.detail_zh, /不能评/)
+  assert.equal(falseStep.journey.addons.length, 2, 'the add-ons are still listed')
+  assert.equal(falseStep.journey.suggestions[0].id, 'doctor-first')
+  assert.ok(!falseStep.journey.suggestions.some((row) => row.id === 'draft-plan'), 'no plan prompt while a doctor comes first')
 
   // A real cut: the fasting-glucose series is past the page, recoverable by its LOINC code.
   const hidden = reading('Hidden glucose', 'not-an-alias', '1558-6', 'mmol/L', '5.50')
