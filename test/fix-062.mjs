@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { gradeBioAge, gradeMarker, markerFromChange } from '../src/feedback/grade.ts'
-import { formatMeasure, plainSource, resultSentence, titleOf } from '../src/core/method-view.ts'
+import { formatMeasure, plainSource, resultSentence, riskBindingNote, titleOf } from '../src/core/method-view.ts'
 import { chineseDate } from '../src/client/format.ts'
 import { isDiagnosisName, scrubVisible } from '../src/ux/plain.ts'
 import { attributeDrivers, bodyAgeLines, bodyAgeStory, panelFromMeasurements, phenotypicAge } from '../src/ux/body-age.ts'
@@ -68,6 +68,13 @@ assert.match(unbound, /还没对上/)
 assert.match(unbound, /收缩压（高压）148/)
 assert.equal(unbound.includes('绑定未核对'), false)
 assert.equal(/Systolic blood pressure/.test(unbound), false)
+// The risk card shows one number: an unmatched run with another number names its input and does not count.
+const unboundRow = { skill: 'china-par-ascvd-risk', label: 'unverified-binding', outputs: [{ key: 'risk', value: 4.26, unit: '%' }], inputs_used: [{ input: 'sbp', source_row_id: 'row', value: 148, unit: 'mmHg', provenance: 'routine_lab', quote: 'Systolic blood pressure 148 mmHg' }], catalog_version: '2026.39.0', ran_at: '2026-09-28T00:00:00Z', limits_zh: '' }
+const note = riskBindingNote(unboundRow, 3.4)
+assert.equal(/4\.26|%/.test(note), false, note)
+assert.match(note, /收缩压（高压）148/)
+assert.match(note, /还没对上，先不作数/)
+assert.match(riskBindingNote(unboundRow, 4.26), /4\.26%/)
 
 const base = {
   albumin_gL: 45, creat_umol: 70, glucose_mmol: 5.4, crp_mg_dl: 0.2,

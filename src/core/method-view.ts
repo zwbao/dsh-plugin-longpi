@@ -184,6 +184,18 @@ export function resultSentence(row: MethodResult, opts: { youngerAllowed: boolea
 }
 
 /** Short line for the fact list. Limits stay on the card, not in the ranked fact. */
+/**
+ * The unmatched automatic run under the risk card. When its number is not the card's number, the card shows one
+ * number only: the note names the input it used and says it does not count yet.
+ */
+export function riskBindingNote(method: MethodResult, cardPct: number | null): string {
+  const out = primaryOutput(method)
+  const same = out != null && typeof out.value === 'number' && cardPct != null && Math.abs(out.value - cardPct) < 0.05
+  if (same) return resultSentence(method, { youngerAllowed: false })
+  const source = plainSource(method.inputs_used.map((row) => row.quote.trim()).find(Boolean) ?? '')
+  return `还有一版按体检记录自动匹配的结果${source ? `（用的是${source}）` : ''}，还没对上，先不作数。上面的数按你的档案计算。`
+}
+
 export function methodFactText(row: MethodResult): string {
   if (row.label === 'verified') {
     const out = primaryOutput(row)

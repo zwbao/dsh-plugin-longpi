@@ -9,7 +9,7 @@ import type { MethodResult, ResultLabel } from '../contracts/library.ts'
 import { modelRangeNote } from '../honesty/model-range.ts'
 import {
   allowsYoungerClaim, facingUnit, olderThanAgeSentence, overviewSlice, parseMethodResults,
-  PHENO_SKILL, primaryOutput, redCellDriverNames, resultSentence, RISK_SKILL,
+  PHENO_SKILL, primaryOutput, redCellDriverNames, resultSentence, riskBindingNote, RISK_SKILL,
   speciesOf, stripYoungerClaim, titleOf,
 } from '../core/method-view.ts'
 import { fmt, LineChart } from './charts.ts'
@@ -209,7 +209,7 @@ export function RiskCard(props: {
   const card: ModelCard | undefined = props.tracking?.models?.find((row) => row.model === 'china-par')
   const goal = card?.goal?.risk_pct
   const binding = props.method && props.method.label === 'unverified-binding'
-    ? resultSentence(props.method, { youngerAllowed: false })
+    ? riskBindingNote(props.method, result.risk_pct)
     : ''
   return h('div', { className: 'lp-card lp-result', ...(props.method ? { 'data-result-label': props.method.label } : {}) },
     h(CardHead, { label: '10 年心血管风险', info: h(React.Fragment, null, h('span', { className: 'lp-info-line' }, RISK_INFO), card?.note_zh ? h('span', { className: 'lp-info-line' }, card.note_zh) : null), mark: props.method?.label ?? null }),
