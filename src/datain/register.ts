@@ -5,6 +5,8 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import type { CoreDeps } from '../contracts/index.ts'
+import { registerLibraryHooks } from '../contracts/library.ts'
+import { readStored } from '../stores/index.ts'
 import { bindDataDir, datainCandidates } from './index.ts'
 import { registerDatainRoutes } from './routes.ts'
 import { registerDatainTools } from './tools.ts'
@@ -27,6 +29,9 @@ let hooked = false
 
 export function register(ctx: Context, deps: CoreDeps): void {
   bindDataDir(deps.dataDir)
+  registerLibraryHooks({
+    readStore: (kind) => readStored(deps.dataDir(), kind),
+  })
   if (!hooked) {
     deps.nba.register('M7', datainCandidates)
     hooked = true
