@@ -7,6 +7,8 @@ import { connectionUrlProblem, loginMirobody, maskMcpUrl, saveConnection, testCo
 import { listConditions, rememberCondition } from './conditions.ts'
 import { readGenetics } from './genetics.ts'
 import { listMedications, rememberMedication } from './meds.ts'
+import { isStoreKind, readStored, storeIsOn } from '../stores/index.ts'
+import { STORE_KINDS } from '../stores/limits.ts'
 import { findingsFromIndicators, listFindings } from './narrative.ts'
 import { ingestDocument, type SocketOpener } from './upload.ts'
 
@@ -20,6 +22,35 @@ interface Pending {
   chunks: Map<number, Buffer>
   total: number
   at: number
+  type?: 'methylation' | 'taxa' | 'proteins' | 'conditions'
+  confirm: boolean
+  sample_date?: string
+  site?: 'gut' | 'oral'
+  panel?: string
+}
+
+function uploadFields(value: Record<string, unknown>): {
+  type?: 'methylation' | 'taxa' | 'proteins' | 'conditions'
+  confirm: boolean
+  sample_date?: string
+  site?: 'gut' | 'oral'
+  panel?: string
+} {
+  const type = isStoreKind(value.type) ? value.type : undefined
+  const site = value.site === 'gut' || value.site === 'oral' ? value.site : undefined
+  const sample = typeof value.sample_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.sample_date) ? value.sample_date : undefined
+  const panel = typeof value.panel === 'string' && value.panel.trim() ? value.panel.trim().slice(0, 40) : undefined
+  return { ...(type ? { type } : {}), confirm: value.confirm === true, ...(sample ? { sample_date: sample } : {}), ...(site ? { site } : {}), ...(panel ? { panel } : {}) }
+}
+
+function fromPending(row: Pending) {
+  return {
+    ...(row.type ? { type: row.type } : {}),
+    confirm: row.confirm,
+    ...(row.sample_date ? { sample_date: row.sample_date } : {}),
+    ...(row.site ? { site: row.site } : {}),
+    ...(row.panel ? { panel: row.panel } : {}),
+  }
 }
 
 const pending = new Map<string, Pending>()
@@ -105,20 +136,53 @@ export function registerDatainRoutes(deps: CoreDeps, open?: SocketOpener): void 
     return { ok: true, url_masked: maskMcpUrl(minted.mcp_url), indicators: tested.indicators }
   })
 
+  deps.http.route('GET', '/api/longpi/stores', async (req) => {
+    const dataDir = deps.dataDir()
+    const asked = req.query.get('kind')
+    if (!asked) {
+      const stores: Record<string, { on: boolean; rows?: number; error?: string }> = {}
+      for (const kind of STORE_KINDS) {
+        if (!storeIsOn(dataDir, kind)) {
+          stores[kind] = { on: false, rows: 0 }
+          continue
+        }
+        try {
+          stores[kind] = { on: true, rows: readStored(dataDir, kind).length }
+        } catch (error) {
+          stores[kind] = { on: true, error: error instanceof Error ? error.message : '读不出来。' }
+        }
+      }
+      return { ok: true, stores }
+    }
+    if (!isStoreKind(asked)) return fail('不认识的数据类型。')
+    try {
+      const rows = readStored(dataDir, asked)
+      const shown = rows.slice(0, 5000)
+      return { ok: true, kind: asked, on: storeIsOn(dataDir, asked), count: rows.length, truncated: rows.length > shown.length, rows: shown }
+    } catch (error) {
+      return fail(error instanceof Error ? error.message : '读不出来。')
+    }
+  })
+
   deps.http.route('POST', '/api/longpi/upload', async (_req, body) => {
     const value = bodyOf(body)
     const op = typeof value.op === 'string' ? value.op : 'path'
+    const fields = uploadFields(value)
     if (op === 'text') {
       const text = typeof value.text === 'string' ? value.text : ''
       if (text.trim().length < 4) return fail('没有可以读的文字。')
       if (text.length > 200_000) return fail('粘贴的文字太长。请改为上传文件。')
-      return ingestDocument(deps, { filename: typeof value.filename === 'string' ? value.filename : 'pasted.txt', text, upload: false })
+      const result = await ingestDocument(deps, { filename: typeof value.filename === 'string' ? value.filename : 'pasted.txt', text, upload: false, ...fields })
+      if (result.needs_confirm) return fail(result.error || result.read_back_zh)
+      return result
     }
     if (op === 'path') {
       const path = typeof value.path === 'string' ? value.path : ''
       if (!path) return fail('没有文件路径。')
       try {
-        return ingestDocument(deps, { filename: path.split('/').pop() || 'report', path, open })
+        const result = await ingestDocument(deps, { filename: path.split('/').pop() || 'report', path, open, ...fields })
+        if (result.needs_confirm) return fail(result.error || result.read_back_zh)
+        return result
       } catch (error) {
         return fail(error instanceof Error ? '读不到这个文件。' : '读不到这个文件。')
       }
@@ -129,7 +193,7 @@ export function registerDatainRoutes(deps: CoreDeps, open?: SocketOpener): void 
       if (size <= 0 || size > MAX_FILE) return fail('文件为空，或超过 32 MB。基因叙述版请发到健康对话里，不要从网页整本上传。')
       const id = `up-${Date.now().toString(36)}-${randomBytes(3).toString('hex')}`
       const total = Math.max(1, Math.ceil(size / CHUNK_RAW))
-      pending.set(id, { filename, contentType: typeof value.content_type === 'string' ? value.content_type : 'application/octet-stream', size, chunks: new Map(), total, at: Date.now() })
+      pending.set(id, { filename, contentType: typeof value.content_type === 'string' ? value.content_type : 'application/octet-stream', size, chunks: new Map(), total, at: Date.now(), ...fields })
       return { ok: true, id, total }
     }
     if (op === 'chunk') {
@@ -151,7 +215,9 @@ export function registerDatainRoutes(deps: CoreDeps, open?: SocketOpener): void 
       if (row.chunks.size !== row.total) return fail(`还缺 ${row.total - row.chunks.size} 段。`)
       const bytes = Buffer.concat([...row.chunks.entries()].sort((a, b) => a[0] - b[0]).map(([, buf]) => buf))
       pending.delete(id)
-      return ingestDocument(deps, { filename: row.filename, bytes, open })
+      const result = await ingestDocument(deps, { filename: row.filename, bytes, open, ...fromPending(row) })
+      if (result.needs_confirm) return fail(result.error || result.read_back_zh)
+      return result
     }
     return fail('不认识的上传步骤。')
   })

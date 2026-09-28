@@ -8,6 +8,7 @@ import { jsonOut } from '../core/tool-kit.ts'
 import { asJson } from '../json.ts'
 import { rememberCondition } from './conditions.ts'
 import { leadImaging, listFindings } from './narrative.ts'
+import { isStoreKind } from '../stores/index.ts'
 import { ingestDocument } from './upload.ts'
 import { reportReaderProfile } from '../agents/report_reader.ts'
 
@@ -18,6 +19,9 @@ export function registerDatainTools(ctx: Context, deps: CoreDeps): void {
     parameters: {
       path: { type: 'string', required: true, description: 'Absolute path of the file they attached.' },
       note: { type: 'string', description: 'Optional short note. Do not put their name here.' },
+      type: { type: 'string', enum: ['methylation', 'taxa', 'proteins', 'conditions'], description: 'Set when the file is a methylation chip export, a microbiome table, a protein panel, or an ICD-10 list. Omit for a checkup. The rows are stored on this computer after a shape check. Do not paste the raw matrix into the reply.' },
+      sample_date: { type: 'string', description: 'YYYY-MM-DD when the file itself has no date.' },
+      site: { type: 'string', enum: ['gut', 'oral'], description: 'Gut or oral, when a taxa file does not say.' },
     },
     output: jsonOut,
     timeoutMs: 120000,
@@ -26,7 +30,18 @@ export function registerDatainTools(ctx: Context, deps: CoreDeps): void {
       const path = typeof args.path === 'string' ? args.path.trim() : ''
       if (!path || path.includes('\0')) return asJson({ ok: false, error: '没有文件路径。请让对方把报告发到对话里。' })
       try {
-        const result = await ingestDocument(deps, { filename: path.split('/').pop() || 'report', path, note: typeof args.note === 'string' ? args.note.slice(0, 80) : '' })
+        const type = isStoreKind(args.type) ? args.type : undefined
+        const site = args.site === 'gut' || args.site === 'oral' ? args.site : undefined
+        const sample = typeof args.sample_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(args.sample_date) ? args.sample_date : undefined
+        const result = await ingestDocument(deps, {
+          filename: path.split('/').pop() || 'report',
+          path,
+          note: typeof args.note === 'string' ? args.note.slice(0, 80) : '',
+          confirm: true,
+          ...(type ? { type } : {}),
+          ...(site ? { site } : {}),
+          ...(sample ? { sample_date: sample } : {}),
+        })
         const digest = reportReaderProfile.fallback(null as never, result)
         return asJson({ ...result, read_back_zh: digest.read_back_zh, how_to_read: 'Read read_back_zh to them. Do not add a diagnosis, a dose, or their name. A TI-RADS or BI-RADS grade is the report\'s own words: suggest they take it to a doctor, and do not decide on a biopsy or a medicine.' })
       } catch {

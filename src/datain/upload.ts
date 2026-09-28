@@ -9,6 +9,9 @@ import { extname, join } from 'node:path'
 import type { CoreDeps } from '../contracts/index.ts'
 import { readConnection } from '../connection.ts'
 import { appendJsonl, newId, readJsonl } from '../core/store.ts'
+import type { StoreKind } from '../contracts/library.ts'
+import { confirmMessage, parseReport, saveReportText, storeLabel, storeReadBack } from '../stores/index.ts'
+import type { StoreSummary } from '../stores/summary.ts'
 import { judgeIdentity } from './identity.ts'
 import { extractGeneticsPdf, extractGeneticsText, isWeGeneNarrative, isWeGeneRaw, RAW_MARKER, storeGenetics, type GeneticsSummary } from './genetics.ts'
 import { listFindings, parseNarrative, storeFindings, textFingerprint, type NarrativeFinding } from './narrative.ts'
@@ -28,6 +31,9 @@ export interface IngestResult {
   read_back_zh: string
   progress: string[]
   genetics_stored: boolean
+  /** Set when a typed store was offered or written. Counts only: the raw matrix stays on disk. */
+  stores?: StoreSummary[]
+  needs_confirm?: boolean
   error?: string
 }
 
@@ -74,7 +80,7 @@ export function contentTypeOf(filename: string): string {
   if (ext === '.png') return 'image/png'
   if (ext === '.jpg' || ext === '.jpeg') return 'image/jpeg'
   if (ext === '.webp') return 'image/webp'
-  if (ext === '.txt' || ext === '.csv') return 'text/plain'
+  if (ext === '.txt' || ext === '.csv' || ext === '.tsv' || ext === '.json') return 'text/plain'
   return 'application/octet-stream'
 }
 
@@ -235,6 +241,13 @@ export interface IngestInput {
   upload?: boolean
   /** Tests inject a socket. Production uses the platform WebSocket. */
   open?: SocketOpener
+  /** methylation, taxa, proteins, or conditions. Omitted for a checkup. */
+  type?: StoreKind
+  /** Page uploads send true. A chat attachment is already the person's confirmation. */
+  confirm?: boolean
+  sample_date?: string
+  site?: 'gut' | 'oral'
+  panel?: string
 }
 
 export async function ingestDocument(deps: Pick<CoreDeps, 'config' | 'dataDir' | 'bus' | 'invalidate'>, input: IngestInput): Promise<IngestResult> {
@@ -311,9 +324,73 @@ export async function ingestDocument(deps: Pick<CoreDeps, 'config' | 'dataDir' |
       read_back_zh: identity.reason_zh, progress: ['核对姓名后没有写入'], genetics_stored: false,
     }
   }
+  const omics = takeOmics(deps, { filename, bytes, text, sha, fingerprint, input })
+  if (omics.stop) return omics.stop
   const dayGuess = /(20\d{2}-\d{2}-\d{2})/.exec(text)?.[1] ?? ''
   const findings = text ? parseNarrative(text, dayGuess) : []
-  return finishForward(deps, { filename, bytes, text, sha, fingerprint, contentType: contentTypeOf(filename), note: input.note, open: input.open, upload: input.upload !== false, genetics: null, findings })
+  const forwarded = await finishForward(deps, { filename, bytes, text, sha, fingerprint, contentType: contentTypeOf(filename), note: input.note, open: input.open, upload: input.upload !== false, genetics: null, findings })
+  if (omics.note) forwarded.read_back_zh += omics.note
+  if (omics.stores) forwarded.stores = omics.stores
+  return forwarded
+}
+
+const MATRIX_EXT = new Set(['.csv', '.tsv', '.txt', '.json', ''])
+const BINARY_EXT = new Set(['.pdf', '.png', '.jpg', '.jpeg', '.webp'])
+
+function takeOmics(deps: Pick<CoreDeps, 'dataDir'>, bag: {
+  filename: string
+  bytes: Buffer
+  text: string
+  sha: string
+  fingerprint: string
+  input: IngestInput
+}): { stop?: IngestResult; stores?: StoreSummary[]; note?: string } {
+  const { filename, text, input } = bag
+  const ext = extname(filename).toLowerCase()
+  const binary = BINARY_EXT.has(ext)
+  const parsed = parseReport(text, {
+    type: input.type,
+    filename,
+    sample_date: input.sample_date,
+    site: input.site,
+    panel: input.panel,
+  })
+  if (parsed.capped && input.type) {
+    return { stop: localOmics(false, '这份超过 32 MB，没有写入。', [], '这份超过可以记下的大小。') }
+  }
+  const detected = input.type ? [input.type] : parsed.detected
+  if (detected.length === 0) return {}
+  const localOnly = input.type ? !binary : MATRIX_EXT.has(ext)
+  if (!input.confirm) {
+    if (localOnly || input.type) return { stop: localOmics(false, confirmMessage(input.type ?? detected[0]), [], confirmMessage(input.type ?? detected[0]), true) }
+    const name = storeLabel(detected[0] ?? 'methylation')
+    return { note: `报告里有${name}表格。确认后才会把它们记在这台电脑上。` }
+  }
+  const saved = saveReportText(deps.dataDir(), text, {
+    type: input.type,
+    filename,
+    sample_date: input.sample_date,
+    site: input.site,
+    panel: input.panel,
+  })
+  const stored = saved.summaries.some((row) => row.stored > 0)
+  const read = storeReadBack(saved.summaries)
+  if (!localOnly) return { stores: saved.summaries }
+  if (stored) {
+    appendJsonl(logPath(deps.dataDir()), {
+      id: newId('up'), at: new Date().toISOString(), filename, sha256: bag.sha, fingerprint: bag.fingerprint,
+      bytes: bag.bytes.length, checkup_day: input.sample_date ?? null, forwarded: false, accepted: true,
+    } satisfies UploadLog)
+  }
+  return { stop: localOmics(stored, read, saved.summaries, stored ? undefined : read) }
+}
+
+function localOmics(ok: boolean, readBack: string, stores: StoreSummary[], error?: string, needsConfirm = false): IngestResult {
+  return {
+    ok, forwarded: false, duplicate: false, wrong_person: false, checkup_day: null, indicators: null,
+    findings: [], read_back_zh: readBack, progress: [needsConfirm ? '等待确认' : '已在这台电脑上核对'],
+    genetics_stored: false, stores, needs_confirm: needsConfirm, ...(error ? { error } : {}),
+  }
 }
 
 async function finishForward(deps: Pick<CoreDeps, 'config' | 'dataDir' | 'bus' | 'invalidate'>, input: {

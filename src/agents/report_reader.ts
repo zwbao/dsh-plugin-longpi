@@ -4,6 +4,7 @@
 import type { AgentProfile } from '../contracts/agents.ts'
 import type { FactPack } from '../contracts/factpack.ts'
 import type { IngestResult } from '../datain/upload.ts'
+import { parseReport, type ParseOpts, type ParsedStores } from '../stores/parse.ts'
 
 export interface ReportDigest {
   new_markers: Array<{ label_zh: string; text: string }>
@@ -21,6 +22,7 @@ const PROMPT = `你是 LongPi 的报告阅读员。输入是已经提取好的 J
 3. suspicion 是 duplicate：说已经保存过，没有重复写入。
 4. 数字只用输入里出现过的。不写剂量，不建议开始、停止或更换药物。
 5. 不出现工具名、技能 id，也不要称呼对方的名字，用「你」。
+6. 若输入里有 store_counts，只说记下了多少行、有多少行没通过检查。不要列出探针、丰度或蛋白的原始表，也不要据此声称更年轻。
 调用 emit 一次返回 read_back_zh、suspicion、forwarded。
 `
 
@@ -68,6 +70,9 @@ export const reportReaderProfile: AgentProfile<IngestResult | undefined, ReportD
       forwarded: digest.forwarded,
       indicators: digest.new_markers,
       findings: digest.findings.map((row) => ({ kind: row.kind, text_zh: row.text_zh, date: row.date, grade: row.grade ?? '' })),
+      store_counts: Array.isArray((extra as IngestResult | undefined)?.stores)
+        ? (extra as IngestResult).stores?.map((row) => ({ kind: row.kind, stored: row.stored, rejected: row.rejected, coverage_zh: row.coverage_zh }))
+        : [],
     }
   },
   validate(out) {
@@ -84,4 +89,9 @@ export const reportReaderProfile: AgentProfile<IngestResult | undefined, ReportD
 
 export function reportReaderPrompt(): string {
   return PROMPT
+}
+
+/** Propose typed rows from a consumer report or a matrix. Does not write the store. */
+export function proposeStoreRows(text: string, opts: ParseOpts): ParsedStores {
+  return parseReport(text, opts)
 }

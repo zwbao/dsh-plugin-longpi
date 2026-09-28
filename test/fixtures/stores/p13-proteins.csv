@@ -1,0 +1,23 @@
+symbol,value,unit_or_z,panel,sample_date
+ntprobnp,1.6,z,protein_z,2026-03-25
+bmp10,0.4,z,protein_z,2026-03-25
+itgb6,0.5,z,protein_z,2026-03-25
+pth1r,0.3,z,protein_z,2026-03-25
+ren,0.8,z,protein_z,2026-03-25
+umod,-0.6,z,protein_z,2026-03-25
+ager,0.4,z,protein_z,2026-03-25
+ccl18,0.5,z,protein_z,2026-03-25
+lamp3,0.3,z,protein_z,2026-03-25
+scgb1a1,0.2,z,protein_z,2026-03-25
+sftpd,0.6,z,protein_z,2026-03-25
+ProtAge,73.8,岁,organ-age,2026-03-25
+Vendor brain age,74.2,岁,organ-age,2026-03-25
+Vendor immune age,70.5,岁,organ-age,2026-03-25
+Vendor liver age,68.0,岁,organ-age,2026-03-25
+Vendor heart age,71.0,岁,organ-age,2026-03-25
+GDF15,1.2,NPX,npx,2026-03-25
+CXCL9,1.55,NPX,npx,2026-03-25
+HAVCR1,1.9,NPX,npx,2026-03-25
+MMP12,2.25,NPX,npx,2026-03-25
+EDA2R,2.6,NPX,npx,2026-03-25
+CDCP1,2.95,NPX,npx,2026-03-25
