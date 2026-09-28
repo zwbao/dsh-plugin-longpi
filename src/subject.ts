@@ -28,3 +28,26 @@ export function subjectFromText(text: string): RecordSubject | null {
   if (age != null && (age < 1 || age > 120)) return null
   return { relationship_zh: female && !male ? '母亲' : '父亲', age, sex: female && !male ? 'female' : 'male' }
 }
+
+// Labs that only one sex has. A record whose rows contradict the sex of the person the calculators use is not one
+// person's record: a daughter's account holding her father's checkups, or two people's reports mixed together.
+const MALE_ONLY_LAB = /前列腺特异|前列腺抗原|\b[ft]?PSA\b/i
+const FEMALE_ONLY_LAB = /宫颈|阴道|白带/
+
+/**
+ * Why this record cannot be treated as one person's for a body-age number, or null when it can. The reference is
+ * the account holder, unless the profile says the labs are a relative's and gives that relative's age: then the
+ * calculators use the relative, and the rows are checked against the relative's sex. A relative named without an
+ * age is not enough to trust the record, because the holder's age would be used with someone else's labs.
+ */
+export function notOnePersonReason(profile: Profile, rows: ReadonlyArray<{ name: string; label?: string }>): string | null {
+  const subject = profile.subject
+  const sex = subject && subject.age != null && (subject.sex === 'male' || subject.sex === 'female') ? subject.sex : profile.sex
+  if (sex !== 'male' && sex !== 'female') return null
+  const names = rows.map((row) => `${row.name} ${row.label ?? ''}`)
+  const hit = sex === 'female' ? names.find((name) => MALE_ONLY_LAB.test(name)) : names.find((name) => FEMALE_ONLY_LAB.test(name))
+  if (!hit) return null
+  const example = sex === 'female' ? '前列腺特异性抗原' : '宫颈检查'
+  const whose = sex === 'female' ? '男性' : '女性'
+  return `记录里有${example}这类只有${whose}才做的检查，和档案里的性别对不上，像是两个人的体检放在了一起。身体年龄要用同一个人的血检和年龄来算，这次先不算。如果这是家人的体检，请在档案里写明是谁、今年几岁。`
+}

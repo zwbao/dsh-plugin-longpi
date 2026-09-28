@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto'
 import type { NumberRef } from '../contracts/common.ts'
 import type { FactPack, Stage } from '../contracts/factpack.ts'
 import { registeredMethodResults } from '../contracts/library.ts'
-import { titleOf } from './method-view.ts'
+import { alignBodyAge, titleOf, type BodyAgeFigure } from './method-view.ts'
 import type { ExclusionItem, GoalItem } from '../contracts/memory.ts'
 import type { NextBestAction } from '../contracts/surfaces.ts'
 import type { RecordChange } from '../changes.ts'
@@ -36,7 +36,8 @@ export interface PackInput {
   medications: string[]
   changes: readonly RecordChange[]
   results: {
-    bioage: { phenoage: number | null; advance: number | null; date: string | null }
+    /** status and headline_zh are the page's; without status, a phenoage means ok. */
+    bioage: { phenoage: number | null; advance: number | null; date: string | null; status?: 'ok' | 'blocked'; headline_zh?: string }
     risk: { risk_pct: number | null; date: string | null }
   }
   plan: { exists: boolean; version: number | null; days: number | null; open_checkins: number; adherence_pct: number | null }
@@ -53,7 +54,14 @@ function numberText(value: number, unit: string): string {
   return unit === '%' ? `${shown}%` : `${shown} ${unit}`.trim()
 }
 
-function numbersOf(input: PackInput): NumberRef[] {
+/** The page's body-age figure, for one number across the page, the facts and the chat. */
+function bodyAgeFigure(input: PackInput): BodyAgeFigure & { headline_zh?: string } {
+  const bio = input.results.bioage
+  const status = bio.status ?? (bio.phenoage != null ? 'ok' : 'blocked')
+  return { status, phenoage: bio.phenoage, advance: bio.advance, ...(bio.headline_zh ? { headline_zh: bio.headline_zh } : {}) }
+}
+
+function numbersOf(input: PackInput, methods: readonly ReturnType<typeof registeredMethodResults>[number][]): NumberRef[] {
   const out: NumberRef[] = []
   const add = (ref: NumberRef) => { if (!out.some((row) => row.key === ref.key)) out.push(ref) }
   for (const finding of input.care.findings) for (const ref of finding.numbers) add(ref)
@@ -69,7 +77,7 @@ function numbersOf(input: PackInput): NumberRef[] {
   if (input.plan.adherence_pct != null) add({ key: 'plan.adherence', label_zh: '方案执行率', value: input.plan.adherence_pct, unit: '%', date: input.today, source: 'derived', text: `${input.plan.adherence_pct}%` })
   if (input.plan.days != null) add({ key: 'plan.days', label_zh: '方案天数', value: input.plan.days, unit: '天', date: input.today, source: 'derived', text: `${input.plan.days} 天` })
   // Personal method outputs, so a surface can quote them. Evidence-only rows have no personal number.
-  registeredMethodResults().forEach((row, index) => {
+  methods.forEach((row, index) => {
     if (row.label === 'evidence-only') return
     let n = 0
     for (const item of row.outputs) {
@@ -119,7 +127,10 @@ export function packFrom(input: PackInput): FactPack {
     .map((item) => `${item.text_zh} ${item.condition_zh ?? ''} ${item.provenance.quote_zh ?? ''}`)
     .filter((line) => /妈|母亲|姐|妹|女儿|外婆|奶奶|家里|家族/.test(line))
   const screening = input.stage === 'consent' ? [] : screeningTopics({ age: input.person.age, sex: input.person.sex, family, emptyRecord: input.emptyRecord })
-  const top = rankTopFacts({ care: input.care, hits: input.hits, meds, conditions: flags.conditions, changes: input.changes, goals, needsSex: input.needsSex, screening: screening.map((row) => row.fact) })
+  const bioFigure = bodyAgeFigure(input)
+  // One body-age number (INT062 fix 2): method outputs that measure body age carry the page's figure, or nothing.
+  const methods = alignBodyAge(registeredMethodResults(), bioFigure)
+  const top = rankTopFacts({ care: input.care, hits: input.hits, meds, conditions: flags.conditions, changes: input.changes, goals, needsSex: input.needsSex, screening: screening.map((row) => row.fact), methods, bioage: bioFigure })
   const weekAgo = addDays(input.today, -7)
   const asked = (state.items.filter((item) => item.status === 'active' && item.kind === 'asked_topic') as Array<{ topic_key: string; last_asked: string }>)
     .filter((item) => item.last_asked >= weekAgo).map((item) => item.topic_key)
@@ -144,7 +155,7 @@ export function packFrom(input: PackInput): FactPack {
     stage: input.stage,
     person: input.person,
     top_facts: top,
-    numbers: numbersOf(input),
+    numbers: numbersOf(input, methods),
     feedback: input.tracking ? feedbackFor(input.tracking, memory) : [],
     plan: { ...input.plan, draft_hold: false },
     exclusions: memory.active('exclusion') as ExclusionItem[],
@@ -156,7 +167,7 @@ export function packFrom(input: PackInput): FactPack {
     generations: { records: 0, tracking: input.trackingGeneration, memory_rev: state.rev, plan: input.plan.version, triage_rev: care.length, season_rev: 0 },
     triage: { findings: input.care.findings, care, stop },
     stage_next: input.stageNext,
-    method_results: registeredMethodResults(),
+    method_results: methods,
   }
   let candidates: NextBestAction[] = []
   candidates.push(...screening.map((row) => row.action))

@@ -10,7 +10,7 @@ import type { RecordChange } from '../changes.ts'
 import type { StopHit } from '../plan-safety.ts'
 import { statusLine } from '../triage/rules.ts'
 import { outcomeText, type CareState } from '../triage/care.ts'
-import { methodFactText, overviewSlice } from './method-view.ts'
+import { bodyAgeFactText, measuresBodyAge, methodFactText, overviewSlice, type BodyAgeFigure } from './method-view.ts'
 import './method-results.ts'
 
 const KIND_ORDER: Record<TopFact['kind'], number> = { triage: 0, safety_med: 1, safety_condition: 2, screening: 3, care_followup: 4, milestone: 5, goal: 6 }
@@ -33,6 +33,8 @@ export interface TopFactInput {
    * safety: an emergency, a critical pattern, and a safety medicine stay first.
    */
   methods?: readonly MethodResult[]
+  /** The page's body-age figure. Method results that measure body age become one fact with this number. */
+  bioage?: BodyAgeFigure & { headline_zh?: string }
 }
 
 const MED_FACT: Partial<Record<DrugClass, { rule: string; text: (name: string) => string }>> = {
@@ -41,6 +43,8 @@ const MED_FACT: Partial<Record<DrugClass, { rule: string; text: (name: string) =
   insulin: { rule: 'safety.med.insulin', text: (name) => `你在用${name}（胰岛素）：运动、少吃和减重都要防低血糖` },
   sulfonylurea: { rule: 'safety.med.sulfonylurea', text: (name) => `你在用${name}（磺脲类）：运动、少吃和减重都要防低血糖` },
   anticoagulant: { rule: 'safety.med.anticoagulant', text: (name) => `你在用${name}（抗凝药）：鱼油等补剂可能增加出血风险，先问医生` },
+  // INT062 fix 4: a lipid drop after a statin starts is the statin's, not the walking plan's.
+  statin: { rule: 'safety.med.statin', text: (name) => `你在用${name}（他汀类降脂药）：低密度脂蛋白和总胆固醇的下降主要来自${name}，不算走路或方案的效果；药怎么吃听开药的医生` },
 }
 
 const CONDITION_FACT: Partial<Record<ConditionFlag, { rule: string; text: string }>> = {
@@ -51,17 +55,24 @@ const CONDITION_FACT: Partial<Record<ConditionFlag, { rule: string; text: string
   cancer_followup: { rule: 'safety.condition.cancer_followup', text: '你在肿瘤随访中：任何饮食或补剂改动先问主治医生' },
 }
 
-function methodTopFacts(results: readonly MethodResult[]): TopFact[] {
+function ruleOf(label: MethodResult['label']): string {
+  return label === 'verified' ? 'method.verified' : label === 'unverified-binding' ? 'method.unverified' : 'method.evidence'
+}
+
+function methodTopFacts(results: readonly MethodResult[], bioage?: TopFactInput['bioage']): TopFact[] {
   const slice = overviewSlice(results)
-  return [...slice.value, ...slice.evidence].map((row, index) => ({
-    id: `method-result-${index + 1}`,
-    kind: 'milestone',
-    priority: 'should_surface',
-    text_zh: methodFactText(row),
-    refs: [],
-    source_ids: [],
-    rule: row.label === 'verified' ? 'method.verified' : row.label === 'unverified-binding' ? 'method.unverified' : 'method.evidence',
-  }))
+  const rows = [...slice.value, ...slice.evidence]
+  // Every result that measures body age is one fact with the page's number (INT062 fix 2), never a second figure.
+  const bodyRows = rows.filter((row) => measuresBodyAge(row))
+  const label = bodyRows.find((row) => row.label === 'verified')?.label ?? bodyRows[0]?.label ?? null
+  const body = bodyRows.length > 0 && bioage ? bodyAgeFactText(bioage, label) : ''
+  const facts: TopFact[] = []
+  if (body && label) facts.push({ id: 'method-result-bioage', kind: 'milestone', priority: 'should_surface', text_zh: body, refs: [], source_ids: [], rule: ruleOf(label) })
+  for (const row of rows) {
+    if (measuresBodyAge(row)) continue
+    facts.push({ id: `method-result-${facts.length + 1}`, kind: 'milestone', priority: 'should_surface', text_zh: methodFactText(row), refs: [], source_ids: [], rule: ruleOf(row.label) })
+  }
+  return facts
 }
 
 function changeRefs(row: RecordChange): NumberRef[] {
@@ -88,15 +99,20 @@ export function rankTopFacts(input: TopFactInput): TopFact[] {
       refs: [], source_ids: [finding.id, care.id], rule: 'care.visited',
     })
   }
+  // One fact per class, in MED_FACT's order: a medicine that changes what is safe (GLP-1, SGLT2, insulin, a
+  // sulfonylurea, an anticoagulant) ranks above the statin's attribution line, whatever order the record lists them.
+  const medOrder = Object.keys(MED_FACT) as DrugClass[]
+  const medFacts: Array<{ at: number; fact: TopFact }> = []
   const medSeen = new Set<DrugClass>()
   for (const med of input.meds) {
     for (const cls of med.classes) {
       const spec = MED_FACT[cls]
       if (!spec || medSeen.has(cls)) continue
       medSeen.add(cls)
-      facts.push({ id: `safety-${cls}`, kind: 'safety_med', priority: 'must_surface', text_zh: spec.text(med.name), refs: [], source_ids: [], rule: spec.rule })
+      medFacts.push({ at: medOrder.indexOf(cls), fact: { id: `safety-${cls}`, kind: 'safety_med', priority: 'must_surface', text_zh: spec.text(med.name), refs: [], source_ids: [], rule: spec.rule } })
     }
   }
+  facts.push(...medFacts.sort((a, b) => a.at - b.at).map((row) => row.fact))
   for (const flag of input.conditions) {
     const spec = CONDITION_FACT[flag]
     if (spec) facts.push({ id: `condition-${flag}`, kind: 'safety_condition', priority: 'must_surface', text_zh: spec.text, refs: [], source_ids: [], rule: spec.rule })
@@ -114,6 +130,6 @@ export function rankTopFacts(input: TopFactInput): TopFact[] {
   for (const goal of input.goals.slice(0, 2)) facts.push({ id: `goal-${goal.id}`, kind: 'goal', priority: 'context', text_zh: `你的目标：${goal.text_zh}`, refs: [], source_ids: [goal.id], rule: 'memory.goal' })
   // Under triage and safety. should_surface sits below emergency and must_surface,
   // and milestone sits below a should_surface triage or screening fact.
-  facts.push(...methodTopFacts(input.methods ?? registeredMethodResults()))
+  facts.push(...methodTopFacts(input.methods ?? registeredMethodResults(), input.bioage))
   return facts.sort((a, b) => FACT_PRIORITY_RANK[a.priority] - FACT_PRIORITY_RANK[b.priority] || KIND_ORDER[a.kind] - KIND_ORDER[b.kind])
 }

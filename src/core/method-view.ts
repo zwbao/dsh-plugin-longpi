@@ -196,6 +196,98 @@ export function riskBindingNote(method: MethodResult, cardPct: number | null): s
   return `还有一版按体检记录自动匹配的结果${source ? `（用的是${source}）` : ''}，还没对上，先不作数。上面的数按你的档案计算。`
 }
 
+// ---- one body-age number (INT062 fix 2) ----------------------------------------------------------------------
+/** Skills whose number is a blood body age or its gap to the calendar age. A record of two people never runs them. */
+export const BODY_AGE_SKILLS: ReadonlySet<string> = new Set([PHENO_SKILL, 'biological-aging-generational-shifts', 'aging-biomarker-framework'])
+/** Outputs that are the blood PhenoAge gap (body age minus calendar age), whichever method printed them. */
+const BODY_AGE_GAP_KEYS: ReadonlySet<string> = new Set(['phenoage_advance', 'blood_phenoage_age_deviation', 'phenoage_gap'])
+
+function isBodyAgeOutput(skill: string, key: string): 'age' | 'gap' | null {
+  if (skill === PHENO_SKILL && key === 'phenoage') return 'age'
+  return BODY_AGE_GAP_KEYS.has(key) ? 'gap' : null
+}
+
+/** A personal result the page folds into the one body-age card: PhenoAge itself, or a blood PhenoAge gap. */
+export function measuresBodyAge(row: MethodResult): boolean {
+  if (row.label === 'evidence-only') return false
+  if (row.skill === PHENO_SKILL) return true
+  const out = primaryOutput(row)
+  return out != null && isBodyAgeOutput(row.skill, out.key) != null
+}
+
+/** The page's body-age figure (journey results.bioage). */
+export interface BodyAgeFigure {
+  status: 'ok' | 'blocked'
+  phenoage: number | null
+  advance: number | null
+}
+
+/**
+ * Every body-age output of a method result carries the page's figure: PhenoAge becomes results.bioage.phenoage and
+ * a gap becomes results.bioage.advance. When the page has no such number (blocked, or one draw, which has no gap),
+ * the output is dropped. The page, the method fact and the tool text then have one number to quote.
+ */
+export function alignBodyAge(results: readonly MethodResult[], bio: BodyAgeFigure): MethodResult[] {
+  return results.map((row) => {
+    if (row.label === 'evidence-only') return row
+    let touched = false
+    const outputs = row.outputs.flatMap((item) => {
+      const kind = isBodyAgeOutput(row.skill, item.key)
+      const mortality = row.skill === PHENO_SKILL && item.key === 'mortality_10y_pct'
+      if (!kind && !mortality) return [item]
+      touched = true
+      if (bio.status !== 'ok') return []
+      if (mortality) return [item]
+      const value = kind === 'age' ? bio.phenoage : bio.advance
+      return value == null || !Number.isFinite(value) ? [] : [{ ...item, value }]
+    })
+    return touched ? { ...row, outputs } : row
+  })
+}
+
+/**
+ * Earlier skill readouts for the chat with the same rule: a body-age key carries the page's figure, and nothing when
+ * the page has none. A PhenoAge run on a record the page blocked keeps none of its outputs.
+ */
+export function alignReadouts<T extends { value: number | string | null; skill?: string }>(outputs: Record<string, T>, bio: BodyAgeFigure | null): Record<string, T> {
+  const out: Record<string, T> = {}
+  for (const [key, item] of Object.entries(outputs)) {
+    const kind = isBodyAgeOutput(item.skill ?? '', key)
+    if (!kind) {
+      if (item.skill === PHENO_SKILL && (!bio || bio.status !== 'ok')) continue
+      out[key] = item
+      continue
+    }
+    const value = bio && bio.status === 'ok' ? (kind === 'age' ? bio.phenoage : bio.advance) : null
+    if (value == null || !Number.isFinite(value)) continue
+    out[key] = { ...item, value }
+  }
+  return out
+}
+
+function years(value: number): string {
+  return String(Number(Math.abs(value).toFixed(1)))
+}
+
+/** 「比周岁小 3.2 岁」, 「比周岁大 1.5 岁」, 「和周岁差不多」 (the glossary wording). */
+export function versusCalendarAge(advance: number | null): string {
+  if (advance == null || !Number.isFinite(advance)) return ''
+  if (Math.abs(advance) < 0.5) return '和周岁差不多'
+  return advance < 0 ? `比周岁小 ${years(advance)} 岁` : `比周岁大 ${years(advance)} 岁`
+}
+
+/**
+ * The one fact line for body age: the page's number, its label, the gap in glossary words, and the page's own
+ * sentence when that sentence says the smaller number is not good news.
+ */
+export function bodyAgeFactText(bio: BodyAgeFigure & { headline_zh?: string }, label: ResultLabel | null): string {
+  if (bio.status !== 'ok' || bio.phenoage == null) return ''
+  const tag = label === 'verified' ? '模型估计，已核对' : label === 'unverified-binding' ? '模型估计，还没对上' : '模型估计'
+  const gap = versusCalendarAge(bio.advance)
+  const concern = /不一定是好事/.test(bio.headline_zh ?? '') ? (bio.headline_zh ?? '').trim() : ''
+  return `身体年龄 ${years(bio.phenoage)} 岁（${tag}）${gap ? `，${gap}` : ''}。${concern}`
+}
+
 export function methodFactText(row: MethodResult): string {
   if (row.label === 'verified') {
     const out = primaryOutput(row)

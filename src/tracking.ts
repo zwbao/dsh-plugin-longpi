@@ -18,7 +18,7 @@ import { roundPercentPoints } from './honesty/format.ts'
 import { modelRangeNote } from './honesty/model-range.ts'
 import { readHistory, type HistoryRow } from './history.ts'
 import { addDays, CATEGORY_ZH, currentPlan, daysBetween, readCheckIns, readPlans, type CheckIn, type PlanItem, type PlanVersion } from './interventions.ts'
-import { calculatorIdentity } from './subject.ts'
+import { calculatorIdentity, notOnePersonReason } from './subject.ts'
 import { RISK_FACT_ZH, type RiskFact } from './profile.ts'
 import type { InputSpec } from './catalog.ts'
 import { aliasIndex, candidatesFor, indicatorFor, measurementInputs, notRead, resolveInput, stageMeasurements, type MeasurementIn } from './measurements.ts'
@@ -54,7 +54,7 @@ export interface BioAgePoint {
 }
 
 export interface BioAge {
-  status: 'ok' | 'no_skill' | 'no_record' | 'missing_inputs' | 'no_age' | 'no_checkup' | 'error'
+  status: 'ok' | 'no_skill' | 'no_record' | 'missing_inputs' | 'no_age' | 'no_checkup' | 'not_one_person' | 'error'
   note_zh: string
   missing: string[]
   points: BioAgePoint[]
@@ -499,6 +499,9 @@ async function ensureBioAge(context: TrackingContext, reference: Reference): Pro
   // A record that is configured but failed to read is not 'not connected': name the failure.
   if (context.records.record_status === 'error') return empty('error', readFailed(context.records))
   if (!recordReadable(context.records)) return empty('no_record', '还没有读到体检，暂时算不出历次的身体年龄。')
+  // Two people's labs never make one body age (INT062 fix 1): the father's checkups with the daughter's age and sex.
+  const mixed = notOnePersonReason(context.records.profile, context.records.indicators)
+  if (mixed) return empty('not_one_person', mixed)
   const pairs = pairsFor(card, context.records)
   const { missing, unread } = absentInputs(pairs, context.records)
   if (missing.length > 0) {

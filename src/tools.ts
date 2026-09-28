@@ -25,6 +25,8 @@ import { isoDay } from './interventions.ts'
 import { buildJourneyFull, consentAccepted, stageNow, unansweredOf, within, type Journey } from './journey.ts'
 import { invalidateTracking, type Tracking } from './tracking.ts'
 import { latestSelf, readSelf, SELF_KEYS, SELF_SPEC } from './selfmeasure.ts'
+import { notOnePersonReason } from './subject.ts'
+import { alignReadouts, BODY_AGE_SKILLS } from './core/method-view.ts'
 
 function jsonText(value: unknown): [{ type: 'text'; text: string }] {
   return [{ type: 'text', text: JSON.stringify(value, null, 2) }]
@@ -170,7 +172,8 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
         indicator_count: records.indicators.length,
         medications: records.medications,
         medication_summary_zh: records.medication_summary_zh,
-        earlier_readouts: outputs,
+        // One body-age number (INT062 fix 2): an earlier run's body age is the page's figure, or absent.
+        earlier_readouts: alignReadouts(outputs, read.journey ? read.journey.results.bioage : null),
         runnable_now: dispatch.matches.map((item) => ({ name: item.name, blurb: item.blurb })),
         almost_runnable: dispatch.near.map((item) => ({ name: item.name, missing: item.runnable.missing })),
         record_status: records.record_status,
@@ -422,7 +425,10 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
         return [{ input_key: item.key, source_row_id: item.key, value: String(item.value ?? ''), unit: typeof item.unit === 'string' ? item.unit : '', quote: item.key, provenance: 'routine_lab' }]
       })
       const binding = fromBinding ?? fromReceipt ?? proposalFromRows(args.name, measured)
-      return asJson(await runSkill({
+      // Two people's labs never make one body age (INT062 fix 1): the refusal is the answer, with no number.
+      const mixed = BODY_AGE_SKILLS.has(args.name) ? notOnePersonReason(profile, records.indicators) : null
+      if (mixed) return asJson({ ok: false, refused: true, skill: args.name, reason_zh: mixed, how_to_read: 'Say reason_zh plainly. Do not give a body age, an age gap, or any number from this record for it.' })
+      const ran = await runSkill({
         home: skillsHome,
         dataDir,
         name: args.name,
@@ -440,7 +446,10 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
         runtimes: current.skillRuntimes,
         timeoutMs: current.skillTimeoutMs,
         revision: catalog.revision,
-      }))
+      })
+      // The page's body age is computed with the age on the checkup day. A run now may use today's age and land a
+      // little off: the person is told one number, the page's.
+      return asJson(BODY_AGE_SKILLS.has(args.name) ? { ...ran, body_age_how_to_read: 'For the person, quote the body age on the page (read_personal_situation → onboarding.results.bioage.phenoage), not a second figure from this run; this run may use today\'s age instead of the age on the checkup day.' } : ran)
     },
   }))
 

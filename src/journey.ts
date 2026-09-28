@@ -253,7 +253,8 @@ function bioageResult(bioage: BioAge): Journey['results']['bioage'] {
   return {
     status: last ? 'ok' : 'blocked',
     phenoage: last?.phenoage ?? null,
-    advance: last?.advance ?? null,
+    // One draw has no gap to show (INT062 fix 3): the headline says it is one reading, and advance stays empty.
+    advance: last && bioage.points.length >= 2 ? last.advance ?? null : null,
     date: last?.date ?? null,
     checkups: bioage.points.length,
     band_years: last ? bioage.band_years : null,
@@ -544,7 +545,7 @@ function journeyFrom(context: JourneyContext, tracking: Tracking, summary: Recor
     person: { display_name: profile.displayName, age: calculatorIdentity(profile).age, sex: calculatorIdentity(profile).sex },
     care, hits: recordStop.hits, needsSex: recordStop.needs_sex === true,
     medications: currentMedications(records.medications), changes: tracking.changes,
-    results: { bioage: { phenoage: bioage.phenoage, advance: bioage.advance, date: bioage.date }, risk: { risk_pct: risk.risk_pct, date: risk.date } },
+    results: { bioage: { phenoage: bioage.phenoage, advance: bioage.advance, date: bioage.date, status: bioage.status, ...(bioage.headline_zh ? { headline_zh: bioage.headline_zh } : {}) }, risk: { risk_pct: risk.risk_pct, date: risk.date } },
     plan: { exists: plan.exists, version: plan.version, days: plan.days, open_checkins: plan.checkin_items.filter((item) => item.done_today == null).length, adherence_pct: plan.adherence_pct },
     self: body.self.latest.map((row) => ({ key: row.key, label_zh: row.label_zh, value: row.value, unit: row.unit, date: row.date })),
     stageNext: { title_zh: stageNext.title_zh, detail_zh: stageNext.detail_zh, action: stageNext.action },
