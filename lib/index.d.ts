@@ -2209,7 +2209,7 @@ interface BioAgePoint {
   mortality_10y_pct: number | null;
 }
 interface BioAge {
-  status: 'ok' | 'no_skill' | 'no_record' | 'missing_inputs' | 'no_age' | 'no_checkup' | 'error';
+  status: 'ok' | 'no_skill' | 'no_record' | 'missing_inputs' | 'no_age' | 'no_checkup' | 'not_one_person' | 'error';
   note_zh: string;
   missing: string[];
   points: BioAgePoint[];
@@ -3767,11 +3767,16 @@ interface PlanBrief {
     /** Forms the evidence row lists (快走、骑车…), for exercise items. */
     examples_zh: string[];
   }>;
+  /**
+   * weight_med: a current medicine, or one that starts inside the plan window, that moves weight by itself (GLP-1,
+   * SGLT2, insulin). The draft then gives no trial kilogram figure and no weight goal (INT062 fix 5b).
+   */
   safety: {
     medications: string[];
     notes_zh: string[];
     stop_zh?: string;
     no_weight_loss?: boolean;
+    weight_med?: string;
   };
   /** Evidence ids and titles the person already refused. */
   excluded_ids?: string[];
@@ -4741,6 +4746,12 @@ declare function recordMethodResult(row: MethodResult): void;
 declare function currentMethodResults(): MethodResult[];
 //#endregion
 //#region src/core/method-view.d.ts
+/** The page's body-age figure (journey results.bioage). */
+interface BodyAgeFigure {
+  status: 'ok' | 'blocked';
+  phenoage: number | null;
+  advance: number | null;
+}
 interface OverviewSlice {
   value: MethodResult[];
   evidence: MethodResult[];
@@ -4963,6 +4974,10 @@ interface TopFactInput {
    * safety: an emergency, a critical pattern, and a safety medicine stay first.
    */
   methods?: readonly MethodResult[];
+  /** The page's body-age figure. Method results that measure body age become one fact with this number. */
+  bioage?: BodyAgeFigure & {
+    headline_zh?: string;
+  };
 }
 declare function rankTopFacts(input: TopFactInput): TopFact[];
 //#endregion
@@ -4979,10 +4994,13 @@ interface PackInput {
   medications: string[];
   changes: readonly RecordChange[];
   results: {
+    /** status and headline_zh are the page's; without status, a phenoage means ok. */
     bioage: {
       phenoage: number | null;
       advance: number | null;
       date: string | null;
+      status?: 'ok' | 'blocked';
+      headline_zh?: string;
     };
     risk: {
       risk_pct: number | null;
