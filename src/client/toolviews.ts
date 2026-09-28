@@ -381,7 +381,7 @@ export function SkillToolView(props: ToolViewProps): React.ReactElement {
     const band = journey?.results.bioage.band_years
     if (phenoage != null) {
       return h(Shell, { call, icon: 'play', title: BIOAGE_LABEL, summary: typeof result.measured_at === 'string' ? `按 ${result.measured_at} 的血检` : undefined },
-        h(ResultFigure, { figure: fmt(phenoage), unit: '岁', lines: [versusAge(advance), band != null ? `正常波动 ±${fmt(band)} 岁` : ''], label: BIOAGE_LABEL, info: BIOAGE_INFO }))
+        h(ResultFigure, { figure: fmt(phenoage), unit: '岁', lines: [versusAge(advance, journey?.results.bioage.checkups ?? 1), band != null ? `正常波动 ±${fmt(band)} 岁` : ''], label: BIOAGE_LABEL, info: BIOAGE_INFO }))
     }
   }
   if (name === RISK_SKILL) {

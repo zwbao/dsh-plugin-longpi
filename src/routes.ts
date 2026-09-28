@@ -14,7 +14,7 @@ import { loadEvidenceLexicon } from './intents.ts'
 import { buildStats } from './stats.ts'
 import { PRODUCT_NAME, PRODUCT_VERSION } from './version.ts'
 import { addCheckIns, currentPlan, isoDay, normalizePlan, savePlan } from './interventions.ts'
-import { setPlanExclusion } from './plan-prefs.ts'
+import { readPlanPrefs, setPlanExclusion } from './plan-prefs.ts'
 import { acceptedPlan, briefOptionsOf, buildPlanBrief, settleDraft } from './planner.ts'
 import { buildReport, readiness, runReady } from './overview.ts'
 import { invalidateRecords } from './records.ts'
@@ -365,7 +365,9 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
         void (async () => {
           const input = await journeyContext()
           const brief = await buildPlanBrief(input)
-          sendJson(res, 200, { brief, draft: settleDraft(input.dataDir, brief, input.today) })
+          const draft = settleDraft(input.dataDir, brief, input.today)
+          // What was taken out on the page, so 恢复 still works after a reload.
+          sendJson(res, 200, { brief, draft, removed_items: readPlanPrefs(input.dataDir).removed_items })
         })().catch(() => sendJson(res, 500, { ok: false, error: 'plan draft failed' }))
       },
     })
@@ -392,7 +394,8 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
             excluded: value.excluded,
           })
           const brief = await buildPlanBrief(input)
-          sendJson(res, 200, { ok: true, excluded_ids: prefs.excluded_ids, excluded_phrases: prefs.excluded_phrases, draft: settleDraft(input.dataDir, brief, input.today) })
+          const draft = settleDraft(input.dataDir, brief, input.today)
+          sendJson(res, 200, { ok: true, excluded_ids: prefs.excluded_ids, excluded_phrases: prefs.excluded_phrases, removed_items: readPlanPrefs(input.dataDir).removed_items, brief, draft })
         })().catch(() => sendJson(res, 400, { ok: false, error: 'exclude failed' }))
       },
     })

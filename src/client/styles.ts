@@ -514,6 +514,7 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
 }
 .lp-hero-status { margin: 0; max-width: 100%; font-size: 15px; line-height: 22px; font-weight: 400; color: var(--lp-ink-2); text-wrap: balance; }
 .lp-hero-status b { color: var(--lp-ink); font-weight: 500; }
+.lp-hero-care { color: var(--lp-ink); }
 .lp-hero-sep, .lp-row-sep { color: var(--lp-ink-3); margin: 0 8px; }
 .lp-row-sep { margin: 0 2px; }
 .lp-hero-link, .lp-row-link {
@@ -682,6 +683,11 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
 .lp-result > .lp-caption:last-child { margin-top: auto; padding-top: 8px; }
 .lp-result-head .lp-label { align-items: center; gap: 4px; }
 .lp-next-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.lp-care-card { flex-direction: column; align-items: stretch; }
+.lp-visit { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+.lp-visit-form { display: flex; flex-direction: column; gap: 8px; }
+.lp-visit-outcome { width: 100%; font: inherit; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--lp-line, #ddd); }
+.lp-brief-text { white-space: pre-wrap; max-height: 55vh; overflow: auto; font-size: 13px; line-height: 1.6; padding: 12px; border-radius: 8px; background: var(--lp-soft, rgba(0,0,0,0.03)); }
 .lp-next-text { min-width: 0; flex: 1; }
 .lp-next-text .lp-label { margin-bottom: 4px; }
 .lp-next-text .lp-muted { margin-top: 2px; }

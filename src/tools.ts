@@ -12,6 +12,7 @@ import { readReceipts, runSkill } from './runner.ts'
 import { PRODUCT_VERSION } from './version.ts'
 import { discoverPython, runBridgeStatus } from './bridge.ts'
 import { asJson } from './json.ts'
+import { memoryFor } from './core/memory.ts'
 import { mcpHost } from './mcp.ts'
 import { latestOutputs } from './history.ts'
 import { loadEvidenceLexicon, mentionedEntities } from './intents.ts'
@@ -134,6 +135,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
         records_summary: read.journey?.records.summary ?? null,
         ...onboardingOf(read, records.profile, input.dataDir),
         ...recordChangesOf(read),
+        ...pageOf(read, input.dataDir),
         note: 'Quote medication_summary_zh for medicines. A line starting 当前 or 你记下的 is what they take now; a line starting 较早 is not. Never say 0x/day. Never print record_status, a skill id, or a tool name. Medication doses are what the record says, not an instruction to change a dose. A missing indicator was not on file, unless record_status is partial: then read_errors says which reads failed, and an indicator in missing_reads (or any indicator, when the catalogue was cut) is unknown because it was not read. Never say such an indicator was not measured; say the read failed and suggest trying again later. Indicators named ...（自测） are measurements the person entered themselves (source self), used only when newer than the record. earlier_readouts are outputs of skills already run for this person; cite them with their date. onboarding says where the person is, the first results or what blocks them, and what to add at the next checkup.',
       })
     },
@@ -555,12 +557,43 @@ function recordChangesOf(read: JourneyRead) {
   return {
     ...(doctor.stop ? {
       doctor_first_zh: doctor.sentence_zh,
-      doctor_first_how_to_read: 'Say doctor_first_zh first and plainly, before any result or plan, with its numbers: these values need a doctor before a lifestyle plan, and no plan is drafted until then. A value below the reference range is 偏低 and one above it is 偏高: say so. Naming a low value is not a diagnosis, so never answer 不能评, 不解读 or 只报数 about it, and never say that going to a doctor is optional or a common choice to skip. Do not name a cause, and never suggest iron, a supplement, a drug or a dose.',
+      doctor_first_how_to_read: 'Say doctor_first_zh first and plainly, before any result or plan, with its numbers, when they ask about these values, a plan or a doctor; for any other question open with one short sentence naming the values and the doctor, then answer the question itself in full. These values need a doctor before a lifestyle plan, and no plan is drafted until then. A value below the reference range is 偏低 and one above it is 偏高: say so. Naming a low value is not a diagnosis, so never answer 不能评, 不解读 or 只报数 about it, and never say that going to a doctor is optional or a common choice to skip. Do not name a cause, and never suggest iron, a supplement, a drug or a dose.',
     } : {}),
     record_changes: read.journey.changes.map(({ points, ...row }) => ({ ...row, n_points: points.length })),
     record_changes_unjudged: read.journey.changes_unjudged,
     record_changes_note_zh: read.journey.changes_note_zh,
     record_changes_how_to_read: HOW_TO_READ_CHANGES,
+  }
+}
+
+/**
+ * 0.5.3: what the LongPi page shows now (the same surfaces the home and the page render), the ranked top
+ * facts, what the person told LongPi before (memory) and where they stand with the doctor.
+ */
+function pageOf(read: JourneyRead, dataDir: string) {
+  const memory = (() => {
+    try {
+      return memoryFor(dataDir).digest({ purpose: 'chat' })
+    } catch {
+      return ''
+    }
+  })()
+  if (!read.journey?.surfaces) return { memory_zh: memory }
+  const { surfaces, triage } = read.journey
+  return {
+    page: {
+      status_zh: surfaces.status.text_zh,
+      next: { kind: surfaces.next.action.kind, title_zh: surfaces.next.card.text_zh, mandatory: surfaces.next.action.mandatory },
+      suggestions_zh: surfaces.suggestions.map((row) => row.prompt_zh ?? row.text_zh),
+    },
+    top_facts: triage.top_facts.slice(0, 5).map(({ id, kind, priority, text_zh }) => ({ id, kind, priority, text_zh })),
+    care: {
+      findings: triage.findings.map(({ id, title_zh, department_zh, status }) => ({ id, title_zh, department_zh, status })),
+      answers: triage.care,
+      needs_sex: triage.needs_sex,
+    },
+    memory_zh: memory,
+    page_how_to_read: 'page is what the LongPi page shows the person now; top_facts are ranked by rule. When top_facts[0] is must_surface, say it first in one or two sentences with its numbers. Do not contradict the page silently; if it is wrong, say why and call note_page_issue. memory_zh is what they told LongPi before: do not ask it again. When care.needs_sex is true, ask their sex (the limits differ for men and women).',
   }
 }
 

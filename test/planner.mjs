@@ -45,8 +45,15 @@ function configFor(dataDir, mcpUrl = '') {
   }
 }
 
+function seedSuitability(dataDir) {
+  mod.memoryFor(dataDir).apply([{ op: 'add', item: { kind: 'condition', name_zh: '高血压', flags: ['hypertension'], state: 'current', text_zh: '高血压', confirmed: true, provenance: { kind: 'page', at: NOW.toISOString(), by: 'M0' } } }], 'M0')
+  mod.setDrinking(dataDir, true)
+}
+
 function profileIn(dataDir, extra = {}) {
   mod.writeProfile(dataDir, { age: 53, sex: 'male', risk: FACTS, focus: ['bioage', 'cardio'], consent: { version: mod.CONSENT_VERSION, accepted_at: NOW.toISOString() }, ...extra })
+  // 0.5.3: BP-lowering and alcohol items need hypertension on record and a stated drinking habit; this person has both.
+  if (extra.seed !== false) seedSuitability(dataDir)
 }
 
 async function contextOf(config, patch = (records) => records) {

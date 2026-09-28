@@ -15,7 +15,7 @@ export const TIME_RESTRICTED = /限时进食|time-restricted|16:8|轻断食|断�
 export const VERY_LOW_CARB = /生酮|极低碳|低碳水|低碳饮食|ketogenic|\bketo\b|very-low-carb|低碳/i
 export const FISH_OIL = /鱼油|omega-?3|ω-?3|\bepa\b|\bdha\b/i
 export const DASH = /DASH|得舒/i
-const PREGNANT_WORDS = /怀孕|孕期|妊娠/
+const PREGNANT_WORDS = /怀孕|孕期|妊娠|备孕/
 const CKD_WORDS = /肾功能不全|慢性肾病|透析|\bckd\b/i
 
 export interface PanelPoint {
@@ -42,10 +42,22 @@ export interface StopHit {
   short_zh: string
   /** The full clause with the date and, when the checkups show it, the fall across them. */
   text_zh: string
+  /** The latest value in the unit named, its date, and the fall when there is one (for the brief and the fact pack). */
+  value?: number
+  unit?: string
+  date?: string
+  label_zh?: string
+  low?: boolean
+  fall?: Array<{ date: string; value: number }>
 }
 
 export interface StopResult {
   stop: boolean
+  /**
+   * The profile has no sex and a value is below the men's limit but not the women's: the stop uses the
+   * men's limit (conservative) and asks for the sex, which settles it.
+   */
+  needs_sex?: boolean
   /** 请先去看医生：… — the whole reply when a plan is asked for. */
   sentence_zh: string
   /** The overview's next step title. */
@@ -204,9 +216,14 @@ function dated(point: PanelPoint): string {
   return point.date ? `（${point.date.slice(0, 10)}）` : ''
 }
 
-/** Lower limits used when the report's own range is not in the record (Mirobody keeps no ranges). */
-const HB_LOW = { male: 130, female: 115, unknown: 120 } as const
-const FERRITIN_LOW = { male: 30, female: 15, unknown: 15 } as const
+/**
+ * Lower limits used when the report's own range is not in the record (Mirobody keeps no ranges). With no sex
+ * on file the men's (higher) limit applies, so a man whose profile lacks it is not missed; the wording says
+ * so and asks for the sex (0.5.3; 0.5.2 used a weaker 120 / 15 silently).
+ */
+const HB_LOW = { male: 130, female: 115, unknown: 130 } as const
+const FERRITIN_LOW = { male: 30, female: 15, unknown: 30 } as const
+const SEX_UNKNOWN_ZH = '（档案里还没有性别，先按男性下限判断；女性下限是 {female}，请在档案里填写性别）'
 
 /**
  * Critical values and a red-cell pattern that need a doctor before any
@@ -217,7 +234,9 @@ const FERRITIN_LOW = { male: 30, female: 15, unknown: 15 } as const
 export function clinicalStop(input: { sex: string; diabetesKnown: boolean; points: readonly PanelPoint[] }): StopResult {
   const hits: StopHit[] = []
   const sex = input.sex === 'male' ? 'male' : input.sex === 'female' ? 'female' : 'unknown'
-  const sexZh = sex === 'male' ? '男性' : sex === 'female' ? '女性' : '成人'
+  const sexZh = sex === 'female' ? '女性' : '男性'
+  let needsSex = false
+  const unknownNote = (female: number) => (sex === 'unknown' ? SEX_UNKNOWN_ZH.replace('{female}', String(female)) : '')
   const hb = input.points.filter(isHb)
   const mcv = input.points.filter(isMcv)
   const latestHb = newest(hb)
@@ -229,11 +248,12 @@ export function clinicalStop(input: { sex: string; diabetesKnown: boolean; point
   if (latestHb) {
     const value = hbValue(latestHb)
     const low = value < HB_LOW[sex]
+    if (low && sex === 'unknown' && value >= HB_LOW.female) needsSex = true
     if (low || hbFall) {
       hits.push({
-        key: 'hgb',
+        key: 'hgb', value, unit: 'g/L', date: latestHb.date.slice(0, 10), label_zh: '血红蛋白', low, ...(hbFall ? { fall: hbFall } : {}),
         short_zh: `血红蛋白 ${num(value)} g/L ${low ? '偏低' : '在下降'}`,
-        text_zh: `血红蛋白 ${num(value)} g/L${dated(latestHb)}${low ? `偏低，低于${sexZh}参考下限 ${HB_LOW[sex]}` : ''}${trendText(hbFall)}`,
+        text_zh: `血红蛋白 ${num(value)} g/L${dated(latestHb)}${low ? `偏低，低于${sexZh}参考下限 ${HB_LOW[sex]}${unknownNote(HB_LOW.female)}` : ''}${trendText(hbFall)}`,
       })
     }
   }
@@ -241,7 +261,7 @@ export function clinicalStop(input: { sex: string; diabetesKnown: boolean; point
     const low = latestMcv.value < 80
     if (low || mcvFall) {
       hits.push({
-        key: 'mcv',
+        key: 'mcv', value: latestMcv.value, unit: 'fL', date: latestMcv.date.slice(0, 10), label_zh: '平均红细胞体积', low, ...(mcvFall ? { fall: mcvFall } : {}),
         short_zh: `平均红细胞体积 ${num(latestMcv.value)} fL ${low ? '偏低' : '在下降'}`,
         text_zh: `平均红细胞体积（MCV）${num(latestMcv.value)} fL${dated(latestMcv)}${low ? '偏低，低于 80' : ''}${trendText(mcvFall)}`,
       })
@@ -249,7 +269,7 @@ export function clinicalStop(input: { sex: string; diabetesKnown: boolean; point
   }
   if (latestRdw && latestRdw.value > 15) {
     hits.push({
-      key: 'rdw',
+      key: 'rdw', value: latestRdw.value, unit: '%', date: latestRdw.date.slice(0, 10), label_zh: '红细胞分布宽度', low: false,
       short_zh: `红细胞分布宽度 ${num(latestRdw.value)}% 偏高`,
       text_zh: `红细胞分布宽度（RDW-CV）${num(latestRdw.value)}%${dated(latestRdw)}偏高，高于常用参考上限 15%`,
     })
@@ -257,10 +277,11 @@ export function clinicalStop(input: { sex: string; diabetesKnown: boolean; point
   if (latestFerritin) {
     const value = ferritinNgMl(latestFerritin)
     if (value > 0 && value < FERRITIN_LOW[sex]) {
+      if (sex === 'unknown' && value >= FERRITIN_LOW.female) needsSex = true
       hits.push({
-        key: 'ferritin',
+        key: 'ferritin', value, unit: 'ng/mL', date: latestFerritin.date.slice(0, 10), label_zh: '铁蛋白', low: true,
         short_zh: `铁蛋白 ${num(value)} ng/mL 偏低`,
-        text_zh: `铁蛋白 ${num(value)} ng/mL${dated(latestFerritin)}偏低，低于${sexZh}常用参考下限 ${FERRITIN_LOW[sex]}`,
+        text_zh: `铁蛋白 ${num(value)} ng/mL${dated(latestFerritin)}偏低，低于${sexZh}常用参考下限 ${FERRITIN_LOW[sex]}${unknownNote(FERRITIN_LOW.female)}`,
       })
     }
   }
@@ -269,7 +290,7 @@ export function clinicalStop(input: { sex: string; diabetesKnown: boolean; point
     const a1c = newest(input.points.filter(isHba1c))
     if (glucose && glucoseMmol(glucose) >= 7) {
       hits.push({
-        key: 'glucose',
+        key: 'glucose', value: Number(glucoseMmol(glucose).toFixed(2)), unit: 'mmol/L', date: glucose.date.slice(0, 10), label_zh: '空腹血糖', low: false,
         short_zh: `空腹血糖 ${num(glucoseMmol(glucose))} mmol/L 偏高`,
         text_zh: `空腹血糖 ${num(glucoseMmol(glucose))} mmol/L${dated(glucose)}偏高，达到糖尿病诊断范围（≥7.0），记录里还没有医生已经知道这件事`,
       })
@@ -277,7 +298,7 @@ export function clinicalStop(input: { sex: string; diabetesKnown: boolean; point
     const pct = a1c ? hba1cPct(a1c) : null
     if (a1c && pct != null && pct >= 6.5) {
       hits.push({
-        key: 'hba1c',
+        key: 'hba1c', value: Number(pct.toFixed(2)), unit: '%', date: a1c.date.slice(0, 10), label_zh: '糖化血红蛋白', low: false,
         short_zh: `糖化血红蛋白 ${num(pct)}% 偏高`,
         text_zh: `糖化血红蛋白 ${num(pct)}%${dated(a1c)}偏高，达到糖尿病诊断范围（≥6.5%），记录里还没有医生已经知道这件事`,
       })
@@ -286,7 +307,7 @@ export function clinicalStop(input: { sex: string; diabetesKnown: boolean; point
   const ldl = newest(input.points.filter(isLdl))
   if (ldl && ldlMmol(ldl) >= 4.9) {
     hits.push({
-      key: 'ldl',
+      key: 'ldl', value: Number(ldlMmol(ldl).toFixed(2)), unit: 'mmol/L', date: ldl.date.slice(0, 10), label_zh: '低密度脂蛋白胆固醇', low: false,
       short_zh: `低密度脂蛋白胆固醇 ${num(ldlMmol(ldl))} mmol/L 很高`,
       text_zh: `低密度脂蛋白胆固醇 ${num(ldlMmol(ldl))} mmol/L${dated(ldl)}很高（≥4.9），需要医生评估`,
     })
@@ -294,7 +315,7 @@ export function clinicalStop(input: { sex: string; diabetesKnown: boolean; point
   const sbp = newest(input.points.filter(isSbp))
   if (sbp && sbp.value >= 180) {
     hits.push({
-      key: 'sbp',
+      key: 'sbp', value: sbp.value, unit: 'mmHg', date: sbp.date.slice(0, 10), label_zh: '收缩压', low: false,
       short_zh: `收缩压 ${num(sbp.value)} mmHg 很高`,
       text_zh: `收缩压 ${num(sbp.value)} mmHg${dated(sbp)}很高（≥180）`,
     })
@@ -305,7 +326,7 @@ export function clinicalStop(input: { sex: string; diabetesKnown: boolean; point
   const urgent = hits.some((hit) => hit.key === 'sbp') ? '血压这么高请尽快就医；如果同时有胸痛、剧烈头痛、一侧无力或说话不清，立即拨打 120。' : ''
   const selfTreat = redCell ? '在医生查明原因之前，不要自己买铁剂或补剂。' : ''
   const sentence = `请先去看医生：${hits.map((hit) => hit.text_zh).join('；')}。${urgent}请带着这几次体检报告去看医生${where}，查清原因。${selfTreat}${DOCTOR_ZH}`
-  return { stop: true, sentence_zh: sentence, title_zh: `请先去看医生：${hits.map((hit) => hit.short_zh).slice(0, 3).join('，')}`, hits }
+  return { stop: true, sentence_zh: sentence, title_zh: `请先去看医生：${hits.map((hit) => hit.short_zh).slice(0, 3).join('，')}`, hits, ...(needsSex ? { needs_sex: true } : {}) }
 }
 
 export function egfrBelowCkd(points: readonly PanelPoint[]): boolean {

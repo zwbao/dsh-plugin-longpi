@@ -13,7 +13,7 @@ import { errorText, postJson } from './api.ts'
 import { fmt } from './charts.ts'
 import { behaviorOf, chineseDate } from './format.ts'
 import { Icon } from './icons.ts'
-import { notifyChanged, putFollowup, useFollowup, usePlanDraft } from './store.ts'
+import { notifyChanged, putFollowup, putPlanDraft, useFollowup, usePlanDraft } from './store.ts'
 import type { AcceptResponse, DraftGoal, DraftItem, FollowupResponse, FollowupUpdate, Journey, PlanDraft, PlanDraftResponse } from './types.ts'
 import { Btn, Skeleton } from './ui.ts'
 
@@ -88,18 +88,38 @@ export function DraftItemCard(props: { item: DraftItem; onRemove: () => void; co
     h(EvidenceMore, { item }))
 }
 
-/** The kept items with 去掉, and the dropped ones as chips to put back. */
-export function DraftItems(props: { draft: PlanDraft; removed: Set<string>; onToggle: (id: string) => void; compact?: boolean }): React.ReactElement {
+/**
+ * The kept items with 去掉, and the dropped ones as chips to put back. saved: items the server already took
+ * out (the page's 去掉 is saved, so they are no longer in the draft); their chips put them back the same way.
+ */
+export function DraftItems(props: { draft: PlanDraft; removed: Set<string>; onToggle: (id: string) => void; compact?: boolean; saved?: Array<{ id: string; title: string }>; busy?: boolean }): React.ReactElement {
   const kept = props.draft.items.filter((item) => !props.removed.has(item.id))
-  const gone = props.draft.items.filter((item) => props.removed.has(item.id))
+  const local = props.draft.items.filter((item) => props.removed.has(item.id)).map((item) => ({ id: item.id, title: item.title }))
+  const gone = [...local, ...(props.saved ?? []).filter((row) => !local.some((item) => item.id === row.id) && !kept.some((item) => item.id === row.id))]
   return h('div', { className: 'lp-draft-block' },
     kept.length > 0
       ? h('ul', { className: 'lp-draft-items' }, ...kept.map((item) => h(DraftItemCard, { key: item.id, item, compact: props.compact, onRemove: () => props.onToggle(item.id) })))
       : h('p', { className: 'lp-muted' }, '所有项目都去掉了。恢复一项，或在对话里说说你想怎么调整。'),
     gone.length > 0 ? h('div', { className: 'lp-draft-removed' },
       h('span', { className: 'lp-caption' }, '已去掉：'),
-      ...gone.map((item) => h('button', { key: item.id, type: 'button', className: 'lp-toggle', onClick: () => props.onToggle(item.id), 'aria-label': `恢复「${item.title}」` },
+      ...gone.map((item) => h('button', { key: `${item.id}|${item.title}`, type: 'button', className: 'lp-toggle', disabled: props.busy, onClick: () => props.onToggle(item.id || item.title), 'aria-label': `恢复「${item.title}」` },
         h(Icon, { name: 'plus', size: 12 }), item.title))) : null)
+}
+
+/**
+ * The page's 去掉 and 恢复: saved on the server (/api/longpi/plan-draft/exclude), so a removed item stays out
+ * of every later draft, after a reload and in chat too. Answers with the draft as it now is.
+ */
+export async function setDraftItemExcluded(item: { id: string; title: string }, excluded: boolean): Promise<{ ok: true; data: PlanDraftResponse } | { ok: false; error: string }> {
+  try {
+    const result = await postJson<Record<string, unknown>>('/api/longpi/plan-draft/exclude', { id: item.id, title: item.title, excluded })
+    if (result.ok !== true) return { ok: false, error: String(result.error ?? '没有保存') }
+    putPlanDraft(result)
+    notifyChanged()
+    return { ok: true, data: result as unknown as PlanDraftResponse }
+  } catch (err) {
+    return { ok: false, error: errorText(err, '没有保存') }
+  }
 }
 
 function Priorities(props: { brief: PlanDraftResponse['brief']; open?: boolean }): React.ReactElement | null {
@@ -217,22 +237,25 @@ function Hint(props: { onPrompt: (text: string) => void }): React.ReactElement {
 
 function Draft(props: { data: PlanDraftResponse; draft: PlanDraft; journey: Journey; onNotice: Notify; onPrompt: (text: string) => void }): React.ReactElement {
   const { draft, data } = props
-  const [removed, setRemoved] = React.useState<Set<string>>(new Set())
   const [confirming, setConfirming] = React.useState(false)
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
-  // A different draft from the server starts whole again; a refetch of the same one keeps the person's choices.
-  const signature = `${draft.title}|${draft.items.map((item) => item.id).join('|')}`
-  React.useEffect(() => { setRemoved(new Set()) }, [signature])
-
-  const kept = draft.items.filter((item) => !removed.has(item.id))
+  // 0.5.3: 去掉 and 恢复 are saved on the server; the draft that comes back is what shows.
+  const removed = React.useMemo(() => new Set<string>(), [])
+  const kept = draft.items
   const goals = keptGoals(draft, kept)
-  const toggle = (id: string) => setRemoved((current) => {
-    const next = new Set(current)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    return next
-  })
+  const toggle = (key: string) => {
+    const inDraft = draft.items.find((item) => item.id === key)
+    const saved = data.removed_items.find((row) => row.id === key || (!row.id && row.title === key))
+    const target = inDraft ? { id: inDraft.id, title: inDraft.title } : saved
+    if (!target) return
+    setBusy(true)
+    setError(null)
+    void setDraftItemExcluded(target, Boolean(inDraft)).then((result) => {
+      if (!result.ok) setError(`没有保存：${result.error}`)
+      else props.onNotice(inDraft ? `已去掉「${target.title}」，之后的草稿也不会再加它。` : `已恢复「${target.title}」。`, 'good')
+    }).finally(() => setBusy(false))
+  }
 
   async function accept(remind: boolean): Promise<void> {
     setBusy(true)
@@ -259,7 +282,8 @@ function Draft(props: { data: PlanDraftResponse; draft: PlanDraft; journey: Jour
         h('h3', { className: 'lp-h3 lp-draft-title' }, draft.title || '改善方案'),
         h('p', { className: 'lp-muted' }, '按你的检查结果和试验证据起草。每项注明试验里的平均效果，个人结果会不同；你确认后才保存。')),
       h('span', { className: 'lp-tag' }, '草稿')),
-    h(DraftItems, { draft, removed, onToggle: toggle }),
+    h(DraftItems, { draft, removed, onToggle: toggle, saved: data.removed_items, busy }),
+    error && !confirming ? h('p', { className: 'lp-fine', role: 'alert' }, error) : null,
     h(DraftGoals, { goals, dropped: draft.goals.length - goals.length }),
     h(Priorities, { brief: data.brief }),
     ...draft.notes_zh.map((text) => h('p', { key: text, className: 'lp-fine' }, text)),
@@ -271,6 +295,22 @@ function Draft(props: { data: PlanDraftResponse; draft: PlanDraft; journey: Jour
       draft, items: kept, goals, today: props.journey.today, busy, error,
       onCancel: () => setConfirming(false), onConfirm: (remind) => { void accept(remind) },
     }) : null)
+}
+
+/** Items taken out on the page when no draft is left: each can be put back. */
+function RestoreRow(props: { items: Array<{ id: string; title: string }>; onNotice: Notify }): React.ReactElement {
+  const [busy, setBusy] = React.useState(false)
+  return h('div', { className: 'lp-draft-removed' },
+    h('span', { className: 'lp-caption' }, '已去掉：'),
+    ...props.items.map((item) => h('button', {
+      key: `${item.id}|${item.title}`, type: 'button', className: 'lp-toggle', disabled: busy, 'aria-label': `恢复「${item.title}」`,
+      onClick: () => {
+        setBusy(true)
+        void setDraftItemExcluded(item, false).then((result) => {
+          props.onNotice(result.ok ? `已恢复「${item.title}」。` : `没有恢复：${result.error}`, result.ok ? 'good' : 'info')
+        }).finally(() => setBusy(false))
+      },
+    }, h(Icon, { name: 'plus', size: 12 }), item.title)))
 }
 
 /** The plan section's empty state: the draft, or why there is none yet. */
@@ -299,6 +339,7 @@ export function PlanDraftCard(props: { journey: Journey; onNotice: Notify; onPro
       h('p', { className: 'lp-muted' }, reasons[0] || '你的记录里还没有能对上研究证据的指标。'),
       ...fine.map((text) => h('p', { key: text, className: 'lp-fine' }, text)),
       stop ? null : h(Priorities, { brief: data.brief, open: true }),
+      !stop && data.removed_items.length > 0 ? h(RestoreRow, { items: data.removed_items, onNotice: props.onNotice }) : null,
       stop ? null : h('div', { className: 'lp-form-actions lp-draft-actions' }, h(Hint, { onPrompt: props.onPrompt })))
   }
   return h(Draft, { data, draft: data.draft, journey: props.journey, onNotice: props.onNotice, onPrompt: props.onPrompt })

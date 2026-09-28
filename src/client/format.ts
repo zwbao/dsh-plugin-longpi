@@ -49,9 +49,14 @@ export function pct(value: number): string {
 }
 
 /** How the body age compares with the calendar age, in words. */
-export function versusAge(advance: number | null | undefined): string {
+/**
+ * Body age against the calendar. A single blood draw is never presented as "younger" (PLAN §B5, FINDINGS 54):
+ * it is a model estimate from one draw, said as such; "younger" needs at least two complete checkups.
+ */
+export function versusAge(advance: number | null | undefined, checkups: number | null | undefined = 2): string {
   if (advance == null || !Number.isFinite(advance)) return ''
   if (Math.abs(advance) < 0.5) return '和实足年龄相当'
+  if (advance < 0 && (checkups ?? 0) < 2) return `单次血检的模型估计，低于实足年龄 ${fmt(-advance)} 岁，只作参考`
   return advance < 0 ? `比实足年龄年轻 ${fmt(-advance)} 岁` : `比实足年龄大 ${fmt(advance)} 岁`
 }
 
