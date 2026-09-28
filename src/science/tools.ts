@@ -11,7 +11,7 @@ import { isoDay } from '../interventions.ts'
 import { estimatedAge, readProfile } from '../profile.ts'
 import { eligibility, grantConsent, withdrawConsent, type PersonFacts } from './consent-flow.ts'
 import { loadStudies, loadStudy, publicQuestions } from './manifest.ts'
-import { designNOf1, type WearableDay } from './nof1.ts'
+import { designNOf1, publicNOf1, type WearableDay } from './nof1.ts'
 import { armsFromOutcomes, logOutcome, readOutcomes } from './outcomes.ts'
 
 function answersOf(value: unknown): Array<{ id: string; choice: number }> {
@@ -94,8 +94,9 @@ export function registerScienceTools(ctx: Context, deps: CoreDeps): void {
         question_zh: typeof args.question === 'string' ? args.question : '',
         wearable: wearable(),
         glucose: armsFromOutcomes(outcomes) as { morning: number[]; after_dinner: number[] },
+        season_id: 'season-local',
       })
-      return asJson({ ok: true, ...designed, say_zh: '把 protocol_zh 和 result_zh 用你自己的话讲短一点，不要添加数字，不要说证明或治愈。' })
+      return asJson({ ok: true, ...publicNOf1(designed), say_zh: '把 protocol_zh 和 result_zh 用你自己的话讲短一点，不要添加数字，不要说证明或治愈。种子留在这台电脑上。' })
     },
   }))
 
@@ -164,7 +165,7 @@ export function registerScienceTools(ctx: Context, deps: CoreDeps): void {
       if (!done.ok) return asJson({ ok: false, error: done.reason_zh })
       deps.bus.emit('study.withdrawn', { study_id: study.manifest.id, consent_id: done.consent.id }, { module: 'M8', via: 'tool', tool: 'withdraw_from_study', session_id: sessionOfExec(exec) })
       deps.invalidate()
-      return asJson({ ok: true, deleted_unreleased: done.deleted, say_zh: '已退出。还没发布的合计已从这台电脑删除。' })
+      return asJson({ ok: true, deleted_unreleased: done.deleted, released_stays: true, statement_zh: done.statement_zh, say_zh: done.statement_zh })
     },
   }))
 

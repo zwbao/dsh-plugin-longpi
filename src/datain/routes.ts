@@ -27,6 +27,9 @@ interface Pending {
   sample_date?: string
   site?: 'gut' | 'oral'
   panel?: string
+  lab_name?: string
+  method?: string
+  analyser?: string
 }
 
 function uploadFields(value: Record<string, unknown>): {
@@ -35,12 +38,27 @@ function uploadFields(value: Record<string, unknown>): {
   sample_date?: string
   site?: 'gut' | 'oral'
   panel?: string
+  lab_name?: string
+  method?: string
+  analyser?: string
 } {
   const type = isStoreKind(value.type) ? value.type : undefined
   const site = value.site === 'gut' || value.site === 'oral' ? value.site : undefined
   const sample = typeof value.sample_date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value.sample_date) ? value.sample_date : undefined
   const panel = typeof value.panel === 'string' && value.panel.trim() ? value.panel.trim().slice(0, 40) : undefined
-  return { ...(type ? { type } : {}), confirm: value.confirm === true, ...(sample ? { sample_date: sample } : {}), ...(site ? { site } : {}), ...(panel ? { panel } : {}) }
+  const lab_name = typeof value.lab_name === 'string' ? value.lab_name : undefined
+  const method = typeof value.method === 'string' ? value.method : undefined
+  const analyser = typeof value.analyser === 'string' ? value.analyser : undefined
+  return {
+    ...(type ? { type } : {}),
+    confirm: value.confirm === true,
+    ...(sample ? { sample_date: sample } : {}),
+    ...(site ? { site } : {}),
+    ...(panel ? { panel } : {}),
+    ...(lab_name ? { lab_name } : {}),
+    ...(method ? { method } : {}),
+    ...(analyser ? { analyser } : {}),
+  }
 }
 
 function fromPending(row: Pending) {
@@ -50,6 +68,9 @@ function fromPending(row: Pending) {
     ...(row.sample_date ? { sample_date: row.sample_date } : {}),
     ...(row.site ? { site: row.site } : {}),
     ...(row.panel ? { panel: row.panel } : {}),
+    ...(row.lab_name ? { lab_name: row.lab_name } : {}),
+    ...(row.method ? { method: row.method } : {}),
+    ...(row.analyser ? { analyser: row.analyser } : {}),
   }
 }
 

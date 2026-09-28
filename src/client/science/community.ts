@@ -14,6 +14,9 @@ export function CommunityPanel(props: {
   give_back_zh: string
   voting: { topics: VoteTopic[]; mine: string | null; note_zh: string }
   cards: ScienceCard[]
+  thresholds?: Array<{ study_id: string; title_zh: string; line_zh: string }>
+  early_zh?: string
+  release_stays_zh?: string
   onChange: () => void
   onError: (message: string) => void
 }): React.ReactElement {
@@ -28,7 +31,17 @@ export function CommunityPanel(props: {
       h('h2', { className: 'lp-h2' }, props.progress.label_zh),
       h('div', { className: 'lp-sci-bar', role: 'progressbar', 'aria-valuenow': props.progress.contributed, 'aria-valuemax': props.progress.min_cohort },
         h('span', { style: { width: `${width}%` } })),
-      h('p', null, `本机参加了 ${props.progress.studies} 项研究。发布合计至少 ${props.progress.min_cohort} 人，这一台电脑只算其中 ${props.progress.contributed} 人。`)),
+      ...(props.thresholds ?? []).map((row) => h('p', { key: row.study_id, className: 'lp-threshold' }, `${row.title_zh} ${row.line_zh}`)),
+      props.early_zh ? h('p', null, props.early_zh) : null,
+      props.early_zh ? h('button', {
+        type: 'button',
+        className: 'lp-linkbtn',
+        onClick: () => {
+          void postJson('/api/longpi/science/n-of-1', { confirm: true, design: 'abab' }).then(() => props.onChange()).catch((error: unknown) => props.onError(error instanceof Error ? error.message : '没有排好'))
+        },
+      }, '开始个人对照') : null,
+      h('p', null, `本机参加了 ${props.progress.studies} 项研究。发布合计至少 ${props.progress.min_cohort} 人，这一台电脑只算其中 ${props.progress.contributed} 人。`),
+      props.release_stays_zh ? h('p', { className: 'lp-muted' }, props.release_stays_zh) : null),
     h('section', { className: 'lp-section', id: 'lp-science-pulse' },
       h('p', { className: 'lp-kicker' }, '群体脉搏'),
       props.pulse ? h('h2', { className: 'lp-h2' }, props.pulse.headline_zh) : h('h2', { className: 'lp-h2' }, '还没有群体结果'),

@@ -44,10 +44,16 @@ function laplace(rng: () => number, scale: number): number {
   return -scale * Math.sign(u) * Math.log(1 - 2 * Math.abs(u))
 }
 
-function gaussian(rng: () => number, sigma: number): number {
+export function gaussianDraw(rng: () => number, sigma: number): number {
   const u1 = Math.max(rng(), 1e-12)
   const u2 = rng()
   return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2) * sigma
+}
+
+/** σ each of `t` people adds so that t independent shares meet the calibrated Gaussian σ on the sum. */
+export function distributedSigma(sensitivity: number, epsilon: number, delta: number, t: number): number {
+  if (!(t >= 1)) throw new Error('t must be at least 1')
+  return gaussianSigma(sensitivity, epsilon, delta) / Math.sqrt(t)
 }
 
 export function clipValue(value: number, clip: [number, number]): { value: number; clipped: boolean } {
@@ -76,7 +82,7 @@ export function addNoise(value: number, opts: { mechanism: Mechanism; epsilon: n
   const rng = rngFromSeed(opts.seed)
   const delta = opts.mechanism === 'gaussian' ? opts.delta : 0
   const noise = opts.mechanism === 'gaussian'
-    ? gaussian(rng, gaussianSigma(sensitivityOf(opts.clip), opts.epsilon, opts.delta > 0 ? opts.delta : 1e-6))
+    ? gaussianDraw(rng, gaussianSigma(sensitivityOf(opts.clip), opts.epsilon, opts.delta > 0 ? opts.delta : 1e-6))
     : laplace(rng, laplaceScale(sensitivityOf(opts.clip), opts.epsilon))
   return {
     value: clipped.value + noise,

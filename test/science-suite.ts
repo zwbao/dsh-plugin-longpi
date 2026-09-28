@@ -139,7 +139,8 @@ const designed = designNOf1({
 assert.equal(designed.design, 'abab')
 assert.equal(wordingProblem(designed.protocol_zh + designed.result_zh), null)
 assert.match(designed.result_zh, /早晨走/)
-assert.ok(designed.schedule.length === 4)
+assert.equal(designed.schedule.filter((row) => row.role === 'treatment').length, 4)
+assert.ok(designed.schedule.some((row) => row.role === 'washout'))
 const t = pairedT([5.1, 5.2, 5.0, 5.3], [5.8, 6.0, 5.9, 6.1])
 assert.ok(t && t[0] > 0)
 

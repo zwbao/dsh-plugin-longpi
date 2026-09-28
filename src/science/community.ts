@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import type { NextBestAction } from '../contracts/surfaces.ts'
 import { newId, readJson, writeJsonAtomic } from '../core/store.ts'
 import { activeStudyIds, latestConsent } from './consent-flow.ts'
+import { RELEASE_STAYS_ZH } from './budget.ts'
+import { EARLY_ZH, thresholdCard, type ThresholdCard } from './coldstart.ts'
 import { ethicsLine, loadStudies, publicQuestions, type LoadedStudy } from './manifest.ts'
 import { readLog } from './translog.ts'
 import { LIVE_REFUSED_ZH } from './verify.ts'
@@ -26,6 +28,9 @@ export interface CommunityView {
   give_back_zh: string
   cards: Array<{ id: string; title_zh: string; body_zh: string }>
   translog: Array<{ seq: number; at: string; kind: string; detail_zh: string }>
+  thresholds: ThresholdCard[]
+  early_zh: string
+  release_stays_zh: string
 }
 
 export interface StudyCard {
@@ -42,6 +47,7 @@ export interface StudyCard {
 interface VoteFile { topic_id: string | null; counts: Record<string, number> }
 interface CardFile { cards: Array<{ id: string; title_zh: string; body_zh: string; study_id: string }> }
 interface PulseFile { headline_zh?: string; detail_zh?: string; n?: number; mean?: number; key?: string }
+interface CohortFile { studies?: Record<string, { enrolled?: number; threshold?: number }> }
 
 function votePath(dataDir: string): string {
   return join(dataDir, 'science', 'votes.json')
@@ -103,7 +109,19 @@ function studyCard(row: LoadedStudy, dataDir: string): StudyCard {
 export function buildCommunity(opts: { dataDir: string; configured: 'off' | 'simulated' | 'live' }): CommunityView {
   const liveRefused = opts.configured === 'live'
   const mode = liveRefused || opts.configured === 'off' ? 'off' : 'simulated'
-  const studies = mode === 'simulated' ? loadStudies().filter((row) => row.verify.ok && row.consent_hash_ok).map((row) => studyCard(row, opts.dataDir)) : []
+  const loaded = mode === 'simulated' ? loadStudies().filter((row) => row.verify.ok && row.consent_hash_ok) : []
+  const studies = loaded.map((row) => studyCard(row, opts.dataDir))
+  const cohort = mode === 'simulated'
+    ? readJson<CohortFile>(join(opts.dataDir, 'science', 'cohort.json'), (raw) => raw as CohortFile, () => ({}))
+    : {}
+  const thresholds = loaded.map((row) => {
+    const saved = cohort.studies?.[row.manifest.id]
+    const consented = latestConsent(opts.dataDir, row.manifest.id)?.decision === 'granted'
+    const enrolled = typeof saved?.enrolled === 'number' ? saved.enrolled : consented ? 1 : 0
+    const threshold = typeof saved?.threshold === 'number' ? saved.threshold : row.manifest.analysis.release.min_cohort
+    return thresholdCard({ study_id: row.manifest.id, title_zh: row.manifest.title_zh, enrolled, threshold })
+  })
+  const early = thresholds.some((row) => row.early)
   const walk = studies.find((row) => row.id === 'walk-timing-glucose')
   const votes = mode === 'simulated' ? readVote(opts.dataDir) : { topic_id: null, counts: {} }
   const pulseFile = mode === 'simulated' ? readJson<PulseFile>(pulsePath(opts.dataDir), (raw) => raw as PulseFile, () => ({})) : {}
@@ -132,6 +150,9 @@ export function buildCommunity(opts: { dataDir: string; configured: 'off' | 'sim
     give_back_zh: pulseFile.detail_zh || '还没有发回的群体结果。你自己的计算会留在本机结果里。',
     cards: mode === 'simulated' ? readCards(opts.dataDir).map(({ id, title_zh, body_zh }) => ({ id, title_zh, body_zh })) : [],
     translog: mode === 'simulated' ? readLog(opts.dataDir).slice(-30).reverse().map((row) => ({ seq: row.seq, at: row.at, kind: row.kind, detail_zh: row.detail_zh })) : [],
+    thresholds,
+    early_zh: early ? EARLY_ZH : '',
+    release_stays_zh: RELEASE_STAYS_ZH,
   }
 }
 

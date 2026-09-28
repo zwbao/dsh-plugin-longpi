@@ -15,6 +15,7 @@ import type { StoreSummary } from '../stores/summary.ts'
 import { judgeIdentity } from './identity.ts'
 import { extractGeneticsPdf, extractGeneticsText, isWeGeneNarrative, isWeGeneRaw, RAW_MARKER, storeGenetics, type GeneticsSummary } from './genetics.ts'
 import { listFindings, parseNarrative, storeFindings, textFingerprint, type NarrativeFinding } from './narrative.ts'
+import { parseLabMethod, rememberLabMethod } from '../science/labmeta.ts'
 
 const LAB_CAP_BYTES = 32 * 1024 * 1024
 const PAGE_CAP = 40
@@ -248,6 +249,9 @@ export interface IngestInput {
   sample_date?: string
   site?: 'gut' | 'oral'
   panel?: string
+  lab_name?: string
+  method?: string
+  analyser?: string
 }
 
 export async function ingestDocument(deps: Pick<CoreDeps, 'config' | 'dataDir' | 'bus' | 'invalidate'>, input: IngestInput): Promise<IngestResult> {
@@ -326,6 +330,8 @@ export async function ingestDocument(deps: Pick<CoreDeps, 'config' | 'dataDir' |
   }
   const omics = takeOmics(deps, { filename, bytes, text, sha, fingerprint, input })
   if (omics.stop) return omics.stop
+  const lab = parseLabMethod(input)
+  if (lab) rememberLabMethod(dataDir, { sha256: sha, ...lab })
   const dayGuess = /(20\d{2}-\d{2}-\d{2})/.exec(text)?.[1] ?? ''
   const findings = text ? parseNarrative(text, dayGuess) : []
   const forwarded = await finishForward(deps, { filename, bytes, text, sha, fingerprint, contentType: contentTypeOf(filename), note: input.note, open: input.open, upload: input.upload !== false, genetics: null, findings })

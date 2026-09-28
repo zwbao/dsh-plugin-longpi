@@ -1,6 +1,7 @@
 // A self-contained research page. The React tab renders the same CommunityView once the client registry is wired.
 
 import type { CommunityView } from './community.ts'
+import { RELEASE_STAYS_ZH } from './budget.ts'
 
 function esc(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char] ?? char))
@@ -38,6 +39,10 @@ export function communityHtml(view: CommunityView): string {
   const log = view.translog.length === 0
     ? '<p class="note">还没有记录。同意、计算和发布都会写在这里。</p>'
     : `<ol class="log">${view.translog.map((row) => `<li><span>${esc(row.at.slice(0, 16).replace('T', ' '))}</span> ${esc(row.detail_zh)}</li>`).join('')}</ol>`
+  const lines = (view.thresholds ?? []).map((row) => `<p class="threshold" data-study="${esc(row.study_id)}"><strong>${esc(row.title_zh)}</strong> ${esc(row.line_zh)}</p>`).join('')
+  const early = view.early_zh
+    ? `<section class="card" id="cold-start"><p class="kicker">先做个人对照</p><p>${esc(view.early_zh)}</p><button type="button" id="start-nof1">开始个人对照</button><p class="status" id="nof1-status"></p></section>`
+    : ''
   const pulse = view.pulse ? `<h2>${esc(view.pulse.headline_zh)}</h2><p>${esc(view.pulse.detail_zh)}</p>` : '<p>群体结果还没发回。一个人的时候不会发布合计。</p>'
   return `<!doctype html>
 <html lang="zh-CN">
@@ -77,8 +82,10 @@ export function communityHtml(view: CommunityView): string {
     <p class="kicker">本季进度 · 第 ${view.progress.week} / ${view.progress.weeks} 周</p>
     <h2>${esc(view.progress.label_zh)}</h2>
     <div class="bar" role="progressbar" aria-valuenow="${view.progress.contributed}" aria-valuemax="${view.progress.min_cohort}"><span></span></div>
+    ${lines}
     <p>本机参加了 ${view.progress.studies} 项研究。发布合计至少需要 ${view.progress.min_cohort} 人，这一台电脑只算其中 ${view.progress.contributed} 人。</p>
   </section>
+  ${early}
   <section class="card" id="pulse"><p class="kicker">群体脉搏</p>${pulse}</section>
   <section class="card"><p class="kicker">发回给你</p><p>${esc(view.give_back_zh)}</p></section>
   <section class="card" id="vote">
@@ -90,7 +97,8 @@ export function communityHtml(view: CommunityView): string {
   ${studies}
   <section><h2>贡献卡</h2>${cards}</section>
   <section class="card"><h2>透明记录</h2>${log}</section>
-  <p class="note">基因、姓名、原始化验单和图片不参加。live 在这个版本里打不开。</p>
+  <p class="note">${esc(view.release_stays_zh || RELEASE_STAYS_ZH)}</p>
+  <p class="note">基因、姓名、原始化验单和图片不参加。live 在这个版本里打不开。进度写在这一页的正文里，不盖住别的卡片。</p>
 </main>
 <script>
 async function post(path, body) {
@@ -122,9 +130,17 @@ document.querySelectorAll('[data-withdraw]').forEach((button) => {
     const status = button.parentElement.querySelector('[data-status]')
     try {
       await post('/api/longpi/science/withdraw', { study_id: id, confirm: true })
-      status.textContent = '已退出，未发布的合计已删除。'
+      status.textContent = '已退出。还没发布的合计已删除。已经发布的合计不能撤回。'
     } catch (error) { status.textContent = error.message }
   })
+})
+const nof1 = document.getElementById('start-nof1')
+if (nof1) nof1.addEventListener('click', async () => {
+  const status = document.getElementById('nof1-status')
+  try {
+    const json = await post('/api/longpi/science/n-of-1', { confirm: true, design: 'abab' })
+    status.textContent = json.protocol_zh || '个人对照已经排好，只留在这台电脑。'
+  } catch (error) { status.textContent = error.message }
 })
 document.getElementById('vote-form').addEventListener('submit', async (event) => {
   event.preventDefault()
@@ -141,5 +157,6 @@ export function offHtml(reason: string): string {
     mode: 'off', configured: 'off', live_refused: false, reason_zh: reason, studies: [],
     progress: { label_zh: '研究', contributed: 0, studies: 0, min_cohort: 20, week: 0, weeks: 8 },
     pulse: null, voting: { topics: [], mine: null, note_zh: '' }, give_back_zh: '', cards: [], translog: [],
+    thresholds: [], early_zh: '', release_stays_zh: RELEASE_STAYS_ZH,
   })
 }

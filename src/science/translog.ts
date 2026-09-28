@@ -44,6 +44,20 @@ function digestOf(entry: TransparencyLogEntry): string {
   return sha256Hex(body)
 }
 
+/** Public export. Only the chain fields. Lab values are not a column on this log. */
+export function exportTransparency(entries: readonly TransparencyLogEntry[]): string {
+  const lines = entries.map((row) => JSON.stringify({
+    seq: row.seq,
+    at: row.at,
+    kind: row.kind,
+    study_id: row.study_id ?? '',
+    digest: row.digest,
+    prev: row.prev,
+    detail_zh: row.detail_zh,
+  }))
+  return lines.length > 0 ? `${lines.join('\n')}\n` : ''
+}
+
 /** Append one line. Returns the seq written into the consent or the result. */
 export function appendLog(dataDir: string, kind: LogKind, detail_zh: string, study_id?: string, at: IsoTime = new Date().toISOString()): TransparencyLogEntry {
   const prior = readLog(dataDir)

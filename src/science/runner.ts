@@ -4,8 +4,9 @@
 import { join } from 'node:path'
 import type { IsoTime } from '../contracts/common.ts'
 import type { LocalStatResult, StudyManifest } from '../contracts/science.ts'
-import { newId, writeJsonAtomic } from '../core/store.ts'
+import { newId, readJson, writeJsonAtomic } from '../core/store.ts'
 import { eligibility, latestConsent, type PersonFacts } from './consent-flow.ts'
+import { tryRelease, RELEASE_STAYS_ZH } from './budget.ts'
 import { addNoise, seedFor } from './dp.ts'
 import { ethicsLine } from './manifest.ts'
 import { isLocalAggregator, LIVE_REFUSED_ZH, verifyManifest } from './verify.ts'
@@ -165,7 +166,13 @@ export function runLocal(opts: {
   const runId = newId('runsci')
   const primary = prepared[0]
   let share: { round: string; masked_b64: string; commitment: string; public_b64: string; stat_key: string } | null = null
-  if (primary && opts.peers && opts.peers.length >= opts.manifest.analysis.release.min_cohort && opts.round) {
+  let budgetNote = ''
+  const cohortReady = Boolean(primary && opts.peers && opts.peers.length >= opts.manifest.analysis.release.min_cohort && opts.round)
+  const charged = cohortReady && primary
+    ? tryRelease(opts.dataDir, { study_id: opts.manifest.id, query: `${primary.stat}:${primary.key}`, epsilon, delta: primary.delta, at, peek: true })
+    : null
+  if (charged && !charged.ok) budgetNote = charged.reason_zh
+  if (primary && cohortReady && charged?.ok && opts.peers && opts.round) {
     const built = shareFor(primary, opts.clientId, opts.peers, opts.round)
     share = { round: opts.round, masked_b64: built.masked_b64, commitment: built.commitment, public_b64: built.public_b64, stat_key: built.stat_key }
     const logged = appendLog(opts.dataDir, 'release', `准备发布「${opts.manifest.title_zh}」的加噪合计（ε=${epsilon}，${primary.key}）。原始读数不出这台电脑。`, opts.manifest.id, at)
@@ -175,12 +182,15 @@ export function runLocal(opts: {
     writeJsonAtomic(join(opts.dataDir, 'science', 'results', `${opts.manifest.id}.json`), { ...result, local_only: prepared.map(publicLocal) })
     return { ok: true, result, local_only: prepared, give_back_zh: giveBack(opts.manifest, prepared, null), share }
   }
-  const logged = appendLog(opts.dataDir, 'run', prepared.length > 0
+  const logged = appendLog(opts.dataDir, 'run', budgetNote
+    ? budgetNote
+    : prepared.length > 0
     ? `在本机算完「${opts.manifest.title_zh}」（${prepared.length} 项）。人数不够或还没进入一轮汇总，没有发布。`
     : `「${opts.manifest.title_zh}」在本机还没有够用的序列，没有发布。`, opts.manifest.id, at)
   const result = resultOf(opts.manifest, prepared, runId, at, logged.seq, null, false)
   writeJsonAtomic(join(opts.dataDir, 'science', 'results', `${opts.manifest.id}.json`), { ...result, local_only: prepared.map(publicLocal) })
-  return { ok: true, result, local_only: prepared, give_back_zh: giveBack(opts.manifest, prepared, null), share: null }
+  const give = giveBack(opts.manifest, prepared, null)
+  return { ok: true, result, local_only: prepared, give_back_zh: budgetNote ? `${budgetNote}${give}` : give, share: null }
 }
 
 function publicLocal(row: PreparedStat) {
@@ -221,8 +231,20 @@ export function giveBack(manifest: StudyManifest, prepared: readonly PreparedSta
     communityLine,
     ethicsLine(manifest),
     '这只描述波动或两组的差别，不是诊断，也不能代替看医生。原始化验、姓名和基因都没有送出。',
+    RELEASE_STAYS_ZH,
   ]
   return parts.map((text) => /[。！？]$/.test(text.trim()) ? text.trim() : `${text.trim()}。`).join('')
+}
+
+/** The aggregate has been published. Charge the budget and keep the share so withdrawal cannot pull it back. */
+export function publishLocalRelease(dataDir: string, runId: string, input: { study_id: string; query: string; epsilon: number; delta?: number; at?: string }): { ok: true; statement_zh: string; spent: number } | { ok: false; reason_zh: string; statement_zh: string } {
+  const path = join(dataDir, 'science', 'outbox', `${runId}.json`)
+  const row = readJson<{ study_id?: string; released?: boolean; share?: unknown }>(path, (raw) => raw as { study_id?: string; released?: boolean }, () => ({}))
+  if (row.study_id !== input.study_id || !row.share) return { ok: false, reason_zh: '没有这份待发布的合计', statement_zh: RELEASE_STAYS_ZH }
+  const charged = tryRelease(dataDir, { study_id: input.study_id, query: input.query, epsilon: input.epsilon, delta: input.delta, at: input.at })
+  if (!charged.ok) return charged
+  writeJsonAtomic(path, { ...row, released: true })
+  return { ok: true, statement_zh: charged.statement_zh, spent: charged.spent }
 }
 
 export { rawOf }
