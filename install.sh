@@ -143,8 +143,21 @@ main() {
     resolved_plugin="$(resolve_plugin_spec "$plugin_spec")" \
       || fail_log "Could not fetch the plugin. On a network that cannot reach GitHub, set LONGPI_PLUGIN_URL to an npm pack tarball (.tgz)." \
                   "无法取得插件。访问不了 GitHub 时，请把 LONGPI_PLUGIN_URL 设成一个 npm pack 压缩包（.tgz）。"
-    dsh plugin --profile "$profile" add "$resolved_plugin" </dev/null >>"$LOG" 2>&1 \
-      || fail_log "dsh plugin add $resolved_plugin failed." "dsh plugin add ${resolved_plugin} 失败。"
+    if ! dsh plugin --profile "$profile" add "$resolved_plugin" </dev/null >>"$LOG" 2>&1; then
+      # The pinned longevity-skills package is not on the registry until the lead publishes it.
+      # A local plugin tarball can still be added once that dependency is left for this installer to place.
+      local offline=""
+      case "$resolved_plugin" in
+        /*.tgz | /*.tar.gz | ./*.tgz | ./*.tar.gz)
+          offline="$(plugin_tarball_without_library_dep "$resolved_plugin")" || offline=""
+          ;;
+      esac
+      if [ -z "$offline" ] || ! dsh plugin --profile "$profile" add "$offline" </dev/null >>"$LOG" 2>&1; then
+        fail_log "dsh plugin add $resolved_plugin failed." "dsh plugin add ${resolved_plugin} 失败。"
+      fi
+      note "Installed the plugin without fetching longevity-skills from the registry. The library is placed from node_modules or LONGPI_SKILLS_URL." \
+           "插件已装上，没有从 npm 拉取 longevity-skills。方法库改从 node_modules 或 LONGPI_SKILLS_URL 取得。"
+    fi
   fi
   [ -f "$installed/lib/index.js" ] && [ -f "$installed/vendor/dsh-plugin-mirobody/bridge/dsh_bridge.py" ] \
     || die "The plugin files are missing from $installed." "$installed 中缺少插件文件。"
@@ -1042,6 +1055,34 @@ docker_mirror_hint() {
        "腾讯云上现场可用的镜像是 https://mirror.ccs.tencentyun.com。https://docker.m.daocloud.io 也能应答仓库 API。"
   info "Example /etc/docker/daemon.json: {\"registry-mirrors\":[\"https://mirror.ccs.tencentyun.com\"]} — then restart docker and rerun with --with-mirobody." \
        "可在 /etc/docker/daemon.json 写入 {\"registry-mirrors\":[\"https://mirror.ccs.tencentyun.com\"]}，重启 Docker 后再用 --with-mirobody 运行。"
+}
+
+plugin_tarball_without_library_dep() {
+  local src="$1" stage packed dest
+  stage="$(mktemp -d "${TMPDIR:-/tmp}/longpi-plugin.XXXXXX")"
+  packed="$(mktemp -d "${TMPDIR:-/tmp}/longpi-plugin-pack.XXXXXX")"
+  dest="${LONGPI_CACHE:-${TMPDIR:-/tmp}}/plugin-offline.tgz"
+  mkdir -p "$(dirname "$dest")"
+  extract_marked "$src" "$stage" package.json || { rm -rf "$stage" "$packed"; return 1; }
+  python3 - "$stage/package.json" <<'PY' || { rm -rf "$stage" "$packed"; return 1; }
+import json, sys
+path = sys.argv[1]
+data = json.load(open(path, encoding="utf-8"))
+deps = data.get("dependencies") or {}
+deps.pop("longevity-skills", None)
+if deps:
+    data["dependencies"] = deps
+else:
+    data.pop("dependencies", None)
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+PY
+  mkdir -p "$packed/package"
+  cp -R "$stage"/. "$packed/package"/
+  tar -czf "$dest" -C "$packed" package
+  rm -rf "$stage" "$packed"
+  printf '%s\n' "$dest"
 }
 
 find_packaged_skills() {

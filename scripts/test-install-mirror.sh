@@ -368,6 +368,11 @@ if [ "${1:-}" = "plugin" ]; then
       prev=""
     fi
   done
+  if [ "${LONGPI_DSH_FAIL_ONCE:-}" = 1 ] && [ ! -f "$HOME/.longpi-dsh-failed-once" ]; then
+    echo 1 >"$HOME/.longpi-dsh-failed-once"
+    echo "ERR_PNPM_FETCH_404 longevity-skills" >&2
+    exit 1
+  fi
   root="${DSH_HOME:-$HOME/.dsh}/profiles/${profile}/node_modules/dsh-plugin-longpi"
   if [ -d "$spec" ] && [ -f "$spec/package.json" ]; then
     rm -rf "$root"
@@ -851,6 +856,18 @@ need "$TRACE" "npm view dsh-plugin-longpi version --registry https://registry.np
 forbid "$TRACE" "git pull"
 unset LONGPI_PLUGIN_VERSION
 printf 'ok mirror-recorded\n'
+PASS=$((PASS + 1))
+
+# --- 16. registry 404 for the pin: add the local tarball, then place the library
+export LONGPI_DSH_FAIL_ONCE=1
+export LONGPI_SKILLS_URL="$LOCAL_SKILLS"
+HIDE_TOOLS=
+run_case plugin-offline --plugin "$LOCAL_PLUGIN"
+need "$ERR" "without fetching longevity-skills"
+need "$TRACE" "dsh plugin --profile web add"
+need "$LONGPI_HOME/longevity-skills/catalog.json" '"id":"local"'
+unset LONGPI_DSH_FAIL_ONCE LONGPI_SKILLS_URL
+printf 'ok plugin-offline\n'
 PASS=$((PASS + 1))
 
 echo "fake-network: ${PASS} cases passed"
