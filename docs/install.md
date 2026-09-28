@@ -224,6 +224,49 @@ record   ok 21 indicators
 
 When something looks wrong, ask "帮我查一下 longpi 状态"; the model calls `longpi_status`, which reports the skill library, runtimes and Mirobody (no chart values, no token).
 
+## Mainland China
+
+With no extra flag the installer uses GitHub, registry.npmjs.org, pypi.org and Docker Hub. On a network that cannot open those hosts, pass one flag:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/install.sh | bash -s -- --mirror cn
+curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/install.sh | bash -s -- --mirror auto
+```
+
+`cn` forces the mirrors below. `auto` probes `github.com`, `registry.npmjs.org`, `pypi.org` and `registry-1.docker.io` (3 second connect timeout, 5 second total) and switches only the hosts that do not answer. A later run without the flag goes back to the public defaults. `LONGPI_MIRROR=cn` or `auto` is the same switch.
+
+| What | Public default | Mainland mirror |
+| --- | --- | --- |
+| npm and pnpm | registry.npmjs.org | `https://registry.npmmirror.com` (`LONGPI_NPM_REGISTRY`) |
+| pip and uv | pypi.org | `https://mirrors.cloud.tencent.com/pypi/simple`, then `https://mirrors.aliyun.com/pypi/simple` if that index fails (`LONGPI_PIP_INDEX`, `LONGPI_PIP_INDEX_FALLBACK`) |
+| Plugin | `github:zwbao/dsh-plugin-longpi` | see below |
+| longevity-skills | `git clone` from GitHub | see below |
+| Mirobody (`--with-mirobody`) | `git clone` from GitHub, then `git lfs pull` | see below |
+| Docker Hub | the daemon's own config | a hint only; this script does not edit `/etc/docker/daemon.json` |
+
+**Plugin and skill library.** Neither `dsh-plugin-longpi` nor `longevity-skills` is published on npm (checked 2026-09-28), so npmmirror has no tarball for them yet. The installer still asks the npm mirror first, so the day a release is published the same command starts using it. Until then it downloads a GitHub archive through a proxy that the client reaches without opening `github.com`: `https://ghfast.top` and then `https://gh-proxy.com`. Set `LONGPI_GITHUB_MIRROR` to put another prefix first, for example `https://ghfast.top/https://github.com`.
+
+There is no Gitee remote for these repositories. Import one yourself and point the installer at it:
+
+```bash
+export LONGPI_PLUGIN_URL=https://gitee.com/you/dsh-plugin-longpi/repository/archive/main.tar.gz
+export LONGPI_SKILLS_URL=https://gitee.com/you/longevity-skills.git
+export LONGPI_MIROBODY_SOURCE=https://gitee.com/you/mirobody.git
+bash install.sh --mirror cn --with-mirobody
+```
+
+`LONGPI_PLUGIN_URL` may also be an npm-pack `.tgz` or a local path. `LONGPI_SKILLS_URL` may be a git URL, a `.tar.gz`, or a directory that contains `catalog.json`. `LONGPI_MIROBODY_SOURCE` is the same for the Mirobody checkout (`deploy.sh` at the top). A tarball install of the skill library is refreshed only when `LONGPI_SKILLS_REFRESH=1`; a git checkout is still fast-forwarded.
+
+**LOINC.** `--with-mirobody` needs `mirobody/res/fhir_loinc_bundle.tar.gz`, which Git LFS stores. If `git-lfs` is missing, or `git lfs pull` fails because GitHub's LFS endpoint is blocked, the installer copies that file out of the `mirobody` wheel already installed into `~/longpi/.venv` (the wheel ships the bundle; pip got it from the PyPI mirror). `LONGPI_LOINC_URL` is a direct URL for the same `.tar.gz` and is tried before the wheel.
+
+**Docker.** Mirobody's `deploy.sh` pulls images through the Docker daemon and, when Docker Hub times out, tries `docker.1ms.run` on its own. On Tencent Cloud the mirror that answered in the field test is `https://mirror.ccs.tencentyun.com`. `https://docker.m.daocloud.io` also answers the registry API. To pin one:
+
+```json
+{ "registry-mirrors": ["https://mirror.ccs.tencentyun.com"] }
+```
+
+Put that in `/etc/docker/daemon.json`, restart Docker, and rerun with `--with-mirobody`. The installer only prints this hint.
+
 ## 9. Troubleshooting
 
 | Symptom | Cause and fix |
@@ -240,6 +283,9 @@ When something looks wrong, ask "帮我查一下 longpi 状态"; the model calls
 | A config change had no effect | Check with `--dump-config` that the row is `patched by` your file; any key left out of the patch falls back to its default. |
 | DSH fails to start | The terminal names the failing plugin; the full report is in `~/.dsh/logs/startup-*.log`. |
 | No 健康看板 tab | Start the session with a message first; after changing plugins, restart `dsh web`. |
+| `git clone` or `npm install` hangs, then fails | GitHub, npmjs, PyPI or Docker Hub is not reachable. Rerun with `--mirror cn` or `--mirror auto`. |
+| LOINC file is a few lines of text starting `version https://git-lfs` | `git lfs pull` did not run. Install git-lfs, or set `LONGPI_LOINC_URL` to a real `fhir_loinc_bundle.tar.gz`. With `--mirror`, the installer copies the bundle from the pip wheel when LFS fails. |
+| Docker pull times out on `registry-1.docker.io` | See the Docker paragraph under Mainland China. `deploy.sh` also tries `docker.1ms.run`. |
 
 ## Update and uninstall
 
@@ -249,7 +295,7 @@ git -C "$LONGPI_HOME/longevity-skills" pull          # new skills, no restart ne
 dsh plugin --profile web remove dsh-plugin-longpi   # uninstall; then delete the LongPi row from cordis.patch.yml
 ```
 
-To pin a version, install `github:zwbao/dsh-plugin-longpi#v0.5.1` (or another tag). Uninstalling keeps the profile, plans and check-ins in `~/.dsh/longpi`.
+To pin a version, install `github:zwbao/dsh-plugin-longpi#v0.5.1` (or another tag). On a mainland network, rerun `bash install.sh --mirror cn` instead of `dsh plugin update`: that command asks GitHub. Uninstalling keeps the profile, plans and check-ins in `~/.dsh/longpi`.
 
 ## Without DSH (developers)
 

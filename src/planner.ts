@@ -157,8 +157,9 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
   const tracking = await buildTracking(context)
   const reference = loadReference(context.skillsHome)
   const { profile, indicators, medications } = context.records
-  const focus = [...(options.focus ?? profile.focus)]
-  const notes: string[] = []
+  const goalsFromMemory = rememberedGoals(context.dataDir)
+  const focus = [...new Set([...(options.focus ?? profile.focus), ...goalsFromMemory.focus])]
+  const notes: string[] = [...goalsFromMemory.notes]
   const prefs = readPlanPrefs(context.dataDir)
   const said = flagsFromText(options.constraints ?? '')
   if (said.pregnant || said.ckd) {
@@ -191,7 +192,7 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
     if (toDoctor.length > 0) notes.push(`记录里有超出正常波动的变化（${toDoctor.join('、')}），建议先请医生看过再开始方案。`)
   }
   const allPriorities = prioritiesOf({
-    focus, asked: options.markers ?? [], models: tracking.models, biovar: reference.biovar, indicators, notes,
+    focus, asked: [...(options.markers ?? []), ...goalsFromMemory.asked], models: tracking.models, biovar: reference.biovar, indicators, notes,
   })
   // Normal blood pressure and no hypertension known: no salt, DASH or other BP-lowering item unless they asked
   // for blood pressure themselves.
@@ -253,6 +254,30 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
 // --- priorities ----------------------------------------------------------------
 
 /** Condition flags the person stated (memory), for the suitability checks; none when memory cannot be read. */
+function rememberedGoals(dataDir: string): { focus: Focus[]; asked: string[]; notes: string[] } {
+  const focus: Focus[] = []
+  const asked: string[] = []
+  const notes: string[] = []
+  try {
+    for (const item of memoryFor(dataDir).active('goal')) {
+      const text = item.text_zh
+      notes.push(`你说过的目标：${text}`)
+      if (item.focus) focus.push(item.focus)
+      if (item.target?.marker_key) asked.push(item.target.marker_key)
+      if (/脂肪肝|体重|公斤|kg|腰围/.test(text)) {
+        focus.push('weight')
+        asked.push('体重')
+      }
+      if (/血糖|糖化/.test(text)) focus.push('glucose')
+      if (/血压/.test(text)) asked.push('血压')
+      if (/睡眠/.test(text)) focus.push('sleep')
+    }
+  } catch {
+    // memory unreadable: the draft still uses the profile focus
+  }
+  return { focus: [...new Set(focus)], asked: [...new Set(asked)], notes }
+}
+
 function safeConditions(dataDir: string): string[] {
   try {
     return memoryFor(dataDir).safetyFlags().conditions
@@ -618,8 +643,31 @@ function itemFor(group: Group, brief: PlanBrief, today: string): DraftItem {
  * saves nothing. Null when there is nothing evidence-backed to propose.
  */
 /** The Chinese reply for this draft. The model sends it and does not call another tool first. */
+/** Walking, meal quality, sleep, and smoking or alcohol. No fast, no large weight target, no supplement, no iron. */
+export function softHoldDraft(today: string): PlanDraft {
+  const item = (id: string, category: DraftCategory, title: string, detail: string): DraftItem => ({
+    id, category, category_zh: CATEGORY_ZH[category], title, detail, start: today, markers: [], target: null,
+    evidence: { effect_id: id, expected_zh: '这不是试验效应，是等医生看过之前可以做的事。', doi: '', verified: false, population: '一般成人' },
+    needs_doctor: false, cautions_zh: [],
+  })
+  return {
+    title: `等就诊期间可以先做的事（${today}）`,
+    items: [
+      item('hold-walk', 'exercise', '每天走路 20 到 30 分钟', '用能说话的速度走。不代替就诊。'),
+      item('hold-diet', 'diet', '每餐有蔬菜和蛋白质，少含糖饮料', '按平时的三餐吃，把蔬菜和蛋白质备好。'),
+      item('hold-sleep', 'sleep', '尽量固定起床时间，睡大约 7 到 9 小时', '睡眠不拿来判断这次检查好了还是坏了。'),
+      item('hold-smoke', 'behavior', '如果吸烟，先把戒烟和医生说；如果喝酒，先少喝', '不吸烟、不喝酒的人不用做这一项。'),
+    ],
+    goals: [],
+    notes_zh: ['请先去看医生。等看过之前，先做上面这几件。'],
+  }
+}
+
 export function replyForDraft(brief: PlanBrief, draft: PlanDraft | null): string {
-  if (brief.safety.stop_zh) return brief.safety.stop_zh
+  if (brief.safety.stop_zh) {
+    const lines = (draft?.items ?? []).map((item) => `${item.category_zh}：${item.title}。${item.detail}`)
+    return [brief.safety.stop_zh, ...lines].join('\n')
+  }
   if (!draft) return brief.notes_zh[0] || '现在还起草不了方案。'
   const lines = draft.items.map((item) => {
     const caution = item.cautions_zh.length > 0 ? `（${item.cautions_zh.join('；')}）` : ''
@@ -643,10 +691,6 @@ export function settleDraft(dataDir: string, brief: PlanBrief, today: string, op
   })
   const content = fingerprint({ clinical, ids: brief.excluded_ids ?? [], phrases: brief.excluded_phrases ?? [], max: opts.maxItems ?? null, candidates: brief.candidates.map((row) => row.id), focus: brief.focus })
   if (prefs.content_fp === content && prefs.draft && typeof prefs.draft === 'object') return prefs.draft as PlanDraft
-  if (brief.safety.stop_zh) {
-    writePlanPrefs(dataDir, { ...prefs, clinical_fp: clinical, content_fp: content, drafted_on: prefs.drafted_on || today, draft: null })
-    return null
-  }
   const draftedOn = prefs.clinical_fp === clinical && prefs.drafted_on ? prefs.drafted_on : today
   const draft = draftPlan(brief, { today: draftedOn, ...(opts.maxItems != null ? { maxItems: opts.maxItems } : {}) })
   writePlanPrefs(dataDir, { ...prefs, clinical_fp: clinical, content_fp: content, drafted_on: draft ? draftedOn : prefs.drafted_on, draft })
@@ -654,7 +698,7 @@ export function settleDraft(dataDir: string, brief: PlanBrief, today: string, op
 }
 
 export function draftPlan(brief: PlanBrief, opts: { today: string; maxItems?: number }): PlanDraft | null {
-  if (brief.safety.stop_zh) return null
+  if (brief.safety.stop_zh) return softHoldDraft(opts.today)
   const maxItems = Math.max(1, Math.min(5, Math.round(opts.maxItems ?? 3)))
   const rankOf = (key: string) => brief.priorities.findIndex((row) => row.marker_key === key)
   const phrases = brief.excluded_phrases ?? []

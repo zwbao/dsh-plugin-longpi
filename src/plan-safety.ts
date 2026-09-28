@@ -7,7 +7,7 @@
 export const FISH_OIL_CAUTION = '试验用的是处方级的较高用量 EPA+DHA，鱼油可能增加出血和房颤（心房颤动）风险；这不是给你的用量，先与医生确认'
 export const HYPO_AWAKE_ZH = '先吃 15 克快速吸收的糖（葡萄糖片或一小杯含糖果汁），15 分钟后复测；仍低于 3.9 mmol/L 就再吃 15 克。'
 export const HYPO_UNCONSCIOUS_ZH = '昏迷、叫不醒或无法吞咽时不要喂东西，请立即拨打 120。'
-export const DOCTOR_ZH = '在医生看过之前，LongPi 不起草生活方式方案。'
+export const DOCTOR_ZH = '请先去看医生。等医生看过之前，可以先走路、把每餐的蔬菜和蛋白质备好、把睡眠稳住；如果吸烟或喝酒，先少一点。这份安排不含断食、大幅减重、补剂或补铁。'
 
 export const SGLT2 = /列净|gliflozin|dapagliflozin|empagliflozin|canagliflozin|ertugliflozin/i
 export const INSULIN_SU = /胰岛素|\binsulin\b|格列(?!净)|磺脲|消渴丸|glibenclamide|glimepiride|gliclazide|glipizide|glyburide/i

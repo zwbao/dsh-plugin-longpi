@@ -108,7 +108,7 @@ export function RecordsStep(props: { journey: Journey; onOpenChanges?: () => voi
       : h(React.Fragment, null,
         records.status === 'error'
           ? h('p', { className: 'lp-blocker lp-blocker-bad' }, `记录读取失败：${records.error || '没有返回原因'}`)
-          : h('p', { className: 'lp-muted' }, 'LongPi 从你自己的 Mirobody 读取体检和可穿戴数据（只读）。在 Mirobody 网页生成个人 MCP 地址，粘贴到这里：')),
+          : h('p', { className: 'lp-muted' }, 'LongPi 从你自己的 Mirobody 读取体检和可穿戴数据（只读）。在下面用 Mirobody 的邮箱和密码登录，不用复制 MCP 地址。')),
     h(ConnectionPanel, { idPrefix: 'lp-onb-conn', collapsed: connected }))
 }
 
@@ -121,7 +121,7 @@ function ResultFigures(props: { journey: Journey }): React.ReactElement {
       bioage.status === 'ok'
         ? h('div', null,
           h('div', { className: 'lp-first-figure' }, fmt(bioage.phenoage), h('span', { className: 'lp-bignum-unit' }, '岁')),
-          h('div', { className: 'lp-caption' }, versusAge(bioage.advance, bioage.checkups)),
+          h('div', { className: 'lp-caption' }, bioage.headline_zh ? bioage.headline_zh : (bioage.allows_younger ? versusAge(bioage.advance, bioage.checkups) : '')),
           bioage.caveat_zh ? h('p', { className: 'lp-caption lp-first-caveat', role: 'note' }, bioage.caveat_zh) : null)
         : h('div', null, h('div', { className: 'lp-first-wait' }, '还不能计算'), h('p', { className: 'lp-blocker' }, bioage.blocker_zh))),
     h('div', { className: 'lp-first-cell' },

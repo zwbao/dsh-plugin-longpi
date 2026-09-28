@@ -40,6 +40,24 @@ export interface Consent {
   accepted_at: string
 }
 
+/** One separate act (PIPL sensitive information, DeepSeek data flow, or session-log upload). */
+export interface PrivacyAct {
+  version: string
+  decision: 'granted' | 'declined' | 'withdrawn'
+  at: string
+}
+
+/** Mirrors of privacy/consents.jsonl. The log is the source of truth; this is what a profile read shows. */
+export interface ProfileConsents {
+  pipl_sensitive: PrivacyAct | null
+  data_flow_deepseek: PrivacyAct | null
+  session_log_upload: PrivacyAct | null
+}
+
+export function emptyConsents(): ProfileConsents {
+  return { pipl_sensitive: null, data_flow_deepseek: null, session_log_upload: null }
+}
+
 export interface Profile {
   displayName: string
   birthYear: number | null
@@ -47,7 +65,12 @@ export interface Profile {
   sex: Sex
   risk: Partial<Record<RiskFact, boolean>>
   focus: Focus[]
+  /** The first-run product notice. Not the PIPL sensitive-information act. */
   consent: Consent | null
+  /** Separate acts. Absent on a file written before 0.5.x privacy means none of them is decided. */
+  consents: ProfileConsents
+  /** Set when the labs belong to someone else (a parent). Calculators use this age and sex. */
+  subject?: { relationship_zh: string; age: number | null; sex: Sex } | null
 }
 
 export const EMPTY_PROFILE: Profile = {
@@ -58,10 +81,11 @@ export const EMPTY_PROFILE: Profile = {
   risk: {},
   focus: [],
   consent: null,
+  consents: emptyConsents(),
 }
 
 function emptyProfile(): Profile {
-  return { ...EMPTY_PROFILE, risk: {}, focus: [] }
+  return { ...EMPTY_PROFILE, risk: {}, focus: [], consents: emptyConsents() }
 }
 
 type Failure = { ok: false; error: string }
@@ -82,7 +106,7 @@ export function normalizeProfile(input: unknown): { ok: true; profile: Profile }
   }
   const raw = input as Record<string, unknown>
   for (const key of Object.keys(raw)) {
-    if (!['displayName', 'birthYear', 'age', 'sex', 'risk', 'focus', 'consent'].includes(key)) {
+    if (!['displayName', 'birthYear', 'age', 'sex', 'risk', 'focus', 'consent', 'consents', 'subject'].includes(key)) {
       return { ok: false, error: `unknown field ${key}` }
     }
   }
@@ -118,10 +142,30 @@ export function normalizeProfile(input: unknown): { ok: true; profile: Profile }
   if (!focus.ok) return focus
   const consent = consentOf(raw.consent)
   if (!consent.ok) return consent
+  const consents = consentsOf(raw.consents)
+  if (!consents.ok) return consents
+  const subject = subjectOf(raw.subject)
+  if (!subject.ok) return subject
   return {
     ok: true,
-    profile: { displayName, birthYear: birthYear.value, age: age.value, sex, risk, focus: focus.value, consent: consent.value },
+    profile: { displayName, birthYear: birthYear.value, age: age.value, sex, risk, focus: focus.value, consent: consent.value, consents: consents.value, ...(subject.value ? { subject: subject.value } : {}) },
   }
+}
+
+function subjectOf(value: unknown): { ok: true; value: Profile['subject'] } | Failure {
+  if (value == null) return { ok: true, value: null }
+  if (typeof value !== 'object' || Array.isArray(value)) return { ok: false, error: 'subject must be an object' }
+  const raw = value as Record<string, unknown>
+  const relationship = typeof raw.relationship_zh === 'string' ? raw.relationship_zh.trim() : ''
+  if (!relationship || relationship.length > 20) return { ok: false, error: 'subject.relationship_zh is required' }
+  const age = optionalInt(raw.age, 0, 130, 'subject.age')
+  if (!age.ok) return age
+  let sex: Sex = 'unknown'
+  if (raw.sex != null && raw.sex !== '') {
+    if (typeof raw.sex !== 'string' || !SEXES.includes(raw.sex as Sex)) return { ok: false, error: 'subject.sex must be female, male, other, or unknown' }
+    sex = raw.sex as Sex
+  }
+  return { ok: true, value: { relationship_zh: relationship, age: age.value, sex } }
 }
 
 function focusOf(value: unknown): { ok: true; value: Focus[] } | Failure {
@@ -146,6 +190,40 @@ function consentOf(value: unknown): { ok: true; value: Consent | null } | Failur
     return { ok: false, error: 'consent.accepted_at must be an ISO date-time' }
   }
   return { ok: true, value: { version: version.trim(), accepted_at: acceptedAt } }
+}
+
+const PRIVACY_SCOPES = ['pipl_sensitive', 'data_flow_deepseek', 'session_log_upload'] as const
+const PRIVACY_DECISIONS = ['granted', 'declined', 'withdrawn'] as const
+
+function actOf(value: unknown, label: string): { ok: true; value: PrivacyAct | null } | Failure {
+  if (value == null) return { ok: true, value: null }
+  if (typeof value !== 'object' || Array.isArray(value)) return { ok: false, error: `${label} must be null or {version, decision, at}` }
+  const raw = value as Record<string, unknown>
+  if (typeof raw.version !== 'string' || !raw.version.trim()) return { ok: false, error: `${label}.version must be a non-empty string` }
+  if (typeof raw.decision !== 'string' || !(PRIVACY_DECISIONS as readonly string[]).includes(raw.decision)) {
+    return { ok: false, error: `${label}.decision must be granted, declined, or withdrawn` }
+  }
+  if (typeof raw.at !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(raw.at) || Number.isNaN(Date.parse(raw.at))) {
+    return { ok: false, error: `${label}.at must be an ISO date-time` }
+  }
+  return { ok: true, value: { version: raw.version.trim(), decision: raw.decision as PrivacyAct['decision'], at: raw.at } }
+}
+
+/** A missing or unreadable block is "not decided", so an older profile file still loads. */
+function consentsOf(value: unknown): { ok: true; value: ProfileConsents } | Failure {
+  const empty = emptyConsents()
+  if (value == null) return { ok: true, value: empty }
+  if (typeof value !== 'object' || Array.isArray(value)) return { ok: false, error: 'consents must be an object' }
+  const raw = value as Record<string, unknown>
+  for (const key of Object.keys(raw)) {
+    if (!(PRIVACY_SCOPES as readonly string[]).includes(key)) return { ok: false, error: `unknown consent scope ${key}` }
+  }
+  for (const scope of PRIVACY_SCOPES) {
+    const act = actOf(raw[scope], `consents.${scope}`)
+    if (!act.ok) return act
+    empty[scope] = act.value
+  }
+  return { ok: true, value: empty }
 }
 
 /**
@@ -220,4 +298,15 @@ export function setConsent(dataDir: string, accept: boolean, now: Date = new Dat
   const consent = accept ? { version: CONSENT_VERSION, accepted_at: now.toISOString() } : null
   writeProfile(dataDir, { ...readProfile(dataDir), consent })
   return consent
+}
+
+/** The privacy screen stated an age. Does not touch the first-run notice or the separate acts. */
+export function setStatedAge(dataDir: string, age: number): void {
+  writeProfile(dataDir, { ...readProfile(dataDir), age })
+}
+
+/** Mirror one separate act onto the profile. The append-only log remains the source of truth. */
+export function setPrivacyAct(dataDir: string, scope: keyof ProfileConsents, act: PrivacyAct | null): void {
+  const current = readProfile(dataDir)
+  writeProfile(dataDir, { ...current, consents: { ...current.consents, [scope]: act } })
 }

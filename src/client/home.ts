@@ -152,7 +152,7 @@ function joinUnlocks(journey: Journey): string {
 function figures(journey: Journey): React.ReactNode[][] {
   const { bioage, risk } = journey.results
   const body: React.ReactNode[] | null = bioage.status === 'ok' && bioage.phenoage != null
-    ? ['身体年龄 ', h('b', { key: 'b', title: ESTIMATE }, `${fmt(bioage.phenoage)} 岁`), versusAge(bioage.advance, bioage.checkups) ? `，${versusAge(bioage.advance, bioage.checkups)}` : '']
+    ? ['身体年龄 ', h('b', { key: 'b', title: ESTIMATE }, `${fmt(bioage.phenoage)} 岁`), bioage.headline_zh ? `。${bioage.headline_zh}` : (bioage.allows_younger ? `，${versusAge(bioage.advance, bioage.checkups)}` : '')]
     : null
   const heart: React.ReactNode[] | null = risk.status === 'ok' && risk.risk_pct != null
     ? ['心血管 10 年风险 ', h('b', { key: 'b', title: ESTIMATE }, `${riskText(risk.risk_pct)}%`), risk.category_zh ? `（${risk.category_zh}）` : '']

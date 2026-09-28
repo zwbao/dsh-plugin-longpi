@@ -11,11 +11,12 @@
 // desktop runner and fetch are injected too, so no test calls osascript or
 // the network.
 
-import { spawn } from 'node:child_process'
+import { spawn, spawnSync } from 'node:child_process'
 import { createHmac, randomBytes } from 'node:crypto'
 import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
+import { plainReminderOf } from './engage/engine.ts'
 import { addDays, civilParts, daysBetween, isoDay } from './interventions.ts'
 
 export const WEBHOOK_KINDS = ['feishu', 'wecom', 'dingtalk', 'bark', 'generic'] as const
@@ -66,6 +67,8 @@ export interface FollowupState {
   /** Retest dates from the plan's verdicts: date moves with today once due, first_due does not. */
   retests: Array<{ marker: string; date: string; first_due: string }>
   week: { pct: number | null; streak: number; next_retest: { marker: string; date: string } | null }
+  /** A weekly line when there is no plan but an unlock or a season task is waiting. */
+  plain_reminder_zh?: string | null
 }
 
 export interface FollowupDeps {
@@ -472,7 +475,42 @@ export function decideFollowup(input: { now: Date; settings: FollowupSettings; s
         : `LongPi：下一步「${state.next_title_zh}」，打开健康页继续。`,
     })
   }
+  if (!state.plan_exists && state.plain_reminder_zh && weekly && isoWeekday(now) === weekly.day && minutes >= minutesOf(weekly.time) && !sent.has(`plain:${isoWeek(now)}`)) {
+    out.push({
+      kind: 'nudge',
+      key: `plain:${isoWeek(now)}`,
+      text: `LongPi：${state.plain_reminder_zh}。打开健康页看这一季就好，没有每天催。`,
+    })
+  }
   return out
+}
+
+function withPlain(dataDir: string, state: FollowupState | null): FollowupState | null {
+  if (!state || state.plan_exists || state.plain_reminder_zh) return state
+  try {
+    const teaser = plainReminderOf(dataDir)
+    return teaser ? { ...state, plain_reminder_zh: teaser } : state
+  } catch {
+    return state
+  }
+}
+
+/** Why nothing is going out, so a switch that looks dead still explains itself. Empty when a send is due now. */
+export function followupSilence(input: { now: Date; settings: FollowupSettings; state: FollowupState | null; log: readonly FollowupLogRow[] }): string {
+  const { now, settings, state, log } = input
+  if (!settings.enabled) {
+    return '提醒是关着的。打开之后，没有方案时，只有到期的复测、待解锁的检查或本季任务才会提醒；这些都没有，就保持安静，不会每天催打卡。'
+  }
+  if (inQuiet(settings.quiet, now)) return '现在是免打扰时段，到点的提醒会在时段结束后同一天再发。'
+  if (state && decideFollowup({ now, settings, state, log }).length > 0) return ''
+  if (!state || (!state.plan_exists && state.checkin_open.length === 0 && state.retests.length === 0 && !state.plain_reminder_zh)) {
+    return '没有方案，也没有到期的复测或待解锁的检查，所以不发提醒。'
+  }
+  if (!state.plan_exists && state.plain_reminder_zh) return `没有方案，不会每天催。每周会提一句：${state.plain_reminder_zh}`
+  const today = isoDay(now)
+  if (state.plan_exists && state.checkin_open.length > 0) return '今天还有没打卡的项目，到了设定的时间会提醒，不会提前催。'
+  if (state.retests.some((row) => row.date === today)) return '今天有复测，到了设定的时间会提醒。'
+  return '今天没有待打卡，也没有到期的复测，所以不发提醒。每周小结在设定的那天发送。'
 }
 
 /** Whether anything could be due now, from the clock, the settings and the log alone: the journey is read only then. */
@@ -515,7 +553,7 @@ export function nextTimes(settings: FollowupSettings, state: FollowupState | nul
   }
   const weeklyAt = settings.weekly ? heldUntil(settings.weekly.time, settings.quiet) : null
   let weekly: string | null = null
-  if (settings.weekly && weeklyAt && state?.plan_exists) {
+  if (settings.weekly && weeklyAt && state && (state.plan_exists || state.plain_reminder_zh)) {
     const offset = (settings.weekly.day - isoWeekday(now) + 7) % 7
     const thisWeek = offset > 0 || (minutes < minutesOf(weeklyAt) && !sent.has(`weekly:${isoWeek(now)}`))
     weekly = localIso(addDays(today, thisWeek ? offset : offset + 7), weeklyAt)
@@ -534,10 +572,52 @@ function bodyOf(text: string): string {
   return clean(text).replace(/^LongPi\s*[：:]\s*/, '') || clean(text)
 }
 
+const NOTIFIER_SCRIPT = `on run argv
+  set msg to "LongPi"
+  if (count of argv) > 0 then set msg to item 1 of argv as text
+  display notification msg with title "LongPi" subtitle "健康提醒"
+end run
+`
+
+let notifierApp: string | null = null
+
+function notifierWanted(): boolean {
+  return process.env.LONGPI_SKIP_NOTIFIER !== '1' && process.env.npm_lifecycle_event !== 'test'
+}
+
+/**
+ * Compile a tiny LongPi.app once, so Notification Center names LongPi.
+ * osascript's own notifications are attributed to Script Editor. If osacompile
+ * is missing, sends fall back to that and the limitation stays.
+ */
+export function armNotifier(dir: string): string | null {
+  if (!notifierWanted() || process.platform !== 'darwin' || !dir) return notifierApp
+  try {
+    const root = join(dir, 'notifier')
+    const app = join(root, 'LongPi.app')
+    const bin = join(app, 'Contents', 'MacOS', 'applet')
+    if (!existsSync(bin)) {
+      mkdirSync(root, { recursive: true, mode: 0o700 })
+      const script = join(root, 'notify.applescript')
+      writeFileSync(script, NOTIFIER_SCRIPT, { mode: 0o600 })
+      const compiled = spawnSync('osacompile', ['-o', app, script], { timeout: 20000 })
+      if (compiled.status !== 0 || !existsSync(bin)) return null
+    }
+    notifierApp = app
+    return app
+  } catch {
+    return null
+  }
+}
+
 /** The notification command for this platform, run without a shell; null where there is none. */
-export function desktopCommand(platform: string, text: string): { command: string; args: string[] } | null {
+export function desktopCommand(platform: string, text: string, appPath?: string | null): { command: string; args: string[] } | null {
   const body = bodyOf(text)
   if (platform === 'darwin') {
+    if (appPath) {
+      const bin = join(appPath, 'Contents', 'MacOS', 'applet')
+      if (existsSync(bin)) return { command: bin, args: [body] }
+    }
     const escaped = body.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
     return { command: 'osascript', args: ['-e', `display notification "${escaped}" with title "LongPi"`] }
   }
@@ -657,7 +737,7 @@ export async function sendFollowup(settings: FollowupSettings, message: string, 
   const use = options.deps ?? deps
   const now = options.now ?? new Date()
   const channels: SendResult['channels'] = {}
-  const command = settings.desktop ? desktopCommand(use.platform, message) : null
+  const command = settings.desktop ? desktopCommand(use.platform, message, notifierWanted() ? notifierApp : null) : null
   if (command) {
     try {
       channels.desktop = await use.run(command.command, command.args, SEND_TIMEOUT_MS)
@@ -723,7 +803,8 @@ export async function followupTick(input: { dataDir: string; now: Date; getState
   const settings = readFollowup(input.dataDir)
   const log = readFollowupLog(input.dataDir)
   if (!followupArmed(settings, log, input.now)) return []
-  const state = await input.getState()
+  const state = withPlain(input.dataDir, await input.getState())
+  if (!state) return []
   const rows: FollowupLogRow[] = []
   for (const send of decideFollowup({ now: input.now, settings, state, log })) {
     if (sentToday([...log, ...rows], input.now) >= FOLLOWUP_MAX_PER_DAY) break
@@ -749,6 +830,7 @@ export interface FollowupContext {
  * save or a self measurement (the generation changes), so a reminder never counts items already ticked.
  */
 export function startFollowup(ctx: Context, getContext: () => FollowupContext, options: { tickMs?: number; now?: () => Date } = {}): void {
+  try { armNotifier(getContext().dataDir) } catch { /* a desktop name is optional */ }
   ctx.effect(() => {
     let running = false
     let cache: { at: number; day: string; generation: number; state: FollowupState } | null = null
@@ -779,11 +861,13 @@ export function startFollowup(ctx: Context, getContext: () => FollowupContext, o
 export function followupResponse(dataDir: string, state: FollowupState | null, now: Date = new Date()) {
   const settings = readFollowup(dataDir)
   const log = readFollowupLog(dataDir)
+  const enriched = withPlain(dataDir, state)
   return {
     settings: publicFollowup(settings),
-    next: nextTimes(settings, state, now, log),
+    next: nextTimes(settings, enriched, now, log),
     log: log.slice(-20).reverse().map((row) => ({ at: row.at, kind: row.kind, key: row.key, ok: row.ok, channels: row.channels, ...(row.error ? { error: row.error } : {}) })),
     platform_desktop: desktopSupported(deps.platform),
+    silence_zh: followupSilence({ now, settings, state: enriched, log }),
   }
 }
 

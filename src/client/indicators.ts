@@ -45,11 +45,18 @@ function Sparkline(props: { points: Array<{ date: string; value: number }>; labe
     h('circle', { cx: x(points.length - 1), cy: y(last.value), r: 2.5, className: 'lp-spark-dot' }))
 }
 
-export function JudgedChip(props: { row: IndicatorRow }): React.ReactElement {
+export function JudgedChip(props: { row: IndicatorRow; gate?: string; reason?: string }): React.ReactElement {
   const { row } = props
+  const reason = props.reason ?? ''
+  if (props.gate === 'too_early' || reason.startsWith('太早')) {
+    return h('span', { className: 'lp-chip-c lp-chip-c-unjudged', title: reason || '间隔还没到这项的最短复测时间' }, '太早')
+  }
+  if (props.gate === 'not_comparable' || reason.startsWith('不可比')) {
+    return h('span', { className: 'lp-chip-c lp-chip-c-unjudged', title: reason || '两次不在同一家机构' }, '不可比')
+  }
   if (row.judged === 'changed' && row.change) return h(ChangeChip, { verdict: row.change.verdict, askDoctor: row.change.ask_doctor })
   if (row.judged === 'within') return h('span', { className: 'lp-chip-c lp-chip-c-within' }, h(Icon, { name: 'within', size: 12 }), '波动内')
-  const why = row.read_error ? '这项没有读到' : row.points.length < 2 ? '只有一次结果' : '缺少这项的正常波动数据'
+  const why = row.read_error ? '这项没有读到' : row.points.length < 2 ? '只有一次结果' : '缺少这项的正常波动数据，或这次还不能比'
   return h('span', { className: 'lp-chip-c lp-chip-c-unjudged', title: why }, '未判断')
 }
 
@@ -59,7 +66,7 @@ function latestText(row: IndicatorRow): string {
   return row.latest.value == null ? '—' : fmtAuto(row.latest.value)
 }
 
-function IndicatorLine(props: { row: IndicatorRow; open: boolean; onToggle: () => void }): React.ReactElement {
+function IndicatorLine(props: { row: IndicatorRow; open: boolean; onToggle: () => void; gate?: string; reason?: string }): React.ReactElement {
   const { row } = props
   const panelId = `lp-ind-panel-${row.id.replace(/[^A-Za-z0-9_-]/g, '_')}`
   return h('li', { className: `lp-ind-row ${props.open ? 'lp-ind-open' : ''} ${row.read_error ? 'lp-ind-failed' : ''}` },
@@ -74,7 +81,9 @@ function IndicatorLine(props: { row: IndicatorRow; open: boolean; onToggle: () =
           row.latest?.text ? null : h('span', { className: 'lp-caption' }, ` ${prettyUnits(row.unit)}`),
           row.latest ? h('span', { className: 'lp-caption lp-ind-date' }, row.latest.date) : null),
       row.read_error ? h('span', { className: 'lp-ind-spark' }) : h('span', { className: 'lp-ind-spark' }, h(Sparkline, { points: row.points, label: row.label_zh })),
-      h('span', { className: 'lp-ind-judged' }, h(JudgedChip, { row })),
+      h('span', { className: 'lp-ind-judged' },
+        h(JudgedChip, { row, gate: props.gate, reason: props.reason }),
+        props.reason ? h('span', { className: 'lp-caption lp-ind-date' }, props.reason) : null),
       h('span', { className: 'lp-ind-source lp-caption' }, SOURCE_ZH[row.source]),
       h(Icon, { name: 'chevron', size: 14, className: 'lp-ind-chevron' })),
     props.open ? h(DetailPanel, { row, id: panelId }) : null)
@@ -158,8 +167,41 @@ function lastCheckup(data: IndicatorsResponse): string | null {
   return last
 }
 
+/** gate and reason_zh are not in the normalised row; the page reads them from the same response. */
+function useGates(stamp: string | undefined): Record<string, { gate?: string; reason?: string }> {
+  const [gates, setGates] = React.useState<Record<string, { gate?: string; reason?: string }>>({})
+  React.useEffect(() => {
+    let live = true
+    getJson<unknown>('/api/longpi/indicators').then((raw) => {
+      if (!live || !raw || typeof raw !== 'object') return
+      const groups = (raw as { groups?: unknown }).groups
+      if (!Array.isArray(groups)) return
+      const next: Record<string, { gate?: string; reason?: string }> = {}
+      for (const group of groups) {
+        const indicators = group && typeof group === 'object' ? (group as { indicators?: unknown }).indicators : undefined
+        if (!Array.isArray(indicators)) continue
+        for (const row of indicators) {
+          if (!row || typeof row !== 'object') continue
+          const item = row as { id?: unknown; gate?: unknown; reason_zh?: unknown }
+          if (typeof item.id !== 'string') continue
+          if (typeof item.gate === 'string' || typeof item.reason_zh === 'string') {
+            next[item.id] = {
+              ...(typeof item.gate === 'string' ? { gate: item.gate } : {}),
+              ...(typeof item.reason_zh === 'string' ? { reason: item.reason_zh } : {}),
+            }
+          }
+        }
+      }
+      setGates(next)
+    }).catch(() => { if (live) setGates({}) })
+    return () => { live = false }
+  }, [stamp])
+  return gates
+}
+
 export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filter: IndicatorFilter) => void; onConnect: () => void }): React.ReactElement {
   const { data, loading, error } = useIndicators()
+  const gates = useGates(data?.updated_at)
   const [open, setOpen] = React.useState<string | null>(null)
   if (!data && loading) return h(Loading)
   if (!data) return h('div', { className: 'lp-tab-body' }, h(LoadError, { what: '指标', error, onRetry: () => reload('indicators') }))
@@ -192,7 +234,7 @@ export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filte
         })),
       h('span', { className: 'lp-caption' }, checkup ? `最近一次体检 ${chineseDate(checkup)}` : '',
         h(Info, { label: '和正常波动比', align: 'end' },
-          '“变好/变差”：最近两次体检之差超出个体正常波动（参考变化值 RCV，按生物学变异数据库计算）；“需结合参考范围”：变化超出波动，但好坏要看是否在参考范围内；“波动内”：差值在正常波动以内；“未判断”：只有一次结果、没有这项的波动数据，或这次没有读到。手环为每周均值，自测为每日值，只显示趋势。'))),
+          '“变好/变差”：最近两次体检之差超出个体正常波动（参考变化值），而且间隔够长、同一家机构；“波动内”：间隔够长，差值仍在正常波动以内；“太早”：间隔短于这项的最短复测时间；“不可比”：两次不在同一家机构；“未判断”：只有一次结果、没有这项的波动数据，或这次没有读到。太早和不可比都不是波动内。手环为每周均值，自测为每日值，只显示趋势。'))),
     groups.length === 0
       ? h('div', { className: 'lp-card lp-empty' }, h('p', { className: 'lp-muted' }, `没有“${filter.label}”的指标。`), h('button', { type: 'button', className: 'lp-row-link', onClick: () => props.onFilter('all') }, '看全部 →'))
       : h('div', { className: 'lp-card lp-ind-card' },
@@ -201,6 +243,9 @@ export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filte
         ...groups.map((group) => h('section', { key: group.key, className: 'lp-ind-group', 'aria-label': group.label_zh },
           h('h3', { className: 'lp-ind-group-title' }, group.label_zh, h('span', { className: 'lp-optional' }, `${group.indicators.length} 项`)),
           h('ul', { className: 'lp-ind-list' },
-            ...group.indicators.map((row) => h(IndicatorLine, { key: row.id, row, open: open === row.id, onToggle: () => setOpen((current) => (current === row.id ? null : row.id)) })))))),
+            ...group.indicators.map((row) => h(IndicatorLine, {
+              key: row.id, row, open: open === row.id, gate: row.gate ?? gates[row.id]?.gate, reason: row.reason_zh ?? gates[row.id]?.reason,
+              onToggle: () => setOpen((current) => (current === row.id ? null : row.id)),
+            })))))),
     h('p', { className: 'lp-fine' }, '点任一行看历次数值、单位、来自哪份报告，以及正常波动的依据。这里只列出记录里的数值，不做诊断。'))
 }

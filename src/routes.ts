@@ -25,6 +25,14 @@ import { buildCalendar } from './calendar.ts'
 import { addSelf, deleteSelf, readSelf } from './selfmeasure.ts'
 import { clearConnection, connectionSource, connectionTokenProblem, connectionUrlProblem, maskMcpUrl, saveConnection, testConnection, type ConnectionSource } from './connection.ts'
 import { buildIndicators, indicatorDetail, recordsSummary, type RecordsSummary } from './indicators.ts'
+import { minorView } from './privacy/consents.ts'
+import { stripWeightLoss } from './privacy/disclosure.ts'
+
+/** Under 18, the page draft drops weight-loss items the same way chat drafts do. */
+function pageDraftPayload<T>(dataDir: string, body: T): T {
+  if (!minorView(readProfile(dataDir)).minor) return body
+  return stripWeightLoss(body) as T
+}
 
 function sendJson(res: ServerResponse, status: number, body: unknown): void {
   if (res.writableEnded) return
@@ -367,7 +375,7 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
           const brief = await buildPlanBrief(input)
           const draft = settleDraft(input.dataDir, brief, input.today)
           // What was taken out on the page, so 恢复 still works after a reload.
-          sendJson(res, 200, { brief, draft, removed_items: readPlanPrefs(input.dataDir).removed_items })
+          sendJson(res, 200, pageDraftPayload(input.dataDir, { brief, draft, removed_items: readPlanPrefs(input.dataDir).removed_items }))
         })().catch(() => sendJson(res, 500, { ok: false, error: 'plan draft failed' }))
       },
     })
@@ -395,7 +403,7 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
           })
           const brief = await buildPlanBrief(input)
           const draft = settleDraft(input.dataDir, brief, input.today)
-          sendJson(res, 200, { ok: true, excluded_ids: prefs.excluded_ids, excluded_phrases: prefs.excluded_phrases, removed_items: readPlanPrefs(input.dataDir).removed_items, brief, draft })
+          sendJson(res, 200, pageDraftPayload(input.dataDir, { ok: true, excluded_ids: prefs.excluded_ids, excluded_phrases: prefs.excluded_phrases, removed_items: readPlanPrefs(input.dataDir).removed_items, brief, draft }))
         })().catch(() => sendJson(res, 400, { ok: false, error: 'exclude failed' }))
       },
     })
@@ -419,7 +427,10 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
           const input = await journeyContext()
           // The items are rebuilt from the evidence by id, from the same brief the draft came from (a chat
           // draft may have its own focus and markers), then saved exactly like a confirmed plan.
-          const accepted = acceptedPlan(await buildPlanBrief(input, briefOptionsOf(value.focus, value.markers)), posted, input.today)
+          const postedDraft = minorView(readProfile(input.dataDir)).minor
+            ? (stripWeightLoss({ draft: posted }) as { draft: typeof posted }).draft
+            : posted
+          const accepted = acceptedPlan(await buildPlanBrief(input, briefOptionsOf(value.focus, value.markers)), postedDraft, input.today)
           if (!accepted.ok) {
             sendJson(res, 400, { ok: false, error: accepted.error, problems: accepted.problems })
             return

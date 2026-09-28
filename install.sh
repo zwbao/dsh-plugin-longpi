@@ -4,11 +4,17 @@
 #   curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/install.sh | bash
 #   curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/install.sh | bash -s -- --mcp-url <URL>
 #   curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/install.sh | bash -s -- --with-mirobody
+#   curl -fsSL .../install.sh | bash -s -- --mirror cn
 #
 # Installs the DeepSeek Harness CLI and pnpm when they are missing, clones
 # longevity-skills, creates a Python environment with the Mirobody engine, adds
 # dsh-plugin-longpi to a DSH profile and writes its configuration. Running it
 # again updates every part and keeps the settings already in place.
+#
+# With no --mirror flag the commands are the public defaults (GitHub, npmjs,
+# PyPI, Docker Hub). --mirror cn forces the mainland mirrors. --mirror auto
+# probes github.com, registry.npmjs.org, pypi.org and registry-1.docker.io
+# with a short timeout and switches only the hosts that do not answer.
 #
 # The whole script sits in main() so that `curl | bash` has read all of it
 # before anything runs, and child processes get /dev/null as stdin.
@@ -20,6 +26,7 @@ main() {
   local profile="web"
   local plugin_spec="github:zwbao/dsh-plugin-longpi"
   local mcp_url="" mcp_token="" set_mcp=0 with_mirobody=0
+  local mirror_mode="${LONGPI_MIRROR:-}"
 
   case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in zh*) ZH=1 ;; *) ZH=0 ;; esac
   if [ -t 1 ]; then B=$'\033[1m' G=$'\033[32m' Y=$'\033[33m' R=$'\033[31m' N=$'\033[0m'; else B='' G='' Y='' R='' N=''; fi
@@ -35,6 +42,8 @@ main() {
       --mcp-token) mcp_token="$(arg "$@")"; shift 2 ;;
       --mcp-token=*) mcp_token="${1#*=}"; shift ;;
       --with-mirobody) with_mirobody=1; shift ;;
+      --mirror) mirror_mode="$(arg "$@")"; shift 2 ;;
+      --mirror=*) mirror_mode="${1#*=}"; shift ;;
       --plugin) plugin_spec="$(arg "$@")"; shift 2 ;;
       --plugin=*) plugin_spec="${1#*=}"; shift ;;
       -h|--help) usage; return 0 ;;
@@ -49,7 +58,11 @@ main() {
   mkdir -p "$longpi_home"
   longpi_home="$(cd "$longpi_home" && pwd)"
   LOG="$longpi_home/install.log"
+  LONGPI_CACHE="$longpi_home/cache"
   printf '\n==== %s install.sh\n' "$(date '+%Y-%m-%d %H:%M:%S')" >>"$LOG"
+  resolve_mirrors "$mirror_mode"
+  printf 'mirror=%s npm=%s pypi=%s github=%s docker=%s\n' \
+    "${mirror_mode:-default}" "$USE_NPM_MIRROR" "$USE_PYPI_MIRROR" "$USE_GITHUB_MIRROR" "$USE_DOCKER_MIRROR" >>"$LOG"
 
   local dsh_home="${DSH_HOME:-$HOME/.dsh}"
   local profile_dir="$dsh_home/profiles/$profile"
@@ -82,17 +95,7 @@ main() {
 
   # 2. Skill library -------------------------------------------------------
   step "Installing the skill library" "安装方法库 longevity-skills"
-  if [ -d "$skills_dir/.git" ]; then
-    if git -C "$skills_dir" pull --ff-only --quiet </dev/null >>"$LOG" 2>&1; then
-      ok "Updated $(pretty "$skills_dir")" "已更新 $(pretty "$skills_dir")"
-    else
-      warn "Could not fast-forward $skills_dir; kept the current checkout." "$skills_dir 无法快进更新，保留现有版本。"
-    fi
-  else
-    git clone --quiet https://github.com/zwbao/longevity-skills.git "$skills_dir" </dev/null >>"$LOG" 2>&1 \
-      || fail_log "Could not clone longevity-skills." "无法下载 longevity-skills。"
-    ok "Cloned into $(pretty "$skills_dir")" "已下载到 $(pretty "$skills_dir")"
-  fi
+  install_skills "$skills_dir"
   [ -f "$skills_dir/catalog.json" ] || die "$skills_dir has no catalog.json." "$skills_dir 中没有 catalog.json。"
 
   # 3. Python environment --------------------------------------------------
@@ -113,12 +116,26 @@ main() {
     fi
   fi
   info "Installing mirobody, numpy, scipy and openpyxl" "安装 mirobody、numpy、scipy、openpyxl"
+  if [ "$USE_PYPI_MIRROR" = 1 ]; then
+    info "pip index: ${PIP_INDEX_CN} (fallback ${PIP_INDEX_CN_FALLBACK})" "pip 源：${PIP_INDEX_CN}（备用 ${PIP_INDEX_CN_FALLBACK}）"
+  fi
   if "$py" -m pip --version </dev/null >/dev/null 2>&1; then
-    { "$py" -m pip install --quiet --upgrade pip && "$py" -m pip install --quiet --upgrade mirobody numpy scipy openpyxl; } </dev/null >>"$LOG" 2>&1 \
-      || fail_log "pip could not install mirobody, numpy, scipy and openpyxl." "pip 无法安装 mirobody、numpy、scipy、openpyxl。"
+    if [ "$USE_PYPI_MIRROR" != 1 ]; then
+      { "$py" -m pip install --quiet --upgrade pip && "$py" -m pip install --quiet --upgrade mirobody numpy scipy openpyxl; } </dev/null >>"$LOG" 2>&1 \
+        || fail_log "pip could not install mirobody, numpy, scipy and openpyxl." "pip 无法安装 mirobody、numpy、scipy、openpyxl。"
+    else
+      { pip_install_quiet "$py" pip && pip_install_quiet "$py" mirobody numpy scipy openpyxl; } </dev/null >>"$LOG" 2>&1 \
+        || fail_log "pip could not install mirobody, numpy, scipy and openpyxl." "pip 无法安装 mirobody、numpy、scipy、openpyxl。"
+    fi
   else
-    uv pip install --quiet --python "$py" --upgrade mirobody numpy scipy openpyxl </dev/null >>"$LOG" 2>&1 \
-      || fail_log "uv could not install mirobody, numpy, scipy and openpyxl." "uv 无法安装 mirobody、numpy、scipy、openpyxl。"
+    if [ "$USE_PYPI_MIRROR" != 1 ]; then
+      uv pip install --quiet --python "$py" --upgrade mirobody numpy scipy openpyxl </dev/null >>"$LOG" 2>&1 \
+        || fail_log "uv could not install mirobody, numpy, scipy and openpyxl." "uv 无法安装 mirobody、numpy、scipy、openpyxl。"
+    else
+      uv pip install --quiet --python "$py" --index-url "$PIP_INDEX_CN" --upgrade mirobody numpy scipy openpyxl </dev/null >>"$LOG" 2>&1 \
+        || uv pip install --quiet --python "$py" --index-url "$PIP_INDEX_CN_FALLBACK" --upgrade mirobody numpy scipy openpyxl </dev/null >>"$LOG" 2>&1 \
+        || fail_log "uv could not install mirobody, numpy, scipy and openpyxl." "uv 无法安装 mirobody、numpy、scipy、openpyxl。"
+    fi
   fi
   local mirobody_version
   mirobody_version="$("$py" -c 'import mirobody; print(mirobody.__version__)' </dev/null)" \
@@ -127,8 +144,12 @@ main() {
 
   # 4. Plugin --------------------------------------------------------------
   step "Installing the plugin into DeepSeek Harness" "将插件安装到 DeepSeek Harness"
-  dsh plugin --profile "$profile" add "$plugin_spec" </dev/null >>"$LOG" 2>&1 \
-    || fail_log "dsh plugin add $plugin_spec failed." "dsh plugin add $plugin_spec 失败。"
+  local resolved_plugin
+  resolved_plugin="$(resolve_plugin_spec "$plugin_spec")" \
+    || fail_log "Could not fetch the plugin. On a network that cannot reach GitHub, set LONGPI_PLUGIN_URL to an npm pack tarball (.tgz)." \
+                "无法取得插件。访问不了 GitHub 时，请把 LONGPI_PLUGIN_URL 设成一个 npm pack 压缩包（.tgz）。"
+  dsh plugin --profile "$profile" add "$resolved_plugin" </dev/null >>"$LOG" 2>&1 \
+    || fail_log "dsh plugin add $resolved_plugin failed." "dsh plugin add ${resolved_plugin} 失败。"
   local installed="$profile_dir/node_modules/dsh-plugin-longpi"
   [ -f "$installed/lib/index.js" ] && [ -f "$installed/vendor/dsh-plugin-mirobody/bridge/dsh_bridge.py" ] \
     || die "The plugin files are missing from $installed." "$installed 中缺少插件文件。"
@@ -145,15 +166,15 @@ main() {
       if ! have docker || ! docker info </dev/null >/dev/null 2>&1; then
         die "--with-mirobody needs Docker installed and running." "--with-mirobody 需要已安装并正在运行的 Docker。"
       fi
-      git lfs version </dev/null >/dev/null 2>&1 \
-        || die "--with-mirobody needs git-lfs (brew install git-lfs, or apt install git-lfs)." "--with-mirobody 需要 git-lfs（brew install git-lfs 或 apt install git-lfs）。"
       local mirobody_dir="$longpi_home/mirobody"
-      if [ ! -d "$mirobody_dir/.git" ]; then
-        git clone --quiet --depth 1 https://github.com/thetahealth/mirobody.git "$mirobody_dir" </dev/null >>"$LOG" 2>&1 \
-          || fail_log "Could not clone Mirobody." "无法下载 Mirobody。"
+      obtain_mirobody "$mirobody_dir"
+      if ! ensure_loinc "$mirobody_dir" "$py"; then
+        fail_log "The LOINC bundle is still a Git LFS pointer. Install git-lfs, or set LONGPI_LOINC_URL to a real fhir_loinc_bundle.tar.gz." \
+                 "LOINC 词表仍是 Git LFS 指针。请安装 git-lfs，或把 LONGPI_LOINC_URL 设成真正的 fhir_loinc_bundle.tar.gz。"
       fi
+      docker_mirror_hint
       info "Starting Mirobody with Docker; the first run takes a few minutes." "正在用 Docker 启动 Mirobody，首次运行需要几分钟。"
-      (cd "$mirobody_dir" && git lfs install --local && git lfs pull && ./deploy.sh) </dev/null >>"$LOG" 2>&1 \
+      (cd "$mirobody_dir" && ./deploy.sh) </dev/null >>"$LOG" 2>&1 \
         || fail_log "Mirobody's deploy.sh failed." "Mirobody 的 deploy.sh 执行失败。"
       wait_for "$mirobody_base/" 300 || fail_log "Mirobody did not answer at $mirobody_base within 5 minutes." "Mirobody 在 5 分钟内没有在 $mirobody_base 响应。"
       ok "Mirobody is running at $mirobody_base" "Mirobody 已在 $mirobody_base 运行"
@@ -200,6 +221,9 @@ main() {
     row "Backups   " "配置备份  " "$(pick "$kept kept (0600, newest 3 only; $removed older removed)" "保留 $kept 份（权限 0600，只留最新 3 份；删除了 $removed 份旧的）")"
   fi
   row "Files     " "安装目录  " "$(pretty "$longpi_home")"
+  if [ "$USE_NPM_MIRROR" = 1 ] || [ "$USE_PYPI_MIRROR" = 1 ] || [ "$USE_GITHUB_MIRROR" = 1 ] || [ "$USE_DOCKER_MIRROR" = 1 ]; then
+    row "Mirrors   " "镜像      " "npm=${USE_NPM_MIRROR} pypi=${USE_PYPI_MIRROR} github=${USE_GITHUB_MIRROR} docker=${USE_DOCKER_MIRROR}"
+  fi
   if [ -n "${EXPOSED:-}" ]; then
     info "Linked${EXPOSED} into ~/.local/bin." "已将${EXPOSED} 链接到 ~/.local/bin。"
   fi
@@ -248,12 +272,27 @@ Options
   --mcp-url URL      Connect a Mirobody record server (its personal MCP address)
   --mcp-token TOKEN  Access token, when the MCP address carries no secret
   --with-mirobody    Deploy Mirobody locally with Docker (demo data) and connect it
+  --mirror MODE      cn: mainland mirrors. auto: probe GitHub, npm, PyPI and
+                     Docker Hub (short timeout) and mirror only what failed.
+                     Omit the flag to keep the public defaults.
   --home DIR         Where the skill library and Python environment go (default ~/longpi)
   --profile NAME     DeepSeek Harness profile (default web)
   --plugin SPEC      Plugin to install (default github:zwbao/dsh-plugin-longpi)
   -h, --help         Show this help
 
-Environment: DSH_HOME (default ~/.dsh), LONGPI_HOME, LONGPI_MIROBODY_URL.
+Environment: DSH_HOME (default ~/.dsh), LONGPI_HOME, LONGPI_MIROBODY_URL, LONGPI_MIRROR.
+Mainland mirrors (only when --mirror cn, or auto decides a host is down):
+  LONGPI_NPM_REGISTRY       default https://registry.npmmirror.com
+  LONGPI_PIP_INDEX          default https://mirrors.cloud.tencent.com/pypi/simple
+  LONGPI_PIP_INDEX_FALLBACK default https://mirrors.aliyun.com/pypi/simple
+  LONGPI_PLUGIN_URL         npm pack tarball (.tgz) or other dsh plugin spec
+  LONGPI_PLUGIN_SHA256      sha256 of a downloaded plugin tarball (required before install)
+  LONGPI_SKILLS_URL         git URL or .tar.gz of longevity-skills (catalog.json)
+  LONGPI_SKILLS_SHA256      sha256 of a downloaded skills tarball (required before install)
+  LONGPI_MIROBODY_SOURCE    git URL, tarball or local directory of thetahealth/mirobody
+  LONGPI_LOINC_URL          fhir_loinc_bundle.tar.gz when git-lfs cannot pull it
+  LONGPI_GITHUB_MIRROR      prefix tried before the built-in archive proxies,
+                            e.g. https://ghfast.top/https://github.com
 Running the installer again updates every part and keeps existing settings.
 EOF
 }
@@ -274,10 +313,22 @@ ensure_cli() {
 npm_install_global() {
   local prefix
   prefix="$(npm prefix -g </dev/null 2>>"$LOG")"
+  # The array is never empty, so "${cmd[@]}" is safe under set -u on bash 3.2.
+  local cmd
   if [ -w "$prefix" ] && { [ ! -d "$prefix/lib/node_modules" ] || [ -w "$prefix/lib/node_modules" ]; }; then
-    npm install -g --no-fund --no-audit --loglevel=error "$1" </dev/null >>"$LOG" 2>&1 || fail_log "npm could not install $1." "npm 无法安装 $1。"
+    cmd=(npm install -g --no-fund --no-audit --loglevel=error)
+    if [ "${USE_NPM_MIRROR:-0}" = 1 ]; then
+      cmd+=(--registry "$NPM_REGISTRY_CN")
+    fi
+    cmd+=("$1")
+    "${cmd[@]}" </dev/null >>"$LOG" 2>&1 || fail_log "npm could not install $1." "npm 无法安装 $1。"
   else
-    npm install -g --prefix "$HOME/.local" --no-fund --no-audit --loglevel=error "$1" </dev/null >>"$LOG" 2>&1 \
+    cmd=(npm install -g --prefix "$HOME/.local" --no-fund --no-audit --loglevel=error)
+    if [ "${USE_NPM_MIRROR:-0}" = 1 ]; then
+      cmd+=(--registry "$NPM_REGISTRY_CN")
+    fi
+    cmd+=("$1")
+    "${cmd[@]}" </dev/null >>"$LOG" 2>&1 \
       || fail_log "npm could not install $1 into ~/.local." "npm 无法把 $1 安装到 ~/.local。"
     NPM_BIN="$HOME/.local/bin"
   fi
@@ -355,6 +406,493 @@ print(value)'
 # Writes the LongPi row between two markers in the profile's patch file.
 # Keeps values set earlier (MCP address, runtimes, member, ...), refreshes the
 # paths this installer owns, and never touches other rows.
+# --- mainland mirrors --------------------------------------------------------
+# Defaults stay on the public hosts. These globals are set by resolve_mirrors.
+
+USE_NPM_MIRROR=0
+USE_PYPI_MIRROR=0
+USE_GITHUB_MIRROR=0
+USE_DOCKER_MIRROR=0
+NPM_REGISTRY_CN="https://registry.npmmirror.com"
+PIP_INDEX_CN="https://mirrors.cloud.tencent.com/pypi/simple"
+PIP_HOST_CN="mirrors.cloud.tencent.com"
+PIP_INDEX_CN_FALLBACK="https://mirrors.aliyun.com/pypi/simple"
+PIP_HOST_CN_FALLBACK="mirrors.aliyun.com"
+
+# Progress that must not mix into a captured stdout.
+note() { printf '  %s\n' "$(pick "$1" "$2")" >&2; }
+
+resolve_mirrors() {
+  local mode="$1"
+  USE_NPM_MIRROR=0
+  USE_PYPI_MIRROR=0
+  USE_GITHUB_MIRROR=0
+  USE_DOCKER_MIRROR=0
+  NPM_REGISTRY_CN="${LONGPI_NPM_REGISTRY:-https://registry.npmmirror.com}"
+  PIP_INDEX_CN="${LONGPI_PIP_INDEX:-https://mirrors.cloud.tencent.com/pypi/simple}"
+  PIP_HOST_CN="${LONGPI_PIP_HOST:-mirrors.cloud.tencent.com}"
+  PIP_INDEX_CN_FALLBACK="${LONGPI_PIP_INDEX_FALLBACK:-https://mirrors.aliyun.com/pypi/simple}"
+  PIP_HOST_CN_FALLBACK="${LONGPI_PIP_HOST_FALLBACK:-mirrors.aliyun.com}"
+  case "$mode" in
+    "") return 0 ;;
+    cn)
+      USE_NPM_MIRROR=1
+      USE_PYPI_MIRROR=1
+      USE_GITHUB_MIRROR=1
+      USE_DOCKER_MIRROR=1
+      info "Using mainland mirrors (npm ${NPM_REGISTRY_CN}, pip ${PIP_INDEX_CN})." \
+           "使用大陆镜像（npm ${NPM_REGISTRY_CN}，pip ${PIP_INDEX_CN}）。"
+      ;;
+    auto)
+      step "Checking which hosts answer" "检查哪些站点能连通"
+      if host_answers "https://github.com/"; then
+        info "github.com answers" "github.com 可连通"
+      else
+        USE_GITHUB_MIRROR=1
+        info "github.com did not answer; source will not be cloned from GitHub." "github.com 不通，不再从 GitHub 克隆源码。"
+      fi
+      if host_answers "https://registry.npmjs.org/"; then
+        info "registry.npmjs.org answers" "registry.npmjs.org 可连通"
+      else
+        USE_NPM_MIRROR=1
+        info "registry.npmjs.org did not answer; npm will use ${NPM_REGISTRY_CN}." "registry.npmjs.org 不通，npm 改用 ${NPM_REGISTRY_CN}。"
+      fi
+      if host_answers "https://pypi.org/simple/pip/"; then
+        info "pypi.org answers" "pypi.org 可连通"
+      else
+        USE_PYPI_MIRROR=1
+        info "pypi.org did not answer; pip will use ${PIP_INDEX_CN}." "pypi.org 不通，pip 改用 ${PIP_INDEX_CN}。"
+      fi
+      if host_answers "https://registry-1.docker.io/v2/"; then
+        info "registry-1.docker.io answers" "registry-1.docker.io 可连通"
+      else
+        USE_DOCKER_MIRROR=1
+        info "registry-1.docker.io did not answer." "registry-1.docker.io 不通。"
+      fi
+      ;;
+    *)
+      die "--mirror must be cn or auto (got: $mode)." "--mirror 只能是 cn 或 auto（当前：${mode}）。"
+      ;;
+  esac
+  if [ "$USE_NPM_MIRROR" = 1 ]; then
+    export npm_config_registry="$NPM_REGISTRY_CN"
+  fi
+}
+
+# Any HTTP status means the host answered. A timeout or "000" means it did not.
+# Connect timeout is 3s and the whole probe is 5s, so a black-holed route fails fast.
+host_answers() {
+  local url="$1" code
+  code="$(curl -sS -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 5 "$url" </dev/null 2>>"$LOG")" || code=000
+  [ -n "${code}" ] && [ "${code}" != "000" ]
+}
+
+pip_install_quiet() {
+  local py="$1"
+  shift
+  if [ "${USE_PYPI_MIRROR:-0}" != 1 ]; then
+    "$py" -m pip install --quiet --upgrade "$@"
+    return
+  fi
+  if "$py" -m pip install --quiet --upgrade -i "$PIP_INDEX_CN" --trusted-host "$PIP_HOST_CN" "$@"; then
+    return 0
+  fi
+  echo "pip index ${PIP_INDEX_CN} failed; trying ${PIP_INDEX_CN_FALLBACK}" >>"$LOG"
+  warn "The pip index ${PIP_INDEX_CN} failed; trying ${PIP_INDEX_CN_FALLBACK}." \
+       "pip 源 ${PIP_INDEX_CN} 失败，改试 ${PIP_INDEX_CN_FALLBACK}。"
+  "$py" -m pip install --quiet --upgrade -i "$PIP_INDEX_CN_FALLBACK" --trusted-host "$PIP_HOST_CN_FALLBACK" "$@"
+}
+
+download_file() {
+  local url="$1" dest="$2" tmp
+  tmp="${dest}.partial"
+  rm -f "$tmp"
+  curl -fL --retry 2 --connect-timeout 5 --max-time 300 -o "$tmp" "$url" </dev/null >>"$LOG" 2>&1 || { rm -f "$tmp"; return 1; }
+  mv "$tmp" "$dest"
+}
+
+sha256_of() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{ print $1 }'
+  else
+    sha256sum "$1" | awk '{ print $1 }'
+  fi
+}
+
+# A downloaded plugin or skills tarball is installed only when its sha256 matches
+# the checksum published with that release. Local files and git clones are not hashed.
+verify_tarball() {
+  local file="$1" url="$2" expected="" label=""
+  case "$url" in
+    *dsh-plugin-longpi*) expected="${LONGPI_PLUGIN_SHA256:-}"; label="plugin" ;;
+    *longevity-skills*) expected="${LONGPI_SKILLS_SHA256:-}"; label="skills" ;;
+    *) return 0 ;;
+  esac
+  if [ -z "$expected" ]; then
+    die "Refusing to install the downloaded ${label} tarball without a sha256. Set LONGPI_PLUGIN_SHA256 or LONGPI_SKILLS_SHA256 to the checksum published with the release." \
+        "拒绝安装没有 sha256 的${label}压缩包。请设置 LONGPI_PLUGIN_SHA256 或 LONGPI_SKILLS_SHA256，用这次发布公布的校验和。"
+  fi
+  local actual
+  actual="$(sha256_of "$file")"
+  if [ "$actual" != "$expected" ]; then
+    rm -f "$file"
+    die "sha256 mismatch for the ${label} tarball (expected ${expected}, got ${actual})." \
+        "${label} 压缩包的 sha256 不一致（期望 ${expected}，实际 ${actual}）。没有安装。"
+  fi
+  note "sha256 ok for ${label}" "${label} 的 sha256 已核对"
+}
+
+# Leave $marker at $dest/$marker. GitHub archives wrap one top directory; npm
+# pack tarballs wrap "package/". The shortest path wins.
+extract_marked() {
+  local archive="$1" dest="$2" marker="$3" tmp root found
+  tmp="$(mktemp -d "${TMPDIR:-/tmp}/longpi-src.XXXXXX")"
+  tar -xzf "$archive" -C "$tmp" >>"$LOG" 2>&1 || { rm -rf "$tmp"; return 1; }
+  if [ -f "$tmp/$marker" ]; then
+    root="$tmp"
+  else
+    # head closes the pipe early; ignore the SIGPIPE status under pipefail.
+    found="$(find "$tmp" -type f -name "$marker" | awk '{ print length, $0 }' | sort -n | head -n 1 | cut -d' ' -f2-)" || true
+    [ -n "$found" ] || { rm -rf "$tmp"; return 1; }
+    root="$(dirname "$found")"
+  fi
+  mkdir -p "$dest"
+  cp -R "$root"/. "$dest"/ >>"$LOG" 2>&1 || { rm -rf "$tmp"; return 1; }
+  rm -rf "$tmp"
+  [ -f "$dest/$marker" ]
+}
+
+fetch_source() {
+  local url="$1" dest="$2" marker="$3" archive
+  case "$url" in
+    git@* | *.git)
+      git clone --quiet --depth 1 "$url" "$dest" </dev/null >>"$LOG" 2>&1 || return 1
+      ;;
+    /* | ./*)
+      if [ -d "$url" ]; then
+        mkdir -p "$dest"
+        cp -R "$url"/. "$dest"/ || return 1
+      else
+        extract_marked "$url" "$dest" "$marker" || return 1
+      fi
+      ;;
+    *.tar.gz | *.tgz | *archive/refs/*)
+      archive="$(mktemp "${TMPDIR:-/tmp}/longpi-arc.XXXXXX")"
+      download_file "$url" "$archive" || { rm -f "$archive"; return 1; }
+      verify_tarball "$archive" "$url" || { rm -f "$archive"; return 1; }
+      extract_marked "$archive" "$dest" "$marker" || { rm -f "$archive"; return 1; }
+      rm -f "$archive"
+      ;;
+    *)
+      git clone --quiet --depth 1 "$url" "$dest" </dev/null >>"$LOG" 2>&1 || return 1
+      ;;
+  esac
+  [ -f "$dest/$marker" ]
+}
+
+github_mirror_prefixes() {
+  if [ -n "${LONGPI_GITHUB_MIRROR:-}" ]; then
+    printf '%s\n' "$LONGPI_GITHUB_MIRROR"
+  fi
+  # These proxies answer without the client opening github.com. ghfast.top and
+  # gh-proxy.com both returned a real gzip of this repo when checked on 2026-09-28.
+  # There is no Gitee remote for these repositories; set LONGPI_SKILLS_URL or
+  # LONGPI_PLUGIN_URL to a Gitee import (or any other URL) to use one.
+  printf '%s\n' "https://ghfast.top/https://github.com"
+  printf '%s\n' "https://gh-proxy.com/https://github.com"
+}
+
+fetch_github_archive() {
+  local owner="$1" repo="$2" ref="$3" dest="$4" marker="$5"
+  local prefix refpath url refs
+  if [ -z "$ref" ] || [ "$ref" = main ]; then
+    refs="heads/main"
+  else
+    refs="tags/${ref} heads/${ref}"
+  fi
+  while IFS= read -r prefix; do
+    [ -n "$prefix" ] || continue
+    prefix="${prefix%/}"
+    for refpath in $refs; do
+      url="${prefix}/${owner}/${repo}/archive/refs/${refpath}.tar.gz"
+      note "Trying ${url}" "正在尝试 ${url}"
+      if fetch_source "$url" "$dest" "$marker"; then
+        return 0
+      fi
+      rm -rf "$dest"
+    done
+  done <<EOF
+$(github_mirror_prefixes)
+EOF
+  return 1
+}
+
+# Prints an https URL ending in .tgz, or fails. Missing packages are normal:
+# dsh-plugin-longpi and longevity-skills are not on npm yet (checked 2026-09-28).
+npm_dist_tarball() {
+  local name="$1" out
+  out="$(npm view "$name" dist.tarball --registry "$NPM_REGISTRY_CN" </dev/null 2>>"$LOG")" || return 1
+  out="$(printf '%s\n' "$out" | awk '/^https?:\/\/.*\.tgz$/ { line = $0 } END { print line }')"
+  [ -n "$out" ] || return 1
+  printf '%s' "$out"
+}
+
+# Download a plugin archive and print a path pnpm can add. npm-pack tarballs
+# (top-level package/package.json) are returned as-is. Git archives are packed
+# with npm pack so the result has the layout dsh plugin add expects.
+materialize_plugin_tarball() {
+  local url="$1" archive srcdir packed kept
+  mkdir -p "$LONGPI_CACHE"
+  case "$url" in
+    /* | ./*)
+      if [ -f "$url" ]; then
+        printf '%s' "$url"
+        return 0
+      fi
+      return 1
+      ;;
+  esac
+  archive="$LONGPI_CACHE/plugin-download.tgz"
+  download_file "$url" "$archive" || return 1
+  verify_tarball "$archive" "$url" || return 1
+  local listing
+  listing="$(tar -tzf "$archive" | head -n 40)" || true
+  case "$listing" in
+    *package/package.json*)
+      printf '%s' "$archive"
+      return 0
+      ;;
+  esac
+  srcdir="$(mktemp -d "${TMPDIR:-/tmp}/longpi-plugin.XXXXXX")"
+  extract_marked "$archive" "$srcdir" package.json || { rm -rf "$srcdir"; return 1; }
+  packed="$(cd "$srcdir" && npm pack --ignore-scripts </dev/null)" || { rm -rf "$srcdir"; return 1; }
+  packed="$(printf '%s\n' "$packed" | tail -n 1)"
+  case "$packed" in
+    /*) ;;
+    *) packed="$srcdir/$packed" ;;
+  esac
+  [ -f "$packed" ] || { rm -rf "$srcdir"; return 1; }
+  kept="$LONGPI_CACHE/$(basename "$packed")"
+  mv "$packed" "$kept"
+  rm -rf "$srcdir"
+  printf '%s' "$kept"
+}
+
+resolve_plugin_spec() {
+  local spec="$1" rest owner repo ref tarball srcdir packed kept
+  if [ "${USE_GITHUB_MIRROR:-0}" != 1 ]; then
+    printf '%s' "$spec"
+    return 0
+  fi
+  if [ -n "${LONGPI_PLUGIN_URL:-}" ]; then
+    spec="${LONGPI_PLUGIN_URL}"
+  fi
+  case "$spec" in
+    github:*) ;;
+    *)
+      case "$spec" in
+        http://*.tgz | http://*.tar.gz | https://*.tgz | https://*.tar.gz | http://*archive/refs/* | https://*archive/refs/*)
+          materialize_plugin_tarball "$spec" || return 1
+          return 0
+          ;;
+        /*.tgz | /*.tar.gz | ./*.tgz | ./*.tar.gz)
+          printf '%s' "$spec"
+          return 0
+          ;;
+      esac
+      printf '%s' "$spec"
+      return 0
+      ;;
+  esac
+  rest="${spec#github:}"
+  ref=""
+  case "$rest" in
+    *#*) ref="${rest#*#}"; rest="${rest%%#*}" ;;
+  esac
+  owner="${rest%%/*}"
+  repo="${rest#*/}"
+  # Only the published name. A fork passed via --plugin is fetched as an archive.
+  if [ "$owner/$repo" = "zwbao/dsh-plugin-longpi" ]; then
+    tarball="$(npm_dist_tarball dsh-plugin-longpi)" || tarball=""
+    if [ -n "$tarball" ]; then
+      note "Plugin tarball: ${tarball}" "插件压缩包：${tarball}"
+      materialize_plugin_tarball "$tarball" || return 1
+      return 0
+    fi
+    note "dsh-plugin-longpi is not on the npm mirror; trying a GitHub archive proxy." \
+         "npm 镜像上还没有 dsh-plugin-longpi，改从 GitHub 归档代理下载。"
+  fi
+  srcdir="$(mktemp -d "${TMPDIR:-/tmp}/longpi-plugin.XXXXXX")"
+  if ! fetch_github_archive "$owner" "$repo" "${ref:-main}" "$srcdir" package.json; then
+    rm -rf "$srcdir"
+    return 1
+  fi
+  packed="$(cd "$srcdir" && npm pack --ignore-scripts </dev/null)" || { rm -rf "$srcdir"; return 1; }
+  packed="$(printf '%s\n' "$packed" | tail -n 1)"
+  case "$packed" in
+    /*) ;;
+    *) packed="$srcdir/$packed" ;;
+  esac
+  [ -f "$packed" ] || { rm -rf "$srcdir"; return 1; }
+  mkdir -p "$LONGPI_CACHE"
+  kept="$LONGPI_CACHE/$(basename "$packed")"
+  mv "$packed" "$kept"
+  rm -rf "$srcdir"
+  printf '%s' "$kept"
+}
+
+install_skills() {
+  local skills_dir="$1" src tarball
+  if [ "${USE_GITHUB_MIRROR:-0}" != 1 ]; then
+    if [ -d "$skills_dir/.git" ]; then
+      if git -C "$skills_dir" pull --ff-only --quiet </dev/null >>"$LOG" 2>&1; then
+        ok "Updated $(pretty "$skills_dir")" "已更新 $(pretty "$skills_dir")"
+      else
+        warn "Could not fast-forward $skills_dir; kept the current checkout." "$skills_dir 无法快进更新，保留现有版本。"
+      fi
+    else
+      git clone --quiet https://github.com/zwbao/longevity-skills.git "$skills_dir" </dev/null >>"$LOG" 2>&1 \
+        || fail_log "Could not clone longevity-skills." "无法下载 longevity-skills。"
+      ok "Cloned into $(pretty "$skills_dir")" "已下载到 $(pretty "$skills_dir")"
+    fi
+    return 0
+  fi
+  if [ -f "$skills_dir/catalog.json" ] && [ -z "${LONGPI_SKILLS_REFRESH:-}" ]; then
+    if [ -d "$skills_dir/.git" ]; then
+      if git -C "$skills_dir" pull --ff-only --quiet </dev/null >>"$LOG" 2>&1; then
+        ok "Updated $(pretty "$skills_dir")" "已更新 $(pretty "$skills_dir")"
+      else
+        warn "Could not fast-forward $skills_dir; kept the current checkout." "$skills_dir 无法快进更新，保留现有版本。"
+      fi
+    else
+      ok "Kept $(pretty "$skills_dir")" "已保留 $(pretty "$skills_dir")"
+    fi
+    return 0
+  fi
+  case "$skills_dir" in
+    "" | / | "$HOME") die "Refusing to replace $skills_dir." "拒绝替换 ${skills_dir}。" ;;
+  esac
+  rm -rf "$skills_dir"
+  src="${LONGPI_SKILLS_URL:-}"
+  if [ -n "$src" ]; then
+    fetch_source "$src" "$skills_dir" catalog.json \
+      || fail_log "Could not fetch longevity-skills from LONGPI_SKILLS_URL." "无法从 LONGPI_SKILLS_URL 下载 longevity-skills。"
+    ok "Skill library from ${src}" "方法库来自 ${src}"
+    return 0
+  fi
+  tarball="$(npm_dist_tarball longevity-skills)" || tarball=""
+  if [ -n "$tarball" ]; then
+    fetch_source "$tarball" "$skills_dir" catalog.json \
+      || fail_log "Could not download the longevity-skills tarball." "无法下载 longevity-skills 压缩包。"
+    ok "Skill library from the npm tarball" "方法库来自 npm 压缩包"
+    return 0
+  fi
+  note "longevity-skills is not on the npm mirror; trying a GitHub archive proxy." \
+       "npm 镜像上没有 longevity-skills，改从 GitHub 归档代理下载。"
+  fetch_github_archive zwbao longevity-skills main "$skills_dir" catalog.json \
+    || fail_log "Could not download longevity-skills. Set LONGPI_SKILLS_URL to a tarball or git URL this machine can reach (for example a Gitee import). Publishing the library to npm would make the npmmirror tarball path work with no proxy." \
+                "无法下载 longevity-skills。请把 LONGPI_SKILLS_URL 设成这台机器能访问的压缩包或 git 地址（例如导入 Gitee 后的地址）。把方法库发布到 npm 后，npmmirror 上的压缩包路径就不需要代理。"
+  ok "Skill library from a GitHub archive proxy" "方法库来自 GitHub 归档代理"
+}
+
+obtain_mirobody() {
+  local dir="$1"
+  if [ -d "$dir/.git" ] || [ -x "$dir/deploy.sh" ]; then
+    return 0
+  fi
+  if [ "${USE_GITHUB_MIRROR:-0}" != 1 ]; then
+    git clone --quiet --depth 1 https://github.com/thetahealth/mirobody.git "$dir" </dev/null >>"$LOG" 2>&1 \
+      || fail_log "Could not clone Mirobody." "无法下载 Mirobody。"
+    return 0
+  fi
+  if [ -n "${LONGPI_MIROBODY_SOURCE:-}" ]; then
+    fetch_source "$LONGPI_MIROBODY_SOURCE" "$dir" deploy.sh \
+      || fail_log "Could not fetch Mirobody from LONGPI_MIROBODY_SOURCE." "无法从 LONGPI_MIROBODY_SOURCE 取得 Mirobody。"
+    return 0
+  fi
+  fetch_github_archive thetahealth mirobody main "$dir" deploy.sh \
+    || fail_log "Could not download Mirobody. Set LONGPI_MIROBODY_SOURCE to a tarball or git URL this machine can reach." \
+                "无法下载 Mirobody。请把 LONGPI_MIROBODY_SOURCE 设成这台机器能访问的压缩包或 git 地址。"
+}
+
+is_lfs_pointer() {
+  local path="$1" head
+  [ -f "$path" ] || return 1
+  head="$(head -c 24 "$path" 2>/dev/null || true)"
+  case "$head" in
+    "version https://git-lfs"*) return 0 ;;
+  esac
+  return 1
+}
+
+bundle_ready() {
+  [ -f "$1" ] && ! is_lfs_pointer "$1"
+}
+
+loinc_from_wheel() {
+  "$1" -c 'import os, sys
+try:
+    import mirobody
+except Exception:
+    sys.exit(0)
+p = os.path.join(os.path.dirname(os.path.abspath(mirobody.__file__)), "res", "fhir_loinc_bundle.tar.gz")
+if not os.path.isfile(p):
+    sys.exit(0)
+raw = open(p, "rb").read(24)
+if raw.startswith(b"version https://git-lfs"):
+    sys.exit(0)
+print(p)
+' </dev/null 2>>"$LOG" || true
+}
+
+ensure_loinc() {
+  local dir="$1" py="$2"
+  local bundle="$dir/mirobody/res/fhir_loinc_bundle.tar.gz" wheel
+  if bundle_ready "$bundle"; then
+    return 0
+  fi
+  if [ -d "$dir/.git" ] && git lfs version </dev/null >/dev/null 2>&1; then
+    if (cd "$dir" && git lfs install --local && git lfs pull) </dev/null >>"$LOG" 2>&1; then
+      if bundle_ready "$bundle"; then
+        ok "LOINC bundle from git-lfs" "LOINC 词表来自 git-lfs"
+        return 0
+      fi
+    fi
+    warn "git lfs pull did not produce the LOINC bundle." "git lfs pull 没有得到 LOINC 词表。"
+  elif ! git lfs version </dev/null >/dev/null 2>&1; then
+    warn "git-lfs is not installed; trying the LOINC fallback." "未安装 git-lfs，改用 LOINC 备用方式。"
+  fi
+  if [ -n "${LONGPI_LOINC_URL:-}" ]; then
+    mkdir -p "$(dirname "$bundle")"
+    if download_file "$LONGPI_LOINC_URL" "$bundle" && bundle_ready "$bundle"; then
+      ok "LOINC bundle from LONGPI_LOINC_URL" "LOINC 词表来自 LONGPI_LOINC_URL"
+      return 0
+    fi
+    warn "LONGPI_LOINC_URL did not yield a real bundle." "LONGPI_LOINC_URL 没有得到可用的词表。"
+  fi
+  wheel="$(loinc_from_wheel "$py")"
+  if [ -n "$wheel" ] && bundle_ready "$wheel"; then
+    mkdir -p "$(dirname "$bundle")"
+    cp -f "$wheel" "$bundle"
+    if bundle_ready "$bundle"; then
+      ok "LOINC bundle copied from the installed mirobody wheel" "LOINC 词表已从已安装的 mirobody 包复制"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+docker_mirror_hint() {
+  [ "${USE_DOCKER_MIRROR:-0}" = 1 ] || return 0
+  warn "Treating Docker Hub (registry-1.docker.io) as unreachable. This installer does not rewrite the Docker daemon config." \
+       "按 Docker Hub（registry-1.docker.io）不可达处理。安装程序不会改写 Docker 守护进程的配置。"
+  info "Mirobody's deploy.sh pulls through the daemon and already tries docker.1ms.run when the Hub times out." \
+       "Mirobody 的 deploy.sh 通过 Docker 守护进程拉镜像，Hub 超时时它自己会试 docker.1ms.run。"
+  info "On Tencent Cloud the mirror that answered in the field test is https://mirror.ccs.tencentyun.com. https://docker.m.daocloud.io also answers the registry API." \
+       "腾讯云上现场可用的镜像是 https://mirror.ccs.tencentyun.com。https://docker.m.daocloud.io 也能应答仓库 API。"
+  info "Example /etc/docker/daemon.json: {\"registry-mirrors\":[\"https://mirror.ccs.tencentyun.com\"]} — then restart docker and rerun with --with-mirobody." \
+       "可在 /etc/docker/daemon.json 写入 {\"registry-mirrors\":[\"https://mirror.ccs.tencentyun.com\"]}，重启 Docker 后再用 --with-mirobody 运行。"
+}
 WRITE_CONFIG='
 import os, re, sys, time
 path, skills_home, python_bin, set_mcp, mcp_url, mcp_token = sys.argv[1:7]

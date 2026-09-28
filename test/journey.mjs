@@ -701,7 +701,7 @@ try {
   await journeyOf(noRuntimeConfig)
   assert.equal(mod.readReceipts(noRuntime, 1000).length, tried, 'and not tried again within the TTL')
 
-  // (13) nine blood tests never on the same day: the add-on says so
+  // (13) one input a day off the others is still a panel, labelled as a window, not "not measured".
   const shifted = (name, days) => {
     const record = loadRecord()
     return { ...record, observations: record.observations.map((row) => (row.indicator === name ? { ...row, date: mod.addDays(row.date, days), time: `${mod.addDays(row.date, days)}${row.time.slice(10)}` } : row)) }
@@ -710,9 +710,13 @@ try {
   servers.push(apart)
   const apartDir = tempDir('apart')
   mod.writeProfile(apartDir, { age: 53, sex: 'male', risk: FACTS, consent: { version: mod.CONSENT_VERSION, accepted_at: NOW.toISOString() } })
-  const apartJourney = (await journeyOf(configFor(apartDir, apart.url))).journey
-  assert.equal(apartJourney.results.bioage.blocker_zh, '九项血检还没有在同一天测齐。')
-  assert.ok(apartJourney.addons.some((row) => row.item_zh === '九项血检安排在同一天' && row.unlocks_zh === '身体年龄' && !row.self_measurable))
+  const apartStep = await journeyOf(configFor(apartDir, apart.url))
+  const apartJourney = apartStep.journey
+  assert.equal(apartJourney.results.bioage.status, 'ok', apartStep.tracking.bioage.note_zh)
+  assert.equal(apartStep.tracking.bioage.panel_span_days, 1)
+  assert.match(apartStep.tracking.bioage.headline_zh, /不是同一天抽血/)
+  assert.match(apartStep.tracking.bioage.note_zh, /身体年龄/)
+  assert.equal(apartJourney.addons.some((row) => row.item_zh === '九项血检安排在同一天'), false)
 
   // A complete catalogue Mirobody 1.5.0 marks truncated (rows == of N), plus uncoded Chinese names.
   // Glucose and RDW-CV are on file; CRP is not; waist was never measured. Neither is a failed read.

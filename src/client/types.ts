@@ -116,7 +116,7 @@ export interface Journey {
   }
   results: {
     /** caveat_zh (round 4): set when a PhenoAge input changed beyond its normal fluctuation and a doctor should look first. */
-    bioage: { status: 'ok' | 'blocked'; phenoage: number | null; advance: number | null; date: string | null; checkups: number; band_years: number | null; blocker_zh: string; missing: string[]; caveat_zh?: string }
+    bioage: { status: 'ok' | 'blocked'; phenoage: number | null; advance: number | null; date: string | null; checkups: number; band_years: number | null; blocker_zh: string; missing: string[]; caveat_zh?: string; headline_zh?: string; allows_younger?: boolean }
     risk: { status: 'ok' | 'blocked'; risk_pct: number | null; category_zh: string; date: string | null; blocker_zh: string; missing_labs: string[]; missing_facts: string[] }
   }
   addons: Addon[]
@@ -208,6 +208,9 @@ export interface IndicatorRow {
   judged: Judged
   plan_marker: boolean
   read_error?: string
+  /** 太早 or 不可比. Absent when the row was judged or simply not compared. */
+  gate?: 'too_early' | 'not_comparable'
+  reason_zh?: string
 }
 
 export interface IndicatorsResponse {

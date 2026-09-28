@@ -126,15 +126,69 @@ export function parseCompact(text: string): CompactTable {
 
 /**
  * The table inside one MCP tool payload. Mirobody wraps it as {result: "<table>",
- * status, row_count, truncated}; a transport may hand over the bare text. Returns
- * null when the payload is not a compact table (an older JSON shape).
+ * status, row_count, truncated}; a transport may hand over the bare text, or the
+ * REST shape {rows, count, total, truncated}. Returns null when the payload is
+ * neither (an OAuth blob, a warmup sentence, a JSON object with no rows).
  */
 export function tableOf(payload: unknown): CompactTable | null {
-  if (typeof payload === 'string') return looksCompact(payload) ? parseCompact(payload) : null
+  if (typeof payload === 'string') {
+    if (looksCompact(payload)) return parseCompact(payload)
+    const parsed = jsonObject(payload)
+    return parsed ? tableOf(parsed) : null
+  }
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null
-  const result = (payload as { result?: unknown }).result
-  if (typeof result === 'string' && looksCompact(result)) return parseCompact(result)
-  return null
+  const record = payload as { result?: unknown }
+  const result = record.result
+  if (typeof result === 'string') {
+    if (looksCompact(result)) return parseCompact(result)
+    const parsed = jsonObject(result)
+    if (parsed) {
+      const inner = tableOf(parsed)
+      if (inner) return inner
+    }
+  } else if (result && typeof result === 'object') {
+    const inner = restTable(result)
+    if (inner) return inner
+  }
+  return restTable(payload)
+}
+
+function jsonObject(text: string): unknown {
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null
+  try {
+    return JSON.parse(trimmed) as unknown
+  } catch {
+    return null
+  }
+}
+
+/** Mirobody's browser shape: rows as objects, the same meta the compact table carries. */
+function restTable(payload: unknown): CompactTable | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null
+  const record = payload as Record<string, unknown>
+  if (!Array.isArray(record.rows)) return null
+  const rows: Array<Record<string, string>> = []
+  for (const item of record.rows) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue
+    const row: Record<string, string> = {}
+    for (const [key, value] of Object.entries(item as Record<string, unknown>)) {
+      if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') row[key] = String(value)
+    }
+    rows.push(row)
+  }
+  const meta = emptyMeta()
+  meta.rows = typeof record.count === 'number' ? record.count : rows.length
+  if (typeof record.total === 'number') meta.total = record.total
+  if (record.truncated === true) meta.truncated = true
+  const window = record.window
+  if (window && typeof window === 'object') {
+    const zone = (window as { tz?: unknown }).tz
+    if (typeof zone === 'string') meta.tz = zone
+  }
+  if (typeof record.resolution === 'string') meta.resolution = record.resolution
+  if (typeof record.aggregate === 'string') meta.aggregate = record.aggregate
+  return { rows, meta, notes: [] }
 }
 
 function looksCompact(text: string): boolean {
@@ -144,11 +198,75 @@ function looksCompact(text: string): boolean {
     || trimmed.startsWith('error (') || /\n\((?:window|rows)=/.test(trimmed)
 }
 
-/** A cell as a number, or null for an empty or non-numeric cell ("Positive", "<0.5"). */
+/** A cell as a number, or null for an empty or non-numeric cell ("Positive", "<0.5", "5.48 ↑"). */
 export function cellNumber(value: string | undefined): number | null {
   if (value == null) return null
   const text = value.trim()
   if (!/^[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?$/.test(text)) return null
   const number = Number(text)
   return Number.isFinite(number) ? number : null
+}
+
+export type PrintedFlag = 'high' | 'low' | 'positive' | 'negative' | 'abnormal' | 'below' | 'above'
+
+export interface PrintedValue {
+  /** The measurement, when the cell is a number plus an optional arrow or H/L flag. */
+  value: number | null
+  /** The bound in "<0.5" or ">100". Not a measurement. */
+  bound: number | null
+  comparator: '<' | '<=' | '>' | '>=' | null
+  flag: PrintedFlag | null
+  /** 阴性 / 阳性 / 弱阳性, with the "(−)" decoration removed. */
+  qualitative: string | null
+  /** The original cell when it was not a bare number. */
+  printed: string | null
+}
+
+const NO_PRINT: PrintedValue = { value: null, bound: null, comparator: null, flag: null, qualitative: null, printed: null }
+
+/**
+ * A lab cell as printed on a report. "5.48 ↑" and "120↓" are the number plus a flag.
+ * "<0.5" keeps the bound and is not treated as 0.5. "阴性(-)" is qualitative.
+ * A bare number has no flag and no printed form.
+ */
+export function parsePrinted(raw: string | null | undefined): PrintedValue {
+  if (raw == null) return NO_PRINT
+  const text = String(raw).normalize('NFKC').trim()
+  if (!text) return NO_PRINT
+  const qualitative = qualitativeOf(text)
+  if (qualitative) {
+    return { ...NO_PRINT, qualitative: qualitative.text, flag: qualitative.flag, printed: text === qualitative.text ? null : text }
+  }
+  const compared = /^(<=|>=|<|>|≤|≥)\s*([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)$/.exec(text)
+  if (compared) {
+    const token = compared[1] ?? ''
+    const comparator = token === '≤' ? '<=' : token === '≥' ? '>=' : token as '<' | '<=' | '>' | '>='
+    const bound = Number(compared[2])
+    if (!Number.isFinite(bound)) return { ...NO_PRINT, printed: text }
+    return { ...NO_PRINT, bound, comparator, flag: comparator.startsWith('<') ? 'below' : 'above', printed: text }
+  }
+  const flagged = /^([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)\s*(↑|↓|▲|▼|\*|H|L|高|低)$/i.exec(text)
+  if (flagged) {
+    const value = Number(flagged[1])
+    if (!Number.isFinite(value)) return { ...NO_PRINT, printed: text }
+    const mark = (flagged[2] ?? '').toUpperCase()
+    const flag: PrintedFlag = mark === '↓' || mark === '▼' || mark === 'L' || mark === '低' ? 'low'
+      : mark === '*' ? 'abnormal' : 'high'
+    return { ...NO_PRINT, value, flag, printed: text }
+  }
+  const bare = cellNumber(text)
+  if (bare != null) return { ...NO_PRINT, value: bare }
+  return { ...NO_PRINT, printed: text }
+}
+
+function qualitativeOf(text: string): { text: string; flag: PrintedFlag } | null {
+  if (/弱阳性/.test(text)) return { text: '弱阳性', flag: 'abnormal' }
+  const stripped = text.replace(/[（(]\s*[-+＋−–—]*\s*[)）]/g, '').replace(/\s+/g, '')
+  if (/阴性|negative|^neg$/i.test(stripped) || stripped === '-' || stripped === '−' || stripped === '—') {
+    return { text: '阴性', flag: 'negative' }
+  }
+  if (/阳性|positive|^pos$/i.test(stripped) || stripped === '+' || stripped === '＋') {
+    return { text: '阳性', flag: 'positive' }
+  }
+  return null
 }

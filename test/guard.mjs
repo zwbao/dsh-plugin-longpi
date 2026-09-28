@@ -83,7 +83,9 @@ try {
   // The self-harm line comes from the boundary skill, and no other phone number appears there.
   const skill = readFileSync(join(root, '..', 'skills', 'longpi-boundary', 'SKILL.md'), 'utf8')
   assert.ok(skill.includes(mod.SELF_HARM_LINE_ZH), 'SKILL.md is the source of the self-harm line')
-  assert.deepEqual([...new Set(skill.match(/\d{3,}/g))].sort(), ['120', '988'], 'only 120 and 988 are sourced')
+  const emergencyNumbers = new Set(['110', '119', '120', '122', '911', '999', '988'])
+  const phones = [...skill.matchAll(/(?<!\d)(\d{3})(?!\d)/g)].map((hit) => hit[1]).filter((n) => emergencyNumbers.has(n))
+  assert.deepEqual([...new Set(phones)].sort(), ['120', '988'], 'the only emergency numbers in the skill are 120 and 988')
   for (const note of [mod.guidanceNote({ ...labelsOf({ labels: ['self_harm'] }), reason: '' }), mod.guidanceNote({ ...labelsOf({ labels: ['acute_emergency'] }), reason: '' })]) {
     assert.deepEqual([...new Set(note.text.match(/\d{3,}/g))].filter((n) => !['120', '988'].includes(n)), [], 'no invented number')
   }
@@ -161,7 +163,7 @@ try {
   assert.equal(ownPreStep.length, 1, 'one outermost LongPi pre-step listener')
   assert.equal(host.listeners['agent/turn-stopping'].length, 2, 'the guard\'s reply check, and the memory distiller (0.5.3, background)')
   assert.equal(host.listeners['tools/pre-execute'].length, 2, 'set_followup and the plan save each have one')
-  assert.equal(host.listeners['tools/post-execute'].length, 2, 'the plan save read-back, and the HealthEvent hooks (0.5.3)')
+  assert.equal(host.listeners['tools/post-execute'].length, 3, 'the plan save read-back, the privacy redaction (M11), and the HealthEvent hooks (0.5.3)')
   // 0.5.3: the persona is agent-scoped (agents/orchestrator.ts), not a global section.
   assert.equal(host.prompts.some((section) => section.name === 'longpi:persona'), false, 'no global persona')
   const personaText = mod.orchestratorPrompt({ mounted: false, peer: false, error: '', pluginHome: '' })
@@ -310,7 +312,10 @@ try {
   run = turnAgent(7, '每天两片二甲双胍就可以。')
   await turnStopping({ agent: run.agent, turn: 7, signal })
   assert.equal(run.steered.length, 0, 'the judge answered: it decides, the rules do not overrule it')
-  for (const safe of ['这件事请问开药的医生，我不能建议停药。', 'TAME 试验中受试者每天服用 1500 mg 二甲双胍，这是研究方案，不是给你的剂量。', '你的表型年龄比实际年龄小 3 岁（模型估计）。']) {
+  run = turnAgent(3, '这件事请问开药的医生，我不能建议停药。')
+  await turnStopping({ agent: run.agent, turn: 3, signal })
+  assert.equal(run.steered.length, 1, 'a bare refusal of a supplement question is corrected with concrete information')
+  for (const safe of ['TAME 试验中受试者每天服用 1500 mg 二甲双胍，这是研究方案，不是给你的剂量。', '你的表型年龄比实际年龄小 3 岁（模型估计）。']) {
     run = turnAgent(3, safe)
     await turnStopping({ agent: run.agent, turn: 3, signal })
     assert.equal(run.steered.length, 0, safe)

@@ -91,6 +91,8 @@ function resultsOf(raw: Raw): Journey['results'] {
       blocker_zh: str(bio.blocker_zh),
       missing: strings(bio.missing),
       ...(str(bio.caveat_zh) ? { caveat_zh: str(bio.caveat_zh) } : {}),
+      ...(str(bio.headline_zh) ? { headline_zh: str(bio.headline_zh) } : {}),
+      ...(bio.allows_younger === true ? { allows_younger: true } : {}),
     },
     risk: {
       status: risk.status === 'ok' && riskPct != null ? 'ok' : 'blocked',
@@ -584,6 +586,8 @@ function indicatorRowOf(raw: Raw): IndicatorRow | null {
     judged: judged === 'changed' && !change ? 'unjudged' : judged,
     plan_marker: raw.plan_marker === true,
     ...(readError ? { read_error: readError } : {}),
+    ...(raw.gate === 'too_early' || raw.gate === 'not_comparable' ? { gate: raw.gate } : {}),
+    ...(str(raw.reason_zh) ? { reason_zh: str(raw.reason_zh) } : {}),
   }
 }
 

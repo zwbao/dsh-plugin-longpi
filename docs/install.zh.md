@@ -224,6 +224,49 @@ Mirobody 已挂载
 
 有问题时发「帮我查一下 longpi 状态」，模型会调 `longpi_status`，里面有技能库、运行时和 Mirobody 的状态（不含病历和 token）。
 
+## 中国大陆网络
+
+不加参数时，安装程序走 GitHub、registry.npmjs.org、pypi.org 和 Docker Hub。这些地址打不开时加一个参数：
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/install.sh | bash -s -- --mirror cn
+curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/install.sh | bash -s -- --mirror auto
+```
+
+`cn` 强制使用下面的镜像。`auto` 会探测 `github.com`、`registry.npmjs.org`、`pypi.org`、`registry-1.docker.io`（连接超时 3 秒，总超时 5 秒），只把没有应答的换成镜像。之后不加这个参数再跑，就回到公网默认。环境变量 `LONGPI_MIRROR=cn` 或 `auto` 作用相同。
+
+| 项目 | 公网默认 | 大陆镜像 |
+| --- | --- | --- |
+| npm 和 pnpm | registry.npmjs.org | `https://registry.npmmirror.com`（`LONGPI_NPM_REGISTRY`） |
+| pip 和 uv | pypi.org | 先 `https://mirrors.cloud.tencent.com/pypi/simple`，失败再 `https://mirrors.aliyun.com/pypi/simple`（`LONGPI_PIP_INDEX`、`LONGPI_PIP_INDEX_FALLBACK`） |
+| 插件 | `github:zwbao/dsh-plugin-longpi` | 见下文 |
+| longevity-skills | 从 GitHub `git clone` | 见下文 |
+| Mirobody（`--with-mirobody`） | 从 GitHub `git clone`，再 `git lfs pull` | 见下文 |
+| Docker Hub | 守护进程自己的配置 | 只打印提示，不改 `/etc/docker/daemon.json` |
+
+**插件和方法库。** `dsh-plugin-longpi` 和 `longevity-skills` 都还没有发布到 npm（2026-09-28 核对过），所以 npmmirror 上现在没有它们的压缩包。安装程序仍会先问 npm 镜像：哪一天包发布了，同一条命令就会改用压缩包。在那之前，它通过不需要本机直连 `github.com` 的代理下载 GitHub 归档，顺序是 `https://ghfast.top`，然后 `https://gh-proxy.com`。要用别的前缀，设 `LONGPI_GITHUB_MIRROR`，例如 `https://ghfast.top/https://github.com`。
+
+这些仓库没有现成的 Gitee 远程。可以自己导入，再把地址交给安装程序：
+
+```bash
+export LONGPI_PLUGIN_URL=https://gitee.com/you/dsh-plugin-longpi/repository/archive/main.tar.gz
+export LONGPI_SKILLS_URL=https://gitee.com/you/longevity-skills.git
+export LONGPI_MIROBODY_SOURCE=https://gitee.com/you/mirobody.git
+bash install.sh --mirror cn --with-mirobody
+```
+
+`LONGPI_PLUGIN_URL` 也可以是 npm pack 出来的 `.tgz`，或本地路径。`LONGPI_SKILLS_URL` 可以是 git 地址、`.tar.gz`，或一个里面有 `catalog.json` 的目录。`LONGPI_MIROBODY_SOURCE` 对 Mirobody 同样处理（顶层要有 `deploy.sh`）。用压缩包装的方法库，只有 `LONGPI_SKILLS_REFRESH=1` 时才会重新下载；git 检出仍会快进更新。
+
+**LOINC。** `--with-mirobody` 需要 `mirobody/res/fhir_loinc_bundle.tar.gz`，这个文件在 Git LFS 里。没装 `git-lfs`，或 GitHub 的 LFS 被墙导致 `git lfs pull` 失败时，安装程序会从 `~/longpi/.venv` 里已经装好的 `mirobody` 包复制这份词表（wheel 里带了词表，pip 是从 PyPI 镜像装的）。`LONGPI_LOINC_URL` 指向同一个 `.tar.gz` 的直链，会比从 wheel 复制更先尝试。
+
+**Docker。** Mirobody 的 `deploy.sh` 通过 Docker 守护进程拉镜像；Hub 超时时它自己会试 `docker.1ms.run`。腾讯云上现场可用的镜像是 `https://mirror.ccs.tencentyun.com`。`https://docker.m.daocloud.io` 也能应答仓库 API。要固定一个镜像：
+
+```json
+{ "registry-mirrors": ["https://mirror.ccs.tencentyun.com"] }
+```
+
+写进 `/etc/docker/daemon.json`，重启 Docker，再带 `--with-mirobody` 运行。安装程序只打印这段提示。
+
 ## 9. 常见问题
 
 | 现象 | 原因和处理 |
@@ -240,6 +283,9 @@ Mirobody 已挂载
 | 改了配置没生效 | `--dump-config` 看这一行是否 `patched by` 你的文件；补丁里漏掉的键会回到默认值。 |
 | DSH 启动失败 | 终端会打印出错的插件；完整记录在 `~/.dsh/logs/startup-*.log`。 |
 | 没有「健康看板」标签 | 先发一条消息或命令让会话开始；插件改动后要重启 `dsh web`。 |
+| `git clone` 或 `npm install` 一直卡住然后失败 | GitHub、npmjs、PyPI 或 Docker Hub 不通。加上 `--mirror cn` 或 `--mirror auto` 再跑。 |
+| LOINC 文件只有几行，开头是 `version https://git-lfs` | 没拉到 LFS。安装 git-lfs，或把 `LONGPI_LOINC_URL` 设成真正的 `fhir_loinc_bundle.tar.gz`。加了 `--mirror` 时，LFS 失败会从 pip 装好的 wheel 里复制词表。 |
+| 拉镜像卡在 `registry-1.docker.io` | 见上面「中国大陆网络」里的 Docker 一段。`deploy.sh` 自己也会试 `docker.1ms.run`。 |
 
 ## 更新和卸载
 
@@ -249,7 +295,7 @@ git -C "$LONGPI_HOME/longevity-skills" pull          # 更新技能库，不用�
 dsh plugin --profile web remove dsh-plugin-longpi   # 卸载；再删掉 cordis.patch.yml 里 LongPi 那一行
 ```
 
-要固定版本，安装时用 `github:zwbao/dsh-plugin-longpi#v0.5.1` 这样的标签。卸载不会删除 `~/.dsh/longpi` 里的档案、方案和打卡记录。
+要固定版本，安装时用 `github:zwbao/dsh-plugin-longpi#v0.5.1` 这样的标签。在大陆网络上，更新请重新执行 `bash install.sh --mirror cn`，不要用 `dsh plugin update`（那条命令会去 GitHub）。卸载不会删除 `~/.dsh/longpi` 里的档案、方案和打卡记录。
 
 ## 不装 DSH，先看一眼（开发者）
 

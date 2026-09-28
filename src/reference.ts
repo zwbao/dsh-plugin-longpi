@@ -74,6 +74,23 @@ const EMPTY: Biovar = { z: 1.96, default_cva_rule_zh: '', markers: [] }
 /** EFLM desirable analytical imprecision: CVA at most half of CVI (Fraser). Used when the source gives no CVA. */
 export const DEFAULT_CVA_FACTOR = 0.5
 
+/**
+ * Codes Mirobody assigns that name the same measurement as a variation row but are not in its list.
+ * 22748-8 is LDL cholesterol in mmol/L; without it the changes card never sees that series.
+ */
+const EXTRA_LOINC: Record<string, readonly string[]> = {
+  ldl: ['22748-8', '2089-1'],
+}
+
+function withExtraCodes(markers: BiovarMarker[]): BiovarMarker[] {
+  return markers.map((marker) => {
+    const extra = EXTRA_LOINC[marker.key]
+    if (!extra) return marker
+    const missing = extra.filter((code) => !marker.loinc.includes(code))
+    return missing.length > 0 ? { ...marker, loinc: [...marker.loinc, ...missing] } : marker
+  })
+}
+
 let memo: { home: string; stamp: string; value: Reference } | null = null
 
 function stampOf(path: string): string {
@@ -94,7 +111,7 @@ export function loadReference(skillsHome: string): Reference {
     if (existsSync(biovarPath)) {
       const parsed = JSON.parse(readFileSync(biovarPath, 'utf8')) as Partial<Biovar> & { schema?: string }
       if (parsed.schema === 'longevity-biovar/1' && Array.isArray(parsed.markers)) {
-        value.biovar = { z: typeof parsed.z === 'number' ? parsed.z : 1.96, default_cva_rule_zh: parsed.default_cva_rule_zh ?? '', markers: parsed.markers }
+        value.biovar = { z: typeof parsed.z === 'number' ? parsed.z : 1.96, default_cva_rule_zh: parsed.default_cva_rule_zh ?? '', markers: withExtraCodes(parsed.markers) }
       }
     }
     if (existsSync(effectsPath)) {

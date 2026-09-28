@@ -11,6 +11,7 @@ import React from 'react'
 import { errorText, postJson } from './api.ts'
 import { chineseDate, localToday } from './format.ts'
 import { Icon } from './icons.ts'
+import { EngageSettingsNote } from './engage/index.ts'
 import { notifyChanged, putFollowup, reload, useFollowup } from './store.ts'
 import type { FollowupKind, FollowupLogRow, FollowupResponse, FollowupSettings, FollowupTestResponse, FollowupUpdate, WebhookKind, Weekday } from './types.ts'
 import { Btn, LoadError, Segmented, Skeleton, Switch } from './ui.ts'
@@ -411,6 +412,7 @@ export function FollowupPanel(props: { onNotice: Notify }): React.ReactElement {
   if (!data) return h(LoadError, { what: '随访设置', error, onRetry: () => reload('followup') })
   return h('div', { className: 'lp-followup-panel' },
     h(ReminderSwitch, { data, onNotice: props.onNotice }),
+    h(EngageSettingsNote),
     h('details', { className: 'lp-more' },
       h('summary', null, '更多设置', h('span', { className: 'lp-optional' }, '复测提醒、每周小结、免打扰、发到飞书或手机、内容详略')),
       h(Settings, { data, onNotice: props.onNotice, hideSwitch: true })))

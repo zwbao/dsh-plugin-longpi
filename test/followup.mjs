@@ -5,6 +5,7 @@
 // are injected before anything runs: no test calls osascript, notify-send or
 // the network. Times are Asia/Shanghai wall time (+08:00), so the test holds in any process zone.
 
+process.env.LONGPI_SKIP_NOTIFIER = '1'
 import assert from 'node:assert/strict'
 import { createHmac } from 'node:crypto'
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -329,7 +330,8 @@ try {
   let res = await call(host, 'GET', '/api/longpi/followup')
   assert.equal(res.status, 200)
   let body = res.json()
-  assert.deepEqual(Object.keys(body).sort(), ['log', 'next', 'platform_desktop', 'settings'])
+  assert.deepEqual(Object.keys(body).sort(), ['log', 'next', 'platform_desktop', 'settings', 'silence_zh'])
+  assert.match(body.silence_zh, /关着的/)
   assert.equal(body.settings.enabled, false)
   assert.deepEqual(body.next, { checkin: null, retest: null, weekly: null })
   assert.equal(body.platform_desktop, true)

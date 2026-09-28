@@ -157,6 +157,49 @@ export function connectionTokenProblem(token: unknown): string {
 
 export type ConnectionTest = { ok: true; indicators: number } | { ok: false; error: string }
 
+export type MirobodyLogin = { ok: true; mcp_url: string; mcp_token: string } | { ok: false; error: string }
+
+/**
+ * Log into Mirobody with the account email and password, then mint the personal MCP URL
+ * (POST /personal/mcp). The password is not stored. The token is the account JWT, saved
+ * only by the caller after a catalogue read succeeds.
+ */
+export async function loginMirobody(input: { base_url: string; email: string; password: string }, fetchImpl: typeof fetch = fetch): Promise<MirobodyLogin> {
+  const base = input.base_url.replace(/\/+$/, '')
+  const problem = connectionUrlProblem(base)
+  if (problem) return { ok: false, error: problem }
+  if (input.password.length < 8) return { ok: false, error: '密码至少 8 位。' }
+  let loginBody: { code?: number; msg?: string; data?: { access_token?: string } }
+  try {
+    const response = await fetchImpl(`${base}/password/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: input.email, password: input.password }),
+    })
+    loginBody = await response.json() as typeof loginBody
+    if (!response.ok || loginBody.code !== 0 || !loginBody.data?.access_token) {
+      return { ok: false, error: 'Mirobody 没有接受这个邮箱或密码。' }
+    }
+  } catch {
+    return { ok: false, error: '连不上这个 Mirobody 地址。请确认它正在运行。' }
+  }
+  const token = loginBody.data?.access_token
+  if (!token) return { ok: false, error: 'Mirobody 没有接受这个邮箱或密码。' }
+  try {
+    const response = await fetchImpl(`${base}/personal/mcp`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
+      body: '{}',
+    })
+    const minted = await response.json() as { code?: number; data?: { url?: string } }
+    const url = minted.data?.url ?? ''
+    if (!response.ok || minted.code !== 0 || !url.startsWith('http')) return { ok: false, error: '登录成功，但没有得到个人 MCP 地址。' }
+    return { ok: true, mcp_url: url, mcp_token: token }
+  } catch {
+    return { ok: false, error: '登录成功，但生成个人地址时没有连上。' }
+  }
+}
+
 function timeoutText(timeoutMs: number): string {
   return `${Math.round(timeoutMs / 1000)} 秒内没有回应。请确认 Mirobody 正在运行、地址无误。`
 }
