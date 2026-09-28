@@ -11,7 +11,7 @@ import { isoDay } from '../interventions.ts'
 import { estimatedAge, readProfile } from '../profile.ts'
 import { eligibility, grantConsent, withdrawConsent, type PersonFacts } from './consent-flow.ts'
 import { loadStudies, loadStudy, publicQuestions } from './manifest.ts'
-import { designNOf1, type WearableDay } from './nof1.ts'
+import { designNOf1, publicNOf1, seasonIdOnDisk, storeNOf1, type WearableDay } from './nof1.ts'
 import { armsFromOutcomes, logOutcome, readOutcomes } from './outcomes.ts'
 
 function answersOf(value: unknown): Array<{ id: string; choice: number }> {
@@ -84,18 +84,24 @@ export function registerScienceTools(ctx: Context, deps: CoreDeps): void {
     },
     output: jsonOut,
     timeoutMs: 20000,
-    isConcurrencySafe: () => true,
-    async execute(args) {
+    isConcurrencySafe: () => false,
+    async execute(args, exec) {
       const dataDir = deps.dataDir()
       const outcomes = readOutcomes(dataDir)
+      const seasonId = seasonIdOnDisk(dataDir)
       const designed = designNOf1({
         today: isoDay(),
         design: args.design === 'crossover' ? 'crossover' : 'abab',
         question_zh: typeof args.question === 'string' ? args.question : '',
         wearable: wearable(),
         glucose: armsFromOutcomes(outcomes) as { morning: number[]; after_dinner: number[] },
+        season_id: seasonId,
       })
-      return asJson({ ok: true, ...designed, say_zh: '把 protocol_zh 和 result_zh 用你自己的话讲短一点，不要添加数字，不要说证明或治愈。' })
+      const stored = storeNOf1(dataDir, designed)
+      if (stored.completed) {
+        deps.bus.emit('study.n_of_1_completed', { study_id: 'n-of-1', season_id: seasonId }, { module: 'M8', via: 'tool', tool: 'design_n_of_1', session_id: sessionOfExec(exec) })
+      }
+      return asJson({ ok: true, ...publicNOf1(designed), say_zh: '把 protocol_zh 和 result_zh 用你自己的话讲短一点，不要添加数字，不要说证明或治愈。种子留在这台电脑上。' })
     },
   }))
 
@@ -109,11 +115,27 @@ export function registerScienceTools(ctx: Context, deps: CoreDeps): void {
     output: jsonOut,
     timeoutMs: 20000,
     isConcurrencySafe: () => false,
-    async execute(args) {
+    async execute(args, exec) {
       const quote = typeof args.quote === 'string' ? args.quote : ''
-      const saved = logOutcome(deps.dataDir(), quote, isoDay(), typeof args.study_id === 'string' ? args.study_id : null, newId('outcme'), new Date().toISOString())
+      const dataDir = deps.dataDir()
+      const saved = logOutcome(dataDir, quote, isoDay(), typeof args.study_id === 'string' ? args.study_id : null, newId('outcme'), new Date().toISOString())
       if (!saved) return asJson({ ok: false, error: '这句话里没有走路时段、分钟数或血糖数字' })
-      return asJson({ ok: true, saved: { day: saved.day, arm: saved.arm, value: saved.value, unit: saved.unit, minutes: saved.minutes }, say_zh: '已记在这台电脑上。' })
+      const seasonId = seasonIdOnDisk(dataDir)
+      const prev = readJson<{ design?: string }>(join(dataDir, 'science', 'n-of-1.json'), (raw) => raw as { design?: string }, () => ({}))
+      const seed = readJson<{ seed?: string }>(join(dataDir, 'science', 'n-of-1-seed.json'), (raw) => raw as { seed?: string }, () => ({}))
+      const designed = designNOf1({
+        today: isoDay(),
+        design: prev.design === 'crossover' ? 'crossover' : 'abab',
+        seed: typeof seed.seed === 'string' ? seed.seed : undefined,
+        wearable: wearable(),
+        glucose: armsFromOutcomes(readOutcomes(dataDir)) as { morning: number[]; after_dinner: number[] },
+        season_id: seasonId,
+      })
+      const stored = storeNOf1(dataDir, designed)
+      if (stored.completed) {
+        deps.bus.emit('study.n_of_1_completed', { study_id: 'n-of-1', season_id: seasonId }, { module: 'M8', via: 'tool', tool: 'log_n_of_1_outcome', session_id: sessionOfExec(exec) })
+      }
+      return asJson({ ok: true, saved: { day: saved.day, arm: saved.arm, value: saved.value, unit: saved.unit, minutes: saved.minutes }, stopping: designed.stopping.decision, say_zh: '已记在这台电脑上。' })
     },
   }))
 
@@ -164,7 +186,7 @@ export function registerScienceTools(ctx: Context, deps: CoreDeps): void {
       if (!done.ok) return asJson({ ok: false, error: done.reason_zh })
       deps.bus.emit('study.withdrawn', { study_id: study.manifest.id, consent_id: done.consent.id }, { module: 'M8', via: 'tool', tool: 'withdraw_from_study', session_id: sessionOfExec(exec) })
       deps.invalidate()
-      return asJson({ ok: true, deleted_unreleased: done.deleted, say_zh: '已退出。还没发布的合计已从这台电脑删除。' })
+      return asJson({ ok: true, deleted_unreleased: done.deleted, released_stays: true, statement_zh: done.statement_zh, say_zh: done.statement_zh })
     },
   }))
 

@@ -7,6 +7,7 @@ import type { Id, IsoTime } from '../contracts/common.ts'
 import type { ConditionFlag, DrugClass } from '../contracts/memory.ts'
 import type { ConsentRecord, StudyManifest } from '../contracts/science.ts'
 import { appendJsonl, newId, readJson, readJsonl, writeJsonAtomic } from '../core/store.ts'
+import { closeStudyBudget, RELEASE_STAYS_ZH } from './budget.ts'
 import { appendLog } from './translog.ts'
 
 export interface Answer { id: string; choice: number }
@@ -127,11 +128,12 @@ export function grantConsent(input: GrantInput): { ok: true; consent: ConsentRec
   return { ok: true, consent }
 }
 
-export function withdrawConsent(dataDir: string, manifest: StudyManifest, at: IsoTime = new Date().toISOString()): { ok: true; consent: ConsentRecord; deleted: number } | { ok: false; reason_zh: string } {
+export function withdrawConsent(dataDir: string, manifest: StudyManifest, at: IsoTime = new Date().toISOString()): { ok: true; consent: ConsentRecord; deleted: number; released_stays: true; statement_zh: string } | { ok: false; reason_zh: string } {
   const current = latestConsent(dataDir, manifest.id)
   if (!current || current.decision !== 'granted') return { ok: false, reason_zh: '现在没有生效的同意' }
   const deleted = deleteUnreleased(dataDir, manifest.id)
-  const logged = appendLog(dataDir, 'withdraw', `退出「${manifest.title_zh}」。已删除 ${deleted} 份尚未发布的合计。`, manifest.id, at)
+  closeStudyBudget(dataDir, manifest.id)
+  const logged = appendLog(dataDir, 'withdraw', `退出「${manifest.title_zh}」。已删除 ${deleted} 份尚未发布的合计。${RELEASE_STAYS_ZH}`, manifest.id, at)
   const consent: ConsentRecord = {
     id: newId('cnsent'),
     scope: 'study',
@@ -147,7 +149,7 @@ export function withdrawConsent(dataDir: string, manifest: StudyManifest, at: Is
     translog_seq: logged.seq,
   }
   appendJsonl(consentsPath(dataDir), consent)
-  return { ok: true, consent, deleted }
+  return { ok: true, consent, deleted, released_stays: true, statement_zh: RELEASE_STAYS_ZH }
 }
 
 function deleteUnreleased(dataDir: string, studyId: string): number {

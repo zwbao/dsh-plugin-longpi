@@ -1,0 +1,18 @@
+{
+  "region": "cn-mainland",
+  "host": "0.0.0.0",
+  "port": 8443,
+  "tls": {
+    "required": true,
+    "cert_path": "certs/fullchain.pem",
+    "key_path": "certs/privkey.pem"
+  },
+  "rate_limit": { "window_ms": 60000, "max": 120 },
+  "audit_log": "var/aggregator-audit.jsonl",
+  "accept_dev_key": false,
+  "root_public_b64": "REPLACE_WITH_OFFLINE_ROOT_PUBLIC",
+  "feed_key_id": "longpi-prod-2026a",
+  "feed_private_pem": "",
+  "keys": [],
+  "icp_note_zh": "上线前需要境内主体、ICP 备案、伦理批件和离线根密钥。这个进程不接收真实参与者，scienceMode live 保持关闭。"
+}

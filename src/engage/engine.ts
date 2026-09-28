@@ -30,6 +30,8 @@ import {
 } from './personal.ts'
 import { readQuiet, seasonPressureOn } from './quiet.ts'
 import { makeQuests, questProgress, type QuestFacts } from './quests.ts'
+import { effectiveMode } from '../science/index.ts'
+import { nOf1SeasonQuest } from '../science/nof1-model.ts'
 import { commitmentOf } from './rng.ts'
 import { chapterList, MIN_SEASON_DAYS, recapText, seasonSpan, seasonStatus, weekOf } from './seasons.ts'
 import { computeStreak, daysInRange } from './streak.ts'
@@ -239,6 +241,7 @@ interface World {
   checkinDays: IsoDay[]
   doctorFirst: boolean
   displayName: string
+  nOf1Done: boolean
 }
 
 function memoryFlags(dataDir: string): { minor: boolean; optOut: boolean; nudge: boolean } {
@@ -316,6 +319,18 @@ function readWorld(dataDir: string, now: Date): World {
     selfDays: [...new Set(self.map((row) => row.date))],
     checkinDays: checkins,
     doctorFirst: false,
+    nOf1Done: nOf1Finished(dataDir),
+  }
+}
+
+function nOf1Finished(dataDir: string): boolean {
+  if (!dataDir) return false
+  try {
+    const raw = JSON.parse(readFileSync(join(dataDir, 'science', 'n-of-1.json'), 'utf8')) as { stopping?: { decision?: string } }
+    const decision = raw.stopping?.decision
+    return decision === 'stop_difference' || decision === 'stop_futility' || decision === 'stop_cap'
+  } catch {
+    return false
   }
 }
 
@@ -348,8 +363,28 @@ function factsOf(state: State, world: World): QuestFacts & { allActive: IsoDay[]
     hscrp,
     activeDays: allActive.filter(inSeason).length,
     retestInWindow,
+    nOf1Done: world.nOf1Done,
     allActive,
   }
+}
+
+/** Simulated studies add one ordinary Codex quest. Live stays off, so it adds nothing. */
+function attachSimulatedTrial(state: State, season: Season): void {
+  if (effectiveMode() !== 'simulated') return
+  if (state.quests.some((quest) => quest.id === 'qs-n-of-1')) return
+  const raw = nOf1SeasonQuest(season.id)
+  state.quests.push({
+    id: raw.id,
+    season_id: season.id,
+    kind: raw.kind,
+    title_zh: raw.title_zh,
+    criteria: { event: raw.criteria.event, count: raw.criteria.count },
+    progress: 0,
+    status: 'open',
+    reward: { draws: raw.reward.draws },
+    origin: raw.origin,
+  })
+  season.quest_ids = state.quests.map((quest) => quest.id)
 }
 
 function blockOf(state: State, world: World): CodexBlock {
@@ -434,6 +469,7 @@ function reduce(state: State, world: World, now: Date): void {
   else if (state.season) personalize(state, state.season)
   const season = state.season
   if (!season) return
+  attachSimulatedTrial(state, season)
   const at = now.toISOString() as IsoTime
   const facts = factsOf(state, world)
   for (const unlock of state.unlocks) {
@@ -644,7 +680,7 @@ function safePack() {
 export function syncEngage(dataDir: string, now: Date = new Date()): EngageView {
   if (!dataDir) {
     const blank = emptyState()
-    return viewOf(blank, { today: isoDay(now), age: null, accountAge: null, sex: 'unknown', subject: false, subject_zh: null, consent: false, focus: null, minorFlag: false, memoryOptOut: false, memoryNudge: false, waist: false, hscrp: false, selfDays: [], checkinDays: [], doctorFirst: false, displayName: '' }, dataDir)
+    return viewOf(blank, { today: isoDay(now), age: null, accountAge: null, sex: 'unknown', subject: false, subject_zh: null, consent: false, focus: null, minorFlag: false, memoryOptOut: false, memoryNudge: false, waist: false, hscrp: false, selfDays: [], checkinDays: [], doctorFirst: false, displayName: '', nOf1Done: false }, dataDir)
   }
   const world = readWorld(dataDir, now)
   const state = readState(dataDir)

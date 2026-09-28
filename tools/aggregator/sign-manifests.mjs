@@ -76,7 +76,7 @@ const rcv = {
     after_withdraw: 'delete_unreleased',
     comprehension: [
       { id: 'leave', question_zh: '离开这台电脑的是什么？', options_zh: ['原始化验单', '加了噪声并遮住的合计，不是原始化验单', '基因数据'], correct: 1 },
-      { id: 'quit', question_zh: '想退出时怎么办？', options_zh: ['不能退出', '可以随时退出，未发布的数字会删除', '要等研究结束'], correct: 1 },
+      { id: 'quit', question_zh: '想退出时怎么办？', options_zh: ['不能退出', '可以随时退出；未发布的份额会删除，已经发布的合计不能撤回', '要等研究结束'], correct: 1 },
       { id: 'dx', question_zh: '这个结果可以当作诊断吗？', options_zh: ['可以，它能下诊断', '不可以，它只描述波动，看病还是找医生', '可以代替看医生'], correct: 1 },
     ],
   },

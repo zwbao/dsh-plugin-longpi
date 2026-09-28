@@ -14,7 +14,7 @@ export interface Season {
   chapters: Array<{ week: number; title_zh: string }>
   quest_ids: Id[]; unlock_ids: Id[]; codex_set_id?: Id; study_id?: string
 }
-export type QuestKind = 'care' | 'data' | 'behaviour' | 'learn' | 'retest' | 'reflect'
+export type QuestKind = 'care' | 'data' | 'behaviour' | 'learn' | 'retest' | 'reflect' | 'science_n_of_1'
 export interface Quest {
   id: Id; season_id: Id; kind: QuestKind; title_zh: string
   criteria: { event: HealthEventType; where?: Record<string, string | number | boolean>; count: number; within_days?: number }

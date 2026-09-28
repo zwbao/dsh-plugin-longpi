@@ -1,8 +1,12 @@
 // Personal N-of-1: design an ABAB or crossover on this person's own wearable series, and explain it here.
 // Nothing in this file is sent to an aggregator.
 
-import type { Point } from './stats.ts'
+import { createHash } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { writeJsonAtomic } from '../core/store.ts'
 import { mean, pairedT, round } from './stats.ts'
+import { nOf1SeasonQuest, posteriorDiff, readingsForAnalysis, stoppingRule, type NOf1Quest, type Posterior, type ScheduleBlock, type Stopping, type TrialReading } from './nof1-model.ts'
 
 export type DesignKind = 'abab' | 'crossover'
 
@@ -12,10 +16,15 @@ export interface NOf1Result {
   design: DesignKind
   title_zh: string
   protocol_zh: string
-  schedule: Array<{ arm: string; label_zh: string; from: string; to: string }>
+  schedule: ScheduleBlock[]
   result_zh: string
   numbers: Array<{ key: string; text: string }>
   claim: 'none' | 'describe'
+  seed: string
+  posterior: Posterior | null
+  stopping: Stopping
+  quest: NOf1Quest
+  carryover_days: number
 }
 
 const BANNED = /证明|治愈|患有|确诊|年轻了|变年轻/
@@ -31,20 +40,29 @@ function addDays(day: string, days: number): string {
   return date.toISOString().slice(0, 10)
 }
 
-function schedule(kind: DesignKind, start: string): NOf1Result['schedule'] {
-  if (kind === 'crossover') {
-    return [
-      { arm: 'morning', label_zh: '早晨走 20 分钟', from: start, to: addDays(start, 13) },
-      { arm: 'after_dinner', label_zh: '晚饭后走 20 分钟', from: addDays(start, 14), to: addDays(start, 27) },
-      { arm: 'after_dinner', label_zh: '晚饭后走 20 分钟', from: addDays(start, 28), to: addDays(start, 41) },
-      { arm: 'morning', label_zh: '早晨走 20 分钟', from: addDays(start, 42), to: addDays(start, 55) },
-    ]
-  }
-  const blocks: NOf1Result['schedule'] = []
-  const order = ['morning', 'after_dinner', 'morning', 'after_dinner']
+export function firstArm(seed: string): 'morning' | 'after_dinner' {
+  const hash = createHash('sha256').update(seed, 'utf8').digest()
+  return (hash[0] ?? 0) % 2 === 0 ? 'morning' : 'after_dinner'
+}
+
+function schedule(kind: DesignKind, start: string, first: 'morning' | 'after_dinner'): ScheduleBlock[] {
+  const other = first === 'morning' ? 'after_dinner' : 'morning'
+  const order = kind === 'abab' ? [first, other, first, other] : [first, other, other, first]
+  const blockDays = kind === 'abab' ? 7 : 14
+  const washDays = kind === 'abab' ? 3 : 7
+  const blocks: ScheduleBlock[] = []
+  let cursor = start
   order.forEach((arm, index) => {
-    const from = addDays(start, index * 7)
-    blocks.push({ arm, label_zh: arm === 'morning' ? '早晨走 20 分钟' : '晚饭后走 20 分钟', from, to: addDays(from, 6) })
+    const from = cursor
+    const to = addDays(from, blockDays - 1)
+    blocks.push({ arm, label_zh: arm === 'morning' ? '早晨走 20 分钟' : '晚饭后走 20 分钟', from, to, role: 'treatment' })
+    cursor = addDays(to, 1)
+    if (index < order.length - 1) {
+      const washFrom = cursor
+      const washTo = addDays(washFrom, washDays - 1)
+      blocks.push({ arm: 'washout', label_zh: '洗脱，这几天不比较', from: washFrom, to: washTo, role: 'washout' })
+      cursor = addDays(washTo, 1)
+    }
   })
   return blocks
 }
@@ -87,26 +105,53 @@ export function designNOf1(opts: {
   wearable?: readonly WearableDay[]
   /** Arm-labelled glucose the person already logged. */
   glucose?: { morning: number[]; after_dinner: number[] }
+  /** Day-labelled readings. Washout and the carryover window are left out of the posterior. */
+  readings?: readonly TrialReading[]
+  seed?: string
+  season_id?: string
+  carryover_days?: number
+  mcid?: number
 }): NOf1Result {
   const design: DesignKind = opts.design ?? (opts.question_zh && /交叉|对调/.test(opts.question_zh) ? 'crossover' : 'abab')
-  const blocks = schedule(design, opts.today)
+  const seed = opts.seed ?? `nof1|${design}|${opts.today}`
+  const first = firstArm(seed)
+  const blocks = schedule(design, opts.today, first)
+  const carryover = opts.carryover_days ?? 2
+  const mcid = opts.mcid ?? 0.3
   const protocol = design === 'abab'
-    ? 'ABAB：早晨走一周，晚饭后走一周，再各重复一次。每次 20 分钟。第二天早上记空腹血糖；手表继续记静息心率。两条手臂都记满再比较。'
-    : '交叉：先连续两周早晨走，再连续两周晚饭后走，然后对调重复。每次 20 分钟。比的是你自己记下的血糖，不是别人的。'
+    ? `ABAB：本机用种子随机决定先走哪一种，每种走 7 天，中间 3 天洗脱，再重复。每次 20 分钟。每段开头 ${carryover} 天和洗脱不进入比较。比的是你自己的血糖，种子不出这台电脑。`
+    : `交叉：本机用种子随机决定先走哪一种，每种连续两周，中间 7 天洗脱，然后按 ABBA 对调。每次 20 分钟。每段开头 ${carryover} 天和洗脱不进入比较。比的是你自己记下的血糖。`
   const numbers: NOf1Result['numbers'] = []
+  let morning: number[] = []
+  let after: number[] = []
+  let excluded = 0
+  if (opts.readings && opts.readings.length > 0) {
+    const picked = readingsForAnalysis(blocks, opts.readings, carryover)
+    morning = picked.morning
+    after = picked.after_dinner
+    excluded = picked.excluded
+  } else if (opts.glucose) {
+    morning = opts.glucose.morning
+    after = opts.glucose.after_dinner
+  }
+  const posterior = morning.length >= 2 && after.length >= 2 ? posteriorDiff(morning, after) : null
+  const periods = blocks.filter((row) => row.role === 'treatment').length
+  const stopping = stoppingRule(posterior, { mcid, periods_done: opts.readings && opts.readings.length > 0 ? periods : 0, max_periods: periods, min_n: 4 })
   let result = '手表的每日步数没有区分早晨和晚饭后，所以现有记录还不能比较这两种走法。从今天起按上面的安排走，并把血糖记下来，记在这台电脑上。'
-  const glucose = opts.glucose
-  if (glucose && glucose.morning.length >= 2 && glucose.after_dinner.length >= 2) {
-    const row = contrast(glucose.morning, glucose.after_dinner)
+  if (posterior) {
+    const row = contrast(morning, after)
     if (row) {
-      result = explainContrast('早晨走', '晚饭后走', row, 'mmol/L')
+      const interval = `后验均值 ${round(posterior.mean)}，95% 区间 ${round(posterior.ci95[0])} 到 ${round(posterior.ci95[1])}。`
+      const dropped = excluded > 0 ? `洗脱和携带窗里有 ${excluded} 个读数没有进入比较。` : ''
+      result = `${explainContrast('早晨走', '晚饭后走', row, 'mmol/L')}${interval}${dropped}${stopping.reason_zh}`
       numbers.push(
         { key: 'morning.mean', text: round(row.mean_a) },
         { key: 'after_dinner.mean', text: round(row.mean_b) },
         { key: 'diff', text: round(row.diff) },
+        { key: 'posterior.mean', text: round(posterior.mean) },
       )
     }
-  } else {
+  } else if (!opts.readings?.length) {
     const split = wearableContrast(opts.wearable ?? [])
     if (split) {
       const row = contrast(split.low, split.high)
@@ -115,6 +160,8 @@ export function designNOf1(opts: {
         numbers.push({ key: 'hr.low_steps', text: round(row.mean_a) }, { key: 'hr.high_steps', text: round(row.mean_b) })
       }
     }
+  } else {
+    result = `按随机顺序排好了。洗脱和每段开头 ${carryover} 天先不比较。现在有效记录还不够，继续记在这台电脑上。`
   }
   const built: NOf1Result = {
     design,
@@ -124,8 +171,45 @@ export function designNOf1(opts: {
     result_zh: result,
     numbers,
     claim: 'describe',
+    seed,
+    posterior,
+    stopping,
+    quest: nOf1SeasonQuest(opts.season_id ?? 'season-local'),
+    carryover_days: carryover,
   }
-  const problem = wordingProblem(`${built.protocol_zh} ${built.result_zh}`)
+  const problem = wordingProblem(`${built.protocol_zh} ${built.result_zh} ${built.stopping.reason_zh}`)
   if (problem) built.result_zh = '这次对照只留在本机，次数或记录还不够比较。'
   return built
+}
+
+export type { TrialReading }
+
+const FINISHED = new Set(['stop_difference', 'stop_futility', 'stop_cap'])
+
+export function seasonIdOnDisk(dataDir: string): string {
+  try {
+    const raw = JSON.parse(readFileSync(join(dataDir, 'engage', 'state.json'), 'utf8')) as { season?: { id?: string } }
+    if (typeof raw.season?.id === 'string' && raw.season.id) return raw.season.id
+  } catch { /* the season file belongs to M6 */ }
+  return 'season-local'
+}
+
+/** The plan and the seed stay on this computer. The seed file is not part of the tool response. */
+export function storeNOf1(dataDir: string, designed: NOf1Result): { completed: boolean } {
+  writeJsonAtomic(join(dataDir, 'science', 'n-of-1.json'), {
+    design: designed.design,
+    protocol_zh: designed.protocol_zh,
+    schedule: designed.schedule,
+    quest: designed.quest,
+    stopping: designed.stopping,
+    seed_kept_local: true,
+  })
+  writeJsonAtomic(join(dataDir, 'science', 'n-of-1-seed.json'), { seed: designed.seed })
+  return { completed: FINISHED.has(designed.stopping.decision) }
+}
+
+/** The model and the page see the plan. The random seed stays in the local file. */
+export function publicNOf1(result: NOf1Result): Omit<NOf1Result, 'seed'> {
+  const { seed: _seed, ...shown } = result
+  return shown
 }

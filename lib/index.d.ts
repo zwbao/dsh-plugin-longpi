@@ -559,7 +559,7 @@ declare function registerApprovals(ctx: Context, guard: Pick<Guard, 'inEmergency
 declare function hasDoseAmount(text: string): boolean;
 //#endregion
 //#region src/version.d.ts
-declare const PRODUCT_VERSION = "0.6.0";
+declare const PRODUCT_VERSION = "0.6.1";
 declare const TOOL_NAMES: readonly ["read_personal_situation", "list_longevity_intents", "match_longevity_skills", "read_longevity_skill", "run_longevity_skill", "query_longevity_evidence", "list_longevity_domains", "save_personal_profile", "longpi_status", "save_intervention_plan", "draft_intervention_plan", "log_intervention_checkin", "save_self_measurement", "record_medication_statement", "read_intervention_plan", "review_interventions", "model_intervention_goals", "set_followup", "send_followup_message", "read_person_memory", "remember_for_me", "note_page_issue", "read_care_navigation", "prepare_doctor_brief", "log_care_visit"];
 declare const HARNESS_SKILLS: readonly ["longpi-dispatch", "longpi-board", "longpi-boundary", "longpi-interventions"];
 /**
@@ -584,7 +584,7 @@ declare const RESERVED_ROUTES: {
   readonly M5: readonly ["GET /api/longpi/surfaces"];
   readonly M6: readonly ["GET /api/longpi/season", "POST /api/longpi/season", "POST /api/longpi/streak-freeze", "GET /api/longpi/codex", "GET /api/longpi/codex/odds", "POST /api/longpi/codex/draw", "POST /api/longpi/codex/run", "GET /api/longpi/weekly", "POST /api/longpi/nudges"];
   readonly M7: readonly ["POST /api/longpi/upload", "GET /api/longpi/findings", "GET /api/longpi/meds", "POST /api/longpi/meds", "GET /api/longpi/conditions", "POST /api/longpi/conditions", "GET /api/longpi/stores"];
-  readonly M8: readonly ["GET /api/longpi/science/studies", "POST /api/longpi/science/consent", "POST /api/longpi/science/withdraw", "POST /api/longpi/science/run", "GET /api/longpi/science/translog", "GET /api/longpi/science/community"];
+  readonly M8: readonly ["GET /api/longpi/science/studies", "POST /api/longpi/science/consent", "POST /api/longpi/science/withdraw", "POST /api/longpi/science/run", "GET /api/longpi/science/translog", "GET /api/longpi/science/community", "GET /api/longpi/science/registry", "GET /api/longpi/science/transparency", "POST /api/longpi/science/n-of-1", "POST /api/longpi/science/export"];
   readonly M11: readonly ["GET /api/longpi/privacy", "POST /api/longpi/privacy/consent", "GET /api/longpi/privacy/export", "POST /api/longpi/privacy/delete"];
 };
 /** Harness skills reserved for later modules (AA §3.4); HARNESS_SKILLS lists the ones registered. */
@@ -4417,7 +4417,7 @@ interface Season {
   codex_set_id?: Id;
   study_id?: string;
 }
-type QuestKind = 'care' | 'data' | 'behaviour' | 'learn' | 'retest' | 'reflect';
+type QuestKind = 'care' | 'data' | 'behaviour' | 'learn' | 'retest' | 'reflect' | 'science_n_of_1';
 interface Quest {
   id: Id;
   season_id: Id;
@@ -4608,6 +4608,10 @@ interface HealthEventPayloads {
     study_id: string;
     run_id: Id;
     released: boolean;
+  };
+  'study.n_of_1_completed': {
+    study_id: string;
+    season_id: Id;
   };
   'consent.changed': {
     scope: ConsentRecord['scope'];

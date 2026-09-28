@@ -18,4 +18,10 @@ Round:
 4. Each node `POST /v1/rounds/:id/share` `{ client_id, masked_b64, commitment }`
 5. `POST /v1/rounds/:id/finalize` returns the sum and the mean, or `released: false` when fewer than `min_cohort` shares arrived
 
-Pairwise masks cancel in the sum. One share on its own is not a lab value.
+Pairwise masks cancel in the sum. One share on its own is not a lab value. That round still fails closed if anyone who joined does not submit.
+
+## Threshold round (v2)
+
+`src/science/threshold.ts` deals a mask seed with Shamir, threshold `t`. Survivors add the shares they hold and the server reconstructs only the sum of the seeds of people who submitted. A round with 10–30% dropouts still finishes when at least `t` people remain. Fewer than `t` fails closed.
+
+The production skeleton is `tools/aggregator/prod-server.mjs` with `config.example.json`: mainland bind, TLS required, rate limit, audit log, `/healthz` and `/readyz`, offline root key, key id on the feed. The example config does not listen. The dev key `longpi-sim-dev-1` is rejected when `accept_dev_key` is false, and it is never accepted for `scienceMode: live`. Live stays off.

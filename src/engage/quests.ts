@@ -11,6 +11,7 @@ export interface QuestFacts {
   keys: Record<string, boolean>
   activeDays: number
   retestInWindow: boolean
+  nOf1Done?: boolean
 }
 
 export function makeQuests(seasonId: Id, need: { waist: boolean; hscrp: boolean }): Quest[] {
@@ -85,6 +86,7 @@ function scored(quest: Quest, facts: QuestFacts): number | null {
   if (event === 'care.booked') return facts.booked ? 1 : 0
   if (event === 'retest.arrived') return facts.retestInWindow ? 1 : 0
   if (event === 'checkin.logged') return Math.min(quest.criteria.count, facts.activeDays)
+  if (event === 'study.n_of_1_completed') return facts.nOf1Done ? 1 : 0
   if (event === 'selfmeasure.logged') {
     const key = typeof where.key === 'string' ? where.key : ''
     if (key === 'waist') return facts.waist ? 1 : 0

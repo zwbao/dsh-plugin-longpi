@@ -41,7 +41,7 @@
   },
   "consent": {
     "text_version": "walk-1",
-    "text_zh_sha256": "bb4540e1f94ab032f0739383a8813dd0e2155da14085992a4308a9aeeb70f634",
+    "text_zh_sha256": "f122bb5d420f29f46f87101b2332e4ab18b50adfe37e62a19cc74f554dd244a4",
     "withdraw": "any_time",
     "after_withdraw": "delete_unreleased",
     "comprehension": [
@@ -145,6 +145,6 @@
   "signature": {
     "alg": "ed25519",
     "key_id": "longpi-sim-dev-1",
-    "sig": "eZAt6QxixClJvt2+wJlEVYlGISTnda0Cjud0+X4xENTctOp2+wd8rXe3ZLHsDrihUGBbqm+IvqDzvBTvNWTjBw=="
+    "sig": "9fA/i8k/xqD8nd73YgiOoDCu7v1A3oFTMSoogFNwTCO5k+kuktPMAro4ZTohjf5De5k4Wy+zjLmES6gFpdiMAw=="
   }
 }

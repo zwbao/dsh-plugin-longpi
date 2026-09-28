@@ -1,8 +1,9 @@
 // Science HTTP routes. Writes need confirm: true. ?view=page is the research screen until the client tab is wired.
 
+import { join } from 'node:path'
 import type { CoreDeps } from '../contracts/index.ts'
 import type { DrugClass } from '../contracts/memory.ts'
-import { newId } from '../core/store.ts'
+import { newId, readJson, writeJsonAtomic } from '../core/store.ts'
 import { isoDay } from '../interventions.ts'
 import { estimatedAge, readProfile } from '../profile.ts'
 import { buildCommunity, castVote, rememberCard, writePulse } from './community.ts'
@@ -11,6 +12,9 @@ import { configuredMode, effectiveMode } from './index.ts'
 import { loadStudies, loadStudy } from './manifest.ts'
 import { armsFromOutcomes, logOutcome, readOutcomes } from './outcomes.ts'
 import { communityHtml, offHtml } from './page-html.ts'
+import { claimFromRelease, claimProblems, writeClaimsExport } from './claims-export.ts'
+import { designNOf1, publicNOf1, seasonIdOnDisk, storeNOf1 } from './nof1.ts'
+import { buildRegistry, registryHtml, transparencyExport } from './registry-page.ts'
 import { gateRun, runLocal, type LocalSeries } from './runner.ts'
 import { appendLog, readLog, verifyChain } from './translog.ts'
 import { LIVE_REFUSED_ZH } from './verify.ts'
@@ -124,7 +128,7 @@ export function registerScienceRoutes(deps: CoreDeps): void {
     if (!done.ok) return { ok: false, status: 400, error: done.reason_zh }
     deps.bus.emit('study.withdrawn', { study_id: study.manifest.id, consent_id: done.consent.id }, { module: 'M8', via: 'route' })
     deps.invalidate()
-    return { ok: true, deleted_unreleased: done.deleted }
+    return { ok: true, deleted_unreleased: done.deleted, released_stays: done.released_stays, statement_zh: done.statement_zh }
   })
 
   deps.http.route('POST', '/api/longpi/science/run', async (_req, body) => {
@@ -155,5 +159,65 @@ export function registerScienceRoutes(deps: CoreDeps): void {
     if (effectiveMode() !== 'simulated') return { ok: true, mode: 'off', entries: [] }
     const entries = readLog(dir())
     return { ok: true, chain: verifyChain(entries), entries }
+  })
+
+  deps.http.route('GET', '/api/longpi/science/transparency', async (req) => {
+    const entries = effectiveMode() === 'simulated' ? readLog(dir()) : []
+    const text = transparencyExport(entries)
+    if (req.query.get('download') === '1') return { __raw: { type: 'application/x-ndjson; charset=utf-8', body: text } }
+    return { ok: true, chain: verifyChain(entries), export_zh: '透明记录可以导出。里面没有化验数值。', text }
+  })
+
+  deps.http.route('GET', '/api/longpi/science/registry', async (req) => {
+    const configured = configuredMode()
+    const mode = configured === 'simulated' ? 'simulated' : configured === 'live' ? 'live' : 'off'
+    const cohort = mode === 'simulated'
+      ? readJson<{ studies?: Record<string, { enrolled?: number }> }>(join(dir(), 'science', 'cohort.json'), (raw) => raw as { studies?: Record<string, { enrolled?: number }> }, () => ({}))
+      : {}
+    const enrolled = Object.fromEntries(Object.entries(cohort.studies ?? {}).map(([id, row]) => [id, row.enrolled ?? 0]))
+    const view = buildRegistry({ mode, enrolled })
+    if (req.query.get('view') === 'page') return { __raw: { type: 'text/html; charset=utf-8', body: registryHtml(view) } }
+    return { ok: true, ...view }
+  })
+
+  deps.http.route('POST', '/api/longpi/science/n-of-1', async (_req, body) => {
+    if (effectiveMode() !== 'simulated') return { ok: false, status: 403, error: configuredMode() === 'live' ? LIVE_REFUSED_ZH : '研究没有打开' }
+    const record = (body ?? {}) as { confirm?: boolean; design?: string }
+    if (record.confirm !== true) return { ok: false, status: 400, error: '个人对照需要 confirm: true' }
+    const seasonId = seasonIdOnDisk(dir())
+    const designed = designNOf1({
+      today: isoDay(),
+      design: record.design === 'crossover' ? 'crossover' : 'abab',
+      season_id: seasonId,
+    })
+    const stored = storeNOf1(dir(), designed)
+    if (stored.completed) {
+      deps.bus.emit('study.n_of_1_completed', { study_id: 'n-of-1', season_id: seasonId }, { module: 'M8', via: 'route' })
+    }
+    return { ok: true, ...publicNOf1(designed) }
+  })
+
+  deps.http.route('POST', '/api/longpi/science/export', async (_req, body) => {
+    if (effectiveMode() !== 'simulated') return { ok: false, status: 403, error: '研究没有打开' }
+    const record = (body ?? {}) as Record<string, unknown>
+    if (record.confirm !== true) return { ok: false, status: 400, error: '导出需要 confirm: true' }
+    if (typeof record.study_id !== 'string' || typeof record.marker !== 'string') return { ok: false, status: 400, error: '缺少研究或指标' }
+    const estimate = typeof record.estimate === 'number' ? record.estimate : Number.NaN
+    const n = typeof record.n === 'number' ? record.n : Number.NaN
+    const epsilon = typeof record.epsilon === 'number' ? record.epsilon : Number.NaN
+    if (!Number.isFinite(estimate) || !Number.isFinite(n) || !Number.isFinite(epsilon)) return { ok: false, status: 400, error: '估计、人数和 ε 要是数字' }
+    const claim = claimFromRelease({
+      study_id: record.study_id,
+      marker: record.marker,
+      marker_zh: typeof record.marker_zh === 'string' ? record.marker_zh : record.marker,
+      estimate,
+      n,
+      epsilon,
+      unit: typeof record.unit === 'string' ? record.unit : '',
+    })
+    const problems = claimProblems(claim)
+    if (problems.length > 0) return { ok: false, status: 400, error: problems.join(',') }
+    const written = writeClaimsExport(dir(), [claim])
+    return { ok: true, submitted: written.submitted, rows: written.rows }
   })
 }

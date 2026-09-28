@@ -38,6 +38,7 @@ export interface HealthEventPayloads {
   'study.consented': { study_id: string; consent_id: Id }
   'study.withdrawn': { study_id: string; consent_id: Id }
   'study.run_completed': { study_id: string; run_id: Id; released: boolean }
+  'study.n_of_1_completed': { study_id: string; season_id: Id }
   'consent.changed': { scope: ConsentRecord['scope']; decision: ConsentRecord['decision'] }
   'day.rolled': { day: IsoDay }
   /** save_personal_profile, POST /profile. */
@@ -74,6 +75,6 @@ export const EVENT_OWNERS: Readonly<Record<HealthEventType, ModuleId>> = {
   'plan.item_excluded': 'M3', 'checkin.logged': 'M3', 'selfmeasure.logged': 'M7', 'life_event.logged': 'M6', 'streak.frozen': 'M6',
   'retest.due': 'M9', 'retest.arrived': 'M9', 'verdict.changed': 'M9', 'feedback.issued': 'M4', 'season.started': 'M6',
   'season.ended': 'M6', 'quest.completed': 'M6', 'unlock.granted': 'M6', 'codex.draw_earned': 'M6', 'codex.drawn': 'M6',
-  'study.consented': 'M8', 'study.withdrawn': 'M8', 'study.run_completed': 'M8', 'consent.changed': 'M11', 'day.rolled': 'M0',
+  'study.consented': 'M8', 'study.withdrawn': 'M8', 'study.run_completed': 'M8', 'study.n_of_1_completed': 'M8', 'consent.changed': 'M11', 'day.rolled': 'M0',
   'profile.changed': 'M0', 'surface.generated': 'M5', 'chat.turn_ended': 'M0', 'nudge.shown': 'M6',
 }

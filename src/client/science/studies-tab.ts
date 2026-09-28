@@ -19,6 +19,9 @@ interface Payload {
   give_back_zh?: string
   cards?: ScienceCard[]
   translog?: LogRow[]
+  thresholds?: Array<{ study_id: string; title_zh: string; line_zh: string; early: boolean }>
+  early_zh?: string
+  release_stays_zh?: string
 }
 
 const CSS = `
@@ -47,6 +50,9 @@ export function StudiesTab(): React.ReactElement {
       give_back_zh: data.give_back_zh ?? '',
       voting: data.voting,
       cards: data.cards ?? [],
+      thresholds: data.thresholds,
+      early_zh: data.early_zh,
+      release_stays_zh: data.release_stays_zh,
       onChange: load,
       onError: setError,
     }) : null,

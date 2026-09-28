@@ -1,12 +1,26 @@
 # Changelog
 
-## Unreleased
+## 0.6.1
+
+给使用者
 
 这一季从你自己的重要事实里长出来。贫血相关的记录会变成「查清贫血」：预约血液科或消化科，带上简报，补铁蛋白和铁代谢，8 到 12 周后复查。写得不合法的任务会退回这个模板。复测之后的回看用前后数字，并且按证据分级；只有核对过、而且超出测量波动的变化才庆祝。一次检查不会说你变年轻了。
 
-抽到的方法卡可以立刻用你的记录算，缺什么就写「再补什么才能解锁」。动物和细胞证据先说物种，不当作你的数字。图鉴仍然没有付费，概率公开，未满 18 岁不开放，稀有度不跟指标走。带着简报去看医生、补检查、复测，仍然至少是一张银卡。
+抽到的方法卡可以立刻用你的记录算，缺什么就写「再补什么才能解锁」。动物和细胞证据先说物种，不当作你的数字。图鉴仍然没有付费，概率公开（铜 52%、银 28%、紫 16%、金 4%），未满 18 岁不开放，稀有度不跟指标走。带着简报去看医生、补检查、复测，仍然至少是一张银卡。
 
-第一季在第一次结果出来之后，或医生这一步已经明确之后，单独一屏邀请你开始，并链到公开概率。没点开始之前，页面上不放浮动的「本季」芯片。成年人可以打开家人圈，分享一张卡或这一季的回看。帮父母看记录时，这一季用的是那位家人的年龄和性别。
+第一季在第一次结果出来之后，或医生这一步已经明确之后，单独一屏邀请你开始，并链到公开概率。没点开始之前，页面上不放浮动的「本季」芯片。标题是健康页里的一枚普通按钮，不盖住内容。成年人可以打开家人圈，分享一张卡或这一季的回看。帮父母看记录时，这一季用的是那位家人的年龄和性别。
+
+模拟研究可以在有人掉线时仍把合计算完。隐私预算用完就拒绝再发。已经发布的合计不能撤回。人数没到发布线时，页面写明还差多少，并请你先做个人对照。个人对照按随机顺序安排，洗脱日照常生活，种子留在这台电脑上。live 仍然关闭。
+
+English, same release
+
+A season grows from the facts that already matter. An anaemia record becomes 「查清贫血」: book haematology or gastroenterology, take the brief, add ferritin and iron studies, and repeat the blood count in 8 to 12 weeks. A draft that fails the checks falls back to that template. The recap after a retest prints the before and after numbers and the grade. A celebration is added only when the noise band is verified and the move is past it. One draw is not "you got younger".
+
+A drawn method card can be run from the record, or it says what is still missing. Animal and cell evidence names the species and is not this person's number. Codex still has no payment. The public odds are 52/28/16/4. Under 18 it stays off. Rarity does not follow a lab. A briefed visit, an added test, or a retest still draws at least a rare card.
+
+The first season invites you once, after a first result or when the doctor step is current, and links to the odds page. Until you opt in, the home has no floating season chip. The title is an ordinary button in the health page and does not cover the content. Adults can open a family circle and share one card or the recap. A parent's record uses that parent's age and sex.
+
+A simulated study can still total the sum when some people drop out. A query past the privacy budget is refused. A result that was already released cannot be withdrawn. Until a study reaches its line, the page shows the count and asks for a personal trial first. That trial is ordered at random, washout days stay ordinary, and the seed stays on this computer. Live stays off.
 
 ## 0.6.0
 

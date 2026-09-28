@@ -73,7 +73,7 @@
   },
   "consent": {
     "text_version": "rcv-1",
-    "text_zh_sha256": "99b52b06c6e98f5ac53d02af4ed3fd1865fcc9886cb940f8ccd82e117fd38e37",
+    "text_zh_sha256": "d846d5db269b04c495fa782510ce3e55ce805d7b8ad2d384e05c9d7efbf97c16",
     "withdraw": "any_time",
     "after_withdraw": "delete_unreleased",
     "comprehension": [
@@ -92,7 +92,7 @@
         "question_zh": "想退出时怎么办？",
         "options_zh": [
           "不能退出",
-          "可以随时退出，未发布的数字会删除",
+          "可以随时退出；未发布的份额会删除，已经发布的合计不能撤回",
           "要等研究结束"
         ],
         "correct": 1
@@ -189,6 +189,6 @@
   "signature": {
     "alg": "ed25519",
     "key_id": "longpi-sim-dev-1",
-    "sig": "Lw63cVQIt/PQT/Yy3f7wz9dwaEyQtBBBJYRCVksFUtRjcueKmzrKgIrc0k8Xk+vvG1UJYtfCXOCphZrkTuSODw=="
+    "sig": "9jUG43NvZUiFiM6vcyAOzQpHqubvTQHm6K9A+n3Ga11GggB21ve+9wQdo4qO5SNjW5l66JSaIUzj53BWOuMvAw=="
   }
 }
