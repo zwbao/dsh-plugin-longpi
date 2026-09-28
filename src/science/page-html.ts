@@ -17,16 +17,17 @@ export function communityHtml(view: CommunityView): string {
       </fieldset>`).join('')
     const state = study.consented === 'granted' ? '已参加' : study.consented === 'withdrawn' ? '已退出' : '未参加'
     return `<article class="card" id="study-${esc(study.id)}">
-      <p class="kicker">${esc(state)} · ${esc(study.kind === 'community_season' ? '社区季' : study.kind === 'n_of_1' ? '个人对照' : '观察')}</p>
+      <p class="kicker">${esc(state)} · ${esc(study.kind === 'community_season' ? '社区赛季' : study.kind === 'n_of_1' ? '个人对照' : '观察')}</p>
       <h2>${esc(study.title_zh)}</h2>
       <p>${esc(study.summary_zh)}</p>
-      <p class="note">${esc(study.ethics_zh)}</p>
-      <details><summary>同意说明</summary><p class="prose">${esc(study.text_zh).replace(/\n/g, '<br>')}</p></details>
+      <p>加入之后，研究正式开始才会把合计发出去。现在只保存在你的设备上。基因和姓名不参加。</p>
+      <details><summary>完整同意书</summary><p class="prose">${esc(study.text_zh).replace(/\n/g, '<br>')}</p></details>
       <form data-consent="${esc(study.id)}">
         ${questions}
         <label class="confirm"><input type="checkbox" name="confirm"> 我看过说明，同意在这台电脑上参加</label>
-        <button type="submit">提交同意</button>
+        <button type="submit">加入</button>
         <button type="button" data-withdraw="${esc(study.id)}">退出这项研究</button>
+        <span class="note">已经发出的合计不会收回。</span>
         <p class="status" data-status="${esc(study.id)}"></p>
       </form>
     </article>`
@@ -37,7 +38,7 @@ export function communityHtml(view: CommunityView): string {
     ? '<p class="note">还没有贡献卡。完成本机计算后会出现在这里，不和化验结果挂钩。</p>'
     : view.cards.map((card) => `<article class="card slim"><h3>${esc(card.title_zh)}</h3><p>${esc(card.body_zh)}</p></article>`).join('')
   const log = view.translog.length === 0
-    ? '<p class="note">还没有记录。同意、计算和发布都会写在这里。</p>'
+    ? '<p class="note">还没有东西离开这台电脑。</p>'
     : `<ol class="log">${view.translog.map((row) => `<li><span>${esc(row.at.slice(0, 16).replace('T', ' '))}</span> ${esc(row.detail_zh)}</li>`).join('')}</ol>`
   const lines = (view.thresholds ?? []).map((row) => `<p class="threshold" data-study="${esc(row.study_id)}"><strong>${esc(row.title_zh)}</strong> ${esc(row.line_zh)}</p>`).join('')
   const early = view.early_zh
@@ -75,18 +76,18 @@ export function communityHtml(view: CommunityView): string {
   @media (max-width:640px) { main { padding:16px 12px 48px; } button { width:100%; } }
 </style>
 <main>
-  <p class="kicker">LongPi · 研究 · 模拟</p>
+  <p class="kicker">LongPi · 研究</p>
   <h1>一起看波动，原始数据留在这台电脑</h1>
   <div class="banner">${esc(view.reason_zh)}</div>
   <section class="card">
-    <p class="kicker">本季进度 · 第 ${view.progress.week} / ${view.progress.weeks} 周</p>
+    <p class="kicker">研究进度 · 第 ${view.progress.week} 周 / 共 ${view.progress.weeks} 周</p>
     <h2>${esc(view.progress.label_zh)}</h2>
     <div class="bar" role="progressbar" aria-valuenow="${view.progress.contributed}" aria-valuemax="${view.progress.min_cohort}"><span></span></div>
     ${lines}
     <p>本机参加了 ${view.progress.studies} 项研究。发布合计至少需要 ${view.progress.min_cohort} 人，这一台电脑只算其中 ${view.progress.contributed} 人。</p>
   </section>
   ${early}
-  <section class="card" id="pulse"><p class="kicker">群体脉搏</p>${pulse}</section>
+  <section class="card" id="pulse"><p class="kicker">大家的结果</p>${pulse}</section>
   <section class="card"><p class="kicker">发回给你</p><p>${esc(view.give_back_zh)}</p></section>
   <section class="card" id="vote">
     <p class="kicker">下一季题目</p>
@@ -96,9 +97,8 @@ export function communityHtml(view: CommunityView): string {
   </section>
   ${studies}
   <section><h2>贡献卡</h2>${cards}</section>
-  <section class="card"><h2>透明记录</h2>${log}</section>
-  <p class="note">${esc(view.release_stays_zh || RELEASE_STAYS_ZH)}</p>
-  <p class="note">基因、姓名、原始化验单和图片不参加。live 在这个版本里打不开。进度写在这一页的正文里，不盖住别的卡片。</p>
+  <section class="card"><h2>发出记录</h2><p class="note">这里只记离开这台电脑的东西：什么时候、发给哪一项研究。</p>${log}</section>
+  <p class="note">基因、姓名、原始化验单和图片不参加。进度写在这一页的正文里，不盖住别的卡片。</p>
 </main>
 <script>
 async function post(path, body) {
@@ -130,7 +130,7 @@ document.querySelectorAll('[data-withdraw]').forEach((button) => {
     const status = button.parentElement.querySelector('[data-status]')
     try {
       await post('/api/longpi/science/withdraw', { study_id: id, confirm: true })
-      status.textContent = '已退出。还没发布的合计已删除。已经发布的合计不能撤回。'
+      status.textContent = '已退出。还没发出的那一份已删掉。已经发出的合计不会收回。'
     } catch (error) { status.textContent = error.message }
   })
 })

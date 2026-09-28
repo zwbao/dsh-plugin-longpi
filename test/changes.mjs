@@ -28,7 +28,7 @@ const TODAY = '2026-09-24'
 const NOW = new Date(`${TODAY}T12:00:00Z`)
 const FACTS = { smoker: false, diabetes: false, bp_treated: false, north: true, urban: true, family_history: false }
 const MOUNT = { mounted: true, peer: false, error: '', pluginHome: '' }
-const NOTE = '判断依据：两次结果之差超过同一个人正常波动与检测误差合成的参考变化值（RCV，z=1.96）才算真实变化；变异数据来自 longevity-skills 的 data/biological_variation.json，每一行注明期刊出处。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。'
+const NOTE = '判断依据：两次结果之差，要比同一个人平常的起伏更大，才算值得注意的变化。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。'
 const ASK = '建议带着这几次体检报告咨询医生，看看是否需要进一步检查。'
 const GOOD = '变化超出了正常波动，方向是好的。'
 const RANGE = '变化超出了正常波动；是否需要处理要结合参考范围判断，建议带着这几次体检报告咨询医生。'
@@ -297,7 +297,11 @@ try {
   assert.equal(journey.changes[0].ask_doctor, true)
   assert.equal(journey.changes[0].points.length, 4)
   assert.equal(journey.results.bioage.status, 'ok')
-  assert.equal(journey.results.bioage.caveat_zh, '身体年龄用到的平均红细胞体积近期变化明显，原因可能与衰老无关，这次的结果请谨慎看待。')
+  assert.match(journey.results.bioage.headline_zh, /算出来小了/)
+  assert.match(journey.results.bioage.headline_zh, /平均红细胞体积/)
+  assert.match(journey.results.bioage.headline_zh, /不一定是好事/)
+  assert.equal(journey.results.bioage.allows_younger, false)
+  assert.equal(journey.results.bioage.caveat_zh, undefined, 'the concern sentence is the only caveat')
   assert.deepEqual(step.tracking.changes, journey.changes, 'the tracking carries the same rows')
 
   // HbA1c rising beyond its band is one to show a doctor, but not a PhenoAge input
@@ -325,7 +329,7 @@ try {
   assert.ok(report.includes(`- ${step.tracking.changes[0].text_zh}。${step.tracking.changes[0].advice_zh}`))
   assert.ok(report.includes(`  - ${markerOf('mcv').caveat_zh}`))
   assert.ok(report.includes(NOTE))
-  assert.ok(report.indexOf('## 记录里的明显变化') < report.indexOf('## 表型年龄'), 'before the results')
+  assert.ok(report.indexOf('## 记录里的明显变化') < report.indexOf('## 身体年龄'), 'before the results')
   assert.doesNotMatch(mod.buildReport({ name: '', today: TODAY, records: fallingContext.records, tracking: null }), /记录里的明显变化/)
 
   // --- 4. the tools and the prompt, through the plugin's own apply ------------------------

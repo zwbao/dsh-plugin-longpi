@@ -262,7 +262,7 @@ export function Markers(props: { tracking: Tracking | null }): React.ReactElemen
   return h(Section, {
     id: 'lp-markers', title: '方案相关的指标', kicker: '和正常波动比',
     aside: h(Info, { label: '和正常波动比', align: 'end' },
-      '浅色带是以基线为中心的个体正常波动范围（参考变化值，RCV，按生物学变异数据计算）。落在带外才算真实变化；带内的起伏多半是测量和生理波动。'),
+      '浅色带是以基线为中心的平常起伏。落在带外才值得注意；带里的起伏多半不算数。'),
   },
     h('div', { className: 'lp-grid-charts' },
       ...charts.map((chart) => {

@@ -167,20 +167,44 @@ export function buildTimeline(input: {
 
 const SCRUB: Array<[RegExp, string]> = [
   [/Mirobody/gi, '体检记录'],
+  [/longevity-skills/gi, ''],
   [/\bMCP\b/g, ''],
+  [/\/mcp\/\S*/g, ''],
   [/\bDSH\b/g, ''],
   [/HARNESS/gi, ''],
   [/\bLOINC\b/g, ''],
   [/\bRCV\b/g, '正常波动'],
   [/\bCVI\b/g, '个体起伏'],
+  [/ChiCTR/g, ''],
+  [/签署密钥/g, ''],
+  [/参考变化值/g, '平常的起伏'],
+  [/加了噪声/g, ''],
+  [/\blive\b/g, ''],
   [/record_status/g, ''],
   [/~\/\.dsh\/longpi/g, '这台电脑'],
-  [/https?:\/\/127\.0\.0\.1:\d+\S*/g, ''],
+  [/https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?\S*/g, ''],
+  [/\b(?:127\.0\.0\.1|localhost)\b/g, ''],
+  [/(?:(?<=\s)|^):\d{2,5}\b/g, ''],
+  [/\b[A-Z]\d{2}\.\d+\b/g, ''],
+  [/\b(?:NaN|undefined|null)\b/g, ''],
   [/\b\d[\d,]*\s*tok(?:\/s)?\b/gi, ''],
   [/User says[:：][^\n]*/gi, ''],
   [/\bTHE PATTERN\b/g, '我看到的'],
   [/\bWHAT WE DON'T KNOW\b/g, '数据说明不了的'],
+  [/[A-Za-z]+(?:[ \t]+[A-Za-z]+){2,}/g, ''],
 ]
+
+// A dotted disease code anywhere (血脂异常 E78.5), or a bare three-character code standing as its own word at the end (高血压 I10).
+// A vitamin name such as 维生素B12 or 维生素 B12 is a lab, not a diagnosis.
+const ICD_DOTTED = /\b[A-Z]\d{2}\.\d{1,2}\b/
+const ICD_TAIL = /(?:^|[\s（(])[A-Z]\d{2}(?=[）)]?\s*$)/
+const NOT_DIAGNOSIS = /维生素|vitamin/i
+
+/** A catalogue row that is a diagnosis (it carries a disease code) is not an indicator. */
+export function isDiagnosisName(name: string): boolean {
+  if (NOT_DIAGNOSIS.test(name)) return false
+  return ICD_DOTTED.test(name) || ICD_TAIL.test(name.trim())
+}
 
 /** Drop backend names from a sentence a person will read. */
 export function scrubVisible(text: string): string {
@@ -204,7 +228,7 @@ export function researchRangeFromQuote(quote: string, source: string): ResearchR
 /** Words a non-expert reader should not have to meet. A hit means the sentence still needs work. */
 const OBSTACLES = [
   'Mirobody', 'MCP', 'DSH', 'HARNESS', 'LOINC', 'record_status', 'tok/s', '~/.dsh', '127.0.0.1',
-  '参考变化值', '个体内变异', '工具调用',
+  '参考变化值', '个体内变异', '工具调用', 'ChiCTR', '签署密钥', 'localhost',
 ]
 const BARE = [/(?<!正常)波动内(?!）)/, /(?<![还])未判断/, /(?<!（)太早(?!（)/, /(?<!（)不可比(?!（)/, /(?<!（)解锁(?!（)/]
 

@@ -132,7 +132,7 @@ export function maskMcpUrl(url: string): string {
 
 /** Why an address cannot be used, in Chinese; '' when it can. https, or http to this machine only. */
 export function connectionUrlProblem(url: unknown): string {
-  if (typeof url !== 'string' || !url.trim()) return '请填写 Mirobody 地址。'
+  if (typeof url !== 'string' || !url.trim()) return '请填写连接地址。'
   if (url.trim().length > URL_MAX) return `地址太长（最多 ${URL_MAX} 个字符）。`
   let parsed: URL
   try {
@@ -143,7 +143,7 @@ export function connectionUrlProblem(url: unknown): string {
   if (parsed.username || parsed.password) return '地址里不能包含用户名或密码。'
   if (parsed.protocol === 'https:') return ''
   if (parsed.protocol === 'http:' && (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost')) return ''
-  return '只接受 https:// 地址；本机运行的 Mirobody 可以用 http://127.0.0.1 或 http://localhost。'
+  return '只接受 https:// 地址。这台电脑上的服务可以用 http。'
 }
 
 /** Why a token cannot be used, in Chinese; '' when it can (or when there is none). */
@@ -181,7 +181,7 @@ export async function loginMirobody(input: { base_url: string; email: string; pa
       return { ok: false, error: '没有接受这个邮箱或密码。' }
     }
   } catch {
-    return { ok: false, error: '连不上这个 Mirobody 地址。请确认它正在运行。' }
+    return { ok: false, error: '连不上这个地址。请确认你放体检报告的地方正在运行。' }
   }
   const token = loginBody.data?.access_token
   if (!token) return { ok: false, error: '没有接受这个邮箱或密码。' }
@@ -193,7 +193,7 @@ export async function loginMirobody(input: { base_url: string; email: string; pa
     })
     const minted = await response.json() as { code?: number; data?: { url?: string } }
     const url = minted.data?.url ?? ''
-    if (!response.ok || minted.code !== 0 || !url.startsWith('http')) return { ok: false, error: '登录成功，但没有得到个人 MCP 地址。' }
+    if (!response.ok || minted.code !== 0 || !url.startsWith('http')) return { ok: false, error: '登录成功，但没有连上。' }
     return { ok: true, mcp_url: url, mcp_token: token }
   } catch {
     return { ok: false, error: '登录成功，但生成个人地址时没有连上。' }
@@ -201,14 +201,14 @@ export async function loginMirobody(input: { base_url: string; email: string; pa
 }
 
 function timeoutText(timeoutMs: number): string {
-  return `${Math.round(timeoutMs / 1000)} 秒内没有回应。请确认 Mirobody 正在运行、地址无误。`
+  return `${Math.round(timeoutMs / 1000)} 秒内没有回应。请确认它正在运行、地址无误。`
 }
 
 function refusedText(result: McpCallResult, secrets: string[], timeoutMs: number): string {
   const detail = redact(result.error || '', secrets)
   if (result.error_kind === 'unavailable' && /time(?:d)? ?out/i.test(result.error ?? '')) return timeoutText(timeoutMs)
-  if (result.error_kind === 'denied') return `Mirobody 拒绝了这个地址或令牌${detail ? `（${detail}）` : ''}。请检查个人 MCP 地址，或重新登录后复制令牌。`
-  if (result.error_kind === 'unavailable') return `连不上这个地址${detail ? `（${detail}）` : ''}。请确认 Mirobody 正在运行、地址无误。`
+  if (result.error_kind === 'denied') return `对方拒绝了这个地址或口令${detail ? `（${detail}）` : ''}。请重新登录后再试。`
+  if (result.error_kind === 'unavailable') return `连不上这个地址${detail ? `（${detail}）` : ''}。请确认它正在运行、地址无误。`
   return `读取记录目录失败${detail ? `（${detail}）` : ''}。`
 }
 

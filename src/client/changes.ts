@@ -125,7 +125,7 @@ export function Basis(props: { journey: Journey; rows: readonly RecordChange[] }
   return h('details', { className: 'lp-basis' },
     h('summary', null, '判断依据'),
     h('div', { className: 'lp-change-notes' },
-      h('p', { className: 'lp-caption' }, '“超出正常波动”指两次结果之差大于个体正常波动（参考变化值，RCV）。趋势图里的浅色带以比较起点那次结果为基线，落在带外就是真实变化。'),
+      h('p', { className: 'lp-caption' }, '“超出正常波动”指两次结果之差比你平常的起伏更大。趋势图里的浅色带以比较起点那次结果为基线，落在带外才值得注意。'),
       ...rows.map((row) => h('p', { key: `text:${row.key}`, className: 'lp-caption' }, h('span', { className: 'lp-strong' }, row.label_zh), `：${withoutLabel(row)}`)),
       ...caveats.map((text) => h('p', { key: `caveat:${text}`, className: 'lp-caption' }, text)),
       unjudged.length > 0 ? h('p', { className: 'lp-caption' }, `没有判断：${unjudged.map((row) => `${row.label_zh}（${row.reason_zh || '读取没有完成'}）`).join('、')}`) : null,

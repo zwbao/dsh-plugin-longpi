@@ -6,6 +6,7 @@ import React from 'react'
 import { NotableChanges } from './changes.ts'
 import { todayCounts, useCheckIns } from './checkin.ts'
 import { chineseDate } from './format.ts'
+import { isDiagnosisName, scrubVisible } from '../ux/plain.ts'
 import { Icon } from './icons.ts'
 import { retestDates, TodayList } from './plan.ts'
 import { ResultsRow, type ResultTarget } from './results.ts'
@@ -109,11 +110,12 @@ function NextCard(props: OverviewProps): React.ReactElement | null {
 function PartialNote(props: { journey: Journey }): React.ReactElement | null {
   const records = props.journey.records
   if (records.status !== 'partial') return null
-  const missing = records.missing_reads
+  const missing = records.missing_reads.filter((name) => name && !isDiagnosisName(name)).map((name) => scrubVisible(name)).filter(Boolean)
+  const errors = records.read_errors.map((line) => scrubVisible(line)).filter(Boolean)
   return h('p', { className: 'lp-blocker lp-blocker-bad lp-partial', role: 'note' },
     h(Icon, { name: 'warn', size: 14 }),
     h('span', null,
-      `有一部分记录这次没有读到${records.read_errors.length > 0 ? `（${records.read_errors.slice(0, 2).join('；')}）` : ''}。`,
+      `有一部分记录这次没有读到${errors.length > 0 ? `（${errors.slice(0, 2).join('；')}）` : ''}。`,
       missing.length > 0 ? `没读到的指标：${missing.slice(0, 6).join('、')}${missing.length > 6 ? ` 等 ${missing.length} 项` : ''}。` : '',
       '它们不是“没测”，稍后点右上角的刷新再读一次。'))
 }

@@ -1,4 +1,5 @@
 import { tableOf, type CompactTable } from './compact.ts'
+import { isDiagnosisName } from './ux/plain.ts'
 
 export interface IndicatorRow {
   /** Mirobody's indicator name: the handle a later query must pass back verbatim. */
@@ -71,7 +72,7 @@ export function indicatorsFromTable(table: CompactTable): IndicatorRow[] {
   const out: IndicatorRow[] = []
   for (const row of table.rows) {
     const name = (row.indicator ?? '').trim()
-    if (!name) continue
+    if (!name || isDiagnosisName(name)) continue
     const item: IndicatorRow = { name, value: (row.value ?? row.last ?? '').trim(), unit: (row.unit ?? '').trim() }
     const loinc = loincOf(row)
     if (loinc) item.loinc = loinc
@@ -110,7 +111,7 @@ function walkIndicators(value: unknown, rows: IndicatorRow[], depth: number, cap
     for (const item of value) {
       if (typeof item === 'string') {
         const name = item.trim()
-        if (name) rows.push({ name, value: '', unit: '' })
+        if (name && !isDiagnosisName(name)) rows.push({ name, value: '', unit: '' })
       } else {
         walkIndicators(item, rows, depth + 1, cap)
       }
@@ -123,7 +124,7 @@ function walkIndicators(value: unknown, rows: IndicatorRow[], depth: number, cap
   const measurement = firstText(rec, ['value', 'latest', 'result', 'last_value'])
   const unit = firstText(rec, ['unit', 'ucum'])
   const loinc = firstText(rec, ['loinc', 'loinc_code', 'loincCode'])
-  if (name && (measurement || unit)) rows.push(loinc ? { name, value: measurement, unit, loinc } : { name, value: measurement, unit })
+  if (name && !isDiagnosisName(name) && (measurement || unit)) rows.push(loinc ? { name, value: measurement, unit, loinc } : { name, value: measurement, unit })
   for (const [key, child] of Object.entries(rec)) {
     if (key === 'name' || key === 'value' || key === 'unit') continue
     if (child && typeof child === 'object') walkIndicators(child, rows, depth + 1, cap)

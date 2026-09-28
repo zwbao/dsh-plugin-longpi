@@ -16,14 +16,23 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((Date.parse(`${to.slice(0, 10)}T00:00:00Z`) - Date.parse(`${from.slice(0, 10)}T00:00:00Z`)) / 86_400_000)
 }
 
-export function chineseDate(iso: string): string {
-  const [, month, day] = iso.slice(0, 10).split('-')
-  return `${Number(month)} 月 ${Number(day)} 日`
+export function chineseDate(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (!match) return ''
+  const month = Number(match[2])
+  const day = Number(match[3])
+  if (!Number.isInteger(month) || !Number.isInteger(day) || month < 1 || month > 12 || day < 1 || day > 31) return ''
+  return `${month} 月 ${day} 日`
 }
 
-export function chineseMonth(iso: string): string {
-  const [year, month] = iso.slice(0, 10).split('-')
-  return `${year} 年 ${Number(month)} 月`
+export function chineseMonth(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const match = /^(\d{4})-(\d{2})/.exec(iso)
+  if (!match) return ''
+  const month = Number(match[2])
+  if (!Number.isInteger(month) || month < 1 || month > 12) return ''
+  return `${match[1]} 年 ${month} 月`
 }
 
 export function weekday(iso: string): string {

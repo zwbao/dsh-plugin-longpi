@@ -124,7 +124,7 @@ const DETAIL_MAX = 40
 const JOURNEY_TTL_MS = 10 * 60_000
 
 const BIOAGE_BLOCKER: Partial<Record<BioAge['status'], string>> = {
-  no_skill: '方法库里没有身体年龄（表型年龄）方法，请更新 longevity-skills。',
+  no_skill: '方法库里没有身体年龄这项计算。',
   no_record: '还没有读到体检。',
   no_age: '档案里还没有周岁。',
   no_checkup: '九项血检还没有在同一天测齐。',
@@ -446,7 +446,8 @@ function stageStatus(stage: Stage, journey: Body, next: Next): string {
   if (stage === 'first_result' && journey.addons.length > 0) return concreteNext(journey.addons).title_zh
   const { bioage, risk } = journey.results
   const parts: string[] = []
-  if (bioage.status === 'ok' && bioage.phenoage != null) parts.push(`身体年龄 ${Number(bioage.phenoage.toFixed(1))} 岁（模型估计）`)
+  if (bioage.status === 'ok' && bioage.headline_zh && /你确实年轻了|算出来小了/.test(bioage.headline_zh)) parts.push(bioage.headline_zh)
+  else if (bioage.status === 'ok' && bioage.phenoage != null) parts.push(`身体年龄 ${Number(bioage.phenoage.toFixed(1))} 岁（模型估计）`)
   if (risk.status === 'ok' && risk.risk_pct != null) parts.push(`心血管 10 年风险 ${Number(risk.risk_pct.toFixed(1))}%`)
   return parts.length > 0 ? parts.join('，') : next.detail_zh
 }
@@ -472,7 +473,7 @@ function journeyFrom(context: JourneyContext, tracking: Tracking, summary: Recor
   const points = tracking.bioage.points
   const latest = latestSelf(readSelf(context.dataDir))
   const bioage = bioageResult(tracking.bioage)
-  const caveat = bioage.status === 'ok' ? bioageCaveat(context, tracking.changes) : null
+  const caveat = bioage.status === 'ok' && !/不一定是好事/.test(bioage.headline_zh ?? '') ? bioageCaveat(context, tracking.changes) : null
   if (caveat) bioage.caveat_zh = caveat
   const risk = riskResult(tracking)
   const plan = planOf(context, tracking)
@@ -567,7 +568,13 @@ function journeyFrom(context: JourneyContext, tracking: Tracking, summary: Recor
     followup: { enabled: followupOn, channels: [], next_at: null },
     surfaces,
     triage: { findings: care.findings, care: pack.triage.care, needs_sex: pack.triage.stop?.needs_sex === true, top_facts: pack.top_facts },
-    method_results: pack.method_results,
+    method_results: pack.method_results.map((row) => {
+      const card = context.catalog.cards.find((item) => item.name === row.skill)
+      const paper = card?.paper?.title_zh?.trim() ?? ''
+      const blurb = (card?.blurb ?? '').replace(/。$/, '').trim()
+      const title = /[\u4e00-\u9fff]/.test(paper) && !/[A-Za-z]{4,}/.test(paper) ? paper : blurb
+      return title ? { ...row, title_zh: title } : row
+    }),
   }
   journey.followup = followupSummary(context.dataDir, followupStateOf(journey, tracking), context.now ?? new Date())
   try {

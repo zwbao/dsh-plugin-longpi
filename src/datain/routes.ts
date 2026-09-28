@@ -146,7 +146,7 @@ export function registerDatainRoutes(deps: CoreDeps, open?: SocketOpener): void 
     const password = typeof value.password === 'string' ? value.password : ''
     const problem = connectionUrlProblem(base)
     if (problem) return fail(problem)
-    if (!email.includes('@')) return fail('请填写 Mirobody 的邮箱。')
+    if (!email.includes('@')) return fail('请填写邮箱。')
     if (password.length < 8) return fail('密码至少 8 位。')
     const minted = await loginMirobody({ base_url: base, email, password })
     if (!minted.ok) return fail(minted.error)

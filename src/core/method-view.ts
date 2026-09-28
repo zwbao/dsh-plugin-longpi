@@ -34,21 +34,38 @@ const RED_LABEL = /血红蛋白|平均红细胞体积|红细胞分布宽度|平�
 /** A positive "you are younger" claim. A negation such as 不能说明你变年轻了 does not match. */
 const YOUNGER_CLAIM = /你确实年轻了|比实足年龄年轻|你变年轻了|更年轻了|年轻了\s*\d+(?:\.\d+)?|逆龄/g
 
-export function titleOf(skill: string): string {
-  return TITLES[skill] ?? '这项结果'
+export function facingUnit(unit: string, key = ''): string {
+  const raw = unit.trim()
+  if (!raw || raw === '1') return ''
+  const folded = raw.toLowerCase()
+  if (folded === 'a' || folded === 'yr' || folded === 'yrs' || folded === 'year' || folded === 'years' || folded === 'y') {
+    return /hour|时间|时长|随访/.test(key) ? '年' : '岁'
+  }
+  if (folded === 'h' || folded === 'hr' || folded === 'hour' || folded === 'hours') return '小时'
+  if (folded === 'd' || folded === 'day' || folded === 'days') return '天'
+  if (folded === 'min' || folded === 'minute' || folded === 'minutes') return '分钟'
+  return raw
 }
 
-export function formatMeasure(value: number | string, unit: string): string {
+export function titleOf(skill: string, titleZh = ''): string {
+  if (TITLES[skill]) return TITLES[skill]
+  const named = titleZh.trim().replace(/。$/, '')
+  if (named && /[\u4e00-\u9fff]/.test(named) && !/[A-Za-z]{4,}/.test(named)) return named.length > 22 ? named.slice(0, 22) : named
+  return '这项检查'
+}
+
+export function formatMeasure(value: number | string, unit: string, key = ''): string {
+  const shownUnit = facingUnit(unit, key)
   if (typeof value === 'string') {
     const text = value.trim()
     if (!text) return ''
-    return unit && !text.includes(unit) ? `${text} ${unit}`.trim() : text
+    return shownUnit && !text.includes(shownUnit) ? `${text} ${shownUnit}`.trim() : text
   }
   if (!Number.isFinite(value)) return ''
   const shown = String(Number(value.toFixed(2)))
-  if (!unit) return shown
-  if (unit === '%') return `${shown}%`
-  return `${shown} ${unit}`
+  if (!shownUnit) return shown
+  if (shownUnit === '%') return `${shown}%`
+  return `${shown} ${shownUnit}`
 }
 
 export function speciesOf(row: Pick<MethodResult, 'limits_zh'>): string | null {
@@ -106,6 +123,33 @@ export function evidenceSentence(row: MethodResult): string {
   return `仅证据（物种：${species}）。${tail}${personal}`
 }
 
+const SOURCE_ZH: Array<[RegExp, string]> = [
+  [/systolic blood pressure/i, '收缩压（高压）'],
+  [/diastolic blood pressure/i, '舒张压（低压）'],
+  [/fasting (?:blood )?glucose|blood glucose/i, '空腹血糖'],
+  [/hs-?crp|c-reactive protein/i, '超敏 C 反应蛋白'],
+  [/mean corpuscular volume|\bmcv\b/i, '平均红细胞体积'],
+  [/white blood cell/i, '白细胞'],
+  [/haemoglobin|hemoglobin/i, '血红蛋白'],
+]
+
+/** A source line a person can read. English lab names become the Chinese name plus the number. */
+export function plainSource(quote: string): string {
+  const text = quote.trim()
+  if (!text) return ''
+  for (const [pattern, label] of SOURCE_ZH) {
+    if (pattern.test(text)) {
+      const num = text.match(/-?\d+(?:\.\d+)?/)
+      return num ? `${label}${num[0]}` : label
+    }
+  }
+  if (/[A-Za-z]{3,}(?:\s+[A-Za-z]{3,}){2,}/.test(text)) {
+    const num = text.match(/-?\d+(?:\.\d+)?/)
+    return num ? num[0] : ''
+  }
+  return text.replace(/\b[A-Z]\d{2}\.\d+\b/g, '').replace(/\s{2,}/g, ' ').trim()
+}
+
 /**
  * The sentence under a result. An unverified binding names the source row in
  * that same sentence. A younger claim is removed unless M4 already allowed it
@@ -114,14 +158,13 @@ export function evidenceSentence(row: MethodResult): string {
 export function resultSentence(row: MethodResult, opts: { youngerAllowed: boolean }): string {
   if (row.label === 'evidence-only') return evidenceSentence(row)
   const out = primaryOutput(row)
-  const shown = out && out.value != null && out.value !== '' ? formatMeasure(out.value, out.unit) : '没有个人数字'
-  const title = titleOf(row.skill)
+  const shown = out && out.value != null && out.value !== '' ? formatMeasure(out.value, out.unit, out.key) : '没有个人数字'
+  const title = titleOf(row.skill, row.title_zh)
   let text: string
   if (row.label === 'unverified-binding') {
-    const quote = row.inputs_used.map((item) => item.quote.trim()).find(Boolean)
-      || row.inputs_used[0]?.source_row_id
-      || '未注明来源行'
-    text = `${title}是 ${shown}（绑定未核对，来源行：${quote}）。`
+    const raw = row.inputs_used.map((item) => item.quote.trim()).find(Boolean) ?? ''
+    const quote = plainSource(raw)
+    text = quote ? `${title}是 ${shown}（还没对上，来源：${quote}）。` : `${title}是 ${shown}（还没对上）。`
   } else {
     const limits = row.limits_zh.trim()
     const boundary = limits ? (limits.endsWith('。') ? limits : `${limits}。`) : ''
@@ -136,8 +179,8 @@ export function resultSentence(row: MethodResult, opts: { youngerAllowed: boolea
 export function methodFactText(row: MethodResult): string {
   if (row.label === 'verified') {
     const out = primaryOutput(row)
-    const shown = out && out.value != null && out.value !== '' ? formatMeasure(out.value, out.unit) : '没有个人数字'
-    return `${titleOf(row.skill)}是 ${shown}（已核对）。`
+    const shown = out && out.value != null && out.value !== '' ? formatMeasure(out.value, out.unit, out.key) : '没有个人数字'
+    return `${titleOf(row.skill, row.title_zh)}是 ${shown}（已核对）。`
   }
   return resultSentence(row, { youngerAllowed: false })
 }
@@ -147,7 +190,7 @@ export function verifiedMention(results: readonly MethodResult[]): string | null
   if (!row) return null
   const out = primaryOutput(row)
   if (!out || out.value == null || out.value === '') return null
-  return `已核对：${titleOf(row.skill)} ${formatMeasure(out.value, out.unit)}`
+  return `已核对：${titleOf(row.skill, row.title_zh)} ${formatMeasure(out.value, out.unit, out.key)}`
 }
 
 export function redCellDriverNames(rows: readonly { key?: string; label_zh?: string }[]): string[] {
@@ -266,6 +309,7 @@ export function parseMethodResults(value: unknown): MethodResult[] {
       catalog_version,
       ran_at,
       limits_zh: typeof raw.limits_zh === 'string' ? raw.limits_zh : '',
+      ...(typeof raw.title_zh === 'string' && /[\u4e00-\u9fff]/.test(raw.title_zh) ? { title_zh: raw.title_zh.trim() } : {}),
     })
   }
   return out

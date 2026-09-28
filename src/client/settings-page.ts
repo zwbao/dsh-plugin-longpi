@@ -78,7 +78,7 @@ export function LongPiSettings(props: SettingsPageProps): React.ReactElement {
     h(Block, { id: 'lp-set-privacy', title: '隐私与数据' }, h(Privacy), ...settingsSections().map((section) => h(section.Component, { key: section.id }))),
     h('section', { className: 'lp-set-block', id: 'lp-set-methods' },
       h('details', { className: 'lp-more', onToggle: (event: React.SyntheticEvent<HTMLDetailsElement>) => setAdvanced(event.currentTarget.open) },
-        h('summary', null, h('span', { className: 'lp-set-title' }, '高级：方法库'), h('span', { className: 'lp-optional' }, '给想看方法细节的人')),
+        h('summary', null, h('span', { className: 'lp-set-title' }, '高级（给安装的人）'), h('span', { className: 'lp-optional' }, '方法库和安装细节')),
         // The board is read only once the section is opened: most people never need it.
         advanced ? h(Methods, { onNotice: notify }) : null)))
 }

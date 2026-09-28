@@ -139,7 +139,8 @@ export function InsightCard(props: { journey: Journey }): React.ReactElement | n
           if (/步数/.test(row.label_zh ?? '')) steps = row.latest.value
         }
       }
-      const lab = (props.journey.changes ?? []).find((row) => row.ask_doctor)
+      const concern = /不一定是好事/.test(props.journey.results.bioage.headline_zh ?? '')
+      const lab = concern ? undefined : (props.journey.changes ?? []).find((row) => row.ask_doctor)
       const labNote = lab ? `${lab.label_zh}最近的变化比平常大。睡眠或步数说明不了这个化验，复查时再看。` : null
       setText(insightSentence({ sleepHours: sleep, steps, labNote }))
     }).catch(() => { if (live) setText(null) })

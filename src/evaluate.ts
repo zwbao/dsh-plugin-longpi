@@ -256,9 +256,9 @@ export function adherenceFor(
     const date = addDays(window.end, -i)
     calendar.push({ date, status: date < item.start || (item.end != null && date > item.end) ? 'unknown' : (status.get(date) ?? 'unknown') })
   }
-  const sourceZh = { wearable: '手环数据', dose_log: 'Mirobody 服用记录', check_in: '打卡', none: '没有记录' }[source]
+  const sourceZh = { wearable: '手环数据', dose_log: '服用记录', check_in: '打卡', none: '没有记录' }[source]
   let note = ''
-  if (source === 'none') note = item.mirobody ? '在 Mirobody 里打卡服用后才有执行记录。' : '还没有打卡记录。'
+  if (source === 'none') note = item.mirobody ? '在你放体检报告的地方记下服用后，才有执行记录。' : '还没有打卡记录。'
   else if (level === 'unknown') note = `${sourceZh}覆盖 ${Math.round(coverage * 100)}% 的天数，太少，执行率不作数。`
   else note = `${sourceZh}：执行率 ${Math.round((rate ?? 0) * 100)}%（覆盖 ${Math.round(coverage * 100)}% 的天数）。`
   return { source, rate, coverage, known_days: knownDays, done_days: doneDays, window_days: days, level, streak, calendar, note_zh: note }
@@ -501,8 +501,8 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
     // A course matters when it is still running at the retest, or stopped shortly before it.
     const runningAtRetest = within(course.start) && (!course.end || course.end >= addDays(windowTo, -14))
     const stoppedJustBefore = within(course.end) && daysBetween(course.end, windowTo) <= 30
-    if (runningAtRetest) base.confounders.push(`${course.start} 开始用${course.medication}（Mirobody 用药记录）`)
-    else if (stoppedJustBefore) base.confounders.push(`${course.end} 停用${course.medication}，距复测不到一个月（Mirobody 用药记录）`)
+    if (runningAtRetest) base.confounders.push(`${course.start} 开始用${course.medication}（用药记录）`)
+    else if (stoppedJustBefore) base.confounders.push(`${course.end} 停用${course.medication}，距复测不到一个月（用药记录）`)
   }
   for (const row of input.checkins) {
     if (!within(row.date) || row.tags.length === 0) continue
@@ -633,7 +633,7 @@ export function suggestNext(summaries: readonly ItemSummary[], context: { today:
     if (item.adherence.source === 'none' && item.days >= 7) {
       out.push({
         kind: 'record', priority: 4, item: item.id,
-        text_zh: item.adherence.note_zh.startsWith('在 Mirobody')
+        text_zh: item.adherence.note_zh.startsWith('在你放体检报告的地方')
           ? `「${item.title}」没有服用记录。${item.adherence.note_zh}`
           : `「${item.title}」还没有执行记录。每天在对话里说一句“今天${item.title}完成了”就能记下。`,
       })

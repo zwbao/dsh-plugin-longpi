@@ -71,11 +71,12 @@ body[data-ds-dark-theme] .lp {
 /* --- page frame ----------------------------------------------------------------- */
 .lp-page-root {
   container: lp-root / inline-size;
-  height: 100%; overflow-y: auto; background: var(--lp-bg);
+  width: 100%; max-width: 100%; box-sizing: border-box;
+  height: 100%; overflow-x: hidden; overflow-y: auto; background: var(--lp-bg);
   padding-top: var(--dsh-frame-top-clearance, 48px);
   padding-left: var(--dsh-frame-leading-clearance, 0px);
 }
-.lp-page { max-width: 1040px; margin: 0 auto; padding: 12px 40px 64px; }
+.lp-page { width: 100%; max-width: 1040px; margin: 0 auto; padding: 12px 40px 64px; box-sizing: border-box; }
 @container lp-root (max-width: 760px) { .lp-page { padding: 8px 20px 48px; } }
 .lp-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 28px; }
 .lp-season-bar { position: static; display: flex; align-items: center; width: 100%; max-width: 100%; margin: -12px 0 16px; padding: 8px 12px; border: 0; border-radius: 12px; background: var(--lp-layer-2); color: var(--lp-ink); font: inherit; text-align: left; cursor: pointer; }
@@ -604,7 +605,7 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
 .lp-banner .lp-icon { color: var(--lp-accent); }
 .lp-banner:hover { background: var(--lp-accent-soft); }
 .lp-banner-go { margin-left: auto; color: var(--lp-accent); white-space: nowrap; }
-.lp-tabs { display: flex; gap: 4px; margin: 0 0 20px; border-bottom: .5px solid var(--lp-line-2); overflow-x: auto; scrollbar-width: none; }
+.lp-tabs { display: flex; gap: 4px; margin: 0 0 20px; max-width: 100%; border-bottom: .5px solid var(--lp-line-2); overflow-x: auto; scrollbar-width: none; }
 .lp-tab {
   position: relative; display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border: 0; background: transparent;
   color: var(--lp-ink-2); font-size: 14px; line-height: 22px; cursor: pointer; white-space: nowrap; border-radius: 8px 8px 0 0;
@@ -732,7 +733,7 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
 .lp-ind-list { list-style: none; margin: 0; padding: 0; }
 .lp-ind-row { border-top: .5px solid var(--lp-line-1); }
 .lp-ind-row:first-child { border-top: 0; }
-.lp-ind-btn { width: 100%; min-height: 44px; padding: 6px 8px; margin: 0 -8px; width: calc(100% + 16px); border: 0; border-radius: 10px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.lp-ind-btn { width: 100%; max-width: 100%; min-height: 44px; padding: 6px 8px; margin: 0; box-sizing: border-box; border: 0; border-radius: 10px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .lp-ind-btn:hover, .lp-ind-open .lp-ind-btn { background: var(--lp-hover); }
 .lp-ind-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .lp-ind-name .lp-strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -919,6 +920,18 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
 @keyframes lp-pop { 0% { transform: scale(.94); } 60% { transform: scale(1.04); } 100% { transform: scale(1); } }
 @keyframes lp-pulse { 50% { opacity: .45; } }
 @keyframes lp-spin { to { transform: rotate(360deg); } }
+.lp-card, .lp-result, .lp-overview, .lp-science, .lp-tab-body, .lp-method-block, .lp-results { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.lp-science, .lp-science p, .lp-science h2, .lp-science label, .lp-card p, .lp-muted, .lp-caption { overflow-wrap: anywhere; }
+.lp-actions, .lp-form-actions, .lp-life-row { flex-wrap: wrap; max-width: 100%; }
+.lp-found { grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); }
+.lp-timeline-date { min-width: 0; }
+@media (max-width: 420px) {
+  .lp-page { padding-left: 12px; padding-right: 12px; }
+  .lp-results, .lp-grid-2, .lp-method-block, .lp-first { grid-template-columns: minmax(0, 1fr); }
+  .lp-header, .lp-result-head, .lp-card-head { flex-wrap: wrap; }
+  .lp-linkbtn, .lp-bignum { max-width: 100%; }
+  .lp-bignum { font-size: 36px; line-height: 44px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .lp-card, .lp-win, .lp-pop, .lp-skeleton, .lp-hero, .lp-home-row, .lp-task-ring, .lp-pill-wrap, .lp-notice, .lp-spin, .lp-info-pop, .lp-task-menu { animation: none; }
   .lp-ring-fill, .lp-body, .lp-dot, .lp-dot-step, .lp-switch-track, .lp-switch-thumb { transition: none; }

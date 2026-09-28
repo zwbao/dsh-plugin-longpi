@@ -43,6 +43,9 @@ export interface BioAgeInput {
   /** How many complete draws exist, when the series itself was not loaded. */
   draws: number
   same_lab: boolean | null
+  /** The page's body-age sentence, when the driver story already chose the words. */
+  story_zh?: string
+  story_younger?: boolean
 }
 
 export interface BehaviourInput {
@@ -416,8 +419,18 @@ export function gradeBioAge(input: BioAgeInput, today: string): FeedbackMessage 
   }
   const beyond = band != null && deltaYears != null && Math.abs(deltaYears) > Math.abs(band)
   const younger = beyond && deltaYears != null && deltaYears < 0 && input.band_verified
+  if (input.story_zh && input.story_younger === false && /算出来小了|不一定是好事/.test(input.story_zh)) {
+    return {
+      ...base, numbers, grade: 'beyond_band_worse', allowed_claims: ['see_doctor', 'retest_when'], delta,
+      retest: { earliest: dates.earliest, recommended: dates.recommended, why_zh: advice.why_zh },
+      headline_zh: input.story_zh,
+      tone: 'care',
+    }
+  }
   if (younger && deltaYears != null) {
-    const headline = `你确实年轻了 ${showYears(Math.abs(deltaYears))} 岁（模型估计，超出了测量波动，是真实的变化）。`
+    const headline = input.story_zh && input.story_younger !== false
+      ? input.story_zh
+      : `你确实年轻了 ${showYears(Math.abs(deltaYears))} 岁（模型估计，超出了测量波动，是真实的变化）。`
     const message: FeedbackMessage = {
       ...base, numbers, grade: 'beyond_band_better',
       allowed_claims: ['younger', 'celebrate', 'improved', 'retest_when'],

@@ -20,16 +20,16 @@ const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]'])
 /** The same rule the server applies: https, or http only on this computer. */
 export function addressProblem(text: string): string | null {
   const trimmed = text.trim()
-  if (!trimmed) return '请在高级里粘贴连接地址。'
+  if (!trimmed) return '请先展开给安装的人的那一栏，再粘贴连接地址。'
   let url: URL
   try {
     url = new URL(trimmed)
   } catch {
-    return '这不是一个完整的网址，请从原来放报告的地方复制完整地址（以 https:// 开头）。'
+    return '这不是一个完整的网址，请复制以 https:// 开头的完整地址。'
   }
   if (url.protocol === 'https:') return null
   if (url.protocol === 'http:' && LOOPBACK.has(url.hostname)) return null
-  return url.protocol === 'http:' ? '只有本机地址（127.0.0.1 或 localhost）可以用 http://，其他地址请用 https://。' : '地址要以 https:// 开头。'
+  return url.protocol === 'http:' ? '只有这台电脑上的地址可以用 http，其他地址请用 https。' : '地址要以 https:// 开头。'
 }
 
 function month(iso: string | null): string {
@@ -50,12 +50,6 @@ export function summaryParts(summary: RecordsSummary): string[] {
   ].filter(Boolean)
 }
 
-function sourceText(connection: Connection): string {
-  if (connection.source === 'saved') return '在这里保存的地址'
-  if (connection.source === 'config') return '安装时配置的地址'
-  return ''
-}
-
 /** brief: without the summary line, where the found counts are already on screen (onboarding step 3). */
 export function ConnectionStatus(props: { connection: Connection; brief?: boolean }): React.ReactElement {
   const { connection } = props
@@ -65,10 +59,7 @@ export function ConnectionStatus(props: { connection: Connection; brief?: boolea
     h('div', { className: 'lp-status' },
       h('span', { className: `lp-statusdot ${ok ? 'lp-statusdot-on' : bad ? 'lp-statusdot-bad' : ''}`, 'aria-hidden': true }),
       ok ? '已连上' : bad ? `连接失败：${connection.error || '没有返回原因'}` : '还没有连上'),
-    connection.url_masked
-      ? h('div', { className: 'lp-caption lp-conn-url' }, h('code', null, connection.url_masked),
-        sourceText(connection) ? ` · ${sourceText(connection)}` : '', connection.token_set ? ' · 令牌已设置' : '')
-      : null,
+    null,
     ok && connection.summary && !props.brief ? h('div', { className: 'lp-caption' }, `找到：${summaryParts(connection.summary).join(' · ')}`) : null)
 }
 
@@ -117,7 +108,7 @@ function MirobodyLogin(props: { idPrefix: string; onSaved?: () => void }): React
   return h('div', { className: 'lp-conn-login', id: `${props.idPrefix}-login` },
     h('p', { className: 'lp-muted' }, '用邮箱和密码登录并连接。'),
     h('details', { className: 'lp-more' },
-      h('summary', null, '高级'),
+      h('summary', null, '高级（给安装的人）'),
       h('div', { className: 'lp-field' },
         h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-base` }, '服务地址'),
         h('input', { id: `${props.idPrefix}-base`, className: 'lp-input', value: base, autoComplete: 'off', spellCheck: false, onChange: (event: React.ChangeEvent<HTMLInputElement>) => setBase(event.target.value) }))),
@@ -192,7 +183,8 @@ export function ConnectionForm(props: { connection: Connection | null; idPrefix:
   return h('form', { className: 'lp-conn-form', noValidate: true, onSubmit: (event: React.FormEvent) => { event.preventDefault(); void run('save') } },
     h(MirobodyLogin, { idPrefix: props.idPrefix }),
     h('details', { className: 'lp-more' },
-      h('summary', null, '高级'),
+      h('summary', null, '高级（给安装的人）'),
+      props.connection?.url_masked ? h('p', { className: 'lp-caption' }, `当前地址 ${props.connection.url_masked}`) : null,
       h('p', { className: 'lp-caption' }, '安装的人如果已经拿到连接地址，再展开填写。平时不用看。'),
       h('div', { className: 'lp-field' },
         h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-url` }, '连接地址'),
@@ -246,5 +238,6 @@ export function connectionLine(connection: Connection | null): string {
 }
 
 export function lastCheckupText(summary: RecordsSummary | null): string {
-  return summary?.last_date ? `最近一次体检：${chineseDate(summary.last_date)}` : ''
+  const when = summary?.last_date ? chineseDate(summary.last_date) : ''
+  return when ? `最近一次体检：${when}` : ''
 }

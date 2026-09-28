@@ -35,8 +35,10 @@ function write() {
   if (existsSync(`${client}.map`)) copyFileSync(`${client}.map`, join(out, 'client.js.map'))
   cpSync(fixtures, join(out, 'fixtures'), { recursive: true })
   const read = (name) => JSON.parse(readFileSync(join(fixtures, name), 'utf8'))
+  // The product version on screen comes from package.json, never from a fixture written for an older release.
+  const version = JSON.parse(readFileSync(join(here, '..', 'package.json'), 'utf8')).version
   const data = {
-    board: read('board.json'), tracking: read('tracking.json'), journey: read('journey.json'), self: read('self.json'),
+    board: { ...read('board.json'), version }, tracking: read('tracking.json'), journey: { ...read('journey.json'), version }, self: read('self.json'),
     planDraft: read('plan-draft.json'), followup: read('followup.json'), indicators: read('indicators.json'), connection: read('connection.json'),
   }
   const template = readFileSync(join(here, 'index.html'), 'utf8')

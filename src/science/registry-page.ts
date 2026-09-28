@@ -143,7 +143,7 @@ export function registryHtml(view: ReturnType<typeof buildRegistry>): string {
   <p class="kicker">分析代码 sha256</p>
   <p><code>${esc(view.analysis_sha256)}</code></p>
   ${rows || '<p>还没有已签名的研究说明。</p>'}
-  <p class="kicker">透明记录可以从 /api/longpi/science/transparency 导出。这里没有个人化验，也没有理解测验的答案。</p>
+  <p class="kicker">发出记录可以导出。这里没有个人化验，也没有理解测验的答案。</p>
 </main>`
 }
 

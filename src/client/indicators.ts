@@ -265,7 +265,7 @@ export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filte
             onClick: () => props.onFilter(row.key),
           }, row.label, h('span', { className: 'lp-toggle-count' }, String(count)))
         })),
-      h('span', { className: 'lp-caption' }, checkup ? `最近一次体检 ${chineseDate(checkup)}` : '',
+      h('span', { className: 'lp-caption' }, (() => { const when = checkup ? chineseDate(checkup) : ''; return when ? `最近一次体检 ${when}` : '' })(),
         h(Info, { label: '和正常波动比', align: 'end' },
           '超出正常波动：比你平常的起伏更大，值得问医生，不是急症。在正常波动范围内：这点变化不算数。太早：离上次太近。不可比：两次不是同一家机构。还不能下结论：看缺的是哪一步。'))),
     groups.length === 0

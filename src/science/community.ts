@@ -8,7 +8,6 @@ import { RELEASE_STAYS_ZH } from './budget.ts'
 import { EARLY_ZH, thresholdCard, type ThresholdCard } from './coldstart.ts'
 import { ethicsLine, loadStudies, publicQuestions, type LoadedStudy } from './manifest.ts'
 import { readLog } from './translog.ts'
-import { LIVE_REFUSED_ZH } from './verify.ts'
 
 export const TOPICS = [
   { id: 'sleep-glucose', title_zh: '下一季：睡眠时间和空腹血糖' },
@@ -137,7 +136,7 @@ export function buildCommunity(opts: { dataDir: string; configured: 'off' | 'loc
     configured: opts.configured,
     live_refused: liveRefused,
     reason_zh: liveRefused
-      ? LIVE_REFUSED_ZH
+      ? '研究正式开始后才会发出，现在只保存在你的设备上。'
       : mode === 'off'
         ? '研究没有打开。可以在设置里再打开。'
         : mode === 'local'
@@ -160,7 +159,7 @@ export function buildCommunity(opts: { dataDir: string; configured: 'off' | 'loc
       mine: mode === 'local' ? null : votes.topic_id,
       note_zh: mode === 'local'
         ? '票先记在这台电脑上。研究正式开始前，这里不显示别人的人数。'
-        : '你的一票记在这台电脑上。凑够人数之后，页面上的票数是加了噪声的合计，看不出是谁投的。',
+        : '你的一票记在这台电脑上。凑够人数之后，这里只显示看不出是谁的合计。',
     },
     give_back_zh: pulseFile.detail_zh || '还没有发回的群体结果。你自己的计算会留在本机结果里。',
     cards: mode === 'off' ? [] : readCards(opts.dataDir).map(({ id, title_zh, body_zh }) => ({ id, title_zh, body_zh })),

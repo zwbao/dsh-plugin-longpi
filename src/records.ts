@@ -6,6 +6,7 @@ import { readProfile, estimatedAge, type Profile } from './profile.ts'
 import { rememberMedications } from './guardrails.ts'
 import { presentMedications, readStatements } from './meds-stated.ts'
 import { loincCode, summarizeIndicators, summarizeMedications, type IndicatorRow, type MedicationRow } from './situation.ts'
+import { isDiagnosisName } from './ux/plain.ts'
 import { parsePrinted, tableOf, type PrintedFlag } from './compact.ts'
 import { readSelf, selfIndicators, selfKeyOf, SELF_ALIASES, SELF_DEVICE_NAMES, SELF_KEYS, SELF_SPEC, SELF_SUFFIX, type SelfKey } from './selfmeasure.ts'
 import { foldName, nameVariants, normalizeUnit } from './units.ts'
@@ -151,8 +152,8 @@ function delay(ms: number): Promise<void> {
 /** A database fault, not a slow query. The test fixture's "database timeout" is not this. */
 const DB_DOWN = /OperationalError|InterfaceError|connection refused|could not connect to server|server closed the connection unexpectedly|too many clients already|the database system is starting up|the database system is shutting down|password authentication failed|remaining connection slots|psycopg|asyncpg/i
 
-const DB_DOWN_HEALTHY_ZH = 'Mirobody 显示服务正常，但数据库没有连上，体检记录暂时读不到。请稍后再试。'
-const DB_DOWN_ZH = 'Mirobody 的数据库没有连上，体检记录暂时读不到。请稍后再试。'
+const DB_DOWN_HEALTHY_ZH = '体检记录的服务显示正常，但数据库没有连上，暂时读不到。请稍后再试。'
+const DB_DOWN_ZH = '体检记录的数据库没有连上，暂时读不到。请稍后再试。'
 const AUTH_ZH = '没有认出这次登录，请在设置里重新连接体检记录。'
 
 function isDbDown(text: string): boolean {
@@ -590,7 +591,7 @@ async function loadRemote(config: Config, pluginHome: string): Promise<Remote> {
     snapshot.catalog_truncated = true
     snapshot.read_errors.push(cut)
   }
-  const names = snapshot.indicators.filter((item) => !item.value).map((item) => item.name).filter(Boolean)
+  const names = snapshot.indicators.filter((item) => !item.value && !isDiagnosisName(item.name)).map((item) => item.name).filter(Boolean)
   if (names.length > 0) {
     const filled = new Map<string, IndicatorRow>()
     const unread: string[] = []
@@ -663,11 +664,11 @@ function catalogueCut(payload: unknown, table: ReturnType<typeof tableOf>, liste
   const charCut = textOf(payload).includes('… cut at ')
   const short = claimed != null && claimed > parsed
   if (charCut || short || (total != null && total > parsed)) {
-    return `指标目录被截断：Mirobody 只返回了 ${parsed} 项${total != null ? `（共 ${total} 项）` : ''}，其余指标没有读到（目录不能分页）。`
+    return `指标目录没有读全：这次只读到 ${parsed} 项${total != null ? `（共 ${total} 项）` : ''}，其余没有读到。`
   }
   // No "of N" to go by: a catalogue exactly at Mirobody's cap was most likely cut there.
   if (table && total == null && parsed >= MIROBODY_CATALOG_CAP) {
-    return `指标目录返回了 ${parsed} 项，正好是 Mirobody 的上限，可能还有指标没有读到。`
+    return `指标目录返回了 ${parsed} 项，正好到了一次能读的上限，可能还有指标没有读到。`
   }
   if (listed > MAX_INDICATORS) return `指标目录超过 ${MAX_INDICATORS} 项，只读取了前 ${MAX_INDICATORS} 项。`
   return ''

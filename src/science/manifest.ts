@@ -54,10 +54,7 @@ export function publicQuestions(manifest: StudyManifest): Array<{ id: string; qu
 
 export function ethicsLine(manifest: StudyManifest): string {
   if (manifest.ethics.approval_id && manifest.ethics.registry.id) {
-    return `伦理批件 ${manifest.ethics.approval_id}，${manifest.ethics.registry.name} ${manifest.ethics.registry.id}`
+    return `已有批件 ${manifest.ethics.approval_id}。`
   }
-  if (manifest.ethics.registry.name === 'ChiCTR') {
-    return '上线收集真实数据之前，需要伦理委员会批件和 ChiCTR 注册号。这个版本的 live 不会打开。'
-  }
-  return '观察性波动研究，模拟模式只在本机汇总。'
+  return '研究正式开始后才会发出，现在只保存在你的设备上。'
 }

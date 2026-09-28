@@ -114,7 +114,7 @@ export function MethodsSection(props: { board: Board | null; loading: boolean; e
           : h('ul', { className: 'lp-rows' }, ...readouts.slice(0, 8).map((row) => h('li', { key: row.key, className: 'lp-row' },
             h('span', null, row.label_zh || row.key),
             h('span', { className: 'lp-row-end' },
-              h('span', { className: 'lp-num' }, `${typeof row.value === 'number' ? fmt(row.value, 2) : row.value ?? ''} ${row.unit && row.unit !== '1' ? (row.unit === 'a' ? '岁' : row.unit) : ''}`),
+              h('span', { className: 'lp-num' }, `${typeof row.value === 'number' ? fmt(row.value, 2) : row.value ?? ''} ${row.unit && row.unit !== '1' ? (row.unit === 'a' || row.unit === 'yr' ? '岁' : row.unit) : ''}`),
               h('span', { className: 'lp-caption' }, (row.measured_at || row.at || '').slice(0, 10)))))))),
     h('div', { className: 'lp-grid-1' }, h(Search, { board })))
 }

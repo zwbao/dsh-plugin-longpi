@@ -106,6 +106,9 @@ export function feedbackInput(tracking: Tracking, memory: MemoryApi | null): Fee
       date: latest?.date ?? null,
       draws: tracking.bioage.points?.length ?? 0,
       same_lab: null,
+      ...(/你确实年轻了|算出来小了/.test(tracking.bioage.headline_zh ?? '')
+        ? { story_zh: tracking.bioage.headline_zh, story_younger: tracking.bioage.allows_younger === true }
+        : {}),
     }
     : null
   return {

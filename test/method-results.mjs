@@ -61,7 +61,7 @@ const sleepSentence = resultSentence(sleep, { youngerAllowed: false })
 assert.equal(sleepSentence.split('。').filter(Boolean).length, 1, sleepSentence)
 assert.match(sleepSentence, /6\.4/)
 assert.match(sleepSentence, /近 120 夜睡眠中位数 6\.4 小时/)
-assert.match(sleepSentence, /绑定未核对/)
+assert.match(sleepSentence, /还没对上/)
 
 const clock = fixtures.find((row) => row.skill === 'aging-biomarker-framework')
 const clockSentence = resultSentence(clock, { youngerAllowed: false })

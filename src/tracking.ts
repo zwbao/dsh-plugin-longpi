@@ -13,6 +13,7 @@ import type { StopResult } from './plan-safety.ts'
 import type { Config } from './config.ts'
 import { adherenceFor, evaluatePlan, resolveMarkers, suggestNext, wearableTargetFor, type Adherence, type ItemSummary, type LeverHint, type ResolvedMarker, type Suggestion } from './evaluate.ts'
 import { bodyAgeWording, codedRecords, missedPlanChanges, PHENOAGE_WINDOW_DAYS, siblingNames } from './honesty/comparability.ts'
+import { bodyAgeStory, panelFromMeasurements, type PhenoPanel } from './ux/body-age.ts'
 import { roundPercentPoints } from './honesty/format.ts'
 import { modelRangeNote } from './honesty/model-range.ts'
 import { readHistory, type HistoryRow } from './history.ts'
@@ -69,6 +70,8 @@ export interface BioAge {
   allows_younger?: boolean
   /** Days from the earliest to the latest input of the latest panel. 0 is one draw day. */
   panel_span_days: number | null
+  /** The first and latest complete panels, in the method's units, when both exist. */
+  pheno_compare?: { before: PhenoPanel; after: PhenoPanel } | null
 }
 
 export interface ModelCard {
@@ -209,10 +212,13 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
   const changesNote = readChanges.note_zh
   let unjudged = readChanges.unjudged
   const doctorFirst = await doctorRead
+  const glucoseTreatedEarly = context.records.profile.risk.diabetes === true
+    || currentMedications(context.records.medications).some((name) => GLUCOSE_LOWERING.test(name))
+  const bioageTold = narrateBioAge(bioage, changes, doctorFirst, glucoseTreatedEarly)
   if (!plan) {
     if (unjudged.length > 0) errors.push(`没有判断变化：${unjudged.map((row) => row.label_zh).join('、')}（读取失败或不完整）`)
     return {
-      status: 'no_plan', today: context.today, plan: null, versions, items: [], suggestions: [], charts: [], bioage, models,
+      status: 'no_plan', today: context.today, plan: null, versions, items: [], suggestions: [], charts: [], bioage: bioageTold, models,
       checkins: [], reference: referenceStats(reference), errors, changes, changes_note_zh: changesNote, changes_unjudged: unjudged, doctor_first: doctorFirst,
     }
   }
@@ -298,7 +304,7 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
   const suggestions = suggestNext(items, { today: context.today, levers })
   const charts = chartsFor(judged, resolvedList, series, reference, goals)
   return {
-    status: 'ok', today: context.today, plan, versions, items, suggestions, charts, bioage, models,
+    status: 'ok', today: context.today, plan, versions, items, suggestions, charts, bioage: bioageTold, models,
     checkins: checkins.slice(-30).reverse(), reference: referenceStats(reference), errors, changes, changes_note_zh: changesNote, changes_unjudged: unjudged, doctor_first: doctorFirst,
   }
 }
@@ -561,6 +567,12 @@ async function ensureBioAge(context: TrackingContext, reference: Reference): Pro
   const windowNote = span > 0
     ? `最近一次九项血检在 ${span} 天内测齐（截至 ${latest}，不超过 ${PHENOAGE_WINDOW_DAYS} 天），不是同一天抽血。`
     : `按 ${points.length} 次同一天测齐九项血检的检查回算${sameDayCount < points.length ? '（另有不在同一天、但在窗口内的检查）' : ''}。`
+  const firstDate = checkups[0]
+  const beforePanel = firstDate && firstDate !== latest
+    ? panelFromMeasurements(wanted.get(firstDate)?.measurements ?? [], wanted.get(firstDate)?.age ?? ageNow)
+    : null
+  const afterPanel = panelFromMeasurements(wanted.get(latest)?.measurements ?? [], wanted.get(latest)?.age ?? ageNow)
+  const pheno_compare = beforePanel && afterPanel ? { before: beforePanel, after: afterPanel } : null
   return {
     status: current ? 'ok' : 'error',
     note_zh: current
@@ -570,6 +582,46 @@ async function ensureBioAge(context: TrackingContext, reference: Reference): Pro
     allows_younger: wording?.allows_younger === true,
     panel_span_days: current ? span : null,
     missing: [], points, band_years: band?.years ?? null, band_verified: band?.verified ?? false, band_missing: band?.missing ?? [], runs,
+    ...(pheno_compare ? { pheno_compare } : {}),
+  }
+}
+
+/** Replace a younger celebration when the input that moved the age is itself a concern. */
+export function narrateBioAge(bioage: BioAge, changes: readonly RecordChange[], doctor: StopResult, glucoseTreated: boolean): BioAge {
+  const compare = bioage.pheno_compare
+  const first = bioage.points[0]
+  const last = bioage.points.at(-1)
+  if (!compare || !first || !last || first.advance == null || last.advance == null) return bioage
+  // A caution is a change the page already sends to a doctor, or a doctor-first hit. A method note on a
+  // marker (caveat_zh, e.g. how CRP's variation was measured) is not a health concern.
+  const cautions = [
+    ...changes.filter((row) => row.ask_doctor || row.range_flag).map((row) => row.key),
+    ...(doctor.hits ?? []).map((hit) => hit.key),
+  ]
+  const story = bodyAgeStory({
+    deltaYears: last.advance - first.advance,
+    bandYears: bioage.band_years,
+    draws: bioage.points.length,
+    before: compare.before,
+    after: compare.after,
+    cautions,
+    glucoseTreated,
+  })
+  if (!story) return bioage
+  // The celebration needs a verified noise band, the same rule the graded message applies. Without it the
+  // existing wording stays; a concern sentence is never a celebration, so it stands either way.
+  if (story.allows_younger && !bioage.band_verified) return bioage
+  // A panel measured across days stays labelled as a window. The story replaces the celebration, not that fact.
+  const clause = bioage.panel_span_days != null && bioage.panel_span_days > 0
+    ? (`${bioage.headline_zh} ${bioage.note_zh}`.match(/九项血检在 \d+ 天内测齐[^。]*不是同一天抽血。/)?.[0] ?? '')
+    : ''
+  const headline = clause && !story.headline_zh.includes('不是同一天抽血') ? `${story.headline_zh}${clause}` : story.headline_zh
+  const told = /身体年龄/.test(headline) ? headline : `身体年龄（模型估计）。${headline}`
+  return {
+    ...bioage,
+    headline_zh: headline,
+    note_zh: bioage.status === 'ok' ? told : bioage.note_zh,
+    allows_younger: story.allows_younger,
   }
 }
 
@@ -896,7 +948,7 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
     boundary_zh: `模型估计：China-PAR 按中国成人队列建立，给出的是和你条件相同的人群平均风险，不是诊断，也不决定是否用药。${modelRangeNote('china-par', context.records.profile.age) ?? ''}`,
   }
   if (!card || !card.script) {
-    base.note_zh = '方法库里没有 China-PAR 方法，请更新 longevity-skills。'
+    base.note_zh = '方法库里没有 10 年心血管风险这项计算。'
     return base
   }
   if (card.inputsStatus !== 'verified') {
@@ -1037,7 +1089,7 @@ export function describeItem(item: PlanItem): string {
   if (item.frequency) parts.push(`每${item.frequency.per === 'day' ? '天' : '周'} ${item.frequency.times} 次`)
   if (item.target) parts.push(`手环目标 ${item.target.metric} ${item.target.op} ${item.target.value}${item.target.unit ? ` ${item.target.unit}` : ''}`)
   if (item.markers.length > 0) parts.push(`看 ${item.markers.join('、')}`)
-  if (item.mirobody) parts.push(`服用记录来自 Mirobody（${item.mirobody.medication}）`)
+  if (item.mirobody) parts.push(`服用记录来自用药计划（${item.mirobody.medication}）`)
   if (item.detail) parts.push(`说明：${item.detail}`)
   return parts.join('；')
 }

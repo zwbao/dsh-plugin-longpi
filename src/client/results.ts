@@ -8,7 +8,7 @@ import React from 'react'
 import type { MethodResult, ResultLabel } from '../contracts/library.ts'
 import { modelRangeNote } from '../honesty/model-range.ts'
 import {
-  allowsYoungerClaim, olderThanAgeSentence, overviewSlice, parseMethodResults,
+  allowsYoungerClaim, facingUnit, olderThanAgeSentence, overviewSlice, parseMethodResults,
   PHENO_SKILL, primaryOutput, redCellDriverNames, resultSentence, RISK_SKILL,
   speciesOf, stripYoungerClaim, titleOf,
 } from '../core/method-view.ts'
@@ -133,7 +133,8 @@ export function BodyAgeCard(props: {
   const partial = (bio?.band_missing ?? []).length > 0
   const graded = messagesFor(props.journey, props.tracking).find((row) => row.subject.kind === 'bioage')
   const verified = !props.method || props.method.label === 'verified'
-  const younger = verified && allowsYoungerClaim('verified', graded?.allowed_claims)
+  const concernLine = /不一定是好事/.test(result.headline_zh ?? '') || /不一定是好事/.test(graded?.headline_zh ?? '')
+  const younger = !concernLine && verified && allowsYoungerClaim('verified', graded?.allowed_claims)
   const drivers = redCellDriverNames(props.journey.changes ?? [])
   const older = phenoage != null && (latest?.advance ?? result.advance) != null
     ? olderThanAgeSentence({ phenoage, advance: (latest?.advance ?? result.advance) as number, drivers })
@@ -141,7 +142,9 @@ export function BodyAgeCard(props: {
   const binding = props.method && props.method.label === 'unverified-binding'
     ? resultSentence(props.method, { youngerAllowed: false })
     : ''
-  const gradedText = graded ? (younger ? graded.headline_zh : stripYoungerClaim(graded.headline_zh)) : ''
+  const gradedText = concernLine
+    ? (result.headline_zh || graded?.headline_zh || '')
+    : graded ? (younger ? graded.headline_zh : stripYoungerClaim(graded.headline_zh)) : ''
   // Older than chronological age: say what drives it. Do not lead with "one test cannot show you got younger".
   const caption = older
     ? [older, younger && graded ? graded.headline_zh : '', binding].filter(Boolean).join('')
@@ -157,7 +160,7 @@ export function BodyAgeCard(props: {
       h('span', { className: 'lp-bignum-unit' }, '岁'),
       younger ? h('span', { className: 'lp-pill lp-pill-good' }, '真实的变化') : null),
     // Set by the server when an input of this model changed beyond normal fluctuation.
-    result.caveat_zh ? h('p', { className: 'lp-caveat', role: 'note' }, h(Icon, { name: 'warn', size: 14 }), h('span', null, result.caveat_zh)) : null,
+    result.caveat_zh && !concernLine ? h('p', { className: 'lp-caveat', role: 'note' }, h(Icon, { name: 'warn', size: 14 }), h('span', null, result.caveat_zh)) : null,
     points.length > 1 ? h(LineChart, {
       points: points.filter((row) => row.advance != null).map((row) => ({ date: row.date, value: row.advance as number })),
       unit: '岁', label: '身体年龄减周岁', height: 96, compact: true,
@@ -230,11 +233,11 @@ function MethodCard(props: { result: MethodResult }): React.ReactElement {
   const numeric = out != null && typeof out.value === 'number'
   const sentence = resultSentence(props.result, { youngerAllowed: false })
   return h('div', { className: 'lp-card lp-result', 'data-result-label': props.result.label },
-    h(CardHead, { label: titleOf(props.result.skill), info: h('span', { className: 'lp-info-line' }, props.result.limits_zh || '模型估计，不是诊断。'), mark: props.result.label }),
+    h(CardHead, { label: titleOf(props.result.skill, props.result.title_zh), info: h('span', { className: 'lp-info-line' }, props.result.limits_zh || '模型估计，不是诊断。'), mark: props.result.label }),
     numeric
       ? h('div', { className: 'lp-result-figure' },
         h('span', { className: 'lp-bignum' }, fmt(out.value as number)),
-        out.unit ? h('span', { className: 'lp-bignum-unit' }, out.unit) : null)
+        out.unit ? h('span', { className: 'lp-bignum-unit' }, facingUnit(out.unit, out.key)) : null)
       : null,
     h('p', { className: 'lp-method-sentence' }, sentence))
 }

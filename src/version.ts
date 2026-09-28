@@ -1,4 +1,22 @@
-export const PRODUCT_VERSION = '0.6.2'
+import { createRequire } from 'node:module'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+function versionFromPackage(): string {
+  const require = createRequire(import.meta.url)
+  const here = dirname(fileURLToPath(import.meta.url))
+  for (const rel of ['../package.json', '../../package.json']) {
+    try {
+      const pkg = require(join(here, rel)) as { version?: string }
+      if (typeof pkg.version === 'string' && pkg.version) return pkg.version
+    } catch {
+      // The bundled file and the source file sit at different depths.
+    }
+  }
+  return '0.6.2'
+}
+
+export const PRODUCT_VERSION = versionFromPackage()
 export const PRODUCT_NAME = 'dsh-plugin-longpi'
 
 export const TOOL_NAMES = [

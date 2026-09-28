@@ -20,7 +20,7 @@ function ScienceToolCard(props: { block?: unknown; toolName?: string }): React.R
 function ScienceSettings(): React.ReactElement {
   return h('section', { className: 'lp-section' },
     h('h2', { className: 'lp-h2' }, '研究'),
-    h('p', null, '模拟模式只把加了噪声的合计发到本机。live 在这个版本里不能打开：还没有伦理批件、ChiCTR 和正式的签署密钥。'),
+    h('p', null, '研究正式开始后才会发出，现在只保存在你的设备上。'),
     h('p', null, h('a', { href: '/api/longpi/science/community?view=page' }, '打开研究页')))
 }
 

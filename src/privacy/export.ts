@@ -28,8 +28,8 @@ export function mirobodyExportLink(dataDir: string, fallbackUrl = ''): MirobodyL
     }
   }
   const note_zh = url
-    ? `体检和手环记录不在这个压缩包里，它们在你自己的 Mirobody。打开 ${url} 导出或删除那份记录。`
-    : '还没有连接 Mirobody。体检记录不在 LongPi 的压缩包里；连接之后，在 Mirobody 网页导出。'
+    ? '体检原件留在你原来放报告的地方。这个压缩包里没有那份原件。'
+    : '还没有连上。体检记录不在这个压缩包里。'
   return { url, note_zh }
 }
 

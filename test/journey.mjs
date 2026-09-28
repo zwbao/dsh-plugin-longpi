@@ -669,7 +669,7 @@ try {
   assert.ok(withSelf.indicators.length > mirobodyCount, 'self rows are merged')
   const board = mod.buildBoard({ catalog, records: withSelf, mount: MOUNT, receipts: [], limit: 6, outputs: {} })
   assert.equal(board.records.indicator_count, mirobodyCount)
-  assert.match(mod.buildReport({ name: '', today: TODAY, records: withSelf, tracking: null }), new RegExp(`已接入 Mirobody（${mirobodyCount} 项指标）`))
+  assert.match(mod.buildReport({ name: '', today: TODAY, records: withSelf, tracking: null }), new RegExp(`已连上（${mirobodyCount} 项指标）`))
 
   // (6) the band's lower-bound note reaches the model
   const band = step.journey.results.bioage

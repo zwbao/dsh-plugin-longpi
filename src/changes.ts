@@ -55,7 +55,7 @@ export interface ChangesContext {
   today: string
 }
 
-export const CHANGES_NOTE_ZH = '判断依据：两次结果之差超过同一个人正常波动与检测误差合成的参考变化值（RCV，z=1.96）才算真实变化；变异数据来自 longevity-skills 的 data/biological_variation.json，每一行注明期刊出处。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。'
+export const CHANGES_NOTE_ZH = '判断依据：两次结果之差，要比同一个人平常的起伏更大，才算值得注意的变化。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。'
 const WORSE_ZH = '建议带着这几次体检报告咨询医生，看看是否需要进一步检查。'
 // A 'range' marker (haemoglobin, MCV, white cells) can be fine or not either way; only the lab's reference range tells.
 const RANGE_ZH = '变化超出了正常波动；是否需要处理要结合参考范围判断，建议带着这几次体检报告咨询医生。'
