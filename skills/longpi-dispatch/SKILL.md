@@ -20,14 +20,18 @@ description: Dispatch longevity-skills for one person. Start from the onboarding
 
 对方报出自己量的腰围、家庭血压或体重时，用 `save_self_measurement`，单位照对方说的传（斤、尺、寸、英寸会换算），不要替对方估一个值。
 
+## 绑定
+
+跑一个有输入清单的方法之前，用 `bind_longevity_inputs` 把记录行对到输入。不要自己换算单位，不要补档案里没有的行。插件核对单位、范围和来源。甲基化 PhenoAge 不能填血检表型年龄。单独写的 agatston（冠脉钙化积分）不能填腹主动脉钙化。可选输入没通过就丢掉并说明，不让整次失败。核对通过才 `run_longevity_skill`。结果带 verified、unverified-binding 或 evidence-only。只有 verified，而且变化超出正常波动，才可以说比实足年龄年轻。
+
 ## 三类问题
 
 - **我的身体怎么样**（生物年龄、甲基化年龄、器官年龄、睡眠节律、端粒）：跑 A 类技能。`read_longevity_skill` 说 `structured_measurements` 时，用 `measurements` 传值，数值和单位照记录原样抄，不要自己换算。
 - **某个东西有没有用**（NMN、二甲双胍、雷帕霉素、断食、某个基因）：用 `query_longevity_evidence`，按人群、动物、细胞分开说。
 - **我的方案有没有用、怎么调整**：见 `longpi-interventions`。
 
-问题笼统时先 `list_longevity_intents`，再把意图 id 传给 `match_longevity_skills`。只打开名单里的技能，读完再决定要不要跑。
+技能目录里有全部方法（名字、一句话、分级、物种）。`match_longevity_skills` 和意图词只是提示，不是封闭名单：提示里没有的方法也可以读，也可以绑定后运行。问题笼统时可以看 `list_longevity_intents`。读完再绑定。
 
 ## 不做的事
 
-技能没要的输入就停在缺项。不要用出生年估算值代替已经保存的实足年龄，除非这个人确认过。插件或脚本拒收一个值时，照原因说出来，不要改值重试。C 类技能是动物或细胞研究，只在问题点名该生物时进入名单。跑完脚本后引用读出，并保留其中的边界句。脚本没写出的数字不要补。
+技能没要的输入就停在缺项。不要用出生年估算值代替已经保存的实足年龄，除非这个人确认过。插件或脚本拒收一个值时，照原因说出来，不要改值重试。C 类是证据：说明第一句是物种。可以读，可以引用论文做了什么。不要把它跑成这个人的数字，也不要把它藏起来。跑完脚本后引用读出和标签，并保留其中的边界句。脚本没写出的数字不要补。

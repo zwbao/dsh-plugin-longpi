@@ -1,8 +1,11 @@
 import { spawn } from 'node:child_process'
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync, existsSync, appendFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { ABDOMINAL_CT_SKILL, assessBinding, isCoronaryName, methodFromReport, type BindingReport, type RecordView } from './bind.ts'
 import type { Catalog, SkillCard } from './catalog.ts'
 import { loadCatalog } from './catalog.ts'
+import type { BindingProposal, MethodResult } from './contracts/library.ts'
+import { speciesZh } from './skills-provider.ts'
 import { readResultFile, recordOutputs, type OutputValue } from './history.ts'
 import { stageMeasurements, type MeasurementIn, type Problem } from './measurements.ts'
 
@@ -34,6 +37,10 @@ export interface RunRequest {
   measuredAt?: string
   /** Kept with the outputs in history.jsonl, so a caller can tell a result for today's inputs from a stale one. */
   inputsKey?: string
+  /** The model's row-to-input proposal. Checked before the script runs. */
+  binding?: BindingProposal
+  /** Record rows the server can see. Omit it and the binding is checked against the manifest only. */
+  bindingView?: RecordView | null
 }
 
 export interface Conversion {
@@ -65,6 +72,8 @@ export interface RunResult {
   measured_at?: string
   /** out/levers.json (schema longevity-levers/1), when the skill writes it. */
   levers?: Levers
+  /** Labelled result. Tier C and a failed binding do not invent a personal number. */
+  method?: MethodResult
 }
 
 export interface Levers {
@@ -121,6 +130,28 @@ function fail(skill: string, revision: string, error_kind: string, error: string
     stderr_tail: '',
     ...extra,
   }
+}
+
+/** A script that exits 0 without a value did not produce a personal number. */
+function labelAfterRun(report: BindingReport, outputs: Record<string, OutputValue>): BindingReport {
+  if (report.label === 'evidence-only') return report
+  const produced = Object.values(outputs).some((item) => item && item.value != null && item.value !== '')
+  if (produced) return report
+  return {
+    ...report,
+    label: 'evidence-only',
+    blockReason: 'evidence-only',
+    limits_zh: '这次没有算出个人数字。',
+  }
+}
+
+function coronaryCell(text: string): string | null {
+  for (const line of text.split(/\r?\n/)) {
+    const cell = line.split(/[,:\t]/)[0]?.trim() ?? ''
+    if (!cell || /^(name|项目|key|marker|item|sex)$/i.test(cell)) continue
+    if (isCoronaryName(cell)) return cell
+  }
+  return null
 }
 
 function checkArg(arg: string): string | null {
@@ -255,13 +286,49 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
     }
     python = configured
   }
-  if (request.args.length > 40) {
+  if (card.tier === 'C') {
+    const species = speciesZh(card.species) || '非人类'
+    const limits = `${species}研究，不是这个人的数字。`
+    const report = assessBinding(request.binding ?? { skill: card.name, inputs: {} }, request.bindingView ?? null)
+    const method = methodFromReport(card.name, { ...report, label: 'evidence-only', blockReason: 'evidence-only', limits_zh: limits }, undefined, limits)
+    return {
+      ok: true,
+      skill: card.name,
+      revision: catalog.revision,
+      exit_code: null,
+      report_excerpt: limits,
+      stdout_tail: '',
+      stderr_tail: '',
+      hint: `${limits} 可以引用论文做了什么。不要把它当成这个人的数字。`,
+      method,
+    }
+  }
+  let bindingReport: BindingReport | null = null
+  let measurements = request.measurements
+  let boundArgs = request.args
+  if (request.binding) {
+    bindingReport = assessBinding(request.binding, request.bindingView ?? null)
+    if (!bindingReport.ok) {
+      const problems: Problem[] = bindingReport.issues.map((issue) => ({
+        key: issue.input,
+        label: issue.input,
+        kind: issue.kind === 'range' ? 'range' : issue.kind === 'missing' ? 'missing' : issue.kind === 'unit' ? 'unit' : 'unknown',
+        message_zh: issue.detail ?? issue.kind,
+      }))
+      return fail(request.name, catalog.revision, 'invalid_inputs', problems.map((item) => item.message_zh).join(' '),
+        'Say which input failed the unit, range, or provenance check. Do not relabel a methylation PhenoAge as a blood phenotypic age, or a coronary Agatston score as abdominal aortic calcium.',
+        { problems })
+    }
+    if (bindingReport.measurements.length > 0) measurements = bindingReport.measurements
+    if (bindingReport.args.length > 0) boundArgs = [...request.args, ...bindingReport.args]
+  }
+  if (boundArgs.length > 40) {
     return fail(request.name, catalog.revision, 'invalid_arguments', 'at most 40 arguments', 'Pass only the flags the skill command lists.')
   }
   if (request.files.length > 12) {
     return fail(request.name, catalog.revision, 'invalid_arguments', 'at most 12 staged files', 'Stage the files named by the skill command.')
   }
-  for (const arg of request.args) {
+  for (const arg of boundArgs) {
     const problem = checkArg(arg)
     if (problem) return fail(request.name, catalog.revision, 'invalid_arguments', problem, 'Paths stay inside the run directory. Do not point the script at the skill tree or the home directory.')
   }
@@ -278,14 +345,23 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
     }
   }
 
-  let args = [...request.args]
+  let args = [...boundArgs]
   const inputKeys: string[] = []
   const conversions: Conversion[] = []
-  if (request.measurements && request.measurements.length > 0) {
+  if (card.name === ABDOMINAL_CT_SKILL) {
+    const named = (measurements ?? []).find((item) => isCoronaryName(String(item.key)))
+    const filed = files.map((file) => coronaryCell(file.text)).find((item) => item)
+    if (named || filed) {
+      return fail(request.name, catalog.revision, 'invalid_inputs', '冠脉 Agatston 不是腹主动脉钙化。',
+        'A bare agatston score is coronary calcium. Pass abdominal aortic calcium only when the row names the abdominal aorta.',
+        { problems: [{ key: named?.key || filed || 'agatston', label: '腹主动脉钙化', kind: 'unknown', message_zh: '冠脉 Agatston 不是腹主动脉钙化。' }] })
+    }
+  }
+  if (measurements && measurements.length > 0) {
     if (card.inputsStatus === 'none' || !card.entry?.measurements_flag) {
       return fail(request.name, catalog.revision, 'invalid_arguments', 'this skill does not declare measurement inputs', 'Stage the file its command names with files and args instead.')
     }
-    const staged = stageMeasurements(card, request.measurements)
+    const staged = stageMeasurements(card, measurements)
     if (staged.problems.length > 0) {
       const kinds = [...new Set(staged.problems.map((item) => item.kind))]
       const onlyMissing = kinds.every((kind) => kind === 'missing')
@@ -404,7 +480,9 @@ export async function runSkill(request: RunRequest): Promise<RunResult> {
       : report
         ? 'Quote report_excerpt, including the 边界 line. Cite outputs exactly. Do not add a diagnosis or a dose.'
         : 'No out/report.md was written. Say so. Do not invent the missing readout.',
+    ...(bindingReport ? { method: methodFromReport(request.name, labelAfterRun(bindingReport, outputs), outputs) } : {}),
   }
+  if (payload.method) payload.hint = `${payload.hint} ${payload.method.limits_zh}`
   remember(request.dataDir, {
     at: new Date().toISOString(),
     skill: request.name,

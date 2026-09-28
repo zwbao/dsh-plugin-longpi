@@ -356,6 +356,8 @@ export {
   registerLibraryHooks, registerLibraryMount, mountLibraryLanes,
   listSkillIndex, validateBinding, readStore, methodResults, registeredMethodResults,
 } from './contracts/library.ts'
+export { listEntries, catalogDescription, whenToUseOf, LIBRARY_SKILL_RANK, LIBRARY_PROVIDER } from './skills-provider.ts'
+export { assessBinding, bindRecord, proposeFromRecord, useBindingView, isCoronaryName, ABDOMINAL_CT_SKILL, specKind, proposedRowKind } from './bind.ts'
 export { MODULES, registerModules } from './modules.ts'
 export type * from './contracts/index.ts'
 // 0.5.3 agent core (AA step 1–2, M1): memory, bus, fact pack, surfaces, triage and care.
