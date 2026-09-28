@@ -414,7 +414,59 @@
       j.followup = { enabled: f.enabled, channels: [f.desktop ? 'desktop' : null, f.webhook ? 'webhook' : null].filter(Boolean), next_at: state.followup.next.checkin }
       return json({ ok: true, ...state.followup })
     }
-    if (path.endsWith('/run-ready')) return json({ ok: true, results: [{ skill: 'accelerated-biological-aging-risk', ok: true, excerpt: '表型年龄已按最近一次血检算出。' }] })
+    if (path.endsWith('/season') || path.endsWith('/codex')) {
+      const quiet = params.get('persona') === 'ux2'
+      const view = {
+        pressure: !quiet,
+        subject_zh: null,
+        season: {
+          title_zh: quiet ? '有空再看一眼' : '看清血红蛋白',
+          status: 'active', week: 3, weeks: 12, start: '2026-09-01', end: '2026-11-23', retest_day: '2026-11-23', chapters: [], recap_zh: null,
+        },
+        quests: quiet ? [] : [
+          { id: 'q1', title_zh: '量一次腰围', status: 'open', progress: 0, count: 1, reward_zh: '' },
+          { id: 'q2', title_zh: '我约了医生', status: 'open', progress: 0, count: 1, reward_zh: '' },
+          { id: 'q3', title_zh: '做了复查', status: 'open', progress: 0, count: 1, reward_zh: '' },
+        ],
+        unlocks: [],
+        streak: { frozen: [], current: 0, best: 0 },
+        codex: { enabled: true, hidden: false, reason_zh: '', odds_zh: '铜 52%，银 28%，紫 16%，金 4%。每天最多 3 次。没有付费，不能交易。', draws_available: 1, draws_today: 0, daily_cap: 3, owned: [] },
+        weekly_zh: null, reminder_zh: null, nudge: { offer: false, enabled: false }, invite: { show: false },
+        header: quiet ? { show: false, text_zh: '' } : { show: true, text_zh: '本赛季 · 看清血红蛋白 · 第 3 周' },
+      }
+      return json(path.endsWith('/codex') ? { ok: true, codex: view.codex } : view)
+    }
+    if (path.endsWith('/science/invite')) {
+      const quiet = params.get('persona') === 'ux2'
+      return json({ ok: true, show: !quiet, mode: quiet ? 'off' : 'local', preference: quiet ? 'off' : 'local', waiting_zh: '研究正式开始后才会发出，现在只保存在你的设备上。', prechecked: false, bundled_with_product: false })
+    }
+    if (path.endsWith('/science/community') || path.endsWith('/science/preference')) {
+      return json({
+        ok: true, mode: 'local',
+        reason_zh: '研究正式开始后才会发出，现在只保存在你的设备上。',
+        studies: [{
+          id: 'walk-timing-glucose', title_zh: '晚饭后走路和早晨走路', summary_zh: '用你自己记下的血糖，比较两个时间走路。不会建议你改药。',
+          kind: 'community_season', ethics_zh: '还没有开始对外收集。', consented: 'none',
+          questions: [
+            { id: 'live', question_zh: '现在会把数据发出去吗？', options_zh: ['会，马上就发', '不会。研究正式开始前，只保存在你的设备上', '你一点同意就会发出去'] },
+            { id: 'who', question_zh: '谁先不参加？', options_zh: ['谁都可以', '正在打胰岛素的人先不参加', '只有不满 18 岁的人可以'] },
+          ],
+          text_zh: '这个小试验比较晚饭后走路和早晨走路之后的血糖。数据现在只留在这台电脑上。你可以随时退出。',
+        }],
+        progress: { label_zh: '晚饭后走路', contributed: 0, studies: 0, min_cohort: 350, week: 1, weeks: 8 },
+        pulse: null,
+        voting: { topics: [], mine: null, note_zh: '票先记在这台电脑上。研究正式开始前，这里不显示别人的人数。' },
+        give_back_zh: '还没有发回的群体结果。你自己的计算会留在本机结果里。',
+        cards: [], translog: [],
+        thresholds: [{ study_id: 'walk-timing-glucose', title_zh: '晚饭后走路', line_zh: '目标 350 人 · 招募中', early: true }],
+        early_zh: '', release_stays_zh: '已经发出的合计不会收回。',
+      })
+    }
+    if (path.endsWith('/schedule')) {
+      if (method === 'GET') return json({ ok: true, suggestions: [], events: [] })
+      return json({ ok: true, event: { ...(body || {}), confirmed: true }, events: [{ ...(body || {}), confirmed: true }] })
+    }
+    if (path.endsWith('/run-ready')) return json({ ok: true, results: [{ skill: 'accelerated-biological-aging-risk', ok: true, excerpt: '身体年龄已按最近一次血检算出。' }] })
     if (path.endsWith('/match')) return json({ matches: (state.board.dispatch && state.board.dispatch.matches) || [], note: '' })
     return json({ ok: false }, 404)
   }

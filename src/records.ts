@@ -153,7 +153,7 @@ const DB_DOWN = /OperationalError|InterfaceError|connection refused|could not co
 
 const DB_DOWN_HEALTHY_ZH = 'Mirobody 显示服务正常，但数据库没有连上，体检记录暂时读不到。请稍后再试。'
 const DB_DOWN_ZH = 'Mirobody 的数据库没有连上，体检记录暂时读不到。请稍后再试。'
-const AUTH_ZH = 'Mirobody 没有认出这次登录，请在设置里重新连接体检记录。'
+const AUTH_ZH = '没有认出这次登录，请在设置里重新连接体检记录。'
 
 function isDbDown(text: string): boolean {
   return DB_DOWN.test(text)

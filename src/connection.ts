@@ -178,13 +178,13 @@ export async function loginMirobody(input: { base_url: string; email: string; pa
     })
     loginBody = await response.json() as typeof loginBody
     if (!response.ok || loginBody.code !== 0 || !loginBody.data?.access_token) {
-      return { ok: false, error: 'Mirobody 没有接受这个邮箱或密码。' }
+      return { ok: false, error: '没有接受这个邮箱或密码。' }
     }
   } catch {
     return { ok: false, error: '连不上这个 Mirobody 地址。请确认它正在运行。' }
   }
   const token = loginBody.data?.access_token
-  if (!token) return { ok: false, error: 'Mirobody 没有接受这个邮箱或密码。' }
+  if (!token) return { ok: false, error: '没有接受这个邮箱或密码。' }
   try {
     const response = await fetchImpl(`${base}/personal/mcp`, {
       method: 'POST',
@@ -231,6 +231,6 @@ export async function testConnection(
   if (result.success === false) return { ok: false, error: refusedText(result, secrets, timeoutMs) }
   const payload = result.result ?? result.text ?? null
   const refused = tableOf(payload)?.error
-  if (refused) return { ok: false, error: `Mirobody 没有给出记录目录（${redact(`${refused.kind}: ${refused.message}`, secrets)}）。` }
+  if (refused) return { ok: false, error: `没有给出记录目录（${redact(`${refused.kind}: ${refused.message}`, secrets)}）。` }
   return { ok: true, indicators: summarizeIndicators(payload, 10_000).length }
 }

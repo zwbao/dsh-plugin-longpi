@@ -4,6 +4,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { oddsDisclosure } from './droptable.ts'
 import { loadCodexPack } from './codex.ts'
+import { calendarEvents, confirmEvent, listEvents, saveEvent, suggestEvent } from '../ux/schedule.ts'
 import { actEngage, drawEngage, freezeEngage, prefsEngage, runCodexMethod, shareEngage, syncEngage } from './engine.ts'
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => void
@@ -103,6 +104,35 @@ export function mountEngageRoutes(register: (path: string, handler: Handler) => 
               ? actEngage(dataDir(), { action, ...(measurements ? { measurements } : {}) })
               : actEngage(dataDir(), { action: 'next_season' })
       sendJson(res, result.ok ? 200 : 400, result)
+    }).catch((error) => fail(res, error))
+  })
+
+  register('/api/longpi/schedule', (req, res) => {
+    const method = (req.method ?? 'GET').toUpperCase()
+    if (method === 'GET') {
+      try {
+        const rows = listEvents(dataDir())
+        sendJson(res, 200, { ok: true, suggestions: rows.filter((row) => !row.confirmed), events: rows.filter((row) => row.confirmed) })
+      } catch (error) { fail(res, error) }
+      return
+    }
+    if (method !== 'POST') { sendJson(res, 405, { ok: false, error: '只接受 GET 或 POST。' }); return }
+    void readBody(req).then((body) => {
+      const row = isRecord(body) ? body : {}
+      const kind = row.kind === 'visit' || row.kind === 'retest' || row.kind === 'followup' ? row.kind : 'visit'
+      const date = typeof row.date === 'string' ? row.date.slice(0, 10) : ''
+      const title = typeof row.title_zh === 'string' ? row.title_zh : ''
+      if (!date || !title) { sendJson(res, 400, { ok: false, error: '需要日期和标题。' }); return }
+      const draft = suggestEvent({
+        date,
+        kind,
+        title_zh: title,
+        brief_zh: typeof row.brief_zh === 'string' ? row.brief_zh : '',
+        questions_zh: Array.isArray(row.questions_zh) ? row.questions_zh.filter((item) => typeof item === 'string') : [],
+        ...(typeof row.id === 'string' ? { id: row.id } : {}),
+      })
+      const saved = row.confirm === true ? saveEvent(dataDir(), confirmEvent(draft)) : saveEvent(dataDir(), draft)
+      sendJson(res, 200, { ok: true, event: saved, events: calendarEvents(dataDir()) })
     }).catch((error) => fail(res, error))
   })
 

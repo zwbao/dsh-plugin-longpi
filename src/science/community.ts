@@ -17,8 +17,8 @@ export const TOPICS = [
 ] as const
 
 export interface CommunityView {
-  mode: 'off' | 'simulated' | 'live'
-  configured: 'off' | 'simulated' | 'live'
+  mode: 'off' | 'local' | 'simulated' | 'live'
+  configured: 'off' | 'local' | 'simulated' | 'live'
   live_refused: boolean
   reason_zh: string
   studies: StudyCard[]
@@ -101,37 +101,48 @@ function studyCard(row: LoadedStudy, dataDir: string): StudyCard {
     kind: row.manifest.kind,
     ethics_zh: ethicsLine(row.manifest),
     consented,
-    questions: publicQuestions(row.manifest),
+    questions: publicQuestions(row.manifest).slice(0, 2),
     text_zh: row.text_zh,
   }
 }
 
-export function buildCommunity(opts: { dataDir: string; configured: 'off' | 'simulated' | 'live' }): CommunityView {
+export function buildCommunity(opts: { dataDir: string; configured: 'off' | 'local' | 'simulated' | 'live' }): CommunityView {
   const liveRefused = opts.configured === 'live'
-  const mode = liveRefused || opts.configured === 'off' ? 'off' : 'simulated'
-  const loaded = mode === 'simulated' ? loadStudies().filter((row) => row.verify.ok && row.consent_hash_ok) : []
+  const mode = liveRefused || opts.configured === 'off' ? 'off' : opts.configured === 'local' ? 'local' : 'simulated'
+  const loaded = mode === 'off' ? [] : loadStudies().filter((row) => row.verify.ok && row.consent_hash_ok)
   const studies = loaded.map((row) => studyCard(row, opts.dataDir))
   const cohort = mode === 'simulated'
     ? readJson<CohortFile>(join(opts.dataDir, 'science', 'cohort.json'), (raw) => raw as CohortFile, () => ({}))
     : {}
   const thresholds = loaded.map((row) => {
+    const threshold = row.manifest.analysis.release.min_cohort
+    if (mode === 'local') {
+      const card = thresholdCard({ study_id: row.manifest.id, title_zh: row.manifest.title_zh, enrolled: 0, threshold })
+      return { ...card, line_zh: `目标 ${card.threshold} 人 · 招募中` }
+    }
     const saved = cohort.studies?.[row.manifest.id]
     const consented = latestConsent(opts.dataDir, row.manifest.id)?.decision === 'granted'
     const enrolled = typeof saved?.enrolled === 'number' ? saved.enrolled : consented ? 1 : 0
-    const threshold = typeof saved?.threshold === 'number' ? saved.threshold : row.manifest.analysis.release.min_cohort
-    return thresholdCard({ study_id: row.manifest.id, title_zh: row.manifest.title_zh, enrolled, threshold })
+    const savedThreshold = typeof saved?.threshold === 'number' ? saved.threshold : threshold
+    return thresholdCard({ study_id: row.manifest.id, title_zh: row.manifest.title_zh, enrolled, threshold: savedThreshold })
   })
   const early = thresholds.some((row) => row.early)
   const walk = studies.find((row) => row.id === 'walk-timing-glucose')
   const votes = mode === 'simulated' ? readVote(opts.dataDir) : { topic_id: null, counts: {} }
   const pulseFile = mode === 'simulated' ? readJson<PulseFile>(pulsePath(opts.dataDir), (raw) => raw as PulseFile, () => ({})) : {}
-  const active = mode === 'simulated' ? activeStudyIds(opts.dataDir).length : 0
+  const active = mode === 'off' ? 0 : activeStudyIds(opts.dataDir).length
   const minCohort = 20
   return {
     mode,
     configured: opts.configured,
     live_refused: liveRefused,
-    reason_zh: liveRefused ? LIVE_REFUSED_ZH : mode === 'off' ? '研究没有打开。模拟模式可以在本机试跑。' : '模拟模式：合计只发到本机的汇总程序，原始化验留在这里。',
+    reason_zh: liveRefused
+      ? LIVE_REFUSED_ZH
+      : mode === 'off'
+        ? '研究没有打开。可以在设置里再打开。'
+        : mode === 'local'
+          ? '研究正式开始后才会发出，现在只保存在你的设备上。'
+          : '模拟模式：合计只发到本机的汇总程序，原始化验留在这里。',
     studies,
     progress: {
       label_zh: walk?.title_zh ?? '社区研究',
@@ -141,23 +152,27 @@ export function buildCommunity(opts: { dataDir: string; configured: 'off' | 'sim
       week: 1,
       weeks: 8,
     },
-    pulse: pulseFile.headline_zh ? { headline_zh: pulseFile.headline_zh, detail_zh: pulseFile.detail_zh ?? '' } : null,
+    pulse: mode === 'local'
+      ? null
+      : pulseFile.headline_zh ? { headline_zh: pulseFile.headline_zh, detail_zh: pulseFile.detail_zh ?? '' } : null,
     voting: {
-      topics: TOPICS.map((topic) => ({ id: topic.id, title_zh: topic.title_zh, votes: votes.counts[topic.id] ?? 0 })),
-      mine: votes.topic_id,
-      note_zh: '你的一票记在这台电脑上。凑够人数之后，页面上的票数是加了噪声的合计，看不出是谁投的。',
+      topics: TOPICS.map((topic) => ({ id: topic.id, title_zh: topic.title_zh, votes: mode === 'local' ? 0 : (votes.counts[topic.id] ?? 0) })),
+      mine: mode === 'local' ? null : votes.topic_id,
+      note_zh: mode === 'local'
+        ? '票先记在这台电脑上。研究正式开始前，这里不显示别人的人数。'
+        : '你的一票记在这台电脑上。凑够人数之后，页面上的票数是加了噪声的合计，看不出是谁投的。',
     },
     give_back_zh: pulseFile.detail_zh || '还没有发回的群体结果。你自己的计算会留在本机结果里。',
-    cards: mode === 'simulated' ? readCards(opts.dataDir).map(({ id, title_zh, body_zh }) => ({ id, title_zh, body_zh })) : [],
-    translog: mode === 'simulated' ? readLog(opts.dataDir).slice(-30).reverse().map((row) => ({ seq: row.seq, at: row.at, kind: row.kind, detail_zh: row.detail_zh })) : [],
+    cards: mode === 'off' ? [] : readCards(opts.dataDir).map(({ id, title_zh, body_zh }) => ({ id, title_zh, body_zh })),
+    translog: mode === 'off' ? [] : readLog(opts.dataDir).slice(-30).reverse().map((row) => ({ seq: row.seq, at: row.at, kind: row.kind, detail_zh: row.detail_zh })),
     thresholds,
     early_zh: early ? EARLY_ZH : '',
     release_stays_zh: RELEASE_STAYS_ZH,
   }
 }
 
-export function scienceCandidates(mode: 'off' | 'simulated' | 'live', active: number): NextBestAction[] {
-  if (mode !== 'simulated') return []
+export function scienceCandidates(mode: 'off' | 'local' | 'simulated' | 'live', active: number): NextBestAction[] {
+  if (mode !== 'simulated' && mode !== 'local') return []
   if (active > 0) {
     return [{
       id: 'm8-study-back',

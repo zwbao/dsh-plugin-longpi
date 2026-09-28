@@ -67,7 +67,7 @@ function workspacesOf(ctx: Context): WorkspaceLike[] {
 export function register(ctx: Context, deps: CoreDeps): void {
   bindPrivacy({
     dataDir: () => deps.dataDir(),
-    scienceMode: () => deps.config().scienceMode ?? 'off',
+    scienceMode: () => deps.config().scienceMode ?? 'local',
     codexEnabled: () => deps.config().engage?.codex !== false,
   })
   const nameOf = (): string => {
@@ -107,7 +107,7 @@ export function register(ctx: Context, deps: CoreDeps): void {
   const runtime: PrivacyRuntime = {
     http: deps.http,
     dataDir: () => deps.dataDir(),
-    mode: () => deps.config().scienceMode ?? 'off',
+    mode: () => deps.config().scienceMode ?? 'local',
     mcpUrl: () => deps.config().mcpUrl ?? '',
     emit: (scope, decision) => {
       deps.bus.emit('consent.changed', { scope, decision }, { module: 'M11', via: 'route' })

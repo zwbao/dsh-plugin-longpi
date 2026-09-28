@@ -23,7 +23,7 @@ type Answer = (id: string, title: string, state: CheckState) => void
 /** Today's items with their three answers; also the 概览 tab's today card. */
 export function TodayList(props: { journey: Journey; stateOf: (id: string) => CheckState; busy: string | null; onAnswer: Answer }): React.ReactElement {
   const items = props.journey.plan.checkin_items
-  if (items.length === 0) return h('p', { className: 'lp-muted' }, '今天没有需要打卡的项目，手环和 Mirobody 记录的会自动计入。')
+  if (items.length === 0) return h('p', { className: 'lp-muted' }, '今天没有需要亲手记的项目。手环和已经记下的服药会自动算进去。')
   return h('ul', { className: 'lp-today-list' },
     ...items.map((row) => {
       const state = props.stateOf(row.id)
@@ -168,7 +168,7 @@ function ItemCard(props: { item: Item; raw?: PlanItemRaw; today: string; onAnswe
           ? h(React.Fragment, null, h('span', { className: 'lp-caption' }, '今天'),
             h(CheckChoices, { title: item.title, state: props.state, busy: props.busy, onAnswer: (next) => props.onAnswer(item.id, item.title, next) }))
           : h('span', { className: 'lp-caption' }, '今天不用打卡')
-        : h('span', { className: 'lp-caption' }, source === 'wearable' ? '手环自动记录，不用打卡' : '服用情况在 Mirobody 里打卡')))
+        : h('span', { className: 'lp-caption' }, source === 'wearable' ? '手环自动记录，不用亲手记' : '服用情况在原来的用药记录里')))
 }
 
 /** Stage plan, next to the draft: the person may bring their own plan instead. */

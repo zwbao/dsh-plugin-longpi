@@ -26,8 +26,10 @@ export interface Config {
   budget: { dailyInputTokens: number; dailyOutputTokens: number; maxSpawnsPerDay: number }
   surfaces: { enabled: boolean; softRegenMinutes: number; chapterTokens: number; sse: boolean }
   engage: { codex: boolean; nudgesInWorkflow: boolean }
-  /** 'live' also needs the M11 consents and the owner's switch (D6). */
-  scienceMode: 'off' | 'simulated' | 'live'
+  /** 'local' is on-device research. 'live' still needs a production feed before anything leaves (D6). */
+  scienceMode: 'off' | 'local' | 'simulated' | 'live'
+  /** True only after the person uses the settings switch. The old implicit default is not this. */
+  scienceModeSet: boolean
 }
 
 export interface AgentConfig {
@@ -112,5 +114,11 @@ export const Config: Schema<Config> = Schema.object({
     codex: Schema.boolean().default(true),
     nudgesInWorkflow: Schema.boolean().default(false),
   }),
-  scienceMode: Schema.union([Schema.const('off' as const), Schema.const('simulated' as const), Schema.const('live' as const)]).default('off'),
+  scienceMode: Schema.union([
+    Schema.const('off' as const),
+    Schema.const('local' as const),
+    Schema.const('simulated' as const),
+    Schema.const('live' as const),
+  ]).default('local'),
+  scienceModeSet: Schema.boolean().default(false),
 })

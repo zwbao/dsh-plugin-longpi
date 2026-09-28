@@ -467,7 +467,7 @@ async function finishForward(deps: Pick<CoreDeps, 'config' | 'dataDir' | 'bus' |
     }),
     progress: push?.progress ?? (connected ? [] : ['未连接 Mirobody']),
     genetics_stored: Boolean(input.genetics),
-    ...(push?.failed ? { error: 'Mirobody 没有收下这份文件。' } : {}),
+    ...(push?.failed ? { error: '没有收下这份文件。' } : {}),
   }
 }
 

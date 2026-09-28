@@ -65,7 +65,12 @@ let promptNote: { text: string; id: number } | null = null
 let viewRequest: ViewRequest | null = null
 let settingsOpener: ((id: string) => void) | null = null
 
-export type PageTab = 'overview' | 'indicators' | 'plan' | 'profile' | 'season' | 'science'
+export type PageTab = 'overview' | 'indicators' | 'labs' | 'sleep' | 'training' | 'calendar' | 'ask' | 'plan' | 'profile' | 'season' | 'science'
+
+export function canonTab(tab: string): PageTab {
+  if (tab === 'indicators') return 'labs'
+  return tab as PageTab
+}
 export type IndicatorFilter = 'all' | 'changed' | 'plan' | 'device'
 
 /** What another surface asks the page to show: a tab, a section in it, an indicator filter. */

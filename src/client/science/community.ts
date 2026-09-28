@@ -27,7 +27,7 @@ export function CommunityPanel(props: {
   }
   return h('div', null,
     h('section', { className: 'lp-section', id: 'lp-science-progress' },
-      h('p', { className: 'lp-kicker' }, `本季 · 第 ${props.progress.week} / ${props.progress.weeks} 周`),
+      h('p', { className: 'lp-kicker' }, `本赛季 · 第 ${props.progress.week} 周 / 共 ${props.progress.weeks} 周`),
       h('h2', { className: 'lp-h2' }, props.progress.label_zh),
       h('div', { className: 'lp-sci-bar', role: 'progressbar', 'aria-valuenow': props.progress.contributed, 'aria-valuemax': props.progress.min_cohort },
         h('span', { style: { width: `${width}%` } })),
@@ -40,7 +40,15 @@ export function CommunityPanel(props: {
           void postJson('/api/longpi/science/n-of-1', { confirm: true, design: 'abab' }).then(() => props.onChange()).catch((error: unknown) => props.onError(error instanceof Error ? error.message : '没有排好'))
         },
       }, '开始个人对照') : null,
-      h('p', null, `本机参加了 ${props.progress.studies} 项研究。发布合计至少 ${props.progress.min_cohort} 人，这一台电脑只算其中 ${props.progress.contributed} 人。`),
+      (props.thresholds ?? []).some((row) => row.line_zh.includes('招募中'))
+        ? h('p', null, '上面写的是这项研究想凑齐的人数，正在招募。现在不显示已经有多少人，也不把人数当成你的结果。')
+        : h('p', null, `本机参加了 ${props.progress.studies} 项研究。发布合计至少 ${props.progress.min_cohort} 人。`),
+      h('button', {
+        type: 'button', className: 'lp-linkbtn',
+        onClick: () => {
+          void postJson('/api/longpi/science/n-of-1', { confirm: true, design: 'abab' }).then(() => props.onChange()).catch((error: unknown) => props.onError(error instanceof Error ? error.message : '没有排好'))
+        },
+      }, '开始个人对照'),
       props.release_stays_zh ? h('p', { className: 'lp-muted' }, props.release_stays_zh) : null),
     h('section', { className: 'lp-section', id: 'lp-science-pulse' },
       h('p', { className: 'lp-kicker' }, '群体脉搏'),

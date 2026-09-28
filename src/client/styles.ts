@@ -896,6 +896,23 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
 .lp-pane-loading { display: grid; gap: 12px; }
 .lp-pane-foot { margin: 4px 0 0; }
 
+.lp-subnav { display: flex; gap: 8px; flex-wrap: wrap; margin: -8px 0 16px; }
+.lp-subnav-btn { border: 0; background: transparent; color: var(--lp-ink-2); font: inherit; padding: 4px 2px; cursor: pointer; }
+.lp-subnav-on { color: var(--lp-ink); font-weight: 600; }
+.lp-move { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lp-move-lead { font-variant-numeric: tabular-nums; }
+.lp-move-second { color: var(--lp-ink-2); font-size: 13px; }
+.lp-move-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lp-quest-grid { display: grid; gap: 8px; }
+.lp-quest-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; border: 1px solid var(--lp-line-2); border-radius: 12px; background: var(--lp-layer); color: inherit; font: inherit; padding: 12px; cursor: pointer; }
+.lp-life-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.lp-season-bar-track { height: 8px; border-radius: 99px; background: var(--lp-line-2); overflow: hidden; }
+.lp-season-bar-track > span { display: block; height: 100%; background: var(--lp-accent); }
+.lp-timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.lp-timeline-date { display: inline-block; min-width: 7em; color: var(--lp-ink-3); }
+.lp-ask-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.lp-ask-q { width: 100%; text-align: left; border: 1px solid var(--lp-line-2); border-radius: 12px; background: transparent; color: inherit; font: inherit; padding: 10px 12px; cursor: pointer; }
+.lp-trends { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
 .lp-spin { animation: lp-spin 1s linear infinite; }
 @keyframes lp-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes lp-fade { from { opacity: 0; } to { opacity: 1; } }

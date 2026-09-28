@@ -492,7 +492,7 @@ async function ensureBioAge(context: TrackingContext, reference: Reference): Pro
   if (!card || !card.script) return empty('no_skill', '技能库里没有身体年龄（表型年龄）方法。')
   // A record that is configured but failed to read is not 'not connected': name the failure.
   if (context.records.record_status === 'error') return empty('error', readFailed(context.records))
-  if (!recordReadable(context.records)) return empty('no_record', '还没有接上 Mirobody 记录，无法回算历次体检的身体年龄。')
+  if (!recordReadable(context.records)) return empty('no_record', '还没有读到体检，暂时算不出历次的身体年龄。')
   const pairs = pairsFor(card, context.records)
   const { missing, unread } = absentInputs(pairs, context.records)
   if (missing.length > 0) {
@@ -934,7 +934,7 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
   base.missing_facts = missingFacts
   base.missing = [...missingLabs, ...missingFacts]
   const factsHint = missingFacts.length > 0 ? `档案里还缺${missingFacts.join('、')}（在健康页填写，或在对话里告诉我）。` : ''
-  const uncertainHint = uncertainFacts.length > 0 ? `${uncertainFacts.join('、')}记为不确定，China-PAR 需要“是”或“否”才能计算。` : ''
+  const uncertainHint = uncertainFacts.length > 0 ? `${uncertainFacts.join('、')}记为不确定。10 年心血管风险要回答“是”或“否”才能计算。` : ''
   if (context.records.record_status === 'error') {
     // Which labs the record lacks is unknown while the read fails, so none are listed as add-ons.
     base.missing_labs = []
@@ -944,7 +944,7 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
   }
   if (!recordReadable(context.records)) {
     const labsHint = missingLabs.length > 0 ? `，计算还需要${missingLabs.join('、')}` : ''
-    base.note_zh = `还没有连接 Mirobody 体检记录${labsHint}。${factsHint}${uncertainHint}`
+    base.note_zh = `还没有读到体检${labsHint}。${factsHint}${uncertainHint}`
     return base
   }
   if (missingLabs.length > 0 || missingFacts.length > 0 || unreadLabs.length > 0 || uncertainFacts.length > 0) {

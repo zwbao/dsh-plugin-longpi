@@ -10,7 +10,7 @@ export const LIVE_BLOCKERS_ZH = [
   '还没有生命科学和医学研究伦理审查批件',
   '还没有 ChiCTR 注册号',
   '人类遗传资源：研究排除基因、基因组和分型数据，书面说明尚未由负责人确认',
-  '本版本不打开 scienceMode: live',
+  '这一版还不能把数据发到研究机构',
 ] as const
 
 /** Research statistics never include genetics. M8's manifests must keep this exclusion. */

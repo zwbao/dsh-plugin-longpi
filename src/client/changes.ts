@@ -152,7 +152,7 @@ export function NotableChanges(props: { journey: Journey; onOpenIndicators: () =
   return h('section', { className: 'lp-card lp-notable', id: 'lp-changes', 'aria-labelledby': 'lp-changes-title' },
     h('div', { className: 'lp-card-head' },
       h('div', { className: 'lp-label', id: 'lp-changes-title' }, '值得注意的变化', rows.length > 0 ? h('span', { className: 'lp-optional' }, `${rows.length} 项超出正常波动`) : null),
-      h('button', { type: 'button', className: 'lp-row-link', onClick: props.onOpenIndicators }, '在“指标”里看全部 →')),
+      h('button', { type: 'button', className: 'lp-row-link', onClick: props.onOpenIndicators }, '在「化验」里看全部 →')),
     ...advice.map((group) => h('p', { key: group.advice, className: 'lp-change-advice lp-change-warn' },
       h(Icon, { name: 'warn', size: 14 }), h('span', null, group.advice))),
     shown.length > 0

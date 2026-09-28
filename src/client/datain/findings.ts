@@ -39,7 +39,7 @@ export function FindingsList(props: { reloadKey?: number }): React.ReactElement 
   }, [props.reloadKey])
   if (error) return h('p', { className: 'lp-form-error', role: 'alert' }, error)
   if (!rows) return h('p', { className: 'lp-muted' }, '正在读取报告叙述…')
-  if (rows.length === 0) return h('p', { className: 'lp-muted', id: 'lp-findings-empty' }, '还没有从报告里记下超声、总检或医师建议。已经在 Mirobody 里的报告，打开健康页后会读到超声分级；也可以把 PDF 发到健康对话。')
+  if (rows.length === 0) return h('p', { className: 'lp-muted', id: 'lp-findings-empty' }, '还没有从报告里记下超声、总检或医师建议。已经放进来的报告，打开健康页后会读到超声分级；也可以把 PDF 发到健康对话。')
   return h('ul', { className: 'lp-list', id: 'lp-findings' },
     ...rows.map((row) => h('li', { key: row.id, className: row.kind === 'wrong_person' ? 'lp-found-changes-warn' : '' },
       h('div', { className: 'lp-label' }, `${KIND_ZH[row.kind] ?? '报告'} ${row.date || ''}`.trim()),

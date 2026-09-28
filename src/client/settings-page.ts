@@ -5,6 +5,7 @@
 // computer), and 高级：方法库.
 
 import React from 'react'
+import { getJson, postJson } from './api.ts'
 import { ConnectionPanel } from './connection.ts'
 import { FollowupPanel } from './followup.ts'
 import { Icon } from './icons.ts'
@@ -22,11 +23,28 @@ function Block(props: { id: string; title: string; hint?: string; children?: Rea
     props.children)
 }
 
+function ScienceSwitch(): React.ReactElement {
+  const [mode, setMode] = React.useState<'local' | 'off'>('local')
+  React.useEffect(() => {
+    void getJson<{ preference?: string; mode?: string }>('/api/longpi/science/invite').then((row) => {
+      setMode(row.preference === 'off' || row.mode === 'off' ? 'off' : 'local')
+    }).catch(() => setMode('local'))
+  }, [])
+  const set = (next: 'local' | 'off') => {
+    void postJson('/api/longpi/science/preference', { mode: next }).then(() => setMode(next)).catch(() => {})
+  }
+  return h('div', null,
+    h('p', { className: 'lp-muted' }, '本机上的研究默认开着：研究页、个人小试验和本机统计都不用另做设置。关掉之后这些会停。不满 18 岁本来就是关的。'),
+    h('div', { className: 'lp-form-actions' },
+      h('button', { type: 'button', className: mode === 'local' ? 'lp-toggle lp-toggle-on' : 'lp-toggle', onClick: () => set('local') }, '开着'),
+      h('button', { type: 'button', className: mode === 'off' ? 'lp-toggle lp-toggle-on' : 'lp-toggle', onClick: () => set('off') }, '关掉')))
+}
+
 function Privacy(): React.ReactElement {
   const rows: Array<[string, string, string]> = [
-    ['lock', '存在哪里', '档案、方案、打卡、自测和提醒设置只保存在这台电脑上（默认在 ~/.dsh/longpi，安装时可以改）。体检和手环记录在你自己的 Mirobody 中，LongPi 只读。'],
-    ['send', '什么会发给模型', '和 LongPi 对话时，你的问题，以及 LongPi 工具为回答它读出的档案、指标数值和结果，会作为对话内容发给你在 DSH 里配置的模型（默认 DeepSeek）处理。不对话就不会发送。'],
-    ['bell', '什么会发给 Webhook', '只在你配置了 Webhook 时发送。简要模式只发“今天还有 2 项待打卡”这类提示，不含项目名称和健康数值；详细模式会带上方案项目名称、执行率和复测指标。'],
+    ['lock', '存在哪里', '档案、方案、记录、自测和提醒只保存在这台电脑上。体检和手环的原件留在你原来放报告的地方，这里只读。'],
+    ['send', '什么会发给模型', '和 LongPi 对话时，你的问题，以及为回答而读出的档案和化验，在你同意之后才会发给用来回答的人工智能（默认 DeepSeek）。不对话就不会发送。'],
+    ['bell', '发给手机', '默认不使用。只有你自己配了之后才会发。提醒里不写化验数字，也不写项目名字。'],
   ]
   return h('div', null,
     h('ul', { className: 'lp-privacy' },
@@ -54,8 +72,9 @@ export function LongPiSettings(props: SettingsPageProps): React.ReactElement {
       h('h2', { className: 'lp-h2' }, 'LongPi'),
       props.openPage ? h('button', { type: 'button', className: 'lp-row-link', onClick: () => { props.close?.(); props.openPage?.() } }, '打开健康页 →') : null),
     notice ? h('div', { className: 'lp-notice-slot' }, notice) : null,
-    h(Block, { id: 'lp-set-followup', title: '随访提醒', hint: '默认关闭 · 只在 DSH 运行时发送' }, h(FollowupPanel, { onNotice: notify })),
-    h(Block, { id: 'lp-set-connection', title: '数据连接', hint: 'Mirobody' }, h(ConnectionPanel, { idPrefix: 'lp-set-conn' })),
+    h(Block, { id: 'lp-set-followup', title: '提醒', hint: '默认关。这个窗口关了，就不会响。' }, h(FollowupPanel, { onNotice: notify })),
+    h(Block, { id: 'lp-set-connection', title: '数据连接' }, h(ConnectionPanel, { idPrefix: 'lp-set-conn' })),
+    h(Block, { id: 'lp-set-science', title: '一起研究' }, h(ScienceSwitch)),
     h(Block, { id: 'lp-set-privacy', title: '隐私与数据' }, h(Privacy), ...settingsSections().map((section) => h(section.Component, { key: section.id }))),
     h('section', { className: 'lp-set-block', id: 'lp-set-methods' },
       h('details', { className: 'lp-more', onToggle: (event: React.SyntheticEvent<HTMLDetailsElement>) => setAdvanced(event.currentTarget.open) },

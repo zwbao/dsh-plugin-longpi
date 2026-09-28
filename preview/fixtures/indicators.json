@@ -346,7 +346,7 @@
      "change": null,
      "judged": "unjudged",
      "plan_marker": false,
-     "read_error": "Mirobody 没有在 10 秒内返回这一项"
+     "read_error": "这次没有读到，稍后刷新再看"
     },
     {
      "id": "loinc:736-9",

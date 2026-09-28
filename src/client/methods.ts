@@ -103,7 +103,7 @@ export function MethodsSection(props: { board: Board | null; loading: boolean; e
             h('span', { className: 'lp-strong' }, row.item), h('span', { className: 'lp-caption' }, `解锁 ${row.skills.length} 个方法`)))))),
     h('div', { className: 'lp-grid-2' },
       h('div', { className: 'lp-card' },
-        h('div', { className: 'lp-label' }, '用药计划', h('span', { className: 'lp-optional' }, '只读，来自 Mirobody')),
+        h('div', { className: 'lp-label' }, '用药计划', h('span', { className: 'lp-optional' }, '只读，来自原来的用药记录')),
         meds.length === 0
           ? h('p', { className: 'lp-muted' }, '没有读到用药计划。')
           : h('ul', { className: 'lp-rows' }, ...meds.map((row) => h('li', { key: row.name, className: 'lp-row' }, h('span', null, row.name), h('span', { className: 'lp-caption' }, row.status ?? ''))))),

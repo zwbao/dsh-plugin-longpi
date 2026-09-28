@@ -58,7 +58,7 @@ export function ReportUpload(props: { onDone?: () => void }): React.ReactElement
         setStatus(`正在上传 ${index + 1}/${total}`)
         await postJson('/api/longpi/upload', { op: 'chunk', id, index, b64: btoa(binary) })
       }
-      setStatus('Mirobody 正在解析…')
+      setStatus('正在读这份报告…')
       const done = await postJson<UploadAnswer>('/api/longpi/upload', { op: 'finish', id })
       setStatus(done.read_back_zh || '已处理')
       props.onDone?.()

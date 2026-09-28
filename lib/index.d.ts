@@ -172,8 +172,10 @@ interface Config {
     codex: boolean;
     nudgesInWorkflow: boolean;
   };
-  /** 'live' also needs the M11 consents and the owner's switch (D6). */
-  scienceMode: 'off' | 'simulated' | 'live';
+  /** 'local' is on-device research. 'live' still needs a production feed before anything leaves (D6). */
+  scienceMode: 'off' | 'local' | 'simulated' | 'live';
+  /** True only after the person uses the settings switch. The old implicit default is not this. */
+  scienceModeSet: boolean;
 }
 interface AgentConfig {
   enabled: boolean;
@@ -559,7 +561,7 @@ declare function registerApprovals(ctx: Context, guard: Pick<Guard, 'inEmergency
 declare function hasDoseAmount(text: string): boolean;
 //#endregion
 //#region src/version.d.ts
-declare const PRODUCT_VERSION = "0.6.1";
+declare const PRODUCT_VERSION = "0.6.2";
 declare const TOOL_NAMES: readonly ["read_personal_situation", "list_longevity_intents", "match_longevity_skills", "read_longevity_skill", "run_longevity_skill", "query_longevity_evidence", "list_longevity_domains", "save_personal_profile", "longpi_status", "save_intervention_plan", "draft_intervention_plan", "log_intervention_checkin", "save_self_measurement", "record_medication_statement", "read_intervention_plan", "review_interventions", "model_intervention_goals", "set_followup", "send_followup_message", "read_person_memory", "remember_for_me", "note_page_issue", "read_care_navigation", "prepare_doctor_brief", "log_care_visit"];
 declare const HARNESS_SKILLS: readonly ["longpi-dispatch", "longpi-board", "longpi-boundary", "longpi-interventions"];
 /**
@@ -582,9 +584,9 @@ declare const RESERVED_ROUTES: {
   readonly M2: readonly ["GET /api/longpi/advice"];
   readonly M4: readonly ["GET /api/longpi/feedback"];
   readonly M5: readonly ["GET /api/longpi/surfaces"];
-  readonly M6: readonly ["GET /api/longpi/season", "POST /api/longpi/season", "POST /api/longpi/streak-freeze", "GET /api/longpi/codex", "GET /api/longpi/codex/odds", "POST /api/longpi/codex/draw", "POST /api/longpi/codex/run", "GET /api/longpi/weekly", "POST /api/longpi/nudges"];
+  readonly M6: readonly ["GET /api/longpi/season", "POST /api/longpi/season", "POST /api/longpi/streak-freeze", "GET /api/longpi/schedule", "POST /api/longpi/schedule", "GET /api/longpi/codex", "GET /api/longpi/codex/odds", "POST /api/longpi/codex/draw", "POST /api/longpi/codex/run", "GET /api/longpi/weekly", "POST /api/longpi/nudges"];
   readonly M7: readonly ["POST /api/longpi/upload", "GET /api/longpi/findings", "GET /api/longpi/meds", "POST /api/longpi/meds", "GET /api/longpi/conditions", "POST /api/longpi/conditions", "GET /api/longpi/stores"];
-  readonly M8: readonly ["GET /api/longpi/science/studies", "POST /api/longpi/science/consent", "POST /api/longpi/science/withdraw", "POST /api/longpi/science/run", "GET /api/longpi/science/translog", "GET /api/longpi/science/community", "GET /api/longpi/science/registry", "GET /api/longpi/science/transparency", "POST /api/longpi/science/n-of-1", "POST /api/longpi/science/export"];
+  readonly M8: readonly ["GET /api/longpi/science/studies", "POST /api/longpi/science/consent", "POST /api/longpi/science/withdraw", "POST /api/longpi/science/run", "GET /api/longpi/science/translog", "GET /api/longpi/science/community", "GET /api/longpi/science/registry", "GET /api/longpi/science/transparency", "POST /api/longpi/science/n-of-1", "POST /api/longpi/science/export", "GET /api/longpi/science/invite", "POST /api/longpi/science/invite", "POST /api/longpi/science/preference"];
   readonly M11: readonly ["GET /api/longpi/privacy", "POST /api/longpi/privacy/consent", "GET /api/longpi/privacy/export", "POST /api/longpi/privacy/delete"];
 };
 /** Harness skills reserved for later modules (AA §3.4); HARNESS_SKILLS lists the ones registered. */
@@ -2947,7 +2949,7 @@ interface FeedbackMessage {
 declare function youngerAllowed(message: Pick<FeedbackMessage, 'subject' | 'grade' | 'delta'>): boolean;
 //#endregion
 //#region src/contracts/science.d.ts
-type ScienceMode = 'off' | 'simulated' | 'live';
+type ScienceMode = 'off' | 'local' | 'simulated' | 'live';
 interface StudyManifest {
   schema: 'longpi.study/1';
   id: string;

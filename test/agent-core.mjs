@@ -465,7 +465,7 @@ try {
   assert.ok(restored.draft.items.some((item) => item.id === gone.id), '恢复 puts it back')
   const client = readFileSync(join(root, '..', 'lib', 'client.js'), 'utf8')
   assert.match(client, /\/api\/longpi\/plan-draft\/exclude/, 'the page calls the exclude route')
-  assert.match(client, /单次血检的模型估计，低于实足年龄/, 'a single draw is never shown as "younger" (PLAN §B5)')
+  assert.match(client, /一次检查不能说明你变年轻了/, 'a single draw is never shown as "younger" (PLAN §B5)')
   pageHost.dispose()
 
   // --- 8. M1 screening topics; pregnancy planning and a relative's breast cancer kept from chat by rule ------

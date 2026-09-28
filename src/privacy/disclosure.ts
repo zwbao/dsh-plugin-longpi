@@ -39,15 +39,15 @@ const FALLBACK_COPY: DisclosureCopy = {
   data_flow: {
     title: '数据去哪里',
     to_deepseek: ['健康对话里的问题和为回答而读出的指标数值。'],
-    stays_local: ['档案、方案、打卡保存在这台电脑的 ~/.dsh/longpi。'],
-    mirobody: ['体检记录留在你自己的 Mirobody。'],
+    stays_local: ['档案、方案和记录保存在这台电脑上。'],
+    mirobody: ['体检原件留在你原来放报告的地方。'],
     name: '你的名字不会放进发给 DeepSeek 的内容。',
     session_log: '健康对话的会话日志默认不上传。',
   },
   minor: {
-    ask: '请填写实足年龄。还不知道年龄时，图鉴抽卡保持关闭。',
-    under_18: '未满 18 岁：不开启图鉴抽卡，也不安排减肥项目。',
-    under_14: '未满 14 岁还需要监护人同意。',
+    ask: '请填写周岁。还不知道年龄时，图鉴抽卡保持关闭。',
+    under_18: '未满 18 岁：不开启图鉴抽卡，也不安排减肥项目。研究也保持关闭。',
+    under_14: '未满 14 岁还需要家长（监护人）同意。',
   },
   buttons: {
     pipl_grant: '我单独同意处理我的健康信息',
@@ -57,7 +57,7 @@ const FALLBACK_COPY: DisclosureCopy = {
     session_on: '单独打开会话日志上传',
     session_off: '保持关闭（默认）',
   },
-  delete: { phrase: '删除全部', note: '删除这台电脑上的 LongPi 档案。Mirobody 里的记录不会被这里删除。' },
+  delete: { phrase: '删除全部', note: '删除这台电脑上的 LongPi 档案。体检原件不在这里删除。' },
 }
 
 const FALLBACK_BANNED: BannedClaims = {

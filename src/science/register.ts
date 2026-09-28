@@ -7,7 +7,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { CoreDeps } from '../contracts/index.ts'
 import { activeStudyIds } from './consent-flow.ts'
 import { scienceCandidates } from './community.ts'
-import { effectiveMode, startScience } from './index.ts'
+import { resolveRunningMode } from './choice.ts'
+import { effectiveMode, scienceOpen, startScience } from './index.ts'
 import { registerScienceRoutes } from './routes.ts'
 import { registerScienceTools } from './tools.ts'
 
@@ -19,12 +20,13 @@ function skillFile(): string | null {
 
 export function register(ctx: Context, deps: CoreDeps): void {
   startScience({
-    configured: () => deps.config().scienceMode,
+    configured: () => resolveRunningMode(deps.config().scienceMode, deps.config().scienceModeSet === true, deps.dataDir()),
     dataDir: () => deps.dataDir(),
   })
   registerScienceRoutes(deps)
-  if (effectiveMode() !== 'simulated') return
-  deps.nba.register('M8', () => scienceCandidates('simulated', activeStudyIds(deps.dataDir()).length))
+  if (!scienceOpen()) return
+  const mode = effectiveMode()
+  deps.nba.register('M8', () => scienceCandidates(mode === 'simulated' ? 'simulated' : 'local', activeStudyIds(deps.dataDir()).length))
   registerScienceTools(ctx, deps)
   ctx.on('tools/pre-execute', async (exec, next) => {
     const decision = await next()

@@ -19,10 +19,11 @@ import { PlanTab } from './plan.ts'
 import { registerClientModules } from './modules.ts'
 import { ProfileTab } from './profile-tab.ts'
 import { SeasonBar } from './engage/index.ts'
+import { AskTab, CalendarTab, SleepTab, Subnav, TrainingTab } from './life.ts'
 import { pageTabs } from './registry.ts'
 import type { ResultTarget } from './results.ts'
 import {
-  clearViewRequest, setPendingPrompt, useJourney, usePageShown, useTracking, useViewRequest,
+  canonTab, clearViewRequest, setPendingPrompt, useJourney, usePageShown, useTracking, useViewRequest,
   type IndicatorFilter, type PageTab, type ViewRequest,
 } from './store.ts'
 import type { Face, Journey, Stage } from './types.ts'
@@ -32,10 +33,12 @@ const h = React.createElement
 
 const TAB_KEY = 'dsh-plugin-longpi.page-tab'
 const TABS: Array<TabSpec<PageTab>> = [
-  { key: 'overview', label: '概览' },
-  { key: 'indicators', label: '指标' },
-  { key: 'plan', label: '方案' },
-  { key: 'profile', label: '档案' },
+  { key: 'overview', label: '总览' },
+  { key: 'labs', label: '化验' },
+  { key: 'sleep', label: '睡眠' },
+  { key: 'training', label: '运动' },
+  { key: 'calendar', label: '日程' },
+  { key: 'ask', label: '问 LongPi' },
 ]
 
 registerClientModules()
@@ -44,7 +47,8 @@ const SCROLL_WAIT_MS = 2000
 
 function storedTab(extra: readonly string[]): PageTab {
   const saved = readPref(TAB_KEY)
-  if (saved && (TABS.some((tab) => tab.key === saved) || extra.includes(saved))) return saved as PageTab
+  const key = saved ? canonTab(saved) : 'overview'
+  if (saved && (TABS.some((tab) => tab.key === key) || extra.includes(key) || key === 'plan' || key === 'profile' || key === 'season' || key === 'science')) return key
   return 'overview'
 }
 
@@ -92,7 +96,7 @@ function Loading(): React.ReactElement {
 function Failed(props: { error: string; onRetry: () => void }): React.ReactElement {
   return h('div', { className: 'lp-card lp-failed', role: 'alert' },
     h('div', { className: 'lp-strong' }, 'LongPi 没有读到数据'),
-    h('p', { className: 'lp-muted' }, `服务返回：${props.error}。通常是 DSH 刚启动、插件还在加载，稍等几秒再试。`),
+    h('p', { className: 'lp-muted' }, `服务返回：${props.error}。通常是刚打开，稍等几秒再试。`),
     h(Btn, { variant: 'outline', size: 'sm', onClick: props.onRetry }, h(Icon, { name: 'refresh', size: 14 }), '重试'))
 }
 
@@ -130,27 +134,23 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
   const { journey, loading, error, refresh } = useJourney()
   const tracking = useTracking()
   const [notice, notify] = useNotice()
-  const [scienceOn, setScienceOn] = React.useState(false)
+  const [scienceOn, setScienceOn] = React.useState(true)
   React.useEffect(() => {
     void getJson<{ mode?: string }>('/api/longpi/science/community').then((row) => {
-      if (row?.mode && row.mode !== 'off') setScienceOn(true)
-    }).catch(() => { /* science stays hidden while the mode is off or the route is down */ })
+      setScienceOn(row?.mode !== 'off')
+    }).catch(() => setScienceOn(true))
   }, [])
   const registered = pageTabs().filter((item) => item.id !== 'science' || scienceOn)
-  const tabs: Array<TabSpec<PageTab>> = [
-    ...TABS,
-    ...registered
-      .filter((item) => item.id === 'season' || item.id === 'science')
-      .map((item) => ({ key: item.id as PageTab, label: item.label_zh })),
-  ]
+  const tabs: Array<TabSpec<PageTab>> = TABS
   const [tab, setTabState] = React.useState<PageTab>(storedTab(registered.map((item) => item.id)))
   const [filter, setFilter] = React.useState<IndicatorFilter>('all')
   const [refreshing, setRefreshing] = React.useState(false)
   const [onboarding, setOnboarding] = React.useState(false)
 
   const setTab = React.useCallback((next: PageTab) => {
-    setTabState(next)
-    writePref(TAB_KEY, next)
+    const tab = canonTab(next)
+    setTabState(tab)
+    writePref(TAB_KEY, tab)
   }, [])
   useViewRequests(journey != null, setTab, setFilter)
 
@@ -173,7 +173,7 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
   }, [refresh])
 
   const onAction = (target: ResultTarget) => {
-    if (target === 'records') goTab('profile', { id: 'lp-connection-card' })
+    if (target === 'records') goTab('profile', { id: 'lp-connection-card' }) // profile stays reachable from 总览
     else if (target === 'addons') goTab('profile', { id: 'lp-addons-card' })
     else if (target === 'self') goTab('profile', { id: 'lp-self-card' })
     else goTab('profile', { id: 'lp-profile-card' })
@@ -198,8 +198,16 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
     let panel: React.ReactNode
     if (tab === 'overview') {
       panel = h(Overview, { journey, tracking: tracking.data, onNotice: notify, onAction, goTab, openOnboarding: () => setOnboarding(true) })
-    } else if (tab === 'indicators') {
-      panel = h(IndicatorsTab, { filter, onFilter: setFilter, onConnect: () => goTab('profile', { id: 'lp-connection-card' }) })
+    } else if (tab === 'indicators' || tab === 'labs') {
+      panel = h(IndicatorsTab, { filter, onFilter: setFilter, onConnect: () => goTab('profile', { id: 'lp-connection-card' }), area: 'labs' })
+    } else if (tab === 'sleep') {
+      panel = h(SleepTab)
+    } else if (tab === 'training') {
+      panel = h(TrainingTab)
+    } else if (tab === 'calendar') {
+      panel = h(CalendarTab, { journey })
+    } else if (tab === 'ask') {
+      panel = h(AskTab, { journey, openChat: props.openChat })
     } else if (tab === 'plan') {
       panel = h(PlanTab, { journey, tracking: tracking.data, loading: tracking.loading, error: tracking.error, onNotice: notify, onPrompt })
     } else if (tab === 'profile') {
@@ -210,7 +218,8 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
     }
     body = h('div', { className: `lp-body ${refreshing ? 'lp-refreshing' : ''}` },
       h(Banner, { journey, onOpen: () => setOnboarding(true) }),
-      h(Tabs<PageTab>, { tabs, value: tab, onChange: setTab, label: 'LongPi 健康页', idPrefix: 'lp-page' }),
+      h(Tabs<PageTab>, { tabs, value: (tab === 'indicators' ? 'labs' : tab), onChange: setTab, label: 'LongPi 健康页', idPrefix: 'lp-page' }),
+      h(Subnav, { onTab: setTab, science: scienceOn, current: tab }),
       h('div', { className: 'lp-tab-panel', role: 'tabpanel', id: 'lp-page-panel', 'aria-labelledby': `lp-page-tab-${tab}` }, panel))
   }
 
@@ -222,6 +231,6 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
       body,
       h('footer', { className: 'lp-footer' },
         h('p', null, journey?.boundary_zh || BOUNDARY_FALLBACK),
-        h('p', { className: 'lp-caption' }, '档案、方案、打卡和自测只保存在这台电脑上，病历在你自己的 Mirobody 中；对话内容会发送给 DSH 里配置的模型处理。'))),
+        h('p', { className: 'lp-caption' }, '档案、方案和记录只保存在这台电脑上。体检原件留在你原来放报告的地方。对话在你同意之后，才会发给用来回答的人工智能。'))),
     onboarding ? h(Onboarding, { explicit: true, complete: () => setOnboarding(false), openPage: () => {} }) : null)
 }

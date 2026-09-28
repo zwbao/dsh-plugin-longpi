@@ -189,10 +189,8 @@ function Status(props: { journey: Journey; open: () => void }): React.ReactEleme
     parts.push(journey.records.status === 'error' ? '体检记录读取失败，暂时算不出结果' : '连接体检记录后，就能算出你的身体年龄',
       h(Sep, { key: 's' }), h(Go, { key: 'go', label: journey.records.status === 'error' ? '查看原因' : '怎么连接', onClick: open }))
   } else if (journey.stage === 'first_result' && journey.addons.length > 0) {
-    const named = journey.addons.slice(0, ADDONS_NAMED).map((row) => row.item_zh).join('、')
-    const more = journey.addons.length > ADDONS_NAMED ? ' 等' : ''
-    parts.push('还差 ', h('b', { key: 'n' }, `${journey.addons.length} 项检查`), `就能算出${joinUnlocks(journey)}：${named}${more}`,
-      h(Sep, { key: 's' }), h(Go, { key: 'go', label: '加测清单', onClick: open }))
+    parts.push(journey.next.title_zh || '量一次腰围',
+      h(Sep, { key: 's' }), h(Go, { key: 'go', label: '去做', onClick: open }))
   } else {
     const rows = journey.stage === 'first_result' ? [] : figures(journey)
     if (rows.length > 0) {

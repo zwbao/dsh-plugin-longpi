@@ -234,17 +234,17 @@ try {
   assert.equal(journey.records.status, 'unconfigured')
   assert.equal(journey.records.summary, null, 'no record, no summary')
   assert.equal(journey.next.action, 'records')
-  assert.equal(journey.next.detail_zh, '在 Mirobody 中生成个人 MCP 地址，粘贴到设置里的 LongPi 页。')
-  assertSuggestions(journey, ['怎么把体检报告导入 Mirobody？', '还没有体检记录，现在可以先做什么？'])
+  assert.equal(journey.next.detail_zh, '放进来之后，就能看身体年龄。平时不用管连接地址。')
+  assertSuggestions(journey, ['体检报告放在哪里，才能在这里看到？', '还没有报告，我现在可以先做什么？'])
   assert.equal(journey.results.bioage.status, 'blocked')
-  assert.equal(journey.results.bioage.blocker_zh, '还没有连接 Mirobody 记录。')
+  assert.equal(journey.results.bioage.blocker_zh, '还没有读到体检。')
   // without a record the risk card still lists the labs it needs and the facts still unanswered
   const offlineRisk = journey.results.risk
   assert.equal(offlineRisk.status, 'blocked')
   for (const lab of ['收缩压', '总胆固醇', '高密度脂蛋白胆固醇', '腰围']) assert.ok(offlineRisk.missing_labs.includes(lab), `needs ${lab}`)
   assert.ok(offlineRisk.missing_facts.includes(mod.RISK_FACT_ZH.smoker))
   assert.ok(!offlineRisk.missing_facts.includes(mod.RISK_FACT_ZH.north), 'an answered fact is not missing')
-  assert.match(offlineRisk.blocker_zh, /Mirobody/)
+  assert.match(offlineRisk.blocker_zh, /还没有读到体检/)
   const offlineCard = step.tracking.models.find((card) => card.model === 'china-par')
   assert.deepEqual(offlineCard.missing, [...offlineCard.missing_labs, ...offlineCard.missing_facts], 'missing stays their concatenation')
   const waistAddon = journey.addons.find((row) => row.item_zh === '腰围')
@@ -272,8 +272,8 @@ try {
     { item_zh: '腰围', unlocks_zh: '心血管风险', self_measurable: true, self_key: 'waist' },
     { item_zh: 'C反应蛋白', unlocks_zh: '身体年龄', self_measurable: false },
   ])
-  assert.deepEqual(journey.next, { stage: 'first_result', title_zh: '还差 2 项检查', detail_zh: '下次体检加测：腰围、C反应蛋白', action: 'addons' })
-  assertSuggestions(journey, ['下次体检需要加测哪些项目？', '帮我制定一份改善方案', '帮我记录腰围和家庭血压'])
+  assert.deepEqual(journey.next, { stage: 'first_result', title_zh: '量一次腰围', detail_zh: '补上这一项，才能算出心血管风险。之后还可以补：C反应蛋白。', action: 'addons' })
+  assertSuggestions(journey, ['腰围和C反应蛋白和上次比，变了多少？', '下次看医生，我要问哪几件？', '现在我先做哪一件？'])
 
   // a plan saved before any first result is lived day by day: the routine, not first_result
   const early = tempDir('plan-before-result')

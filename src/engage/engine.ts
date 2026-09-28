@@ -368,9 +368,9 @@ function factsOf(state: State, world: World): QuestFacts & { allActive: IsoDay[]
   }
 }
 
-/** Simulated studies add one ordinary Codex quest. Live stays off, so it adds nothing. */
+/** On-device and simulated studies add one ordinary Codex quest. Off and live add nothing. */
 function attachSimulatedTrial(state: State, season: Season): void {
-  if (effectiveMode() !== 'simulated') return
+  if (effectiveMode() === 'off') return
   if (state.quests.some((quest) => quest.id === 'qs-n-of-1')) return
   const raw = nOf1SeasonQuest(season.id)
   state.quests.push({

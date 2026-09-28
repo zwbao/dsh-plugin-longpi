@@ -162,7 +162,7 @@ try {
   const ownPreStep = host.listeners['agent/pre-step'].filter((_listener, index) => host.options['agent/pre-step'][index]?.prepend === true)
   assert.equal(ownPreStep.length, 1, 'one outermost LongPi pre-step listener')
   assert.equal(host.listeners['agent/turn-stopping'].length, 2, 'the guard\'s reply check, and the memory distiller (0.5.3, background)')
-  assert.equal(host.listeners['tools/pre-execute'].length, 2, 'set_followup and the plan save each have one')
+  assert.equal(host.listeners['tools/pre-execute'].length, 3, 'set_followup, the plan save, and the research consent ask (on by default)')
   assert.equal(host.listeners['tools/post-execute'].length, 3, 'the plan save read-back, the privacy redaction (M11), and the HealthEvent hooks (0.5.3)')
   // 0.5.3: the persona is agent-scoped (agents/orchestrator.ts), not a global section.
   assert.equal(host.prompts.some((section) => section.name === 'longpi:persona'), false, 'no global persona')
