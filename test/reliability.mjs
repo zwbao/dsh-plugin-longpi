@@ -4,12 +4,14 @@
 
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as mod from '../lib/index.js'
+import { skillsHome as libraryHome } from './lib/skills-home.mjs'
 
 const recorded = JSON.parse(readFileSync(new URL('./fixtures/mirobody/recorded/reliability.json', import.meta.url), 'utf8'))
-const skillsHome = process.env.LONGEVITY_SKILLS_HOME || ''
+const skillsHome = libraryHome('data/biological_variation.json')
 
 function listen(handler) {
   const calls = []
@@ -233,9 +235,10 @@ const emptyMeds = table('(no rows)\n\n(rows=0)')
     if (args.aggregate === 'latest') return table(latest)
     return table(catalogue)
   })
+  const dataDir = mkdtempSync(join(tmpdir(), 'longpi-reliability-'))
   try {
     mod.invalidateRecords()
-    const snap = await mod.loadRecords(configOf(server.url, { skillsHome }), join('/tmp', 'longpi-reliability'), '/nonexistent/plugin')
+    const snap = await mod.loadRecords(configOf(server.url, { skillsHome }), dataDir, '/nonexistent/plugin')
     assert.equal(snap.record_status, 'ok', snap.record_error)
     const byName = (name) => snap.indicators.find((row) => row.name === name)
     const umol = byName('肌酐')
@@ -279,6 +282,7 @@ const emptyMeds = table('(no rows)\n\n(rows=0)')
     assert.equal(glu.unit, 'mmol/L')
   } finally {
     await server.close()
+    rmSync(dataDir, { recursive: true, force: true })
   }
 }
 

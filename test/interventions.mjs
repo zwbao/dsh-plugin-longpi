@@ -1,21 +1,21 @@
 // Intervention tracking end to end: a plan saved after a read-back, check-ins,
 // the fake Mirobody record (four checkups, wearables, a dose log), and the real
 // longevity-skills checkout for phenotypic age, noise bands and trial effects.
-// Needs ../../longevity-skills (or LONGEVITY_SKILLS_HOME); skips without it.
+// Needs LONGEVITY_SKILLS_HOME, or a sibling checkout named longevity-skills; skips without it.
 
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import * as mod from '../lib/index.js'
 import { startFakeMirobody } from './fake-mirobody.mjs'
 import { startFlakyMirobody } from './flaky-mirobody.mjs'
+import { skillsHome } from './lib/skills-home.mjs'
 
 const root = dirname(fileURLToPath(import.meta.url))
-const sibling = resolve(root, '..', '..', 'longevity-skills')
-const home = mod.resolveSkillsHome(existsSync(join(sibling, 'data', 'biological_variation.json')) ? sibling : '')
-if (!home || !existsSync(join(home, 'data', 'biological_variation.json'))) {
+const home = skillsHome('data/biological_variation.json')
+if (!home) {
   console.log('interventions skipped (no longevity-skills checkout with data/)')
   process.exit(0)
 }

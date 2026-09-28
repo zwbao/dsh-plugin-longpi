@@ -6,14 +6,14 @@
 // this machine, link-local and metadata hosts and anything but https (1f).
 //
 // The fake host's connection stub mirrors dsh-client-connection's
-// requestRejection. When DeepSeek Harness is installed on this machine
-// (~/.dsh/profiles or DSH_MODULES), the same requests also go through the
-// real WebServer and the real connection service on a loopback port.
+// requestRejection. When DSH_MODULES points at an installed DeepSeek Harness,
+// the same requests also go through the real WebServer and the real connection
+// service on a loopback port. Unset, that check is skipped.
 
 import assert from 'node:assert/strict'
 import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { request } from 'node:http'
-import { homedir, tmpdir } from 'node:os'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import { pathToFileURL } from 'node:url'
@@ -216,8 +216,8 @@ try {
   assert.equal(existsSync(join(saveDir, 'followup.json')), false)
 
   // --- 4. the real DeepSeek Harness, when it is installed here ----------------------------------
-  const dshModules = process.env.DSH_MODULES || join(homedir(), '.dsh', 'profiles', 'node_modules', '@deepseek-ai')
-  if (existsSync(join(dshModules, 'dsh-host-webserver', 'lib', 'index.js')) && existsSync(join(dshModules, 'dsh-client-connection', 'lib', 'index.js'))) {
+  const dshModules = process.env.DSH_MODULES || ''
+  if (dshModules && existsSync(join(dshModules, 'dsh-host-webserver', 'lib', 'index.js')) && existsSync(join(dshModules, 'dsh-client-connection', 'lib', 'index.js'))) {
     console.log(`auth: also checking against the installed DeepSeek Harness (${dshModules})`)
     await realHarness(dshModules)
   } else {

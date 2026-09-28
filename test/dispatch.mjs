@@ -1,15 +1,15 @@
 // Dispatch regression against a real longevity-skills checkout.
-// Set LONGEVITY_SKILLS_HOME, or keep the checkout at ~/longevity-skills,
-// ~/Projects/longevity-skills or ../longevity-skills. Skips when none is found.
+// Set LONGEVITY_SKILLS_HOME, or keep a sibling directory named longevity-skills.
+// Skips when neither is present.
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { skillsHome } from './lib/skills-home.mjs'
 
 const root = dirname(fileURLToPath(import.meta.url))
 const mod = await import('../lib/index.js')
-const sibling = resolve(root, '..', '..', 'longevity-skills')
-const home = mod.resolveSkillsHome(existsSync(join(sibling, 'skills')) ? sibling : '')
+const home = skillsHome('catalog.json')
 if (!home) {
   console.log('dispatch skipped (no longevity-skills checkout)')
   process.exit(0)

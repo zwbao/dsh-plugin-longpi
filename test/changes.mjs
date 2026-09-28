@@ -9,19 +9,17 @@
 // made up.
 
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { Readable } from 'node:stream'
-import { fileURLToPath } from 'node:url'
 import * as mod from '../lib/index.js'
 import { loadRecord, startFakeMirobody } from './fake-mirobody.mjs'
 import { startFlakyMirobody } from './flaky-mirobody.mjs'
+import { skillsHome } from './lib/skills-home.mjs'
 
-const root = dirname(fileURLToPath(import.meta.url))
-const sibling = resolve(root, '..', '..', 'longevity-skills')
-const home = mod.resolveSkillsHome(existsSync(join(sibling, 'data', 'biological_variation.json')) ? sibling : '')
-if (!home || !existsSync(join(home, 'data', 'biological_variation.json'))) {
+const home = skillsHome('data/biological_variation.json')
+if (!home) {
   console.log('changes skipped (no longevity-skills checkout with data/)')
   process.exit(0)
 }

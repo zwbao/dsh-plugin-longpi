@@ -21,7 +21,7 @@ import { shareCard } from '../src/feedback/share.ts'
 import { retestReviewer } from '../src/agents/retest_reviewer.ts'
 
 const root = dirname(fileURLToPath(import.meta.url))
-const personas = join(root, '..', '..', 'personas')
+const truths = JSON.parse(readFileSync(join(root, 'fixtures', 'persona-ground-truth.json'), 'utf8'))
 const TODAY = '2026-09-21'
 const textOf = (message) => `${message.headline_zh}${message.body_zh ?? ''}`
 
@@ -58,8 +58,8 @@ const scenarioRule = {
 
 for (let n = 1; n <= 10; n += 1) {
   const id = `p${String(n).padStart(2, '0')}`
-  const person = JSON.parse(readFileSync(join(personas, `${id}.json`), 'utf8'))
-  const truth = person.ground_truth
+  const truth = truths[id]
+  assert.ok(truth, `${id} ground truth`)
   const markers = truth.markers.map((row) => markerFromGroundTruth(row, TODAY))
   const graded = markers.map((row) => gradeMarker(row, TODAY))
   truth.markers.forEach((raw, index) => {

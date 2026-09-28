@@ -4,7 +4,8 @@
 // text for the same call, and the parser must read every shape.
 
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as mod from '../lib/index.js'
 import { loadRecord, queryIndicators, queryMedications, startFakeMirobody } from './fake-mirobody.mjs'
@@ -120,12 +121,14 @@ try {
 
 // the SSE transport carries the same payload
 const sse = await startFakeMirobody({ sse: true })
+const sseDir = mkdtempSync(join(tmpdir(), 'longpi-sse-'))
 try {
   mod.invalidateRecords()
-  const snap = await mod.loadRecords({ mcpUrl: sse.url, mcpToken: '', member: '', timeoutMs: 5000, pythonBin: '/nonexistent/python', mirobodyHome: '', dataDir: '' }, '/tmp/longpi-sse-test', '/nonexistent/plugin')
+  const snap = await mod.loadRecords({ mcpUrl: sse.url, mcpToken: '', member: '', timeoutMs: 5000, pythonBin: '/nonexistent/python', mirobodyHome: '', dataDir: '' }, sseDir, '/nonexistent/plugin')
   assert.equal(snap.indicators.find((row) => row.name === 'hs-CRP').value, '1.2')
 } finally {
   await sse.close()
+  rmSync(sseDir, { recursive: true, force: true })
 }
 
 // 4. a read that fails is named, never taken for "not measured" (5.1: 3a, 3b, 3d, 3e)

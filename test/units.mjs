@@ -1,8 +1,9 @@
 // Unit normalization and measurement staging agree with skillkit.py in longevity-skills.
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { skillsHome } from './lib/skills-home.mjs'
 
 const root = dirname(fileURLToPath(import.meta.url))
 const mod = await import('../lib/index.js')
@@ -11,8 +12,8 @@ const shared = JSON.parse(readFileSync(join(root, 'fixtures', 'unit_cases.json')
 for (const [raw, expected] of shared.cases) {
   assert.equal(mod.normalizeUnit(raw), expected, `normalizeUnit(${JSON.stringify(raw)})`)
 }
-const liveHome = mod.resolveSkillsHome('')
-if (liveHome && existsSync(join(liveHome, 'schema', 'unit_cases.json'))) {
+const liveHome = skillsHome('schema/unit_cases.json')
+if (liveHome) {
   const canonical = JSON.parse(readFileSync(join(liveHome, 'schema', 'unit_cases.json'), 'utf8'))
   assert.deepEqual(shared.cases, canonical.cases, 'test/fixtures/unit_cases.json drifted from longevity-skills/schema/unit_cases.json')
 }

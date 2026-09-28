@@ -6,14 +6,13 @@
 // in chat. Synthetic cards first, then the real catalog if it is checked out.
 
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import * as mod from '../lib/index.js'
 import { loadRecord, startFakeMirobody } from './fake-mirobody.mjs'
+import { skillsHome } from './lib/skills-home.mjs'
 
-const root = dirname(fileURLToPath(import.meta.url))
 const AGE = { key: 'age', label_zh: '实足年龄', unit: 'a', required: true, from: 'profile', flag: '--age' }
 const CRP = { key: 'crp_mg_l', label_zh: 'C反应蛋白', loinc: ['30522-7'], unit: 'mg/L', required: true, from: 'measurements' }
 const ALB = { key: 'albumin_gL', label_zh: '白蛋白', loinc: ['1751-7'], unit: 'g/L', required: true, from: 'measurements' }
@@ -82,9 +81,8 @@ assert.equal(stability.runnable.status, 'ready')
 assert.equal(stability.runnable.record, 'none')
 
 // --- 4. the real catalog against the fixture record ------------------------------------------
-const sibling = resolve(root, '..', '..', 'longevity-skills')
-const home = mod.resolveSkillsHome(existsSync(join(sibling, 'skills')) ? sibling : '')
-if (home && existsSync(join(home, 'catalog.json'))) {
+const home = skillsHome('catalog.json')
+if (home) {
   const real = mod.loadCatalog(home)
   const dataDir = mkdtempSync(join(tmpdir(), 'longpi-readiness-'))
   const servers = []

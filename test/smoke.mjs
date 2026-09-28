@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { skillsHome } from './lib/skills-home.mjs'
 
 const require = createRequire(import.meta.url)
 const root = dirname(fileURLToPath(import.meta.url))
@@ -132,7 +133,7 @@ for (const name of mod.HARNESS_SKILLS) {
   assert.match(raw, new RegExp(`^---\\nname: ${name}\\n`))
 }
 
-const liveHome = mod.resolveSkillsHome('')
+const liveHome = skillsHome('catalog.json')
 if (liveHome) {
   const live = mod.loadCatalog(liveHome)
   assert.equal(live.error, '')

@@ -4,17 +4,15 @@
 // distiller's quote check, and an adversarial audit: 0 unsafe texts pass the validator.
 
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import * as mod from '../lib/index.js'
 import { loadRecord, startFakeMirobody } from './fake-mirobody.mjs'
+import { skillsHome } from './lib/skills-home.mjs'
 
-const root = dirname(fileURLToPath(import.meta.url))
-const sibling = resolve(root, '..', '..', 'longevity-skills')
-const home = mod.resolveSkillsHome(existsSync(join(sibling, 'data', 'effects.jsonl')) ? sibling : '')
-if (!home || !existsSync(join(home, 'data', 'effects.jsonl'))) {
+const home = skillsHome('data/effects.jsonl')
+if (!home) {
   console.log('surfaces-coach skipped (no longevity-skills checkout with data/)')
   process.exit(0)
 }

@@ -5,17 +5,15 @@
 // profile, a plan, check-ins and self measurements on file, and checks each result with DSH's function.
 
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import * as mod from '../lib/index.js'
 import { startFakeMirobody } from './fake-mirobody.mjs'
+import { skillsHome } from './lib/skills-home.mjs'
 
-const root = dirname(fileURLToPath(import.meta.url))
-const sibling = resolve(root, '..', '..', 'longevity-skills')
-const home = mod.resolveSkillsHome(existsSync(join(sibling, 'data', 'biological_variation.json')) ? sibling : '')
-if (!home || !existsSync(join(home, 'data', 'biological_variation.json'))) {
+const home = skillsHome('data/biological_variation.json')
+if (!home) {
   console.log('lossless skipped (no longevity-skills checkout with data/)')
   process.exit(0)
 }

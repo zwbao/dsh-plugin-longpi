@@ -3,9 +3,9 @@
 // diabetes 不确定, China-PAR age. Fixtures are lines from the 0.5.4 diaries.
 
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { absoluteLevel, buildChanges } from '../src/changes.ts'
 import { findingsFromIndicators, listFindings } from '../src/datain/narrative.ts'
@@ -25,9 +25,10 @@ import { EMPTY_PROFILE, mergeProfile, normalizeProfile, writeProfile, CONSENT_VE
 import { invalidateRecords, loadSeries } from '../src/records.ts'
 import { medicationNames } from '../src/tools-tracking.ts'
 
+import { skillsHome } from './lib/skills-home.mjs'
+
 const root = dirname(fileURLToPath(import.meta.url))
-const skills = process.env.LONGEVITY_SKILLS_HOME || resolve(root, '..', '..', 'longevity-skills')
-const home = existsSync(join(skills, 'data', 'effects.jsonl')) ? skills : ''
+const home = skillsHome('data/effects.jsonl')
 const dirs = []
 const servers = []
 function tempDir(name) {

@@ -6,21 +6,19 @@
 // the biological-variation row with its source. The same reads give the
 // record summary for onboarding (journey records.summary, GET /connection).
 // Uses the fake Mirobody record and the real longevity-skills checkout
-// (../../longevity-skills or LONGEVITY_SKILLS_HOME); skips without it.
+// (LONGEVITY_SKILLS_HOME, or a sibling directory named longevity-skills); skips without it.
 
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { Readable } from 'node:stream'
-import { fileURLToPath } from 'node:url'
 import * as mod from '../lib/index.js'
 import { loadRecord, startFakeMirobody } from './fake-mirobody.mjs'
+import { skillsHome } from './lib/skills-home.mjs'
 
-const root = dirname(fileURLToPath(import.meta.url))
-const sibling = resolve(root, '..', '..', 'longevity-skills')
-const home = mod.resolveSkillsHome(existsSync(join(sibling, 'data', 'biological_variation.json')) ? sibling : '')
-if (!home || !existsSync(join(home, 'data', 'biological_variation.json'))) {
+const home = skillsHome('data/biological_variation.json')
+if (!home) {
   console.log('indicators skipped (no longevity-skills checkout with data/)')
   process.exit(0)
 }
