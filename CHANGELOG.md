@@ -4,6 +4,26 @@
 
 Life-area navigation (总览、化验、睡眠、运动、日程、问 LongPi), movement-first lab cards, a quieter season, and plain Chinese on the screens a person reads. On-device research is the default. Joining a group study is a separate tap, and nothing leaves the device until a production-signed study is published.
 
+给使用者（集成修订）
+
+身体年龄只有一个数：页面、要点和对话说的是同一个数字。只抽过一次血，不写「比周岁小多少」；有两次以上，才用「比周岁小/大 X 岁」这样的说法。记录里如果混着两个人的体检（比如女儿的账号里有父亲的前列腺检查），就不算身体年龄，并说明原因；在档案里写明是哪位家人、今年几岁之后再算。
+
+在吃他汀的人，血脂降下来会写明主要是他汀的作用，不算走路或方案的效果。在用司美格鲁肽这类药（或这段时间就要开始用），方案里不写试验的减重公斤数，也不设体重目标，并说清这段时间体重的变化主要来自药；限时进食照样可以做，但先告诉开药的医生，吃得太少、恶心时先停。没有这类药的人，照常给出试验里的公斤数作为目标参考。
+
+回答先直接回答问的那件事：能不能、吃什么、多少、怎么做，并尽量对上你自己的数字；短不是把这些具体内容删掉的理由。贫血加上铁蛋白低或红细胞偏小时，看医生那句话会写上「缺铁的原因常要消化科一起查，尽量在 1 到 2 周内去」。
+
+总览每件事只说一次：要先去看医生的那一步放在最上面，其余卡片不再重复那几项；身体年龄的几种算法合成一张卡；「判断依据」只留一句大白话和来源；心血管风险卡只显示自己的一个数；窄屏上「值得注意的变化」一行一行排开。
+
+English, integration fixes
+
+Body age is one number: the page, the fact list and the chat quote the same figure. One draw has no gap; two or more draws get 「比周岁小/大 X 岁」. A record that holds two people's checkups (a father's prostate test in a daughter's account) gets no body age, with the reason; naming the relative and their age in the profile lets it be computed.
+
+For someone on a statin, the lipid drop is credited to the statin, not to walking or the plan. While a medicine that moves weight by itself (a GLP-1, SGLT2 or insulin) is current or about to start, the plan gives no trial kilogram figure and no weight goal, and says the weight change will mostly come from the medicine. Time-restricted eating stays possible on a GLP-1, with 「先告诉开药的医生」 and a note on low intake and nausea. People on no such medicine keep the kilogram projection.
+
+A reply answers the question itself first, with the specific foods, amounts, ranges or steps, tied to the person's own numbers; a short reply never drops them. With a low haemoglobin plus low ferritin or small red cells, the doctor line adds that the cause of iron deficiency is often looked for by a gastroenterologist too, within one to two weeks.
+
+总览 says each fact once: the doctor step comes first and the other cards leave its values out; the body-age methods fold into one card; 判断依据 is one plain sentence and its source; the risk card shows its own number only; 值得注意的变化 stacks on narrow screens.
+
 ## 0.6.1
 
 给使用者
