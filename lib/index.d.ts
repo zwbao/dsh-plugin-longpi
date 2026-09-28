@@ -21,6 +21,59 @@ declare module '@deepseek-ai/cordis' {
           userInvocable: boolean;
         };
       }): () => void;
+      /** dsh-skill registry. Lower rank wins a duplicate name. list is the index; get loads the body. */
+      registerProvider(create: (control: {
+        signal: AbortSignal;
+        invalidate: () => void;
+      }) => {
+        name: string;
+        list: (options: {
+          cwd?: string;
+          signal?: AbortSignal;
+        }) => Promise<readonly {
+          name: string;
+          description: string;
+          whenToUse?: string;
+          invocation: {
+            modelInvocable: boolean;
+            userInvocable: boolean;
+          };
+          source: string;
+          provider: string;
+          rank: number;
+          locator: unknown;
+          path?: string;
+          resourceBase?: {
+            kind: 'directory';
+            path: string;
+          };
+          metadata?: Readonly<Record<string, unknown>>;
+        }[]>;
+        get: (candidate: {
+          name: string;
+          locator?: unknown;
+        }, options: {
+          cwd?: string;
+          signal?: AbortSignal;
+        }) => Promise<{
+          name: string;
+          description: string;
+          whenToUse?: string;
+          invocation: {
+            modelInvocable: boolean;
+            userInvocable: boolean;
+          };
+          source: string;
+          provider: string;
+          content: string;
+          path?: string;
+          resourceBase?: {
+            kind: 'directory';
+            path: string;
+          };
+          metadata?: Readonly<Record<string, unknown>>;
+        } | undefined>;
+      }): () => void;
     };
     systemPrompt: {
       section(section: {
@@ -763,6 +816,9 @@ interface MatchHit {
   why: string[];
   has_script: boolean;
   tier: string;
+  /** Tier C is evidence. The species is in the first line of the skill. It is not this person's number. */
+  evidence?: boolean;
+  species?: string;
   /** record is runnableFrom's answer for the record alone: ready, near (one or two tests short) or none. */
   runnable: {
     status: Runnable['status'];
@@ -1258,6 +1314,212 @@ declare function loadCourses(config: Config): Promise<{
   error?: string;
 }>;
 //#endregion
+//#region src/contracts/common.d.ts
+type IsoDay = string;
+type IsoTime = string;
+type Id = string;
+type ModuleId = 'M0' | 'M1' | 'M2' | 'M3' | 'M4' | 'M5' | 'M6' | 'M7' | 'M8' | 'M9' | 'M10' | 'M11' | 'M12' | 'M13';
+type Focus$1 = 'bioage' | 'cardio' | 'glucose' | 'weight' | 'sleep' | 'plan';
+interface Provenance {
+  kind: 'chat' | 'page' | 'record' | 'import' | 'model_extracted' | 'rule' | 'migration';
+  at: IsoTime;
+  session_id?: string;
+  turn?: number;
+  /** The person's own words, at most 200 characters. */
+  quote_zh?: string;
+  by: ModuleId;
+}
+/** Every number any generator may put in text. Formatting belongs to M9 (honesty/format.ts). */
+interface NumberRef {
+  /** Stable: 'hgb@2026-09-21', 'phenoage.advance', 'ferritin.latest'. */
+  key: string;
+  label_zh: string;
+  value: number;
+  unit: string;
+  date: IsoDay | null;
+  source: 'record' | 'self' | 'skill' | 'rcv' | 'memory' | 'derived';
+  /** Canonical formatted form the validator accepts, e.g. '8.0 ng/mL'. */
+  text: string;
+}
+interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens?: number;
+  reasoningTokens?: number;
+}
+//#endregion
+//#region src/contracts/library.d.ts
+interface SkillIndexEntry {
+  name: string;
+  blurb: string;
+  tier: string;
+  species: string;
+  whenToUse: string;
+  /** Directory of the skill. Full SKILL.md loads only when the model opens it. */
+  locator: string;
+}
+type ResultLabel = 'verified' | 'unverified-binding' | 'evidence-only';
+/** What kind of row an input accepts. Alias text is not a kind. */
+type ProvenanceKind = 'blood_clock' | 'methylation_clock' | 'abdominal_ct' | 'coronary_ct' | 'routine_lab' | 'wearable' | 'questionnaire' | 'profile' | 'output_of';
+interface BindingInput {
+  source_row_id: string;
+  value: number | string;
+  unit: string;
+  provenance: ProvenanceKind;
+  /** The row text the model pointed at, unchanged. */
+  quote: string;
+}
+interface BindingProposal {
+  skill: string;
+  /** Manifest input key → the row the model named. The model does not convert units. */
+  inputs: Record<string, BindingInput>;
+}
+type BindingIssueKind = 'unit' | 'range' | 'provenance' | 'missing';
+interface BindingIssue {
+  input: string;
+  kind: BindingIssueKind;
+  detail?: string;
+}
+/**
+ * ok is false when a required input failed. A dropped optional is an issue
+ * and leaves ok true.
+ */
+interface BindingValidation {
+  ok: boolean;
+  issues: BindingIssue[];
+}
+interface MethodOutput {
+  key: string;
+  value: number | string | null;
+  unit: string;
+}
+interface MethodInputUsed {
+  input: string;
+  source_row_id: string;
+  value: number | string;
+  unit: string;
+  provenance: ProvenanceKind;
+  quote: string;
+}
+interface MethodResult {
+  skill: string;
+  label: ResultLabel;
+  outputs: MethodOutput[];
+  inputs_used: MethodInputUsed[];
+  catalog_version: string;
+  ran_at: IsoTime;
+  limits_zh: string;
+}
+type StoreKind = 'methylation' | 'taxa' | 'proteins' | 'conditions';
+interface MethylationRow {
+  sample_date: string;
+  probe_id: string;
+  beta: number;
+  source_file: string;
+}
+interface TaxaRow {
+  sample_date: string;
+  site: 'gut' | 'oral';
+  genus: string;
+  relative_abundance: number;
+  source_file: string;
+}
+interface ProteinRow {
+  sample_date: string;
+  panel: string;
+  id: string;
+  symbol: string;
+  value: number;
+  unit_or_z: string;
+  source_file: string;
+}
+interface ConditionRow {
+  code: string;
+  system: 'ICD-10';
+  display: string;
+  onset: string | null;
+  source: string;
+}
+interface StoreRows {
+  methylation: MethylationRow;
+  taxa: TaxaRow;
+  proteins: ProteinRow;
+  conditions: ConditionRow;
+}
+interface LibraryHooks {
+  /** L2. Every catalog entry. Does not drop a tier or a name. */
+  listSkillIndex?: () => SkillIndexEntry[];
+  /** L2. Unit, range, and provenance only. */
+  validateBinding?: (proposal: BindingProposal) => BindingValidation;
+  /** L3. */
+  readStore?: (kind: StoreKind) => StoreRows[StoreKind][];
+  /** L4. Labeled results for this generation. */
+  methodResults?: () => MethodResult[];
+}
+/** A lane registers the functions it owns. Other lanes' hooks stay. */
+declare function registerLibraryHooks(next: LibraryHooks): () => void;
+/** Called from the lane module with the host context, once apply() runs. */
+declare function registerLibraryMount(mount: (ctx: unknown) => void): () => void;
+declare function mountLibraryLanes(ctx: unknown): void;
+declare function listSkillIndex(): SkillIndexEntry[];
+declare function validateBinding(proposal: BindingProposal): BindingValidation;
+declare function readStore<K extends StoreKind>(kind: K): StoreRows[K][];
+declare function methodResults(): MethodResult[];
+/** What the fact pack stores. Empty until L4 registers methodResults. */
+declare function registeredMethodResults(): MethodResult[];
+//#endregion
+//#region src/bind.d.ts
+/** Abdominal CT calcium. A bare Agatston score is coronary and is refused. */
+declare const ABDOMINAL_CT_SKILL = "biological-age-ct-cardiometabolic";
+interface BindingRow extends RecordIndicator {
+  kind?: ProvenanceKind;
+  code?: string;
+  report_type?: string;
+}
+interface BindingProfile {
+  age: number | null;
+  sex: string;
+  risk?: Partial<Record<string, boolean | null>>;
+  waist_cm?: number | null;
+}
+interface BindingOutput {
+  value: number | string | null;
+  unit?: string;
+  skill?: string;
+}
+/** What the server can see. Omit it and a proposal is checked against the manifest only. */
+interface RecordView {
+  home?: string;
+  indicators?: readonly BindingRow[];
+  profile?: BindingProfile;
+  outputs?: Record<string, BindingOutput>;
+  /** Empty means no pin is configured. A non-empty pin must equal the catalog version to label verified. */
+  pinnedVersion?: string;
+}
+interface BindingReport {
+  ok: boolean;
+  issues: BindingIssue[];
+  label: ResultLabel;
+  measurements: MeasurementIn[];
+  args: string[];
+  inputs_used: MethodInputUsed[];
+  limits_zh: string;
+  catalog_version: string;
+  /** Set when this must not be shown as a personal number. */
+  blockReason: string | null;
+}
+declare function useBindingView<T>(view: RecordView | null, fn: () => T): T;
+/** Same refusal as the library branch: a bare Agatston score is coronary calcium. */
+declare function isCoronaryName(name: string): boolean;
+/** What kind of row this input accepts. Alias text is not enough. */
+declare function specKind(spec: InputSpec): ProvenanceKind | 'probe' | 'any';
+/** The row the model pointed at, from its quote and provenance, not from an alias list. */
+declare function proposedRowKind(input: BindingInput, key?: string): ProvenanceKind | 'any';
+/** A proposal the record itself supports. Incompatible rows (methylation PhenoAge, bare Agatston) are left out. */
+declare function proposeFromRecord(card: SkillCard, view: RecordView): BindingProposal;
+declare function bindRecord(card: SkillCard, view: RecordView): BindingReport;
+declare function assessBinding(proposal: BindingProposal, view?: RecordView | null): BindingReport;
+//#endregion
 //#region src/runner.d.ts
 interface StagedFile {
   name: string;
@@ -1284,6 +1546,10 @@ interface RunRequest {
   measuredAt?: string;
   /** Kept with the outputs in history.jsonl, so a caller can tell a result for today's inputs from a stale one. */
   inputsKey?: string;
+  /** The model's row-to-input proposal. Checked before the script runs. */
+  binding?: BindingProposal;
+  /** Record rows the server can see. Omit it and the binding is checked against the manifest only. */
+  bindingView?: RecordView | null;
 }
 interface Conversion {
   key: string;
@@ -1313,6 +1579,8 @@ interface RunResult {
   measured_at?: string;
   /** out/levers.json (schema longevity-levers/1), when the skill writes it. */
   levers?: Levers;
+  /** Labelled result. Tier C and a failed binding do not invent a personal number. */
+  method?: MethodResult;
 }
 interface Levers {
   schema: 'longevity-levers/1';
@@ -2464,160 +2732,6 @@ declare function indicatorDetail(context: IndicatorsContext, id: string): Promis
 declare function recordsSummary(context: IndicatorsContext): Promise<RecordsSummary | null>;
 /** Forget built indicators (tests; the tracking generation already covers every change the routes make). */
 declare function invalidateIndicators(): void;
-//#endregion
-//#region src/contracts/common.d.ts
-type IsoDay = string;
-type IsoTime = string;
-type Id = string;
-type ModuleId = 'M0' | 'M1' | 'M2' | 'M3' | 'M4' | 'M5' | 'M6' | 'M7' | 'M8' | 'M9' | 'M10' | 'M11' | 'M12' | 'M13';
-type Focus$1 = 'bioage' | 'cardio' | 'glucose' | 'weight' | 'sleep' | 'plan';
-interface Provenance {
-  kind: 'chat' | 'page' | 'record' | 'import' | 'model_extracted' | 'rule' | 'migration';
-  at: IsoTime;
-  session_id?: string;
-  turn?: number;
-  /** The person's own words, at most 200 characters. */
-  quote_zh?: string;
-  by: ModuleId;
-}
-/** Every number any generator may put in text. Formatting belongs to M9 (honesty/format.ts). */
-interface NumberRef {
-  /** Stable: 'hgb@2026-09-21', 'phenoage.advance', 'ferritin.latest'. */
-  key: string;
-  label_zh: string;
-  value: number;
-  unit: string;
-  date: IsoDay | null;
-  source: 'record' | 'self' | 'skill' | 'rcv' | 'memory' | 'derived';
-  /** Canonical formatted form the validator accepts, e.g. '8.0 ng/mL'. */
-  text: string;
-}
-interface TokenUsage {
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens?: number;
-  reasoningTokens?: number;
-}
-//#endregion
-//#region src/contracts/library.d.ts
-interface SkillIndexEntry {
-  name: string;
-  blurb: string;
-  tier: string;
-  species: string;
-  whenToUse: string;
-  /** Directory of the skill. Full SKILL.md loads only when the model opens it. */
-  locator: string;
-}
-type ResultLabel = 'verified' | 'unverified-binding' | 'evidence-only';
-/** What kind of row an input accepts. Alias text is not a kind. */
-type ProvenanceKind = 'blood_clock' | 'methylation_clock' | 'abdominal_ct' | 'coronary_ct' | 'routine_lab' | 'wearable' | 'questionnaire' | 'profile' | 'output_of';
-interface BindingInput {
-  source_row_id: string;
-  value: number | string;
-  unit: string;
-  provenance: ProvenanceKind;
-  /** The row text the model pointed at, unchanged. */
-  quote: string;
-}
-interface BindingProposal {
-  skill: string;
-  /** Manifest input key → the row the model named. The model does not convert units. */
-  inputs: Record<string, BindingInput>;
-}
-type BindingIssueKind = 'unit' | 'range' | 'provenance' | 'missing';
-interface BindingIssue {
-  input: string;
-  kind: BindingIssueKind;
-  detail?: string;
-}
-/**
- * ok is false when a required input failed. A dropped optional is an issue
- * and leaves ok true.
- */
-interface BindingValidation {
-  ok: boolean;
-  issues: BindingIssue[];
-}
-interface MethodOutput {
-  key: string;
-  value: number | string | null;
-  unit: string;
-}
-interface MethodInputUsed {
-  input: string;
-  source_row_id: string;
-  value: number | string;
-  unit: string;
-  provenance: ProvenanceKind;
-  quote: string;
-}
-interface MethodResult {
-  skill: string;
-  label: ResultLabel;
-  outputs: MethodOutput[];
-  inputs_used: MethodInputUsed[];
-  catalog_version: string;
-  ran_at: IsoTime;
-  limits_zh: string;
-}
-type StoreKind = 'methylation' | 'taxa' | 'proteins' | 'conditions';
-interface MethylationRow {
-  sample_date: string;
-  probe_id: string;
-  beta: number;
-  source_file: string;
-}
-interface TaxaRow {
-  sample_date: string;
-  site: 'gut' | 'oral';
-  genus: string;
-  relative_abundance: number;
-  source_file: string;
-}
-interface ProteinRow {
-  sample_date: string;
-  panel: string;
-  id: string;
-  symbol: string;
-  value: number;
-  unit_or_z: string;
-  source_file: string;
-}
-interface ConditionRow {
-  code: string;
-  system: 'ICD-10';
-  display: string;
-  onset: string | null;
-  source: string;
-}
-interface StoreRows {
-  methylation: MethylationRow;
-  taxa: TaxaRow;
-  proteins: ProteinRow;
-  conditions: ConditionRow;
-}
-interface LibraryHooks {
-  /** L2. Every catalog entry. Does not drop a tier or a name. */
-  listSkillIndex?: () => SkillIndexEntry[];
-  /** L2. Unit, range, and provenance only. */
-  validateBinding?: (proposal: BindingProposal) => BindingValidation;
-  /** L3. */
-  readStore?: (kind: StoreKind) => StoreRows[StoreKind][];
-  /** L4. Labeled results for this generation. */
-  methodResults?: () => MethodResult[];
-}
-/** A lane registers the functions it owns. Other lanes' hooks stay. */
-declare function registerLibraryHooks(next: LibraryHooks): () => void;
-/** Called from the lane module with the host context, once apply() runs. */
-declare function registerLibraryMount(mount: (ctx: unknown) => void): () => void;
-declare function mountLibraryLanes(ctx: unknown): void;
-declare function listSkillIndex(): SkillIndexEntry[];
-declare function validateBinding(proposal: BindingProposal): BindingValidation;
-declare function readStore<K extends StoreKind>(kind: K): StoreRows[K][];
-declare function methodResults(): MethodResult[];
-/** What the fact pack stores. Empty until L4 registers methodResults. */
-declare function registeredMethodResults(): MethodResult[];
 //#endregion
 //#region src/contracts/memory.d.ts
 declare const MEMORY_VERSION = 1;
@@ -4537,6 +4651,17 @@ interface Bus {
 /** Only the owning module emits a given type (AA §3.4). */
 declare const EVENT_OWNERS: Readonly<Record<HealthEventType, ModuleId>>;
 //#endregion
+//#region src/skills-provider.d.ts
+/** Worse than the four LongPi harness skills, so a shared name cannot hide them. */
+declare const LIBRARY_SKILL_RANK = 800;
+declare const LIBRARY_PROVIDER = "longpi-library";
+/** One line the model can route on. Tier C starts with the species. */
+declare function whenToUseOf(card: SkillCard): string;
+/** Always-on catalog line. English descriptions stay out. */
+declare function catalogDescription(card: SkillCard): string;
+/** Every catalog card. Nothing is dropped for tier or species. */
+declare function listEntries(home?: string): SkillIndexEntry[];
+//#endregion
 //#region src/contracts/advice.d.ts
 type AdviceTier = 1 | 2 | 3 | 4;
 interface AdviceTierResult {
@@ -5179,4 +5304,4 @@ declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { AGENT_DEFAULTS, AGENT_PROFILE_IDS, type ActionKind, type AdviceTier, type AdviceTierResult, type AgentConfig, type AgentProfile, type AgentProfileId, type AgentRoute, type AgentRunRecord, type AskedTopicItem, BASE_RULES, BRIEF_PROMPT_ZH, BUDGET_DEFAULTS, type BindingInput, type BindingIssue, type BindingIssueKind, type BindingProposal, type BindingValidation, type BootstrapResult, type Bus, CHANGES_NOTE_ZH, CIVIL_TZ, CLASSIFIER_SYSTEM, COACH_PROMPT, COACH_SCHEMA, CONNECTION_FILE, CONNECTION_TEST_MS, CONNECTION_UNAVAILABLE, CONSENT_HOLD_ZH, CONSENT_VERSION, type CandidateProvider, type CareItem, type Claim, type CodexCard, type ConditionFlag, type ConditionItem, type ConditionRow, Config, type ConnectionGuard, type ConnectionSource, type ConnectionStatus, type ConnectionTest, type Consent, type ConsentRecord, type CoreDeps, DATA_FILES, DEFAULT_FOLLOWUP, DISTILL_PREFILTER, DOCTOR_PROMPT_ZH, DRAFT_CATEGORIES, type DistributiveOmit, type DoctorBrief, type DraftCategory, type DraftItem, type DrawGrant, type DrawResult, type DropTable, type DrugClass, EMERGENCY_LINE_ZH, EMPTY_PROFILE, EVENT_OWNERS, type EvidenceGrade, type ExclusionItem, FACT_PRIORITY_RANK, FISH_OIL_CAUTION, FOCUS, FOCUS_ZH, FOLLOWUP_DAMAGED, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type FactPack, type FactPriority, type FamilyHistoryItem, type FeedbackMessage, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, GROUP_KEYS, GROUP_ZH, GUARD_COUNTERS, GUARD_SCOPES, GUARD_TIMEOUT_MS, type GoalItem, type GroupKey, type Guard, type GuardCall, type GuardHit, type GuardLabels, type GuardScope, HARNESS_SKILLS, HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH, type HealthEvent, type HealthEventPayloads, type HealthEventSource, type HealthEventType, HealthSessions, type Id, type IndicatorChange, type IndicatorDetail, type IndicatorEntry, type IndicatorSource, type IndicatorsResponse, type IsoDay, type IsoTime, JUDGE_SYSTEM, type Journey, LABEL_KEYS, type LibraryHooks, type LifeEventItem, type LlmCall, type LlmLike, type LocalStatResult, MANDATORY_PROVIDERS, MEMORY_VERSION, MODULES, type MedicationItem, type MemoryApi, type MemoryApplyResult, type MemoryItem, type MemoryKind, type MemoryOp, type MethodInputUsed, type MethodOutput, type MethodResult, type MethylationRow, type ModuleId, NO_READ_BACK, type NewMemoryItem, type NextBestAction, type NoteItem, type NumberRef, ORCHESTRATOR_RULES, type ObjectJsonSchema, PHENOAGE_SKILL, PRODUCT_VERSION, PROFILE_DAMAGED, PROMPT_SECTIONS, type PageState, type PersonMemory, type PlanBrief, type PlanDraft, type PlanDraftItem, type PlanDraftV2, type PlanPrefs, type PreferenceItem, type PreferenceKey, type Profile, type ProteinRow, type Provenance, type ProvenanceKind, type Quest, type QuestKind, READ_BACK_MS, RESERVED_ROUTES, RESERVED_SKILLS, RESERVED_TOOL_NAMES, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type Rarity, type RecordChange, type RecordSnapshot, type RecordStatus, type RecordsSummary, type ReplyVerdict, type ResultLabel, type RiskFact, type RouteHandler, SAFETY_CONDITION_FLAGS, SAFETY_DRUG_CLASSES, SELF_ALIASES, SELF_HARM_LINE_ZH, SELF_KEYS, SELF_SPEC, SURFACES_DEFAULTS, type SavedConnection, type ScienceMode, type Season, type SelfKey, type SelfRow, type SendResult, type SkillIndexEntry, type Specialists, type Stage, type StopHit, type StopResult, type StoreKind, type StoreRows, type StreakState, type StudyManifest, type SurfaceCard, type SurfaceKind, type SurfaceSet, TOOL_NAMES, type TaxaRow, type TokenUsage, type TopFact, type TransparencyLogEntry, type TriageFinding, type UnjudgedChange, type Unlock, VISIT_PROMPT_ZH, type ValidatorRule, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, WRITE_TOOLS, type WorkspaceLike, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, affirmsBooking, agentConfig, allowedNumbers, anchorOf, appendFollowupLog, appendJsonl, apply, asJson, bootstrapWorkspace, bridgeEnv, briefOptionsOf, buildBoard, buildBrief, buildCalendar, buildChanges, buildDoctorFirst, buildIndicators, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, candidateProviders, candidatesFor, careFor, careItems, careState, cellNumber, checkDay, checkReply, checkinStatus, checkupMarkerFor, chooseSurfaces, classifyMessage, clearConnection, clinicalStop, coachFallback, coachInflight, coachInput, coachProfile, collectCandidates, commandExcerpt, computeSafety, conditionFlagsOf, connectionKey, connectionSource, connectionTokenProblem, connectionUrlProblem, correctionNote, countGuard, createBudget, createBus, createGuard, createHttp, createLlmCall, createMemory, createSse, currentBus, currentPlan, currentSurfaces, dateSaid, daysBetween, decideFollowup, deepseekConsentPending, deleteSelf, deniesBooking, describeItem, describePlan, desktopCommand, desktopSupported, detectIntents, distillerProfile, domainSummary, dosePattern, draftPlan, drinkingFromText, drugClassesOf, effectiveConfig, effectsFor, emergencyScript, escapeText, estimatedAge, evaluateMarker, evaluatePlan, exclusionsFromText, expandMarkerNames, expectedText, factorFor, fallbackSurfaces, findingsFrom, firstJsonObject, fixScheduleText, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, forgetExclusion, goalProblems, greetingZh, groupOf, guardRoute, guidanceNote, hardKeyOf, hasDose, hasDoseAmount, healthWorkspacePaths, heldUntil, hitRefs, holdPlanDraft, homeBloodPressure, hypoCorrectionNote, hypoglycaemiaNow, inQuiet, indicatorDetail, indicatorFor, indicatorsFromTable, inject, insideWorkspace, invalidateIndicators, invalidateRecords, invalidateTracking, isJsonRequest, isMedicationRecordRequest, isoDay, isoWeek, isoWeekday, itemFrom, journeyCandidates, keepsValidatedComputation, lastPersonText, latestOutputs, latestSelf, leadsWithHypoFirstStep, listSkillIndex, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, localAidText, logCareVisit, manifestSummary, markerFor, markerGroupKeys, maskMcpUrl, maskUrl, matchSkills, matchesInputName, medicationClasses, memoryFor, mentionedEntities, mentionsMedicine, mergeProfile, mergeSelf, methodResults, migrateLegacy, modelEgress, modelGoals, mountLibraryLanes, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, numberKeysIn, oddsSumToOne, orchestratorPrompt, organismOf, organismsAsked, packFp, packFrom, pageStateOf, parseCompact, parseFrontmatter, parseLabels, parseNumber, parseReadme, parseVerdict, patterns, personText, personaLines, planApprovalReason, planDraftHeld, planKey, pluginMessage, preGuard, presentMedications, profileComplete, publicFollowup, quoteIn, rangeFlag, rankActions, rankTopFacts, rcvBand, readBrief, readCheckIns, readConnection, readFailed, readFollowup, readFollowupLog, readGuardStats, readHistory, readJson, readJsonl, readPageState, readPlanPrefs, readPlans, readProfile, readReceipts, readResultFile, readSelf, readStatements, readStore, readiness, recordOutputs, recordReadable, recordSurfaces, recordsSummary, regenerate, registerApprovals, registerCandidates, registerLibraryHooks, registerLibraryMount, registerModules, registerOrchestrator, registerValidator, registeredMethodResults, releasePlanDraft, rememberExclusions, rememberFromWords, rememberMedications, rememberPersonText, rememberedMedications, replyForDraft, replyRuleCheck, reportExcerpt, resetCoachCache, resetReadBacks, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, routeFor, ruleLabels, runReady, runRegistered, runSkill, runValidators, runnableFrom, runtimeCall, sameMeasure, saveConnection, savePlan, screeningTopics, seenNotes, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, sessionKey, setBus, setCoach, setConsent, setDrinking, setFollowupDeps, setPlanExclusion, settleDraft, skillEnv, snapshotText, softHoldDraft, stageMeasurements, stageNow, startFollowup, statusLine, steerNeed, stripDoses, suggestNext, summarizeIndicators, summarizeMedications, supplementFieldInputs, tableOf, testConnection, togetherZh, tokenKey, touchesHealth, trackingGeneration, triageCandidates, triageFindings, turnText, unansweredOf, unitFactor, validateBinding, validateCoach, validateDistilled, validatorRules, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, within, wrapGuardMessage, writeFollowup, writeJsonAtomic, writeProfile, writeStats, youngerAllowed };
+export { ABDOMINAL_CT_SKILL, AGENT_DEFAULTS, AGENT_PROFILE_IDS, type ActionKind, type AdviceTier, type AdviceTierResult, type AgentConfig, type AgentProfile, type AgentProfileId, type AgentRoute, type AgentRunRecord, type AskedTopicItem, BASE_RULES, BRIEF_PROMPT_ZH, BUDGET_DEFAULTS, type BindingInput, type BindingIssue, type BindingIssueKind, type BindingProposal, type BindingValidation, type BootstrapResult, type Bus, CHANGES_NOTE_ZH, CIVIL_TZ, CLASSIFIER_SYSTEM, COACH_PROMPT, COACH_SCHEMA, CONNECTION_FILE, CONNECTION_TEST_MS, CONNECTION_UNAVAILABLE, CONSENT_HOLD_ZH, CONSENT_VERSION, type CandidateProvider, type CareItem, type Claim, type CodexCard, type ConditionFlag, type ConditionItem, type ConditionRow, Config, type ConnectionGuard, type ConnectionSource, type ConnectionStatus, type ConnectionTest, type Consent, type ConsentRecord, type CoreDeps, DATA_FILES, DEFAULT_FOLLOWUP, DISTILL_PREFILTER, DOCTOR_PROMPT_ZH, DRAFT_CATEGORIES, type DistributiveOmit, type DoctorBrief, type DraftCategory, type DraftItem, type DrawGrant, type DrawResult, type DropTable, type DrugClass, EMERGENCY_LINE_ZH, EMPTY_PROFILE, EVENT_OWNERS, type EvidenceGrade, type ExclusionItem, FACT_PRIORITY_RANK, FISH_OIL_CAUTION, FOCUS, FOCUS_ZH, FOLLOWUP_DAMAGED, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type FactPack, type FactPriority, type FamilyHistoryItem, type FeedbackMessage, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, GROUP_KEYS, GROUP_ZH, GUARD_COUNTERS, GUARD_SCOPES, GUARD_TIMEOUT_MS, type GoalItem, type GroupKey, type Guard, type GuardCall, type GuardHit, type GuardLabels, type GuardScope, HARNESS_SKILLS, HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH, type HealthEvent, type HealthEventPayloads, type HealthEventSource, type HealthEventType, HealthSessions, type Id, type IndicatorChange, type IndicatorDetail, type IndicatorEntry, type IndicatorSource, type IndicatorsResponse, type IsoDay, type IsoTime, JUDGE_SYSTEM, type Journey, LABEL_KEYS, LIBRARY_PROVIDER, LIBRARY_SKILL_RANK, type LibraryHooks, type LifeEventItem, type LlmCall, type LlmLike, type LocalStatResult, MANDATORY_PROVIDERS, MEMORY_VERSION, MODULES, type MedicationItem, type MemoryApi, type MemoryApplyResult, type MemoryItem, type MemoryKind, type MemoryOp, type MethodInputUsed, type MethodOutput, type MethodResult, type MethylationRow, type ModuleId, NO_READ_BACK, type NewMemoryItem, type NextBestAction, type NoteItem, type NumberRef, ORCHESTRATOR_RULES, type ObjectJsonSchema, PHENOAGE_SKILL, PRODUCT_VERSION, PROFILE_DAMAGED, PROMPT_SECTIONS, type PageState, type PersonMemory, type PlanBrief, type PlanDraft, type PlanDraftItem, type PlanDraftV2, type PlanPrefs, type PreferenceItem, type PreferenceKey, type Profile, type ProteinRow, type Provenance, type ProvenanceKind, type Quest, type QuestKind, READ_BACK_MS, RESERVED_ROUTES, RESERVED_SKILLS, RESERVED_TOOL_NAMES, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type Rarity, type RecordChange, type RecordSnapshot, type RecordStatus, type RecordsSummary, type ReplyVerdict, type ResultLabel, type RiskFact, type RouteHandler, SAFETY_CONDITION_FLAGS, SAFETY_DRUG_CLASSES, SELF_ALIASES, SELF_HARM_LINE_ZH, SELF_KEYS, SELF_SPEC, SURFACES_DEFAULTS, type SavedConnection, type ScienceMode, type Season, type SelfKey, type SelfRow, type SendResult, type SkillIndexEntry, type Specialists, type Stage, type StopHit, type StopResult, type StoreKind, type StoreRows, type StreakState, type StudyManifest, type SurfaceCard, type SurfaceKind, type SurfaceSet, TOOL_NAMES, type TaxaRow, type TokenUsage, type TopFact, type TransparencyLogEntry, type TriageFinding, type UnjudgedChange, type Unlock, VISIT_PROMPT_ZH, type ValidatorRule, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, WRITE_TOOLS, type WorkspaceLike, type WorkspaceRegistryLike, acceptedPlan, addCheckIns, addDays, addSelf, adherenceFor, affirmsBooking, agentConfig, allowedNumbers, anchorOf, appendFollowupLog, appendJsonl, apply, asJson, assessBinding, bindRecord, bootstrapWorkspace, bridgeEnv, briefOptionsOf, buildBoard, buildBrief, buildCalendar, buildChanges, buildDoctorFirst, buildIndicators, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, candidateProviders, candidatesFor, careFor, careItems, careState, catalogDescription, cellNumber, checkDay, checkReply, checkinStatus, checkupMarkerFor, chooseSurfaces, classifyMessage, clearConnection, clinicalStop, coachFallback, coachInflight, coachInput, coachProfile, collectCandidates, commandExcerpt, computeSafety, conditionFlagsOf, connectionKey, connectionSource, connectionTokenProblem, connectionUrlProblem, correctionNote, countGuard, createBudget, createBus, createGuard, createHttp, createLlmCall, createMemory, createSse, currentBus, currentPlan, currentSurfaces, dateSaid, daysBetween, decideFollowup, deepseekConsentPending, deleteSelf, deniesBooking, describeItem, describePlan, desktopCommand, desktopSupported, detectIntents, distillerProfile, domainSummary, dosePattern, draftPlan, drinkingFromText, drugClassesOf, effectiveConfig, effectsFor, emergencyScript, escapeText, estimatedAge, evaluateMarker, evaluatePlan, exclusionsFromText, expandMarkerNames, expectedText, factorFor, fallbackSurfaces, findingsFrom, firstJsonObject, fixScheduleText, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, forgetExclusion, goalProblems, greetingZh, groupOf, guardRoute, guidanceNote, hardKeyOf, hasDose, hasDoseAmount, healthWorkspacePaths, heldUntil, hitRefs, holdPlanDraft, homeBloodPressure, hypoCorrectionNote, hypoglycaemiaNow, inQuiet, indicatorDetail, indicatorFor, indicatorsFromTable, inject, insideWorkspace, invalidateIndicators, invalidateRecords, invalidateTracking, isCoronaryName, isJsonRequest, isMedicationRecordRequest, isoDay, isoWeek, isoWeekday, itemFrom, journeyCandidates, keepsValidatedComputation, lastPersonText, latestOutputs, latestSelf, leadsWithHypoFirstStep, listEntries, listSkillIndex, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, localAidText, logCareVisit, manifestSummary, markerFor, markerGroupKeys, maskMcpUrl, maskUrl, matchSkills, matchesInputName, medicationClasses, memoryFor, mentionedEntities, mentionsMedicine, mergeProfile, mergeSelf, methodResults, migrateLegacy, modelEgress, modelGoals, mountLibraryLanes, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, numberKeysIn, oddsSumToOne, orchestratorPrompt, organismOf, organismsAsked, packFp, packFrom, pageStateOf, parseCompact, parseFrontmatter, parseLabels, parseNumber, parseReadme, parseVerdict, patterns, personText, personaLines, planApprovalReason, planDraftHeld, planKey, pluginMessage, preGuard, presentMedications, profileComplete, proposeFromRecord, proposedRowKind, publicFollowup, quoteIn, rangeFlag, rankActions, rankTopFacts, rcvBand, readBrief, readCheckIns, readConnection, readFailed, readFollowup, readFollowupLog, readGuardStats, readHistory, readJson, readJsonl, readPageState, readPlanPrefs, readPlans, readProfile, readReceipts, readResultFile, readSelf, readStatements, readStore, readiness, recordOutputs, recordReadable, recordSurfaces, recordsSummary, regenerate, registerApprovals, registerCandidates, registerLibraryHooks, registerLibraryMount, registerModules, registerOrchestrator, registerValidator, registeredMethodResults, releasePlanDraft, rememberExclusions, rememberFromWords, rememberMedications, rememberPersonText, rememberedMedications, replyForDraft, replyRuleCheck, reportExcerpt, resetCoachCache, resetReadBacks, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveSkillsHome, retestDay, retestsOf, routeFor, ruleLabels, runReady, runRegistered, runSkill, runValidators, runnableFrom, runtimeCall, sameMeasure, saveConnection, savePlan, screeningTopics, seenNotes, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, sessionKey, setBus, setCoach, setConsent, setDrinking, setFollowupDeps, setPlanExclusion, settleDraft, skillEnv, snapshotText, softHoldDraft, specKind, stageMeasurements, stageNow, startFollowup, statusLine, steerNeed, stripDoses, suggestNext, summarizeIndicators, summarizeMedications, supplementFieldInputs, tableOf, testConnection, togetherZh, tokenKey, touchesHealth, trackingGeneration, triageCandidates, triageFindings, turnText, unansweredOf, unitFactor, useBindingView, validateBinding, validateCoach, validateDistilled, validatorRules, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, whenToUseOf, within, wrapGuardMessage, writeFollowup, writeJsonAtomic, writeProfile, writeStats, youngerAllowed };

@@ -88,9 +88,10 @@ function walk(dir) {
 }
 for (const file of walk(join(root, '..', 'src'))) assert.doesNotMatch(readFileSync(file, 'utf8'), /session\.append\(/, `${file} appends a session event`)
 
-// 0.6.0 C1: the library hooks throw until a lane registers, and a lane can plug in without editing index.ts.
-assert.throws(() => mod.listSkillIndex(), /not implemented in C1/)
-assert.throws(() => mod.validateBinding({ skill: 'x', inputs: {} }), /not implemented in C1/)
+// 0.6.0: L2 registers the catalog index and binding check. L3 readStore and L4 methodResults still throw.
+assert.ok(Array.isArray(mod.listSkillIndex()))
+const unknownSkill = mod.validateBinding({ skill: 'not-a-real-skill', inputs: {} })
+assert.equal(unknownSkill.ok, false)
 assert.throws(() => mod.readStore('methylation'), /not implemented in C1/)
 assert.throws(() => mod.methodResults(), /not implemented in C1/)
 assert.deepEqual(mod.registeredMethodResults(), [])
@@ -98,7 +99,7 @@ const offRead = mod.registerLibraryHooks({
   readStore: (kind) => (kind === 'conditions' ? [{ code: 'E55', system: 'ICD-10', display: '维生素 D 缺乏', onset: null, source: 'fixture' }] : []),
 })
 assert.equal(mod.readStore('conditions')[0].code, 'E55')
-assert.throws(() => mod.listSkillIndex(), /not implemented in C1/)
+assert.ok(Array.isArray(mod.listSkillIndex()), 'registering readStore leaves the skill index in place')
 offRead()
 assert.throws(() => mod.readStore('conditions'), /not implemented in C1/)
 let mounted = 0

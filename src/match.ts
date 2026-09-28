@@ -10,6 +10,9 @@ export interface MatchHit {
   why: string[]
   has_script: boolean
   tier: string
+  /** Tier C is evidence. The species is in the first line of the skill. It is not this person's number. */
+  evidence?: boolean
+  species?: string
   /** record is runnableFrom's answer for the record alone: ready, near (one or two tests short) or none. */
   runnable: { status: Runnable['status']; missing: string[]; record: Runnable['record'] }
 }
@@ -197,7 +200,7 @@ export function matchSkills(
   const near: MatchHit[] = []
   for (const card of cards) {
     const organism = organismOf(card)
-    if (card.tier === 'C' && !organismIntent && organisms.size === 0) continue
+    // A named organism keeps the hint on that organism. The catalog still lists the others.
     if (organism && organisms.size > 0 && !organisms.has(organism) && organism !== 'other') continue
     const why: string[] = []
     let score = 0
@@ -250,6 +253,7 @@ export function matchSkills(
     } else if (organism && !card.tier) {
       score -= 8
     }
+    if (card.tier === 'C') why.push(`证据：${card.species.join('、') || '非人类'}，不当作这个人的数字`)
     if (card.tier === 'B' && detected[0] && !['intervention_evidence', 'gene_variant'].includes(detected[0].id)) score -= 2
     const hit: MatchHit = {
       name: card.name,
@@ -259,6 +263,7 @@ export function matchSkills(
       why: [...new Set(why)].slice(0, 4),
       has_script: Boolean(card.script),
       tier: card.tier,
+      ...(card.tier === 'C' ? { evidence: true, species: card.species.join('、') } : {}),
       runnable: { status: run.status, missing: run.missing, record: run.record },
     }
     if (!asked && run.record === 'near' && card.tier !== 'C') near.push(hit)
@@ -272,8 +277,16 @@ export function matchSkills(
   }
   hits.sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
   near.sort((a, b) => a.runnable.missing.length - b.runnable.missing.length || b.score - a.score || a.name.localeCompare(b.name))
-  const matches = hits.slice(0, limit)
-  let note = '按问题、个人记录和已经算过的读出排序。名单以外的技能这次不调度。'
+  // When the question did not name an organism, human hints stay in score order and tier C is appended as evidence.
+  // Naming an organism keeps score order, so that organism's method can lead.
+  const namedOrganism = organisms.size > 0 || organismIntent
+  const matches = namedOrganism
+    ? hits.slice(0, limit)
+    : [
+      ...hits.filter((hit) => hit.tier !== 'C').slice(0, limit),
+      ...hits.filter((hit) => hit.tier === 'C').slice(0, limit),
+    ]
+  let note = '这是提示，不是封闭名单。目录里的每个方法都可以读；没出现在这几条里的也可以绑定后运行。C 类是证据，物种在说明第一句，不当作这个人的数字。'
   if (matches.length === 0 && asked) {
     note = detected.some((hit) => hit.id === 'intervention_evidence')
       ? '没有技能直接对上。这是查证据的问题，用 query_longevity_evidence。'

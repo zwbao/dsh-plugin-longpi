@@ -1,6 +1,9 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { assessBinding, lookupReceipt, saveReceipt, type BindingProfile, type RecordView } from './bind.ts'
 import { commandExcerpt, loadCatalog, readSkillFile, type Catalog, type SkillCard } from './catalog.ts'
+import { registerLibraryHooks, registerLibraryMount, type BindingInput, type BindingProposal, type ProvenanceKind } from './contracts/library.ts'
+import { listEntries, registerLibrarySkills, setLibraryHome } from './skills-provider.ts'
 import type { Config } from './config.ts'
 import { matchSkills, domainSummary } from './match.ts'
 import type { MountState } from './mirobody.ts'
@@ -29,6 +32,33 @@ function jsonText(value: unknown): [{ type: 'text'; text: string }] {
 const jsonOut = {
   schema: { type: 'json' as const },
   render: (_args: unknown, value: unknown) => jsonText(value),
+}
+
+const PROVENANCE_KINDS = ['blood_clock', 'methylation_clock', 'abdominal_ct', 'coronary_ct', 'routine_lab', 'wearable', 'questionnaire', 'profile', 'output_of'] as const
+
+function asProvenance(value: unknown): ProvenanceKind {
+  return PROVENANCE_KINDS.includes(value as ProvenanceKind) ? value as ProvenanceKind : 'routine_lab'
+}
+
+function proposalFromRows(skill: string, rows: readonly { input_key?: string; source_row_id?: string; value?: string; unit?: string; provenance?: string; quote?: string }[] | undefined): BindingProposal | null {
+  if (!rows || rows.length === 0) return null
+  const inputs: Record<string, BindingInput> = {}
+  for (const row of rows) {
+    if (!row?.input_key) continue
+    inputs[row.input_key] = {
+      source_row_id: row.source_row_id || row.input_key,
+      value: row.value ?? '',
+      unit: row.unit ?? '',
+      provenance: asProvenance(row.provenance),
+      quote: row.quote || row.input_key,
+    }
+  }
+  if (Object.keys(inputs).length === 0) return null
+  return { skill, inputs }
+}
+
+function bindingViewOf(home: string, pinned: string, profile: BindingProfile, indicators: RecordView['indicators'], outputs: RecordView['outputs']): RecordView {
+  return { home, pinnedVersion: pinned, profile, indicators, outputs }
 }
 
 const EVIDENCE_SKILL = 'longevity-evidence'
@@ -67,6 +97,7 @@ export function versionCheck(catalog: Catalog, pinned: string): { pinned: string
 }
 
 export function registerTools(ctx: Context, config: () => Config, mount: MountState): void {
+  setLibraryHome(() => resolveSkillsHome(config().skillsHome))
   const where = () => {
     const current = config()
     return {
@@ -166,14 +197,14 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
             return { name, tier: card.tier, blurb: card.blurb, runnable: run.status, from_record: run.record, missing: run.missing }
           }),
         })),
-        note: 'Pass an intent id to match_longevity_skills to rank that intent\'s skills first. intervention_evidence questions go to query_longevity_evidence. runnable says whether every required input is there from any source (the profile, earlier outputs, the record); from_record says whether the record itself supplies it (ready) or is one or two tests short (near). Only from_record ready or near may be called 已经能算 or 再测一项就能算.',
+        note: 'Intents are a hint, not a closed list. The skill catalog lists every method. intervention_evidence questions go to query_longevity_evidence. runnable says whether every required input is there from any source; from_record says whether the record itself supplies it. Tier C is evidence.',
       })
     },
   }))
 
   ctx.tools.register(defineTool({
     name: 'match_longevity_skills',
-    description: 'Choose which longevity-skills apply to this person and this question. Returns a short ranked list with the detected intents and, per skill, whether this person\'s record already has its inputs. Dispatch only those names. Model-organism and cell-only skills appear only when the question names that organism. An empty list means nothing matched: say so and look at list_longevity_intents. The score is a sort key, not a biological age.',
+    description: 'Hint which longevity-skills fit this question. Not a closed list: a method that is absent here is still in the skill catalog and may be read and run. Tier C rows are evidence (species on the row); they are not this person\'s number. The score is a sort key, not a biological age.',
     parameters: {
       question: {
         type: 'string',
@@ -204,6 +235,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
         revision: catalog.revision,
         version: catalog.version,
         catalog_count: catalog.cards.length,
+        catalog_visible: catalog.cards.length,
         catalog_error: catalog.error,
         saved_age: records.profile.age,
         sex: records.profile.sex,
@@ -216,7 +248,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
 
   ctx.tools.register(defineTool({
     name: 'read_longevity_skill',
-    description: 'Read one longevity skill by its directory name, after match_longevity_skills. Follow that file. Do not run a skill you have not read. The manifest lists each input with its unit, accepted units and plausible range; when structured_measurements is true, pass values to run_longevity_skill as measurements and the harness converts units and builds the file. Missing inputs stay missing. Cohort hazard ratios and experimental doses are not personal instructions.',
+    description: 'Read one longevity skill by its directory name. The name may come from the skill catalog or from match_longevity_skills. Follow that file. Do not run a skill you have not read. The manifest lists each input with its unit, accepted units and plausible range. Bind rows with bind_longevity_inputs; the harness checks units, ranges and provenance. Missing inputs stay missing. Cohort hazard ratios and experimental doses are not personal instructions. Tier C is evidence.',
     parameters: {
       name: {
         type: 'string',
@@ -245,13 +277,79 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
   }))
 
   ctx.tools.register(defineTool({
+    name: 'bind_longevity_inputs',
+    description: 'Check a proposed binding of record rows onto one skill\'s inputs. Does not choose the skill and does not compute a number. Units convert only with the manifest\'s factors. Ranges are checked after conversion. A methylation PhenoAge does not fill a blood phenotypic age. A bare agatston score does not fill abdominal aortic calcium. Optional rows that fail are dropped and named. A required failure leaves ok false. Pass the receipt to run_longevity_skill.',
+    parameters: {
+      skill: { type: 'string', required: true, description: 'Skill directory name from the catalog.' },
+      inputs: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            input_key: { type: 'string', required: true, description: 'Manifest input key.' },
+            source_row_id: { type: 'string', description: 'Indicator name and date, a profile field, an earlier output key, or a typed-store id.' },
+            value: { type: 'string', required: true, description: 'The value as recorded. Do not convert the unit.' },
+            unit: { type: 'string', description: 'The unit as recorded.' },
+            provenance: { type: 'string', description: 'blood_clock, methylation_clock, abdominal_ct, coronary_ct, routine_lab, wearable, questionnaire, profile, or output_of.' },
+            quote: { type: 'string', description: 'The row text, unchanged.' },
+          },
+        },
+      },
+    },
+    output: jsonOut,
+    timeoutMs: 30000,
+    isConcurrencySafe: () => true,
+    async execute(args) {
+      const { skillsHome, dataDir, current } = where()
+      const records = await loadRecords(current, dataDir, mount.pluginHome)
+      const proposal = proposalFromRows(args.skill, args.inputs) ?? { skill: args.skill, inputs: {} }
+      const view = bindingViewOf(skillsHome, current.skillsVersion, {
+        age: records.profile.age,
+        sex: records.profile.sex,
+        risk: records.profile.risk,
+      }, records.indicators, latestOutputs(dataDir))
+      const report = assessBinding(proposal, view)
+      const receipt = report.ok ? saveReceipt(proposal) : ''
+      return asJson({
+        ok: report.ok,
+        label: report.label,
+        issues: report.issues,
+        inputs_used: report.inputs_used,
+        limits_zh: report.limits_zh,
+        catalog_version: report.catalog_version,
+        block_reason: report.blockReason,
+        receipt,
+        note: 'Do not convert units yourself. Do not say 年轻 unless label is verified and the change is beyond the noise band. Tier C is evidence-only.',
+      })
+    },
+  }))
+
+  ctx.tools.register(defineTool({
     name: 'run_longevity_skill',
-    description: 'Run one skill\'s script. For a skill whose manifest has structured_measurements, pass measurements as {key, value, unit} copied from read_personal_situation (key may be the input key or the indicator name on the report; unit exactly as the record gives it) — the harness converts declared units, checks ranges, refuses a missing or wrong unit, fills age and sex from the saved profile, and adds --out. Otherwise stage files and arguments copied from the skill command. The script computes the readout. Do not calculate the formula yourself and do not fill a missing marker from another file or from memory. Quote the returned excerpt, including 边界. A refusal or non-zero exit is the answer; do not replace it with a guess.',
+    description: 'Run one skill\'s script after bind_longevity_inputs. Pass the receipt, or the same binding. The harness checks units, ranges and provenance again, fills age and sex from the saved profile, and adds --out. The script computes the readout. Do not calculate the formula yourself. Quote the returned excerpt, including 边界, and the label (verified, unverified-binding, or evidence-only). A methylation PhenoAge is not a blood phenotypic age. A coronary Agatston score is not abdominal aortic calcium. Tier C is evidence and is not run as this person\'s number. A refusal or non-zero exit is the answer; do not replace it with a guess. Do not say 年轻 unless the label is verified and the change is beyond the noise band.',
     parameters: {
       name: {
         type: 'string',
         required: true,
-        description: 'Skill directory name returned by match_longevity_skills.',
+        description: 'Skill directory name from the catalog.',
+      },
+      receipt: { type: 'string', description: 'Receipt from bind_longevity_inputs.' },
+      binding: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            input_key: { type: 'string', required: true },
+            source_row_id: { type: 'string' },
+            value: { type: 'string', required: true },
+            unit: { type: 'string' },
+            provenance: { type: 'string' },
+            quote: { type: 'string' },
+          },
+        },
+        description: 'The same rows passed to bind_longevity_inputs.',
       },
       measurements: {
         type: 'array',
@@ -295,6 +393,19 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
       const { skillsHome, dataDir, current } = where()
       const catalog = loadCatalog(skillsHome)
       const profile = readProfile(dataDir)
+      const records = await loadRecords(current, dataDir, mount.pluginHome)
+      const view = bindingViewOf(skillsHome, current.skillsVersion, {
+        age: profile.age,
+        sex: profile.sex,
+        risk: profile.risk,
+      }, records.indicators, latestOutputs(dataDir))
+      const fromBinding = proposalFromRows(args.name, args.binding)
+      const fromReceipt = args.receipt ? lookupReceipt(args.receipt) : null
+      const measured = (args.measurements ?? []).flatMap((item) => {
+        if (!item || typeof item.key !== 'string') return []
+        return [{ input_key: item.key, source_row_id: item.key, value: String(item.value ?? ''), unit: typeof item.unit === 'string' ? item.unit : '', quote: item.key, provenance: 'routine_lab' }]
+      })
+      const binding = fromBinding ?? fromReceipt ?? proposalFromRows(args.name, measured)
       return asJson(await runSkill({
         home: skillsHome,
         dataDir,
@@ -304,9 +415,8 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
           if (!file || typeof file.name !== 'string' || typeof file.text !== 'string') return []
           return [{ name: file.name, text: file.text }]
         }),
-        measurements: (args.measurements ?? []).flatMap((item) => {
-          if (!item || typeof item.key !== 'string') return []
-          return [{ key: item.key, value: String(item.value ?? ''), unit: typeof item.unit === 'string' ? item.unit : '' }]
+        ...(binding ? { binding, bindingView: view } : {
+          measurements: measured.map((item) => ({ key: item.input_key, value: item.value, unit: item.unit })),
         }),
         profile: { age: profile.age, sex: profile.sex },
         useProfile: args.use_profile !== false,
@@ -371,21 +481,23 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
 
   ctx.tools.register(defineTool({
     name: 'list_longevity_domains',
-    description: 'List longevity-skill domains and the directory names in each. Use this when a question matches nothing, or when the person wants to see what the harness can read. Names are methods, not advice to start a method.',
+    description: 'List every longevity-skill domain and the directory names in each, including tier C evidence. Nothing is hidden. Names are methods, not advice to start a method.',
     parameters: {},
     output: jsonOut,
     timeoutMs: 30000,
     isConcurrencySafe: () => true,
     async execute() {
       const catalog = loadCatalog(where().skillsHome)
-      const personal = catalog.cards.filter((card) => card.tier !== 'C')
       return asJson({
         revision: catalog.revision,
         version: catalog.version,
         count: catalog.cards.length,
-        indexed_only: catalog.cards.length - personal.length,
+        catalog_visible: catalog.cards.length,
+        indexed_only: 0,
+        evidence_count: catalog.cards.filter((card) => card.tier === 'C').length,
         error: catalog.error,
-        domains: domainSummary(personal),
+        domains: domainSummary(catalog.cards),
+        note: 'Tier C is listed. It is evidence, with the species in the skill\'s first line, and it is not run as this person\'s number.',
       })
     },
   }))
@@ -636,3 +748,17 @@ function onboardingOf(read: JourneyRead, profile: Profile, dataDir: string) {
     self_measurements: journey.self.latest,
   }
 }
+
+registerLibraryHooks({
+  listSkillIndex: () => listEntries(),
+  validateBinding: (proposal) => {
+    const report = assessBinding(proposal)
+    return { ok: report.ok, issues: report.issues }
+  },
+})
+
+registerLibraryMount((ctx) => {
+  const context = ctx as Context
+  if (!context || typeof context.inject !== 'function') return
+  registerLibrarySkills(context)
+})

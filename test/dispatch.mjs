@@ -34,8 +34,8 @@ for (const item of spec.cases) {
   if (ok) hit += 1
   else misses.push(`${item.q} → ${names.slice(0, 3).join(', ') || '(empty)'} | intents ${result.intents.map((intent) => intent.id).join(',')}`)
   if (!item.organism) {
-    const leaked = names.filter((name) => tierOf.get(name) === 'C')
-    if (leaked.length > 0) leaks.push(`${item.q} → ${leaked.join(', ')}`)
+    const leaked = result.matches.filter((match) => tierOf.get(match.name) === 'C' && !match.evidence)
+    if (leaked.length > 0) leaks.push(`${item.q} → ${leaked.map((match) => match.name).join(', ')}`)
   }
   if (verbose) console.log(`${ok ? 'HIT ' : 'MISS'} ${item.q} → ${names.slice(0, 3).join(', ')}`)
 }
@@ -44,12 +44,13 @@ const heldout = JSON.parse(readFileSync(join(root, 'dispatch-heldout.json'), 'ut
 let heldHit = 0
 for (const item of heldout.cases) {
   const labs = item.labs === 'labs9' ? spec.labs9 : []
-  const names = mod.matchSkills(catalog.cards, item.q, labs, 8, { intents: catalog.intents, profile, lexicon }).matches.map((match) => match.name)
+  const heldResult = mod.matchSkills(catalog.cards, item.q, labs, 8, { intents: catalog.intents, profile, lexicon })
+  const names = heldResult.matches.map((match) => match.name)
   if (names.slice(0, 3).some((name) => item.expect.includes(name))) heldHit += 1
   else console.log(`  held-out miss: ${item.q} → ${names.slice(0, 3).join(', ') || '(empty)'}`)
   if (!item.organism) {
-    const leaked = names.filter((name) => tierOf.get(name) === 'C')
-    if (leaked.length > 0) leaks.push(`${item.q} → ${leaked.join(', ')}`)
+    const leaked = heldResult.matches.filter((match) => tierOf.get(match.name) === 'C' && !match.evidence)
+    if (leaked.length > 0) leaks.push(`${item.q} → ${leaked.map((match) => match.name).join(', ')}`)
   }
 }
 const heldRate = heldHit / heldout.cases.length
@@ -87,6 +88,7 @@ const rate = hit / spec.cases.length
 for (const line of misses) console.log(`  miss: ${line}`)
 for (const line of leaks) console.log(`  tier C leak: ${line}`)
 console.log(`dispatch: top-3 hit ${hit}/${spec.cases.length} (${(rate * 100).toFixed(0)}%), tier C leaks ${leaks.length}, catalog ${catalog.source} ${catalog.version || ''}`)
-assert.equal(leaks.length, 0, 'tier C skills leaked into questions that name no organism')
+assert.equal(leaks.length, 0, 'tier C skills were returned as a personal run')
+assert.doesNotMatch(mod.matchSkills(catalog.cards, '表型年龄', [], 8, { intents: catalog.intents, profile, lexicon }).note, /不调度/)
 assert.ok(rate >= 0.9, `top-3 hit rate ${rate.toFixed(2)} is below 0.90`)
 console.log('dispatch ok')
