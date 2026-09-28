@@ -12,6 +12,7 @@ import { actEngage, careMetrics, drawEngage, noteSeasonContext, prefsEngage, run
 import { offerForCard } from '../src/engage/offer.ts'
 import { insightBody, resolvePersonal, seasonHeader, templateFor, validateSeasonDraft } from '../src/engage/personal.ts'
 import { rarityRank } from '../src/engage/rng.ts'
+import { mergeProfile, readProfile } from '../src/profile.ts'
 
 const dirs = []
 function tempDir() {
@@ -74,6 +75,9 @@ try {
   assert.equal(safety?.title_zh, '先问开药的医生')
   assert.doesNotMatch(JSON.stringify(safety), /断食|限时进食|停药/)
   assert.equal(resolvePersonal([], coach), null)
+  const merged = mergeProfile(readProfile(tempDir()), { age: 40, sex: 'female', subject: { relationship_zh: '父亲', age: 76, sex: 'male' } })
+  assert.equal(merged.subject.relationship_zh, '父亲')
+  assert.equal(merged.subject.age, 76)
 
   const quiet = tempDir()
   profile(quiet)
