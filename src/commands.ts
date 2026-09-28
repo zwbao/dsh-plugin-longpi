@@ -22,7 +22,7 @@ export function registerCommands(ctx: Context, config: () => Config, mount: Moun
   ctx.inject(['commands'], (scoped) => {
     scoped.commands.register({
       name: 'longpi',
-      description: '打印 LongPi 摘要：技能库版本、档案、Mirobody 是否接上、现在走到哪一步、随访提醒是否打开。不含检验数值。',
+      description: '打印 LongPi 摘要（给安装的人看）：方法库版本、档案、体检记录是否连上、现在走到哪一步、提醒是否打开。不含化验数字。',
       handler: () => {
         const current = config()
         const home = resolveSkillsHome(current.skillsHome)

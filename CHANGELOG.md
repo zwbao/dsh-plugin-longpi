@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.2
+
+Life-area navigation (总览、化验、睡眠、运动、日程、问 LongPi), movement-first lab cards, a quieter season, and plain Chinese on the screens a person reads. On-device research is the default. Joining a group study is a separate tap, and nothing leaves the device until a production-signed study is published.
+
 ## 0.6.1
 
 给使用者

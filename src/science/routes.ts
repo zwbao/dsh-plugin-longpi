@@ -8,7 +8,8 @@ import { isoDay } from '../interventions.ts'
 import { estimatedAge, readProfile } from '../profile.ts'
 import { buildCommunity, castVote, rememberCard, writePulse } from './community.ts'
 import { eligibility, grantConsent, withdrawConsent, type PersonFacts } from './consent-flow.ts'
-import { configuredMode, effectiveMode } from './index.ts'
+import { declineInvite, inviteVisible, mayTransmit, readSciencePref, writeSciencePref, OUTBOX_WAITING_ZH } from './choice.ts'
+import { configuredMode, effectiveMode, scienceOpen } from './index.ts'
 import { loadStudies, loadStudy } from './manifest.ts'
 import { armsFromOutcomes, logOutcome, readOutcomes } from './outcomes.ts'
 import { communityHtml, offHtml } from './page-html.ts'
@@ -61,7 +62,7 @@ export function registerScienceRoutes(deps: CoreDeps): void {
 
   deps.http.route('GET', '/api/longpi/science/studies', async (req) => {
     const configured = configuredMode()
-    if (effectiveMode() === 'off') {
+    if (!scienceOpen()) {
       const reason = configured === 'live' ? LIVE_REFUSED_ZH : '研究没有打开。'
       if (configured === 'live') noteLiveOnce(dir())
       if (req.query.get('view') === 'page') return { __raw: { type: 'text/html; charset=utf-8', body: offHtml(reason) } }
@@ -76,7 +77,7 @@ export function registerScienceRoutes(deps: CoreDeps): void {
       consent_text_ok: row.consent_hash_ok,
       reason: row.verify.ok ? '' : ('reason' in row.verify ? row.verify.reason : ''),
     }))
-    return { ok: true, mode: 'simulated', studies, page: '/api/longpi/science/community?view=page' }
+    return { ok: true, mode: effectiveMode(), studies, page: '/api/longpi/science/community?view=page', waiting_zh: OUTBOX_WAITING_ZH }
   })
 
   deps.http.route('GET', '/api/longpi/science/community', async (req) => {
@@ -87,7 +88,7 @@ export function registerScienceRoutes(deps: CoreDeps): void {
   })
 
   deps.http.route('POST', '/api/longpi/science/community', async (_req, body) => {
-    if (effectiveMode() !== 'simulated') return { ok: false, status: 403, error: configuredMode() === 'live' ? LIVE_REFUSED_ZH : '研究没有打开' }
+    if (!scienceOpen()) return { ok: false, status: 403, error: configuredMode() === 'live' ? LIVE_REFUSED_ZH : '研究没有打开' }
     const topic = typeof (body as { topic_id?: unknown })?.topic_id === 'string' ? (body as { topic_id: string }).topic_id : ''
     const cast = castVote(dir(), topic)
     if (!cast.ok) return { ok: false, status: 400, error: cast.reason_zh }
@@ -95,22 +96,26 @@ export function registerScienceRoutes(deps: CoreDeps): void {
   })
 
   deps.http.route('POST', '/api/longpi/science/consent', async (_req, body) => {
-    if (effectiveMode() !== 'simulated') return { ok: false, status: 403, error: configuredMode() === 'live' ? LIVE_REFUSED_ZH : '研究没有打开' }
+    if (!scienceOpen()) return { ok: false, status: 403, error: configuredMode() === 'live' ? LIVE_REFUSED_ZH : '研究没有打开' }
     const record = (body ?? {}) as Record<string, unknown>
     const study = loadStudy(typeof record.study_id === 'string' ? record.study_id : '')
     if (!study || !study.verify.ok || !study.consent_hash_ok) {
       return { ok: false, status: 400, error: study && !study.verify.ok ? study.verify.reason : '研究说明不可用' }
     }
+    if (record.bundled_with_product === true) return { ok: false, status: 400, error: '参加研究不能和开始使用绑在一起。' }
     const fit = eligibility(study.manifest, personOf(dir(), deps.memory))
     if (!fit.ok) return { ok: false, status: 403, error: fit.reason_zh }
+    const manifest = record.plain === true
+      ? { ...study.manifest, consent: { ...study.manifest.consent, comprehension: study.manifest.consent.comprehension.slice(0, 2) } }
+      : study.manifest
     const granted = grantConsent({
       dataDir: dir(),
-      manifest: study.manifest,
+      manifest,
       manifest_sha256: study.sha256,
       answers: answersOf(record),
       confirm: record.confirm === true,
       explained_by: record.explained_by === 'agent' ? 'agent' : 'page',
-      mode: 'simulated',
+      mode: effectiveMode() === 'local' ? 'local' : 'simulated',
     })
     if (!granted.ok) return { ok: false, status: 400, error: granted.reason_zh, comprehension: granted.comprehension }
     deps.bus.emit('study.consented', { study_id: study.manifest.id, consent_id: granted.consent.id }, { module: 'M8', via: 'route' })
@@ -119,7 +124,7 @@ export function registerScienceRoutes(deps: CoreDeps): void {
   })
 
   deps.http.route('POST', '/api/longpi/science/withdraw', async (_req, body) => {
-    if (effectiveMode() !== 'simulated') return { ok: false, status: 403, error: '研究没有打开' }
+    if (!scienceOpen()) return { ok: false, status: 403, error: '研究没有打开' }
     const record = (body ?? {}) as { study_id?: string; confirm?: boolean }
     if (record.confirm !== true) return { ok: false, status: 400, error: '退出需要 confirm: true' }
     const study = loadStudy(record.study_id ?? '')
@@ -132,7 +137,7 @@ export function registerScienceRoutes(deps: CoreDeps): void {
   })
 
   deps.http.route('POST', '/api/longpi/science/run', async (_req, body) => {
-    if (effectiveMode() !== 'simulated') return { ok: false, status: 403, error: configuredMode() === 'live' ? LIVE_REFUSED_ZH : '研究没有打开' }
+    if (!scienceOpen()) return { ok: false, status: 403, error: configuredMode() === 'live' ? LIVE_REFUSED_ZH : '研究没有打开' }
     const record = (body ?? {}) as { study_id?: string; confirm?: boolean; note_zh?: string }
     if (record.confirm !== true) return { ok: false, status: 400, error: '计算需要 confirm: true' }
     const study = loadStudy(record.study_id ?? '')
@@ -140,29 +145,32 @@ export function registerScienceRoutes(deps: CoreDeps): void {
     if (typeof record.note_zh === 'string' && record.note_zh.trim()) {
       logOutcome(dir(), record.note_zh, isoDay(), study.manifest.id, newId('outcme'), new Date().toISOString())
     }
-    const gate = gateRun({ configured: 'simulated', manifest: study.manifest, person: personOf(dir(), deps.memory), dataDir: dir() })
+    const gate = gateRun({ configured: effectiveMode() === 'local' ? 'local' : 'simulated', manifest: study.manifest, person: personOf(dir(), deps.memory), dataDir: dir() })
     if (!gate.ok) return { ok: false, status: 403, error: gate.reason_zh }
     const ran = runLocal({ dataDir: dir(), manifest: study.manifest, series: seriesFromDisk(dir(), study.manifest.id), clientId: 'local' })
     if (!ran.ok) return { ok: false, status: 400, error: ran.reason_zh }
     rememberCard(dir(), study.manifest.title_zh, ran.give_back_zh.slice(0, 180), study.manifest.id)
     writePulse(dir(), { headline_zh: '本机结果', detail_zh: ran.give_back_zh })
     deps.bus.emit('study.run_completed', { study_id: study.manifest.id, run_id: ran.result.run_id, released: ran.result.released }, { module: 'M8', via: 'route' })
+    const transmit = mayTransmit({ published: false, keyId: null })
     return {
       ok: true,
       result: ran.result,
       give_back_zh: ran.give_back_zh,
+      sent: transmit.ok,
+      waiting_zh: transmit.ok ? '' : transmit.reason_zh,
       local: ran.local_only.map(({ key, stat, unnoisy, n, detail_zh }) => ({ key, stat, unnoisy, n, detail_zh })),
     }
   })
 
   deps.http.route('GET', '/api/longpi/science/translog', async () => {
-    if (effectiveMode() !== 'simulated') return { ok: true, mode: 'off', entries: [] }
+    if (!scienceOpen()) return { ok: true, mode: 'off', entries: [] }
     const entries = readLog(dir())
     return { ok: true, chain: verifyChain(entries), entries }
   })
 
   deps.http.route('GET', '/api/longpi/science/transparency', async (req) => {
-    const entries = effectiveMode() === 'simulated' ? readLog(dir()) : []
+    const entries = scienceOpen() ? readLog(dir()) : []
     const text = transparencyExport(entries)
     if (req.query.get('download') === '1') return { __raw: { type: 'application/x-ndjson; charset=utf-8', body: text } }
     return { ok: true, chain: verifyChain(entries), export_zh: '透明记录可以导出。里面没有化验数值。', text }
@@ -170,7 +178,7 @@ export function registerScienceRoutes(deps: CoreDeps): void {
 
   deps.http.route('GET', '/api/longpi/science/registry', async (req) => {
     const configured = configuredMode()
-    const mode = configured === 'simulated' ? 'simulated' : configured === 'live' ? 'live' : 'off'
+    const mode = configured === 'simulated' ? 'simulated' : configured === 'local' ? 'local' : configured === 'live' ? 'live' : 'off'
     const cohort = mode === 'simulated'
       ? readJson<{ studies?: Record<string, { enrolled?: number }> }>(join(dir(), 'science', 'cohort.json'), (raw) => raw as { studies?: Record<string, { enrolled?: number }> }, () => ({}))
       : {}
@@ -181,7 +189,7 @@ export function registerScienceRoutes(deps: CoreDeps): void {
   })
 
   deps.http.route('POST', '/api/longpi/science/n-of-1', async (_req, body) => {
-    if (effectiveMode() !== 'simulated') return { ok: false, status: 403, error: configuredMode() === 'live' ? LIVE_REFUSED_ZH : '研究没有打开' }
+    if (!scienceOpen()) return { ok: false, status: 403, error: configuredMode() === 'live' ? LIVE_REFUSED_ZH : '研究没有打开' }
     const record = (body ?? {}) as { confirm?: boolean; design?: string }
     if (record.confirm !== true) return { ok: false, status: 400, error: '个人对照需要 confirm: true' }
     const seasonId = seasonIdOnDisk(dir())
@@ -219,5 +227,42 @@ export function registerScienceRoutes(deps: CoreDeps): void {
     if (problems.length > 0) return { ok: false, status: 400, error: problems.join(',') }
     const written = writeClaimsExport(dir(), [claim])
     return { ok: true, submitted: written.submitted, rows: written.rows }
+  })
+
+  deps.http.route('GET', '/api/longpi/science/invite', async () => {
+    const mode = effectiveMode()
+    const show = inviteVisible({ dataDir: dir(), mode: effectiveMode() === 'off' ? 'off' : effectiveMode() })
+    const pref = readSciencePref(dir())
+    return {
+      ok: true,
+      show,
+      mode,
+      intro_zh: 'LongPi 的用户在一起研究怎样延缓衰老。你可以用自己的数据做个人小试验，也可以加入大家的研究。',
+      waiting_zh: OUTBOX_WAITING_ZH,
+      prechecked: false,
+      bundled_with_product: false,
+      user_set: pref?.user_set === true,
+      preference: pref?.mode ?? mode,
+    }
+  })
+
+  deps.http.route('POST', '/api/longpi/science/invite', async (_req, body) => {
+    const record = (body ?? {}) as { decision?: string }
+    if (record.decision === 'later') {
+      declineInvite(dir())
+      return { ok: true, show: false }
+    }
+    if (record.decision === 'join') {
+      return { ok: true, show: false, next: 'questions' }
+    }
+    return { ok: false, status: 400, error: '请选择加入或以后再说。' }
+  })
+
+  deps.http.route('POST', '/api/longpi/science/preference', async (_req, body) => {
+    const record = (body ?? {}) as { mode?: string }
+    const mode = record.mode === 'off' || record.mode === 'local' || record.mode === 'simulated' ? record.mode : null
+    if (!mode) return { ok: false, status: 400, error: '只能选择打开或关闭。' }
+    const saved = writeSciencePref(dir(), mode)
+    return { ok: true, preference: saved }
   })
 }

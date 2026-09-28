@@ -27,7 +27,7 @@ function GeneticsCard(): React.ReactElement {
     }).catch(() => { if (!gone) setRow(null) })
     return () => { gone = true }
   }, [])
-  if (!row) return h('p', { className: 'lp-muted', id: 'lp-genetics-empty' }, '还没有基因摘要。叙述版 PDF 请发到健康对话；Mirobody 能查询的是微基因原始数据 txt。')
+  if (!row) return h('p', { className: 'lp-muted', id: 'lp-genetics-empty' }, '还没有基因摘要。叙述版 PDF 请发到健康对话。普通体检不要选基因文件。')
   return h('div', { id: 'lp-genetics' },
     h('p', null, (row.headlines_zh ?? []).join('；') || '已记下基因报告。'),
     (row.variants ?? []).length > 0
@@ -91,7 +91,7 @@ function ConditionsForm(): React.ReactElement {
     }
   }
   return h('div', { id: 'lp-conditions' },
-    h('p', { className: 'lp-fine' }, '诊断记在这台电脑上。Mirobody 这边不接收病情。'),
+    h('p', { className: 'lp-fine' }, '诊断记在这台电脑上。体检原件那边不接收病情。'),
     rows.length > 0 ? h('ul', { className: 'lp-list' }, ...rows.map((row) => h('li', { key: row.id }, row.text_zh))) : null,
     h('div', { className: 'lp-field' },
       h('label', { className: 'lp-field-label', htmlFor: 'lp-cond-name' }, '病情或诊断'),

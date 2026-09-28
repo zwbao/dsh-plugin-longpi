@@ -12,6 +12,7 @@ import { chineseDate } from './format.ts'
 import { Icon } from './icons.ts'
 import { normalizeIndicatorDetail } from './normalize.ts'
 import { reload, useIndicators, type IndicatorFilter } from './store.ts'
+import { judgementKind, judgementText, lifeAreaOf, movementOf, scrubVisible, sourceLabel, type JudgementKey, type LifeArea } from '../ux/plain.ts'
 import type { IndicatorDetail, IndicatorRow, IndicatorsResponse, IndicatorSource } from './types.ts'
 import { Btn, Info, LoadError, Skeleton } from './ui.ts'
 
@@ -70,15 +71,15 @@ export function JudgedChip(props: { row: IndicatorRow; gate?: string; reason?: s
     return h('span', { className: `lp-chip-c lp-chip-c-${low ? 'warn' : 'warn'}`, title: row.range_zh || (low ? '低于参考范围' : '高于参考范围') }, low ? '偏低' : '偏高')
   }
   if (props.gate === 'too_early' || reason.startsWith('太早')) {
-    return h('span', { className: 'lp-chip-c lp-chip-c-unjudged', title: reason || '间隔还没到这项的最短复测时间' }, '太早')
+    return h('span', { className: 'lp-chip-c lp-chip-c-unjudged', title: reason || '离上次太近' }, judgementText('too_early', true))
   }
   if (props.gate === 'not_comparable' || reason.startsWith('不可比')) {
-    return h('span', { className: 'lp-chip-c lp-chip-c-unjudged', title: reason || '两次不在同一家机构' }, '不可比')
+    return h('span', { className: 'lp-chip-c lp-chip-c-unjudged', title: reason || '两次不是同一家机构' }, judgementText('not_comparable', true))
   }
   if (row.judged === 'changed' && row.change) return h(ChangeChip, { verdict: row.change.verdict, askDoctor: row.change.ask_doctor })
-  if (row.judged === 'within') return h('span', { className: 'lp-chip-c lp-chip-c-within' }, h(Icon, { name: 'within', size: 12 }), '波动内')
-  const why = row.read_error ? '这项没有读到' : row.points.length < 2 ? '只有一次结果' : '缺少这项的正常波动数据，或这次还不能比'
-  return h('span', { className: 'lp-chip-c lp-chip-c-unjudged', title: why }, '未判断')
+  if (row.judged === 'within') return h('span', { className: 'lp-chip-c lp-chip-c-within' }, h(Icon, { name: 'within', size: 12 }), judgementText('within', true))
+  const why = row.read_error ? '这项没有读到' : row.points.length < 2 ? '只有一次结果' : '还缺比较要用的信息'
+  return h('span', { className: 'lp-chip-c lp-chip-c-unjudged', title: why }, judgementText('unjudged', true))
 }
 
 function latestText(row: IndicatorRow): string {
@@ -87,25 +88,26 @@ function latestText(row: IndicatorRow): string {
   return row.latest.value == null ? '—' : fmtAuto(row.latest.value)
 }
 
-function IndicatorLine(props: { row: IndicatorRow; open: boolean; onToggle: () => void; gate?: string; reason?: string }): React.ReactElement {
+function IndicatorLine(props: { row: IndicatorRow; open: boolean; onToggle: () => void; gate?: string; reason?: string; explain: boolean }): React.ReactElement {
   const { row } = props
   const panelId = `lp-ind-panel-${row.id.replace(/[^A-Za-z0-9_-]/g, '_')}`
+  const move = movementOf(row.points, prettyUnits(row.unit))
+  const kind: JudgementKey = judgementKind({ gate: props.gate, judged: row.judged, reason: props.reason })
+  const missed = row.read_error ? scrubVisible(row.read_error).replace(/没有在 \d+ 秒内返回这一项/, '这次没有读到，稍后刷新再看') : ''
+  const lead = missed
+    ? `没有读到：${missed}`
+    : move?.lead ?? (row.latest ? `${latestText(row)} ${prettyUnits(row.unit)}` : '还没有数值')
   return h('li', { className: `lp-ind-row ${props.open ? 'lp-ind-open' : ''} ${row.read_error ? 'lp-ind-failed' : ''}` },
-    h('button', { type: 'button', className: 'lp-ind-btn', 'aria-expanded': props.open, 'aria-controls': panelId, onClick: props.onToggle },
-      h('span', { className: 'lp-ind-name' },
-        h('span', { className: 'lp-strong' }, row.label_zh),
-        row.plan_marker ? h('span', { className: 'lp-tag lp-tag-plan' }, '方案') : null),
-      row.read_error
-        ? h('span', { className: 'lp-ind-error' }, h(Icon, { name: 'warn', size: 13 }), `没有读到：${row.read_error}`)
-        : h('span', { className: 'lp-ind-value' },
-          h('span', { className: 'lp-num' }, latestText(row)),
-          row.latest?.text ? null : h('span', { className: 'lp-caption' }, ` ${prettyUnits(row.unit)}`),
-          row.latest ? h('span', { className: 'lp-caption lp-ind-date' }, row.latest.date) : null),
-      row.read_error ? h('span', { className: 'lp-ind-spark' }) : h('span', { className: 'lp-ind-spark' }, h(Sparkline, { points: row.points, label: row.label_zh })),
-      h('span', { className: 'lp-ind-judged' },
-        h(JudgedChip, { row, gate: props.gate, reason: props.reason }),
-        reasonBesideChip(props.gate, props.reason) ? h('span', { className: 'lp-caption lp-ind-date' }, reasonBesideChip(props.gate, props.reason)) : null),
-      h('span', { className: 'lp-ind-source lp-caption' }, SOURCE_ZH[row.source]),
+    h('button', { type: 'button', className: 'lp-ind-btn lp-move-btn', 'aria-expanded': props.open, 'aria-controls': panelId, onClick: props.onToggle },
+      h('span', { className: 'lp-move' },
+        h('span', { className: 'lp-ind-name' },
+          h('span', { className: 'lp-strong' }, row.label_zh),
+          row.plan_marker ? h('span', { className: 'lp-tag lp-tag-plan' }, '方案') : null,
+          h('span', { className: 'lp-caption' }, SOURCE_ZH[row.source])),
+        h('span', { className: 'lp-move-lead' }, lead),
+        h('span', { className: 'lp-move-second' }, judgementText(kind, props.explain)),
+        row.range_zh ? h('span', { className: 'lp-caption' }, `化验单上的范围：${row.range_zh}`) : null),
+      row.read_error ? null : h('span', { className: 'lp-ind-spark' }, h(Sparkline, { points: row.points, label: row.label_zh })),
       h(Icon, { name: 'chevron', size: 14, className: 'lp-ind-chevron' })),
     props.open ? h(DetailPanel, { row, id: panelId }) : null)
 }
@@ -144,7 +146,7 @@ function DetailBody(props: { detail: IndicatorDetail }): React.ReactElement {
     noiseSentence(props.detail)
       ? h('p', { className: 'lp-caption' },
         noiseSentence(props.detail),
-        biovar?.source.url ? h(React.Fragment, null, ' 来源：', h('a', { href: biovar.source.url, target: '_blank', rel: 'noopener noreferrer' }, biovar.source.title || biovar.source.url)) : biovar?.source.title ? ` 来源：${biovar.source.title}` : '',
+        biovar?.source.url ? h(React.Fragment, null, ' 来源：', h('a', { href: biovar.source.url, target: '_blank', rel: 'noopener noreferrer', title: biovar.source.title || undefined }, sourceLabel(biovar.source.title))) : biovar?.source.title ? ` 来源：${sourceLabel(biovar.source.title)}` : '',
         biovar?.source.doi ? ` · doi:${biovar.source.doi}` : '')
       : biovar && (row.gate === 'too_early' || (row.reason_zh ?? '').startsWith('太早'))
         ? h('p', { className: 'lp-caption' }, reasonBesideChip(row.gate, row.reason_zh) || '间隔还没到这项的最短复测时间。')
@@ -153,6 +155,7 @@ function DetailBody(props: { detail: IndicatorDetail }): React.ReactElement {
           : h('p', { className: 'lp-caption' }, row.range_zh
             ? '这项没有用来比较两次变化的波动数据。上面按参考范围标了偏低或偏高。'
             : row.source === 'checkup' ? '这项没有收录个体正常波动数据，分不清真实变化和波动，所以不作判断。' : '手环和自测数据按周均值或日值显示趋势，不作正常波动判断。'),
+    biovar ? h('p', { className: 'lp-caption' }, `研究里用来判断变化的范围：+${fmt(biovar.band_pct.up, 1)}% / ${fmt(biovar.band_pct.down, 1)}%（来源：${sourceLabel(biovar.source.title)}）`) : null,
     biovar?.caveat_zh && !row.gate ? h('p', { className: 'lp-caption' }, biovar.caveat_zh) : null,
     points.length > 0
       ? h('table', { className: 'lp-ind-table' },
@@ -180,8 +183,8 @@ function Empty(props: { data: IndicatorsResponse; onConnect: () => void }): Reac
     h('div', null,
       h('div', { className: 'lp-strong' }, none ? '还没有连接体检记录' : '记录里还没有指标'),
       h('p', { className: 'lp-muted' }, none
-        ? '连接你的 Mirobody 之后，这里会列出每一次体检的化验值和手环数据，按系统分组，带趋势和正常波动的判断。'
-        : '已连接 Mirobody，但还没有读到体检或手环数据。在 Mirobody 上传体检报告后，点右上角的刷新。'),
+        ? '把体检报告放进来之后，这里会列出每一次化验和手环数据，先看变化，再看这点变化算不算数。'
+        : '已经连上了，但还没有读到体检或手环数据。放进报告后，点右上角的刷新。'),
       none ? h(Btn, { size: 'sm', onClick: props.onConnect }, '连接记录') : null))
 }
 
@@ -227,7 +230,7 @@ function useGates(stamp: string | undefined): Record<string, { gate?: string; re
   return gates
 }
 
-export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filter: IndicatorFilter) => void; onConnect: () => void }): React.ReactElement {
+export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filter: IndicatorFilter) => void; onConnect: () => void; area?: LifeArea }): React.ReactElement {
   const { data, loading, error } = useIndicators()
   const gates = useGates(data?.updated_at)
   const [open, setOpen] = React.useState<string | null>(null)
@@ -239,10 +242,12 @@ export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filte
     }
     return h('div', { className: 'lp-tab-body' }, h(Empty, { data, onConnect: props.onConnect }))
   }
-  const all = data.groups.flatMap((group) => group.indicators)
+  const area = props.area ?? 'labs'
+  const all = data.groups.flatMap((group) => group.indicators).filter((row) => lifeAreaOf(row.label_zh) === area || (area === 'labs' && row.source !== 'device'))
+  const explained = new Set<string>()
   const filter = FILTERS.find((row) => row.key === props.filter) ?? FILTERS[0]
   const groups = data.groups
-    .map((group) => ({ ...group, indicators: group.indicators.filter(filter.test) }))
+    .map((group) => ({ ...group, indicators: group.indicators.filter((row) => all.includes(row)).filter(filter.test) }))
     .filter((group) => group.indicators.length > 0)
   const failed = all.filter((row) => row.read_error).length
   const checkup = lastCheckup(data)
@@ -260,9 +265,9 @@ export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filte
             onClick: () => props.onFilter(row.key),
           }, row.label, h('span', { className: 'lp-toggle-count' }, String(count)))
         })),
-      h('span', { className: 'lp-caption' }, checkup ? `最近一次体检 ${chineseDate(checkup)}` : '',
+      h('span', { className: 'lp-caption' }, (() => { const when = checkup ? chineseDate(checkup) : ''; return when ? `最近一次体检 ${when}` : '' })(),
         h(Info, { label: '和正常波动比', align: 'end' },
-          '“变好/变差”：最近两次体检之差超出个体正常波动（参考变化值），而且间隔够长、同一家机构；“波动内”：间隔够长，差值仍在正常波动以内；“太早”：间隔短于这项的最短复测时间；“不可比”：两次不在同一家机构；“未判断”：只有一次结果、没有这项的波动数据，或这次没有读到。太早和不可比都不是波动内。手环为每周均值，自测为每日值，只显示趋势。'))),
+          '超出正常波动：比你平常的起伏更大，值得问医生，不是急症。在正常波动范围内：这点变化不算数。太早：离上次太近。不可比：两次不是同一家机构。还不能下结论：看缺的是哪一步。'))),
     groups.length === 0
       ? h('div', { className: 'lp-card lp-empty' }, h('p', { className: 'lp-muted' }, `没有“${filter.label}”的指标。`), h('button', { type: 'button', className: 'lp-row-link', onClick: () => props.onFilter('all') }, '看全部 →'))
       : h('div', { className: 'lp-card lp-ind-card' },
@@ -271,9 +276,15 @@ export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filte
         ...groups.map((group) => h('section', { key: group.key, className: 'lp-ind-group', 'aria-label': group.label_zh },
           h('h3', { className: 'lp-ind-group-title' }, group.label_zh, h('span', { className: 'lp-optional' }, `${group.indicators.length} 项`)),
           h('ul', { className: 'lp-ind-list' },
-            ...group.indicators.map((row) => h(IndicatorLine, {
-              key: row.id, row, open: open === row.id, gate: row.gate ?? gates[row.id]?.gate, reason: row.reason_zh ?? gates[row.id]?.reason,
-              onToggle: () => setOpen((current) => (current === row.id ? null : row.id)),
-            })))))),
+            ...group.indicators.map((row) => {
+              const kind = judgementKind({ gate: row.gate ?? gates[row.id]?.gate, judged: row.judged, reason: row.reason_zh ?? gates[row.id]?.reason })
+              const explain = !explained.has(kind)
+              explained.add(kind)
+              return h(IndicatorLine, {
+                key: row.id, row, open: open === row.id, gate: row.gate ?? gates[row.id]?.gate, reason: row.reason_zh ?? gates[row.id]?.reason,
+                explain,
+                onToggle: () => setOpen((current) => (current === row.id ? null : row.id)),
+              })
+            }))))),
     h('p', { className: 'lp-fine' }, '点任一行看历次数值、单位、来自哪份报告，以及正常波动的依据。这里只列出记录里的数值，不做诊断。'))
 }

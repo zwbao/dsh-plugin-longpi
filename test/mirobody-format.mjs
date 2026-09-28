@@ -178,7 +178,7 @@ for (const how of ['http500', 'rpc', 'isError', 'refuse', 'text']) {
     const snap = await mod.loadRecords(configOf(cut.url), scratch, '/nonexistent/plugin')
     assert.equal(snap.record_status, 'partial')
     assert.equal(snap.catalog_truncated, true)
-    assert.match(snap.read_errors[0], /指标目录被截断：Mirobody 只返回了 21 项（共 260 项）/)
+    assert.match(snap.read_errors[0], /指标目录没有读全：这次只读到 21 项（共 260 项）/)
     assert.equal(snap.indicators.find((row) => row.name === 'Albumin-ALB').value, '45.6', 'what was listed is still filled')
     // a failed read is kept only briefly, and the same address with another token is another account
     const calls = cut.calls.length

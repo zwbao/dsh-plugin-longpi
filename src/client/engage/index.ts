@@ -29,7 +29,7 @@ export function EngageDock(props: { variant?: 'dock' | 'page' } = {}): React.Rea
       setView(next)
       setFailed('')
     } catch (error) {
-      setFailed(errorText(error, '这一季没有读到'))
+      setFailed(errorText(error, '赛季没有读到'))
     }
   }, [])
 
@@ -70,7 +70,7 @@ export function EngageDock(props: { variant?: 'dock' | 'page' } = {}): React.Rea
   if (page) {
     return h('div', { className: 'lp lp-season-page', style: { display: 'flex', flexDirection: 'column', gap: 8 } },
       failed ? h('p', null, failed) : null,
-      panel ?? h('p', { className: 'lp-muted' }, '这一季正在读取。'),
+      panel ?? h('p', { className: 'lp-muted' }, '赛季正在读取。'),
       view?.nudge?.offer ? h(NudgeOffer, {
         offer: true,
         onAccept: () => { void run('/api/longpi/nudges', { nudge_in_workflow: true, offer_seen: true }) },
@@ -101,11 +101,11 @@ function freezeToday(reason: 'sick' | 'travel'): void {
 }
 
 export function EngageSettingsNote(_props?: Record<string, unknown>): React.ReactElement {
-  const [line, setLine] = React.useState('没有方案时，有待解锁的检查或本季任务才会每周提醒一次；都没有就不发。')
+  const [line, setLine] = React.useState('没有方案时，有待补的检查或本赛季的小目标，才会每周提醒一次；都没有就不发。')
   React.useEffect(() => {
     void getJson<SeasonView>('/api/longpi/season').then((view) => {
       if (view.reminder_zh) setLine(view.reminder_zh)
-      else if (view.needs_consent) setLine('还没有同意使用说明，所以这一季和提醒都还没开始。')
+      else if (view.needs_consent) setLine('还没有同意使用说明，所以赛季和提醒都还没开始。')
     }).catch(() => { /* the static line stays */ })
   }, [])
   return h('p', { className: 'lp-caption', style: { marginTop: 8 } }, line)

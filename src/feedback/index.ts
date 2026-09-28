@@ -7,6 +7,7 @@ import type { MemoryApi } from '../contracts/memory.ts'
 import type { CheckIn } from '../interventions.ts'
 import type { Tracking } from '../tracking.ts'
 import {
+  bioAgeStory,
   buildFeedback,
   markerFromChange,
   markerFromEngine,
@@ -106,6 +107,7 @@ export function feedbackInput(tracking: Tracking, memory: MemoryApi | null): Fee
       date: latest?.date ?? null,
       draws: tracking.bioage.points?.length ?? 0,
       same_lab: null,
+      ...bioAgeStory(tracking.bioage.headline_zh, tracking.bioage.allows_younger),
     }
     : null
   return {

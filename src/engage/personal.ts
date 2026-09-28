@@ -269,7 +269,7 @@ export function insightBody(days: number, doneTitles: readonly string[]): string
 
 export function seasonHeader(input: { pressure: boolean; title: string | null; week: number | null }): { show: boolean; text_zh: string } {
   if (!input.pressure || !input.title || input.week == null) return { show: false, text_zh: '' }
-  return { show: true, text_zh: `本季 · ${input.title} · 第 ${input.week} 周` }
+  return { show: true, text_zh: `本赛季 · ${input.title} · 第 ${input.week} 周` }
 }
 
 export function shareCardText(card: { rarity_zh: string; title_zh: string; body_zh: string }, displayName: string): string {

@@ -50,7 +50,7 @@ function parseRow(raw: unknown): StoredConsent | null {
   if (!scope) return null
   if (row.decision !== 'granted' && row.decision !== 'declined' && row.decision !== 'withdrawn') return null
   if (typeof row.at !== 'string') return null
-  const mode: ScienceMode = row.mode === 'simulated' || row.mode === 'live' ? row.mode : 'off'
+  const mode: ScienceMode = row.mode === 'simulated' || row.mode === 'live' || row.mode === 'local' ? row.mode : 'off'
   return {
     id: typeof row.id === 'string' ? row.id : 'consent-legacy',
     scope,

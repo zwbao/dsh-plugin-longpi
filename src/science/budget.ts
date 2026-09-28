@@ -7,7 +7,7 @@ import { readJson, writeJsonAtomic } from '../core/store.ts'
 
 export const DEFAULT_EPSILON_CAP = 10
 
-export const RELEASE_STAYS_ZH = '已经发布的合计不能撤回。退出会停止以后的发布，并删除还没发布的份额。'
+export const RELEASE_STAYS_ZH = '已经发出的合计不会收回。退出会停掉以后的发出，并删掉还没发出的那一份。'
 
 export interface BudgetEntry {
   study_id: string

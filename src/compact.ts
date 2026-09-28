@@ -28,6 +28,11 @@ export interface CompactTable {
   meta: CompactMeta
   notes: string[]
   error?: { kind: string; message: string }
+  /**
+   * Later tables after a blank line, e.g. the catalogue's "reported by the person" section
+   * (constants kind=condition): diagnoses the person reported. They are not rows of the first table.
+   */
+  sections?: Array<{ title: string; constants: Record<string, string>; rows: Array<Record<string, string>> }>
 }
 
 const META_LINE = /^\((?:window|resolution|aggregate|rows)=/
@@ -102,15 +107,23 @@ export function parseCompact(text: string): CompactTable {
     for (const [key, value] of parsePairs(head.slice(CONSTANTS.length, -1))) constants[key] = value
     at = 1
   }
-  const rest = body.slice(at).filter((line) => !line.startsWith('… cut at'))
+  const all = body.slice(at).filter((line) => !line.startsWith('… cut at'))
+  // A blank line ends the first table. What follows is another section with its own title, constants and header.
+  const blank = all.indexOf('')
+  const rest = blank >= 0 ? all.slice(0, blank) : all
+  const sections = blank >= 0 ? parseSections(all.slice(blank + 1)) : []
+  const extra = sections.length > 0 ? { sections } : {}
   if (rest[0] === '(no rows)' || (rest.length === 0 && Object.keys(constants).length === 0)) {
-    return { rows: [], meta, notes }
+    return { rows: [], meta, notes, ...extra }
   }
-  if (rest.length === 0) return { rows: [{ ...constants }], meta, notes }
+  if (rest.length === 0) return { rows: [{ ...constants }], meta, notes, ...extra }
+  return { rows: rowsOf(rest[0] ?? '', rest.slice(1), constants), meta, notes, ...extra }
+}
 
-  const header = (rest[0] ?? '').split('|')
+function rowsOf(headLine: string, lines: readonly string[], constants: Record<string, string>): Array<Record<string, string>> {
+  const header = headLine.split('|')
   const rows: Array<Record<string, string>> = []
-  for (const line of rest.slice(1)) {
+  for (const line of lines) {
     const cells = line.split('|')
     if (cells.length > header.length) {
       const keep = cells.slice(0, header.length - 1)
@@ -121,7 +134,34 @@ export function parseCompact(text: string): CompactTable {
     header.forEach((column, i) => { row[column] = cells[i] ?? '' })
     rows.push(row)
   }
-  return { rows, meta, notes }
+  return rows
+}
+
+/** Sections after the first table: an optional title line, an optional constants line, a header, rows. */
+function parseSections(lines: readonly string[]): NonNullable<CompactTable['sections']> {
+  const out: NonNullable<CompactTable['sections']> = []
+  let at = 0
+  while (at < lines.length) {
+    while (at < lines.length && !(lines[at] ?? '').trim()) at += 1
+    if (at >= lines.length) break
+    let title = ''
+    const constants: Record<string, string> = {}
+    if (!(lines[at] ?? '').includes('|') && !(lines[at] ?? '').startsWith(CONSTANTS)) title = (lines[at++] ?? '').trim()
+    const head = lines[at] ?? ''
+    if (head.startsWith(CONSTANTS) && head.endsWith(')')) {
+      for (const [key, value] of parsePairs(head.slice(CONSTANTS.length, -1))) constants[key] = value
+      at += 1
+    }
+    const end = lines.indexOf('', at)
+    const chunk = lines.slice(at, end >= 0 ? end : lines.length)
+    at = end >= 0 ? end + 1 : lines.length
+    if (chunk.length === 0 || !(chunk[0] ?? '').includes('|')) {
+      if (title || Object.keys(constants).length > 0) out.push({ title, constants, rows: [] })
+      continue
+    }
+    out.push({ title, constants, rows: rowsOf(chunk[0] ?? '', chunk.slice(1), constants) })
+  }
+  return out
 }
 
 /**

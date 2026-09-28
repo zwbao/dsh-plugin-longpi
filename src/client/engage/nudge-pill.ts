@@ -21,12 +21,12 @@ export function NudgeOffer(props: { offer: boolean; onAccept: () => void; onDism
     className: 'lp',
     role: 'status',
     style: {
-      position: 'absolute', left: 20, bottom: 188, zIndex: 1, pointerEvents: 'auto', maxWidth: 320,
-      padding: '8px 10px', borderRadius: 12, background: 'var(--lp-layer-2)', color: 'var(--lp-ink)', boxShadow: 'var(--lp-lift, 0 4px 16px rgba(0,0,0,.12))',
+      position: 'static', marginTop: 8, maxWidth: '100%',
+      padding: '8px 10px', borderRadius: 12, background: 'var(--lp-layer-2)', color: 'var(--lp-ink)',
       fontSize: 13, lineHeight: '18px',
     },
   },
-    h('div', null, '要不要在别的对话里偶尔看到一句这一季的事？默认关闭。'),
+    h('div', null, '要不要在别的对话里，偶尔看到一句这个赛季的事？默认关闭。'),
     h('div', { style: { display: 'flex', gap: 8, marginTop: 6 } },
       h('button', { type: 'button', onClick: props.onAccept, style: buttonStyle }, '偶尔一句'),
       h('button', { type: 'button', onClick: props.onDismiss, style: buttonStyle }, '不用')))

@@ -410,8 +410,12 @@ function retestKey(row: { marker: string; first_due: string }): string {
 }
 
 function monthDay(date: string): string {
-  const [, month, day] = date.split('-')
-  return `${Number(month)} 月 ${Number(day)} 日`
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(date)
+  if (!match) return ''
+  const month = Number(match[2])
+  const day = Number(match[3])
+  if (!Number.isInteger(month) || !Number.isInteger(day) || month < 1 || month > 12 || day < 1 || day > 31) return ''
+  return `${month} 月 ${day} 日`
 }
 
 // --- decisions -----------------------------------------------------------------------

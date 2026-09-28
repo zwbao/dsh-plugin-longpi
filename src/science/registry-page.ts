@@ -37,12 +37,23 @@ export interface RegistryRow {
 }
 
 export function buildRegistry(opts: {
-  mode: 'off' | 'simulated' | 'live'
+  mode: 'off' | 'local' | 'simulated' | 'live'
   enrolled?: Record<string, number>
   released?: Record<string, boolean>
 }): { analysis_sha256: string; live_refused: boolean; reason_zh: string; rows: RegistryRow[] } {
   const analysis_sha256 = analysisCodeHash()
   const live_refused = true
+  if (opts.mode === 'local') {
+    return {
+      analysis_sha256,
+      live_refused,
+      reason_zh: '研究正式开始后才会发出，现在只保存在你的设备上。',
+      rows: loadStudies().map((row) => {
+        const built = rowOf(row, analysis_sha256, 'collecting', 0, false)
+        return { ...built, line_zh: `目标 ${built.threshold} 人 · 招募中`, live_zh: '还没有开始对外收集' }
+      }),
+    }
+  }
   if (opts.mode === 'off' || opts.mode === 'live') {
     return {
       analysis_sha256,
@@ -106,7 +117,7 @@ export function registryHtml(view: ReturnType<typeof buildRegistry>): string {
       <dt>说明哈希</dt><dd><code>${esc(row.manifest_sha256)}</code></dd>
       <dt>签名密钥</dt><dd>${esc(row.key_id)}</dd>
       <dt>分析代码</dt><dd><code>${esc(row.analysis_sha256)}</code></dd>
-      <dt>发布线</dt><dd>${row.enrolled} / ${row.threshold}</dd>
+      <dt>发布线</dt><dd>${row.line_zh.includes('招募中') ? esc(row.line_zh) : `${row.enrolled} / ${row.threshold}`}</dd>
       <dt>伦理</dt><dd>${esc(row.ethics_zh)}</dd>
     </dl>
   </article>`).join('')
@@ -132,7 +143,7 @@ export function registryHtml(view: ReturnType<typeof buildRegistry>): string {
   <p class="kicker">分析代码 sha256</p>
   <p><code>${esc(view.analysis_sha256)}</code></p>
   ${rows || '<p>还没有已签名的研究说明。</p>'}
-  <p class="kicker">透明记录可以从 /api/longpi/science/transparency 导出。这里没有个人化验，也没有理解测验的答案。</p>
+  <p class="kicker">发出记录可以导出。这里没有个人化验，也没有理解测验的答案。</p>
 </main>`
 }
 

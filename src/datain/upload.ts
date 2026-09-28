@@ -203,7 +203,7 @@ export async function pushToMirobody(opts: {
           finish(msg, type === 'upload_error' || type === 'error')
         }
       },
-      onerror: () => finish({ type: 'upload_error', message: '连不上 Mirobody 的上传通道' }, true),
+      onerror: () => finish({ type: 'upload_error', message: '连不上你放体检报告的地方' }, true),
     })
   })
 }
@@ -222,10 +222,10 @@ function readBack(parts: { forwarded: boolean; connected: boolean; indicators: n
   if (parts.wrong) return parts.wrong
   if (parts.duplicate) return `这份和已经保存的一份相同${parts.day ? `（${parts.day}）` : ''}，没有重复写入。`
   const lines: string[] = []
-  if (parts.genetics === 'raw' && parts.forwarded) lines.push('微基因原始数据已交给 Mirobody。位点以它保存的为准；叙述版 PDF 不必再传。')
-  else if (parts.genetics) lines.push('基因叙述报告没有整本送进体检解析。关键位点记在这台电脑上，并附了消费级报告的限制。要把位点交给 Mirobody，请用微基因原始数据导出。')
-  else if (!parts.connected) lines.push('报告里的叙述已经记下。还没有连上 Mirobody，文件本身没有送出。')
-  else if (parts.forwarded) lines.push(`已交给 Mirobody。${parts.indicators != null ? `解析到 ${parts.indicators} 项` : '解析结果还没返回'}${parts.day ? `，日期 ${parts.day}` : ''}。`)
+  if (parts.genetics === 'raw' && parts.forwarded) lines.push('微基因原始数据已交到你放体检报告的地方。位点以那里保存的为准；叙述版 PDF 不必再传。')
+  else if (parts.genetics) lines.push('基因叙述报告没有整本送进体检解析。关键位点记在这台电脑上，并附了消费级报告的限制。要把位点交出去，请用微基因原始数据导出。')
+  else if (!parts.connected) lines.push('报告里的叙述已经记下。还没有连上你放体检报告的地方，文件本身没有送出。')
+  else if (parts.forwarded) lines.push(`已交到你放体检报告的地方。${parts.indicators != null ? `解析到 ${parts.indicators} 项` : '解析结果还没返回'}${parts.day ? `，日期 ${parts.day}` : ''}。`)
   else lines.push('文件没有送出。')
   const narrative = parts.findings.filter((row) => row.kind !== 'wrong_person').slice(0, 4).map((row) => row.text_zh)
   if (narrative.length > 0) lines.push(`报告里写着：${narrative.join(' ')}`)
@@ -465,9 +465,9 @@ async function finishForward(deps: Pick<CoreDeps, 'config' | 'dataDir' | 'bus' |
       forwarded: Boolean(push && !push.failed), connected, indicators: push?.indicators ?? null, day,
       findings: shown, duplicate: false, wrong: '', genetics: input.genetics ? (input.genetics.source === 'raw' ? 'raw' : 'narrative') : null,
     }),
-    progress: push?.progress ?? (connected ? [] : ['未连接 Mirobody']),
+    progress: push?.progress ?? (connected ? [] : ['还没有连上']),
     genetics_stored: Boolean(input.genetics),
-    ...(push?.failed ? { error: 'Mirobody 没有收下这份文件。' } : {}),
+    ...(push?.failed ? { error: '没有收下这份文件。' } : {}),
   }
 }
 

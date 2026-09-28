@@ -83,6 +83,8 @@ export interface MethodResult {
   catalog_version: string
   ran_at: IsoTime
   limits_zh: string
+  /** Chinese name for the card. Absent on older rows. */
+  title_zh?: string
 }
 
 export type StoreKind = 'methylation' | 'taxa' | 'proteins' | 'conditions'

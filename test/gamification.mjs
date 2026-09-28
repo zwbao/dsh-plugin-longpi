@@ -96,7 +96,7 @@ try {
   const opted = prefsEngage(quiet, { pressure: true }, at('2026-07-27'))
   assert.equal(opted.invite, null)
   assert.equal(opted.header.show, true)
-  assert.match(opted.header.text_zh, /本季 · 查清贫血 · 第 1 周/)
+  assert.match(opted.header.text_zh, /本赛季 · 查清贫血 · 第 1 周/)
   assert.equal(seasonHeader({ pressure: false, title: '查清贫血', week: 1 }).show, false)
 
   const booked = actEngage(quiet, { action: 'book', department_zh: '血液科' }, at('2026-07-28'))

@@ -114,7 +114,7 @@ export type RunGate =
   | { ok: false; reason_zh: string; live_refused?: boolean }
 
 export function gateRun(opts: {
-  configured: 'off' | 'simulated' | 'live'
+  configured: 'off' | 'local' | 'simulated' | 'live'
   manifest: StudyManifest | null
   person: PersonFacts
   dataDir: string

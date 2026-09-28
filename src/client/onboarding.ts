@@ -26,7 +26,7 @@ import { Icon } from './icons.ts'
 
 const h = React.createElement
 
-export const ONBOARDING_TITLES = ['欢迎使用 LongPi', '建立档案', '连接体检记录', '第一个结果'] as const
+export const ONBOARDING_TITLES = ['先放进一份报告', '看看这份报告', '第一个结果', '一起研究'] as const
 const NOOP = () => {}
 /** A journey that has not arrived by then is shown as not read, with a retry. */
 const GIVE_UP_MS = 45_000
@@ -44,9 +44,8 @@ export interface OnboardingProps extends Partial<Face> {
 /** The step a stage starts at when onboarding is opened on purpose. */
 export function stepOfStage(stage: Stage): number {
   if (stage === 'consent') return 0
-  if (stage === 'profile') return 1
-  if (stage === 'records') return 2
-  return 3
+  if (stage === 'records' || stage === 'profile') return 1
+  return 2
 }
 
 function Dots(props: { step: number }): React.ReactElement {
@@ -107,7 +106,7 @@ function NotRead(props: { error: string | null; onRetry: () => void; onLater: ()
       h('h2', { className: 'lp-onb-title', tabIndex: -1 }, '暂时没有读到 LongPi 的数据'),
       h('p', { className: 'lp-muted' }, props.error
         ? `服务返回：${props.error}。通常是 DSH 刚启动、插件还在加载，稍等几秒再试。`
-        : '读取比平时慢，可能是 DSH 刚启动或 Mirobody 响应慢。可以再试一次，或者先去对话，稍后在健康页继续。'),
+        : '读取比平时慢。可以再试一次，或者先去对话，稍后在健康页继续。'),
       h('div', { className: 'lp-modal-actions' },
         h(Btn, { variant: 'outline', onClick: props.onLater }, '稍后再说'),
         h(Btn, { 'data-modal-autofocus': true, onClick: props.onRetry, disabled: props.busy }, props.busy ? '读取中…' : '重试'))))
@@ -242,20 +241,23 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
             onClick: () => {
               setBusy(true)
               acceptConsent()
-                .then(() => setPrivacyOpen(true))
+                .then(() => go(1))
                 .catch((err: unknown) => setError(`没有记下：${errorText(err, '请稍后再试')}`))
                 .finally(() => setBusy(false))
             },
-          }, busy ? '记录中…' : '开始'))) : null,
+          }, busy ? '记录中…' : '先看报告'))) : null,
       step === 1 ? h('div', { className: 'lp-onb-body' },
-        h('p', { className: 'lp-onb-lead' }, '只问能解锁结果的问题。每一项都可以跳过，跳过就是“不知道”，不会当作“否”。'),
-        h(ProfileEditor, { journey, variant: 'onboarding', idPrefix: 'lp-onb-profile', onSaved: () => go(2), onSkip: () => go(2) })) : null,
-      step === 2 ? h('div', { className: 'lp-onb-body' },
+        h('p', { className: 'lp-onb-lead' }, '先看已经放进来的体检。缺的问题可以等结果需要时再答，不知道就跳过。'),
         h(RecordsStep, { journey, onOpenChanges: props.openPage || props.explicit ? () => toPage({ tab: 'overview', id: 'lp-changes' }) : undefined }),
         h('div', { className: 'lp-modal-actions' },
-          h(Btn, { variant: 'outline', onClick: () => go(1) }, '上一步'),
-          h(Btn, { 'data-modal-autofocus': true, onClick: () => go(3) }, recordConnected(journey.records.status) ? '继续' : '先跳过'))) : null,
-      step === 3 ? h('div', { className: 'lp-onb-body' },
+          h(Btn, { variant: 'outline', onClick: () => go(0) }, '上一步'),
+          h(Btn, { 'data-modal-autofocus': true, onClick: () => go(2) }, recordConnected(journey.records.status) ? '看第一个结果' : '先跳过'))) : null,
+      step === 2 ? h('div', { className: 'lp-onb-body' },
+        journey.profile.age == null || (journey.profile.sex !== 'male' && journey.profile.sex !== 'female')
+          ? h(React.Fragment, null,
+            h('p', { className: 'lp-onb-lead' }, '算这个结果还缺一项。不知道可以跳过，不会当成“否”。'),
+            h(ProfileEditor, { journey, variant: 'onboarding', idPrefix: 'lp-onb-profile', onSaved: () => go(2), onSkip: () => go(3) }))
+          : null,
         computing
           ? h('div', { className: 'lp-onb-computing', 'aria-busy': true },
             h(Skeleton, { height: 88 }), h('p', { className: 'lp-caption' }, '正在用你的记录计算…'))
@@ -263,11 +265,14 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
         notice,
         h('p', { className: 'lp-fine' }, journey.boundary_zh),
         h('div', { className: 'lp-modal-actions' },
-          h(Btn, { variant: 'outline', onClick: finish }, '完成'),
-          props.explicit ? null : h(Btn, {
-            'data-modal-autofocus': true,
-            onClick: () => { props.openPage?.(); finish() },
-          }, '打开健康页'))) : null))
+          h(Btn, { variant: 'outline', onClick: () => go(1) }, '上一步'),
+          h(Btn, { onClick: () => go(3) }, '继续'))) : null,
+      step === 3 ? h('div', { className: 'lp-onb-body' },
+        h('p', { className: 'lp-onb-lead' }, 'LongPi 的用户在一起研究怎样延缓衰老。你可以用自己的数据做个人小试验，也可以加入大家的研究。加入要你自己再点一次，没有预先勾上。'),
+        h('p', { className: 'lp-caption' }, '研究正式开始后才会发出，现在只保存在你的设备上。'),
+        h('div', { className: 'lp-modal-actions' },
+          h(Btn, { onClick: () => { props.openPage?.(); finish() } }, '加入'),
+          h(Btn, { variant: 'outline', onClick: finish }, '以后再说'))) : null))
 }
 
 function OnboardingModal(props: { title: string; children?: React.ReactNode }): React.ReactElement {

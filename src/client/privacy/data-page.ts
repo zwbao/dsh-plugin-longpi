@@ -54,7 +54,7 @@ export function DataPage(props: { onDecided?: (decision: 'granted' | 'declined')
     flow ? h(React.Fragment, null,
       h(List, { title: '会发给 DeepSeek 的', lines: flow.to_deepseek ?? [] }),
       h(List, { title: '留在这台电脑的', lines: flow.stays_local ?? [] }),
-      h(List, { title: '留在 Mirobody 的', lines: flow.mirobody ?? [] }),
+      h(List, { title: '体检原件留在原来的地方', lines: flow.mirobody ?? [] }),
       h('p', null, flow.name),
       h('p', { className: 'lp-muted' }, flow.session_log)) : null,
     h('p', { className: 'lp-fine' }, `会话日志：${session}`),

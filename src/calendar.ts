@@ -83,7 +83,7 @@ export function buildCalendar(journey: Journey, tracking: Tracking, opts: { now:
       `DTSTART;VALUE=DATE:${compactDate(day.date)}`,
       `DTEND;VALUE=DATE:${compactDate(addDays(day.date, 1))}`,
       `SUMMARY:${escapeText(summary)}`,
-      `DESCRIPTION:${escapeText(`LongPi 按方案给出的${retest.marker}复测日期。结果进入 Mirobody 后，LongPi 会判断变化是否超出正常波动。`)}`,
+      `DESCRIPTION:${escapeText(`LongPi 按方案给出的${retest.marker}复测日期。结果放进体检记录后，LongPi 会判断变化是否超出正常波动。`)}`,
       'TRANSP:TRANSPARENT',
       ...alarm(summary, 'PT9H'),
       'END:VEVENT',

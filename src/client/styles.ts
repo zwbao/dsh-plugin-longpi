@@ -71,11 +71,12 @@ body[data-ds-dark-theme] .lp {
 /* --- page frame ----------------------------------------------------------------- */
 .lp-page-root {
   container: lp-root / inline-size;
-  height: 100%; overflow-y: auto; background: var(--lp-bg);
+  width: 100%; max-width: 100%; box-sizing: border-box;
+  height: 100%; overflow-x: hidden; overflow-y: auto; background: var(--lp-bg);
   padding-top: var(--dsh-frame-top-clearance, 48px);
   padding-left: var(--dsh-frame-leading-clearance, 0px);
 }
-.lp-page { max-width: 1040px; margin: 0 auto; padding: 12px 40px 64px; }
+.lp-page { width: 100%; max-width: 1040px; margin: 0 auto; padding: 12px 40px 64px; box-sizing: border-box; }
 @container lp-root (max-width: 760px) { .lp-page { padding: 8px 20px 48px; } }
 .lp-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 28px; }
 .lp-season-bar { position: static; display: flex; align-items: center; width: 100%; max-width: 100%; margin: -12px 0 16px; padding: 8px 12px; border: 0; border-radius: 12px; background: var(--lp-layer-2); color: var(--lp-ink); font: inherit; text-align: left; cursor: pointer; }
@@ -535,7 +536,7 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
 /* The host is the last child of DSH's hero composer stack; home.ts sets its top margin so the row sits
    12 px under the card whatever the stack's gap. Empty (no row for this stage), it takes no room. */
 .lp-home-host {
-  display: flex; flex-wrap: wrap; justify-content: center; width: 100%; min-width: 0;
+  display: flex; flex-wrap: wrap; justify-content: center; width: 100%; min-width: 0; box-sizing: border-box;
   padding: 0 var(--dsh-composer-side-clearance, 16px);
 }
 .lp-home-host:empty { display: none; }
@@ -604,7 +605,7 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
 .lp-banner .lp-icon { color: var(--lp-accent); }
 .lp-banner:hover { background: var(--lp-accent-soft); }
 .lp-banner-go { margin-left: auto; color: var(--lp-accent); white-space: nowrap; }
-.lp-tabs { display: flex; gap: 4px; margin: 0 0 20px; border-bottom: .5px solid var(--lp-line-2); overflow-x: auto; scrollbar-width: none; }
+.lp-tabs { display: flex; gap: 4px; margin: 0 0 20px; max-width: 100%; border-bottom: .5px solid var(--lp-line-2); overflow-x: auto; scrollbar-width: none; }
 .lp-tab {
   position: relative; display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border: 0; background: transparent;
   color: var(--lp-ink-2); font-size: 14px; line-height: 22px; cursor: pointer; white-space: nowrap; border-radius: 8px 8px 0 0;
@@ -732,7 +733,7 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
 .lp-ind-list { list-style: none; margin: 0; padding: 0; }
 .lp-ind-row { border-top: .5px solid var(--lp-line-1); }
 .lp-ind-row:first-child { border-top: 0; }
-.lp-ind-btn { width: 100%; min-height: 44px; padding: 6px 8px; margin: 0 -8px; width: calc(100% + 16px); border: 0; border-radius: 10px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.lp-ind-btn { width: 100%; max-width: 100%; min-height: 44px; padding: 6px 8px; margin: 0; box-sizing: border-box; border: 0; border-radius: 10px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .lp-ind-btn:hover, .lp-ind-open .lp-ind-btn { background: var(--lp-hover); }
 .lp-ind-name { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .lp-ind-name .lp-strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -896,12 +897,61 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
 .lp-pane-loading { display: grid; gap: 12px; }
 .lp-pane-foot { margin: 4px 0 0; }
 
+.lp-subnav { display: flex; gap: 8px; flex-wrap: wrap; margin: -8px 0 16px; }
+.lp-subnav-btn { border: 0; background: transparent; color: var(--lp-ink-2); font: inherit; padding: 4px 2px; cursor: pointer; }
+.lp-subnav-on { color: var(--lp-ink); font-weight: 600; }
+.lp-move { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.lp-move-lead { font-variant-numeric: tabular-nums; }
+.lp-move-second { color: var(--lp-ink-2); font-size: 13px; }
+.lp-move-btn { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lp-quest-grid { display: grid; gap: 8px; }
+.lp-quest-card { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; border: 1px solid var(--lp-line-2); border-radius: 12px; background: var(--lp-layer); color: inherit; font: inherit; padding: 12px; cursor: pointer; }
+.lp-life-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.lp-season-bar-track { height: 8px; border-radius: 99px; background: var(--lp-line-2); overflow: hidden; }
+.lp-season-bar-track > span { display: block; height: 100%; background: var(--lp-accent); }
+.lp-timeline { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.lp-timeline-date { display: inline-block; min-width: 7em; color: var(--lp-ink-3); }
+.lp-ask-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 8px; }
+.lp-ask-q { width: 100%; text-align: left; border: 1px solid var(--lp-line-2); border-radius: 12px; background: transparent; color: inherit; font: inherit; padding: 10px 12px; cursor: pointer; }
+.lp-trends { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; }
 .lp-spin { animation: lp-spin 1s linear infinite; }
 @keyframes lp-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @keyframes lp-fade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes lp-pop { 0% { transform: scale(.94); } 60% { transform: scale(1.04); } 100% { transform: scale(1); } }
 @keyframes lp-pulse { 50% { opacity: .45; } }
 @keyframes lp-spin { to { transform: rotate(360deg); } }
+.lp-card, .lp-result, .lp-overview, .lp-science, .lp-tab-body, .lp-method-block, .lp-results { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.lp-science, .lp-science p, .lp-science h2, .lp-science label, .lp-card p, .lp-muted, .lp-caption { overflow-wrap: anywhere; }
+.lp-actions, .lp-form-actions, .lp-life-row { flex-wrap: wrap; max-width: 100%; }
+.lp-found { grid-template-columns: repeat(auto-fit, minmax(min(140px, 100%), 1fr)); }
+.lp-timeline-date { min-width: 0; }
+@media (max-width: 420px) {
+  .lp-page { padding-left: 12px; padding-right: 12px; }
+  .lp-results, .lp-grid-2, .lp-method-block, .lp-first { grid-template-columns: minmax(0, 1fr); }
+  .lp-header, .lp-result-head, .lp-card-head { flex-wrap: wrap; }
+  .lp-linkbtn, .lp-bignum { max-width: 100%; }
+  .lp-bignum { font-size: 36px; line-height: 44px; }
+}
+/* A narrow page or settings column (a phone, or DSH's settings dialog at phone width, where the LongPi column
+   is only about 110 px): every row wraps, fields take the column's width, nothing is pushed past the edge. */
+@container lp-root (max-width: 360px) {
+  .lp-settings > *, .lp-settings section, .lp-settings div, .lp-settings form, .lp-settings fieldset, .lp-settings label,
+  .lp-settings li, .lp-settings details, .lp-settings summary, .lp-settings span, .lp-settings p, .lp-settings h2, .lp-settings h3 { min-width: 0; max-width: 100%; }
+  .lp-settings input:not([type=radio]):not([type=checkbox]), .lp-settings select, .lp-settings textarea { min-width: 0 !important; max-width: 100%; width: 100%; box-sizing: border-box; }
+  .lp-settings button { max-width: 100%; height: auto; min-height: 30px; white-space: normal; text-align: left; }
+  .lp-settings .lp-set-head, .lp-settings .lp-set-title, .lp-settings .lp-field-label, .lp-settings .lp-input-unit, .lp-settings .lp-seg,
+  .lp-settings .lp-status, .lp-settings .lp-privacy-row, .lp-settings .lp-switch, .lp-settings .lp-check, .lp-settings .lp-subhead,
+  .lp-settings .lp-remind-row, .lp-settings .lp-form-actions { flex-wrap: wrap; }
+  .lp-settings .lp-grid-2, .lp-settings .lp-followup-times, .lp-settings .lp-followup-grid, .lp-settings .lp-remind { grid-template-columns: minmax(0, 1fr); }
+  .lp-settings .lp-seg { width: auto; max-width: 100%; }
+  .lp-settings .lp-seg-opt, .lp-settings .lp-seg-opt span { min-width: 0; height: auto; white-space: normal; }
+  .lp-settings, .lp-settings * { overflow-wrap: anywhere; }
+}
+/* On a narrow page an ⓘ note spans the column instead of hanging off the button toward the edge. The page root
+   contains layout, so "fixed" here is relative to it. */
+@container lp-root (max-width: 480px) {
+  .lp-info-pop { position: fixed; left: 12px; right: 12px; top: auto; width: auto; max-width: none; margin-top: 28px; }
+}
 @media (prefers-reduced-motion: reduce) {
   .lp-card, .lp-win, .lp-pop, .lp-skeleton, .lp-hero, .lp-home-row, .lp-task-ring, .lp-pill-wrap, .lp-notice, .lp-spin, .lp-info-pop, .lp-task-menu { animation: none; }
   .lp-ring-fill, .lp-body, .lp-dot, .lp-dot-step, .lp-switch-track, .lp-switch-thumb { transition: none; }

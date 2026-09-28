@@ -178,7 +178,7 @@ function text(value: unknown, max: number): string {
   return typeof value === 'string' ? value.trim().replace(/\s+/g, ' ').slice(0, max) : ''
 }
 
-const DOSE_NOT_SAVED = '方案只记做什么，不记剂量；药物和补剂的剂量与服用记录在 Mirobody 的用药计划里。'
+const DOSE_NOT_SAVED = '方案只记做什么，不记剂量；药物和补剂的剂量与服用记录在用药计划里。'
 
 export interface NormalizeContext {
   today: string
@@ -241,7 +241,7 @@ export function normalizePlan(raw: unknown, context: NormalizeContext): Normaliz
       if (hit) mirobody = { medication: hit.name, ...(hit.plan_id ? { plan_id: hit.plan_id } : {}) }
       else {
         mirobody = { medication: name }
-        warnings.push(`Mirobody 用药计划里没有找到「${name}」。在 Mirobody 里建好用药计划并打卡后，才能跟踪服用情况。`)
+        warnings.push(`用药计划里没有找到「${name}」。在你放体检报告的地方建好用药计划并打卡后，才能跟踪服用情况。`)
       }
     }
 
@@ -318,7 +318,7 @@ export function addCheckIns(dataDir: string, entries: unknown[], context: { toda
       continue
     }
     if (item.mirobody) {
-      problems.push(`「${item.title}」是药物或补剂，服用记录请在 Mirobody 里打卡，这里只读。`)
+      problems.push(`「${item.title}」是药物或补剂，服用记录记在用药计划里，这里只读。`)
       continue
     }
     const date = DATE.test(text(row.date, 10)) ? text(row.date, 10) : context.today

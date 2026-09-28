@@ -3,7 +3,7 @@
 import type { Id, IsoTime } from './common.ts'
 import type { ConditionFlag, DrugClass } from './memory.ts'
 
-export type ScienceMode = 'off' | 'simulated' | 'live'
+export type ScienceMode = 'off' | 'local' | 'simulated' | 'live'
 export interface StudyManifest {
   schema: 'longpi.study/1'; id: string; version: string
   title_zh: string; summary_zh: string

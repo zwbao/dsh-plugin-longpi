@@ -10,7 +10,7 @@ import type { ScienceCard, VoteTopic } from './community.ts'
 const h = React.createElement
 
 interface Payload {
-  mode: 'off' | 'simulated' | 'live'
+  mode: 'off' | 'local' | 'simulated' | 'live'
   reason_zh?: string
   studies?: StudyRow[]
   progress?: { label_zh: string; contributed: number; studies: number; min_cohort: number; week: number; weeks: number }
@@ -39,7 +39,7 @@ export function StudiesTab(): React.ReactElement {
   }, [])
   React.useEffect(() => { load() }, [load])
   if (!data) return h('p', { className: 'lp-muted' }, error || '正在读取研究…')
-  if (data.mode === 'off') return h('section', { className: 'lp-section' }, h('h2', { className: 'lp-h2' }, '研究没有打开'), h('p', null, data.reason_zh || '模拟模式可以在本机试跑。live 在这个版本里不会打开。'))
+  if (data.mode === 'off') return h('section', { className: 'lp-section' }, h('h2', { className: 'lp-h2' }, '研究没有打开'), h('p', null, data.reason_zh || '可以在设置里再打开。不满 18 岁不参加研究。'))
   return h('div', { className: 'lp-science' },
     h('style', null, CSS),
     error ? h('p', { role: 'alert' }, error) : null,

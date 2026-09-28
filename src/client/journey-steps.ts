@@ -43,11 +43,11 @@ export function RecordsStatusLine(props: { journey: Journey }): React.ReactEleme
     const partial = records.status === 'partial'
     return h('div', { className: 'lp-status' },
       h('span', { className: `lp-statusdot ${partial ? 'lp-statusdot-warn' : 'lp-statusdot-on'}`, 'aria-hidden': true }),
-      `Mirobody 已连接 · ${records.indicator_count} 项指标${checkupsText(records.full_checkups)}${partial ? ' · 部分没有读到' : ''}`)
+      `已连上 · ${records.indicator_count} 项检查${checkupsText(records.full_checkups)}${partial ? ' · 有的这次没读到，不是没测' : ''}`)
   }
   return h('div', { className: 'lp-status' },
     h('span', { className: `lp-statusdot ${records.status === 'error' ? 'lp-statusdot-bad' : ''}`, 'aria-hidden': true }),
-    records.status === 'error' ? `记录读取失败：${records.error || '没有返回原因'}` : '还没有连接 Mirobody 记录')
+    records.status === 'error' ? `记录读取失败：${records.error || '没有返回原因'}` : '还没有读到体检')
 }
 
 function month(iso: string | null): string {
@@ -101,14 +101,14 @@ export function RecordsStep(props: { journey: Journey; onOpenChanges?: () => voi
   return h('div', { className: 'lp-step-body' },
     connected
       ? h(React.Fragment, null,
-        h('p', { className: 'lp-muted' }, '我们在 Mirobody 里看到了这些（只读）：'),
+        h('p', { className: 'lp-muted' }, '已经放进来的体检（只读）：'),
         h(FoundTiles, { journey: props.journey }),
         records.status === 'partial' ? h('p', { className: 'lp-blocker lp-blocker-bad' }, `有一部分记录这次没有读到${records.read_errors[0] ? `：${records.read_errors[0]}` : ''}。它们不是“没测”，稍后在健康页刷新。`) : null,
         h(ChangesLine, props))
       : h(React.Fragment, null,
         records.status === 'error'
           ? h('p', { className: 'lp-blocker lp-blocker-bad' }, `记录读取失败：${records.error || '没有返回原因'}`)
-          : h('p', { className: 'lp-muted' }, 'LongPi 从你自己的 Mirobody 读取体检和可穿戴数据（只读）。在下面用 Mirobody 的邮箱和密码登录，不用复制 MCP 地址。')),
+          : h('p', { className: 'lp-muted' }, '用邮箱和密码登录并连接。平时不用看地址。')),
     h(ConnectionPanel, { idPrefix: 'lp-onb-conn', collapsed: connected }))
 }
 

@@ -24,15 +24,25 @@ export function startScience(next: ScienceState): void {
 export function configuredMode(): ScienceMode {
   try {
     const mode = state.configured()
-    return mode === 'live' || mode === 'simulated' || mode === 'off' ? mode : 'off'
+    return mode === 'live' || mode === 'simulated' || mode === 'local' || mode === 'off' ? mode : 'local'
   } catch {
-    return 'off'
+    return 'local'
   }
 }
 
-/** Live is refused in this build (D6). The fact pack then says off, so no study is described as live. */
-export function effectiveMode(): 'off' | 'simulated' {
-  return configuredMode() === 'simulated' ? 'simulated' : 'off'
+/**
+ * Live still does not collect (D6): the fact pack says off.
+ * 'local' is the on-device default. 'simulated' stays for tests.
+ */
+export function effectiveMode(): 'off' | 'local' | 'simulated' {
+  const mode = configuredMode()
+  if (mode === 'simulated') return 'simulated'
+  if (mode === 'local') return 'local'
+  return 'off'
+}
+
+export function scienceOpen(): boolean {
+  return effectiveMode() !== 'off'
 }
 
 export function scienceSummary(): FactPack['science'] {
@@ -55,7 +65,7 @@ export { scienceCandidates }
 
 /** Cards M6 can show. They name a study, never a biomarker rarity. */
 export function contributionCards(): Array<{ id: string; title_zh: string; body_zh: string }> {
-  if (effectiveMode() !== 'simulated') return []
+  if (!scienceOpen()) return []
   const dir = state.dataDir()
   if (!dir) return []
   try {

@@ -16,14 +16,23 @@ export function daysBetween(from: string, to: string): number {
   return Math.round((Date.parse(`${to.slice(0, 10)}T00:00:00Z`) - Date.parse(`${from.slice(0, 10)}T00:00:00Z`)) / 86_400_000)
 }
 
-export function chineseDate(iso: string): string {
-  const [, month, day] = iso.slice(0, 10).split('-')
-  return `${Number(month)} 月 ${Number(day)} 日`
+export function chineseDate(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (!match) return ''
+  const month = Number(match[2])
+  const day = Number(match[3])
+  if (!Number.isInteger(month) || !Number.isInteger(day) || month < 1 || month > 12 || day < 1 || day > 31) return ''
+  return `${month} 月 ${day} 日`
 }
 
-export function chineseMonth(iso: string): string {
-  const [year, month] = iso.slice(0, 10).split('-')
-  return `${year} 年 ${Number(month)} 月`
+export function chineseMonth(iso: string | null | undefined): string {
+  if (!iso) return ''
+  const match = /^(\d{4})-(\d{2})/.exec(iso)
+  if (!match) return ''
+  const month = Number(match[2])
+  if (!Number.isInteger(month) || month < 1 || month > 12) return ''
+  return `${match[1]} 年 ${month} 月`
 }
 
 export function weekday(iso: string): string {
@@ -56,7 +65,7 @@ export function pct(value: number): string {
 export function versusAge(advance: number | null | undefined, checkups: number | null | undefined = 2): string {
   if (advance == null || !Number.isFinite(advance)) return ''
   if (Math.abs(advance) < 0.5) return '和实足年龄相当'
-  if (advance < 0 && (checkups ?? 0) < 2) return `单次血检的模型估计，低于实足年龄 ${fmt(-advance)} 岁，只作参考`
+  if (advance < 0 && (checkups ?? 0) < 2) return `一次检查算出来的数（模型估计，不是诊断），比周岁小 ${fmt(-advance)} 岁。一次检查不能说明你变年轻了`
   return advance < 0 ? `比实足年龄年轻 ${fmt(-advance)} 岁` : `比实足年龄大 ${fmt(advance)} 岁`
 }
 

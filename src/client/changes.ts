@@ -9,6 +9,7 @@ import React from 'react'
 import { LineChart } from './charts.ts'
 import { Icon } from './icons.ts'
 import type { Journey, RecordChange } from './types.ts'
+import { sourceLabel } from '../ux/plain.ts'
 
 const h = React.createElement
 
@@ -125,7 +126,7 @@ export function Basis(props: { journey: Journey; rows: readonly RecordChange[] }
   return h('details', { className: 'lp-basis' },
     h('summary', null, '判断依据'),
     h('div', { className: 'lp-change-notes' },
-      h('p', { className: 'lp-caption' }, '“超出正常波动”指两次结果之差大于个体正常波动（参考变化值，RCV）。趋势图里的浅色带以比较起点那次结果为基线，落在带外就是真实变化。'),
+      h('p', { className: 'lp-caption' }, '“超出正常波动”指两次结果之差比你平常的起伏更大。趋势图里的浅色带以比较起点那次结果为基线，落在带外才值得注意。'),
       ...rows.map((row) => h('p', { key: `text:${row.key}`, className: 'lp-caption' }, h('span', { className: 'lp-strong' }, row.label_zh), `：${withoutLabel(row)}`)),
       ...caveats.map((text) => h('p', { key: `caveat:${text}`, className: 'lp-caption' }, text)),
       unjudged.length > 0 ? h('p', { className: 'lp-caption' }, `没有判断：${unjudged.map((row) => `${row.label_zh}（${row.reason_zh || '读取没有完成'}）`).join('、')}`) : null,
@@ -133,7 +134,7 @@ export function Basis(props: { journey: Journey; rows: readonly RecordChange[] }
         '波动数据来源：',
         ...sources.flatMap((source, index) => [
           index > 0 ? '；' : null,
-          source.url ? h('a', { key: source.url, href: source.url, target: '_blank', rel: 'noopener noreferrer' }, source.title || source.url) : source.title,
+          source.url ? h('a', { key: source.url, href: source.url, target: '_blank', rel: 'noopener noreferrer', title: source.title || undefined }, sourceLabel(source.title)) : sourceLabel(source.title),
           source.verified ? null : '（引用尚未逐字核对）',
         ])) : null,
       props.journey.changes_note_zh ? h('p', { className: 'lp-fine' }, props.journey.changes_note_zh) : null))
@@ -152,7 +153,7 @@ export function NotableChanges(props: { journey: Journey; onOpenIndicators: () =
   return h('section', { className: 'lp-card lp-notable', id: 'lp-changes', 'aria-labelledby': 'lp-changes-title' },
     h('div', { className: 'lp-card-head' },
       h('div', { className: 'lp-label', id: 'lp-changes-title' }, '值得注意的变化', rows.length > 0 ? h('span', { className: 'lp-optional' }, `${rows.length} 项超出正常波动`) : null),
-      h('button', { type: 'button', className: 'lp-row-link', onClick: props.onOpenIndicators }, '在“指标”里看全部 →')),
+      h('button', { type: 'button', className: 'lp-row-link', onClick: props.onOpenIndicators }, '在「化验」里看全部 →')),
     ...advice.map((group) => h('p', { key: group.advice, className: 'lp-change-advice lp-change-warn' },
       h(Icon, { name: 'warn', size: 14 }), h('span', null, group.advice))),
     shown.length > 0

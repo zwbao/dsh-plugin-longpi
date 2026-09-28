@@ -28,6 +28,7 @@ import { fallbackSurfaces } from './surfaces/fallback.ts'
 import { recordSurfaces } from './surfaces/service.ts'
 import { chooseSurfaces } from './surfaces/coach-service.ts'
 import { DAILY_WORDING, QUIET_DETAIL, QUIET_TITLE, quietenSurfaces, readQuiet, stripDailyWording } from './engage/quiet.ts'
+import { concreteNext, suggestedQuestions } from './ux/plain.ts'
 import { careState } from './triage/care.ts'
 import { NO_STOP } from './doctor-first.ts'
 import { currentMedications } from './situation.ts'
@@ -123,9 +124,9 @@ const DETAIL_MAX = 40
 const JOURNEY_TTL_MS = 10 * 60_000
 
 const BIOAGE_BLOCKER: Partial<Record<BioAge['status'], string>> = {
-  no_skill: '方法库里没有身体年龄（表型年龄）方法，请更新 longevity-skills。',
-  no_record: '还没有连接 Mirobody 记录。',
-  no_age: '档案里还没有实足年龄。',
+  no_skill: '方法库里没有身体年龄这项计算。',
+  no_record: '还没有读到体检。',
+  no_age: '档案里还没有周岁。',
   no_checkup: '九项血检还没有在同一天测齐。',
 }
 
@@ -384,14 +385,17 @@ function nextOf(stage: Stage, journey: Body): Next {
     case 'consent':
       return step('开始使用 LongPi', '先了解 LongPi 做什么、数据放在哪里。', 'consent')
     case 'profile':
-      return step('建立档案', '填写年龄和性别即可计算身体年龄；再回答 6 个问题可计算心血管风险。', 'profile')
+      return step('补一个问题', '填写周岁和性别就能算身体年龄。不知道可以跳过，不会当成“否”。', 'profile')
     case 'records':
       return journey.records.status === 'error'
         ? step('连接体检记录', clip(`记录读取失败：${journey.records.error}`), 'records')
-        : step('连接体检记录', '在 Mirobody 中生成个人 MCP 地址，粘贴到设置里的 LongPi 页。', 'records')
+        : step('把体检报告放进来', '放进来之后，就能看身体年龄。平时不用管连接地址。', 'records')
     case 'first_result': {
       const n = journey.addons.length
-      if (n > 0) return step(`还差 ${n} 项检查`, `下次体检加测：${journey.addons.slice(0, 3).map((row) => row.item_zh).join('、')}`, 'addons')
+      if (n > 0) {
+        const one = concreteNext(journey.addons)
+        return step(one.title_zh, one.detail_zh, 'addons')
+      }
       const facts = journey.results.risk.missing_facts.length
       if (facts > 0) return step('补充档案', `回答档案里的 ${facts} 个问题即可计算心血管风险。`, 'profile')
       return step('暂时算不出结果', clip(journey.results.bioage.blocker_zh || journey.results.risk.blocker_zh), 'open')
@@ -413,10 +417,10 @@ function suggestionsOf(stage: Stage, journey: Body, followupOn: boolean): Journe
   if (stage === 'consent' || stage === 'profile') {
     picks.push({ id: 'what-longpi-does', text_zh: 'LongPi 能帮我做什么？' }, { id: 'build-profile', text_zh: '帮我建立健康档案' })
   } else if (stage === 'records') {
-    picks.push({ id: 'import-reports', text_zh: '怎么把体检报告导入 Mirobody？' }, { id: 'before-records', text_zh: '还没有体检记录，现在可以先做什么？' })
+    picks.push({ id: 'import-reports', text_zh: '体检报告放在哪里，才能在这里看到？' }, { id: 'before-records', text_zh: '还没有报告，我现在可以先做什么？' })
   } else if (stage === 'first_result') {
-    // A plan does not have to wait for the first result: many checkups never include CRP or waist.
-    picks.push({ id: 'next-checkup', text_zh: '下次体检需要加测哪些项目？' }, { id: 'draft-plan', text_zh: '帮我制定一份改善方案' })
+    picks.push(...suggestedQuestions({ changes: journey.addons.slice(0, 2).map((row) => row.item_zh) }).map((text, index) => ({ id: `ask-${index}`, text_zh: text })))
+    picks.push({ id: 'draft-plan', text_zh: '帮我制定一份改善方案' })
     if (journey.addons.some((row) => row.self_measurable)) picks.push({ id: 'log-self', text_zh: '帮我记录腰围和家庭血压' })
   } else if (stage === 'plan') {
     picks.push(FOCUS_PROMPT[journey.profile.focus[0] ?? 'none'], { id: 'draft-plan', text_zh: '帮我制定一份改善方案' }, { id: 'save-plan', text_zh: '帮我保存我的干预方案' })
@@ -439,10 +443,11 @@ function suggestionsOf(stage: Stage, journey: Body, followupOn: boolean): Journe
 function stageStatus(stage: Stage, journey: Body, next: Next): string {
   if (stage === 'consent' || stage === 'profile') return '花 2 分钟建档，算出你的身体年龄和心血管风险'
   if (stage === 'records') return journey.records.status === 'error' ? '体检记录读取失败，暂时算不出结果' : '连接体检记录后，就能算出你的身体年龄'
-  if (stage === 'first_result' && journey.addons.length > 0) return `还差 ${journey.addons.length} 项检查：${journey.addons.slice(0, 3).map((row) => row.item_zh).join('、')}`
+  if (stage === 'first_result' && journey.addons.length > 0) return concreteNext(journey.addons).title_zh
   const { bioage, risk } = journey.results
   const parts: string[] = []
-  if (bioage.status === 'ok' && bioage.phenoage != null) parts.push(`身体年龄 ${Number(bioage.phenoage.toFixed(1))} 岁（模型估计）`)
+  if (bioage.status === 'ok' && bioage.headline_zh && /你确实年轻了|算出来小了/.test(bioage.headline_zh)) parts.push(bioage.headline_zh)
+  else if (bioage.status === 'ok' && bioage.phenoage != null) parts.push(`身体年龄 ${Number(bioage.phenoage.toFixed(1))} 岁（模型估计）`)
   if (risk.status === 'ok' && risk.risk_pct != null) parts.push(`心血管 10 年风险 ${Number(risk.risk_pct.toFixed(1))}%`)
   return parts.length > 0 ? parts.join('，') : next.detail_zh
 }
@@ -468,7 +473,7 @@ function journeyFrom(context: JourneyContext, tracking: Tracking, summary: Recor
   const points = tracking.bioage.points
   const latest = latestSelf(readSelf(context.dataDir))
   const bioage = bioageResult(tracking.bioage)
-  const caveat = bioage.status === 'ok' ? bioageCaveat(context, tracking.changes) : null
+  const caveat = bioage.status === 'ok' && !/不一定是好事/.test(bioage.headline_zh ?? '') ? bioageCaveat(context, tracking.changes) : null
   if (caveat) bioage.caveat_zh = caveat
   const risk = riskResult(tracking)
   const plan = planOf(context, tracking)
@@ -563,7 +568,13 @@ function journeyFrom(context: JourneyContext, tracking: Tracking, summary: Recor
     followup: { enabled: followupOn, channels: [], next_at: null },
     surfaces,
     triage: { findings: care.findings, care: pack.triage.care, needs_sex: pack.triage.stop?.needs_sex === true, top_facts: pack.top_facts },
-    method_results: pack.method_results,
+    method_results: pack.method_results.map((row) => {
+      const card = context.catalog.cards.find((item) => item.name === row.skill)
+      const paper = card?.paper?.title_zh?.trim() ?? ''
+      const blurb = (card?.blurb ?? '').replace(/。$/, '').trim()
+      const title = /[\u4e00-\u9fff]/.test(paper) && !/[A-Za-z]{4,}/.test(paper) ? paper : blurb
+      return title ? { ...row, title_zh: title } : row
+    }),
   }
   journey.followup = followupSummary(context.dataDir, followupStateOf(journey, tracking), context.now ?? new Date())
   try {

@@ -1384,7 +1384,10 @@ if set_mcp == "1":
     values["mcpUrl"] = quote(mcp_url)
     values["mcpToken"] = quote(mcp_token)
 
-block = [BEGIN, "- id: dsh-plugin-longpi", "  config:"] + ["    %s: %s" % (key, values[key]) for key in KEYS] + [END]
+# The window corner reads LongPi: the official DeepSeek Harness wordmark row is left out of this profile, so the
+# name slot LongPi fills is the one shown. The mark stays the DeepSeek whale. Removing this block brings it back.
+BRAND = ["- id: ui-brand-official", "  disabled: true"]
+block = [BEGIN, "- id: dsh-plugin-longpi", "  config:"] + ["    %s: %s" % (key, values[key]) for key in KEYS] + BRAND + [END]
 if span:
     new_lines = lines[:span[0]] + block + lines[span[1]:]
 else:

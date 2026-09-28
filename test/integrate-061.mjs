@@ -42,7 +42,7 @@ const anaemia = [{
 }]
 
 try {
-  assert.equal(PRODUCT_VERSION, '0.6.1')
+  assert.equal(PRODUCT_VERSION, '0.6.2')
   assert.equal(EVENT_OWNERS['study.n_of_1_completed'], 'M8')
   assert.equal(EVENT_OWNERS['care.booked'], 'M6')
   assert.ok(RESERVED_ROUTES.M6.includes('GET /api/longpi/codex/odds'))

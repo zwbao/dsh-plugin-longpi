@@ -8,8 +8,8 @@ import React from 'react'
 import type { MethodResult, ResultLabel } from '../contracts/library.ts'
 import { modelRangeNote } from '../honesty/model-range.ts'
 import {
-  allowsYoungerClaim, olderThanAgeSentence, overviewSlice, parseMethodResults,
-  PHENO_SKILL, primaryOutput, redCellDriverNames, resultSentence, RISK_SKILL,
+  allowsYoungerClaim, facingUnit, olderThanAgeSentence, overviewSlice, parseMethodResults,
+  PHENO_SKILL, primaryOutput, redCellDriverNames, resultSentence, riskBindingNote, RISK_SKILL,
   speciesOf, stripYoungerClaim, titleOf,
 } from '../core/method-view.ts'
 import { fmt, LineChart } from './charts.ts'
@@ -19,6 +19,7 @@ import { Icon } from './icons.ts'
 import { recordConnected } from './normalize.ts'
 import { InlineSelf } from './self-measure.ts'
 import { BIOAGE_INFO, RISK_INFO } from './terms.ts'
+import { pickKeyTrends } from '../ux/plain.ts'
 import type { Addon, Journey, ModelCard, Tracking } from './types.ts'
 import { Btn, Info, Skeleton } from './ui.ts'
 
@@ -34,9 +35,9 @@ function EstimateTag(): React.ReactElement {
 }
 
 function labelText(label: ResultLabel): string {
-  if (label === 'verified') return '已核对'
-  if (label === 'unverified-binding') return '绑定未核对'
-  return '仅证据'
+  if (label === 'verified') return '数据对得上'
+  if (label === 'unverified-binding') return '还没对上，先别当成你的结果'
+  return '这是研究里的说法，不是用你的体检算的'
 }
 
 function LabelTag(props: { label: ResultLabel }): React.ReactElement {
@@ -132,7 +133,8 @@ export function BodyAgeCard(props: {
   const partial = (bio?.band_missing ?? []).length > 0
   const graded = messagesFor(props.journey, props.tracking).find((row) => row.subject.kind === 'bioage')
   const verified = !props.method || props.method.label === 'verified'
-  const younger = verified && allowsYoungerClaim('verified', graded?.allowed_claims)
+  const concernLine = /不一定是好事/.test(result.headline_zh ?? '') || /不一定是好事/.test(graded?.headline_zh ?? '')
+  const younger = !concernLine && verified && allowsYoungerClaim('verified', graded?.allowed_claims)
   const drivers = redCellDriverNames(props.journey.changes ?? [])
   const older = phenoage != null && (latest?.advance ?? result.advance) != null
     ? olderThanAgeSentence({ phenoage, advance: (latest?.advance ?? result.advance) as number, drivers })
@@ -140,7 +142,9 @@ export function BodyAgeCard(props: {
   const binding = props.method && props.method.label === 'unverified-binding'
     ? resultSentence(props.method, { youngerAllowed: false })
     : ''
-  const gradedText = graded ? (younger ? graded.headline_zh : stripYoungerClaim(graded.headline_zh)) : ''
+  const gradedText = concernLine
+    ? (result.headline_zh || graded?.headline_zh || '')
+    : graded ? (younger ? graded.headline_zh : stripYoungerClaim(graded.headline_zh)) : ''
   // Older than chronological age: say what drives it. Do not lead with "one test cannot show you got younger".
   const caption = older
     ? [older, younger && graded ? graded.headline_zh : '', binding].filter(Boolean).join('')
@@ -156,15 +160,27 @@ export function BodyAgeCard(props: {
       h('span', { className: 'lp-bignum-unit' }, '岁'),
       younger ? h('span', { className: 'lp-pill lp-pill-good' }, '真实的变化') : null),
     // Set by the server when an input of this model changed beyond normal fluctuation.
-    result.caveat_zh ? h('p', { className: 'lp-caveat', role: 'note' }, h(Icon, { name: 'warn', size: 14 }), h('span', null, result.caveat_zh)) : null,
+    result.caveat_zh && !concernLine ? h('p', { className: 'lp-caveat', role: 'note' }, h(Icon, { name: 'warn', size: 14 }), h('span', null, result.caveat_zh)) : null,
     points.length > 1 ? h(LineChart, {
       points: points.filter((row) => row.advance != null).map((row) => ({ date: row.date, value: row.advance as number })),
-      unit: '岁', label: '身体年龄减实足年龄', height: 96, compact: true,
+      unit: '岁', label: '身体年龄减周岁', height: 96, compact: true,
       band: band != null && first?.advance != null ? { low: first.advance - band, high: first.advance + band, from: first.date } : null,
       reference: { value: 0, label: '持平' },
     }) : props.tracking == null ? h(Skeleton, { height: 40 }) : null,
     caption ? h('p', { className: 'lp-caption lp-method-sentence', id: 'lp-bioage-feedback' }, caption) : null,
-    h('p', { className: 'lp-fine' }, [count > 0 ? `${count} 次体检` : '', points.length > 1 && band != null ? '浅色带为正常波动' : ''].filter(Boolean).join(' · ')))
+    h(KeyTrends, { journey: props.journey, older: (latest?.advance ?? result.advance ?? 0) > 0 }),
+    h('p', { className: 'lp-fine' }, [count > 0 ? `${count} 次体检` : '', points.length > 1 && band != null ? '浅色带为正常波动（这点变化不算数）' : ''].filter(Boolean).join(' · ')))
+}
+
+function KeyTrends(props: { journey: Journey; older: boolean }): React.ReactElement | null {
+  const trends = pickKeyTrends(props.journey.changes ?? [], props.older)
+  if (trends.length === 0) return null
+  return h('div', { className: 'lp-trends' },
+    h('div', { className: 'lp-caption' }, '旁边的变化'),
+    h('ul', { 'aria-label': '旁边的变化' },
+    ...trends.map((row) => h('li', { key: row.label_zh },
+      h('span', { className: 'lp-strong' }, row.label_zh),
+      h('span', { className: 'lp-caption' }, ` ${row.text_zh.startsWith(row.label_zh) ? row.text_zh.slice(row.label_zh.length).trim() : row.text_zh}`)))))
 }
 
 function rangeCaption(age: number | null): React.ReactElement | null {
@@ -193,7 +209,7 @@ export function RiskCard(props: {
   const card: ModelCard | undefined = props.tracking?.models?.find((row) => row.model === 'china-par')
   const goal = card?.goal?.risk_pct
   const binding = props.method && props.method.label === 'unverified-binding'
-    ? resultSentence(props.method, { youngerAllowed: false })
+    ? riskBindingNote(props.method, result.risk_pct)
     : ''
   return h('div', { className: 'lp-card lp-result', ...(props.method ? { 'data-result-label': props.method.label } : {}) },
     h(CardHead, { label: '10 年心血管风险', info: h(React.Fragment, null, h('span', { className: 'lp-info-line' }, RISK_INFO), card?.note_zh ? h('span', { className: 'lp-info-line' }, card.note_zh) : null), mark: props.method?.label ?? null }),
@@ -217,11 +233,11 @@ function MethodCard(props: { result: MethodResult }): React.ReactElement {
   const numeric = out != null && typeof out.value === 'number'
   const sentence = resultSentence(props.result, { youngerAllowed: false })
   return h('div', { className: 'lp-card lp-result', 'data-result-label': props.result.label },
-    h(CardHead, { label: titleOf(props.result.skill), info: h('span', { className: 'lp-info-line' }, props.result.limits_zh || '模型估计，不是诊断。'), mark: props.result.label }),
+    h(CardHead, { label: titleOf(props.result.skill, props.result.title_zh, out?.key ?? ''), info: h('span', { className: 'lp-info-line' }, props.result.limits_zh || '模型估计，不是诊断。'), mark: props.result.label }),
     numeric
       ? h('div', { className: 'lp-result-figure' },
         h('span', { className: 'lp-bignum' }, fmt(out.value as number)),
-        out.unit ? h('span', { className: 'lp-bignum-unit' }, out.unit) : null)
+        out.unit ? h('span', { className: 'lp-bignum-unit' }, facingUnit(out.unit, out.key)) : null)
       : null,
     h('p', { className: 'lp-method-sentence' }, sentence))
 }

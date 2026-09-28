@@ -22,7 +22,7 @@ export function signFeed(body: FeedBody, keyId: string, privateKey: KeyObject): 
 }
 
 export function verifyFeed(feed: SignedFeed, opts: {
-  mode: 'off' | 'simulated' | 'live'
+  mode: 'off' | 'local' | 'simulated' | 'live'
   acceptDevKey: boolean
   publicKeys: Record<string, KeyObject>
 }): { ok: true } | { ok: false; reason: string } {
@@ -39,7 +39,7 @@ export function verifyFeed(feed: SignedFeed, opts: {
 }
 
 export async function pollManifestFeed(url: string, opts: {
-  mode: 'off' | 'simulated' | 'live'
+  mode: 'off' | 'local' | 'simulated' | 'live'
   acceptDevKey: boolean
   publicKeys: Record<string, KeyObject>
   fetchImpl?: typeof fetch
@@ -61,7 +61,7 @@ export async function pollManifestFeed(url: string, opts: {
 
 /** The plugin entry. Live and off pass acceptDevKey false. Simulated mode may use the dev key. */
 export async function pollReleaseManifests(url: string, opts: {
-  mode: 'off' | 'simulated' | 'live'
+  mode: 'off' | 'local' | 'simulated' | 'live'
   publicKeys: Record<string, KeyObject>
   fetchImpl?: typeof fetch
 }): Promise<{ ok: true; feed: SignedFeed } | { ok: false; reason: string }> {

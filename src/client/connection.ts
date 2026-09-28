@@ -20,16 +20,16 @@ const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]'])
 /** The same rule the server applies: https, or http only on this computer. */
 export function addressProblem(text: string): string | null {
   const trimmed = text.trim()
-  if (!trimmed) return '请粘贴 Mirobody 的 MCP 地址。'
+  if (!trimmed) return '请先展开给安装的人的那一栏，再粘贴连接地址。'
   let url: URL
   try {
     url = new URL(trimmed)
   } catch {
-    return '这不是一个完整的网址，请从 Mirobody 复制完整地址（以 https:// 开头）。'
+    return '这不是一个完整的网址，请复制以 https:// 开头的完整地址。'
   }
   if (url.protocol === 'https:') return null
   if (url.protocol === 'http:' && LOOPBACK.has(url.hostname)) return null
-  return url.protocol === 'http:' ? '只有本机地址（127.0.0.1 或 localhost）可以用 http://，其他地址请用 https://。' : '地址要以 https:// 开头。'
+  return url.protocol === 'http:' ? '只有这台电脑上的地址可以用 http，其他地址请用 https。' : '地址要以 https:// 开头。'
 }
 
 function month(iso: string | null): string {
@@ -50,12 +50,6 @@ export function summaryParts(summary: RecordsSummary): string[] {
   ].filter(Boolean)
 }
 
-function sourceText(connection: Connection): string {
-  if (connection.source === 'saved') return '在这里保存的地址'
-  if (connection.source === 'config') return '安装时配置的地址'
-  return ''
-}
-
 /** brief: without the summary line, where the found counts are already on screen (onboarding step 3). */
 export function ConnectionStatus(props: { connection: Connection; brief?: boolean }): React.ReactElement {
   const { connection } = props
@@ -64,11 +58,8 @@ export function ConnectionStatus(props: { connection: Connection; brief?: boolea
   return h('div', { className: 'lp-conn-status' },
     h('div', { className: 'lp-status' },
       h('span', { className: `lp-statusdot ${ok ? 'lp-statusdot-on' : bad ? 'lp-statusdot-bad' : ''}`, 'aria-hidden': true }),
-      ok ? '已连接 Mirobody' : bad ? `连接失败：${connection.error || '没有返回原因'}` : '还没有连接 Mirobody'),
-    connection.url_masked
-      ? h('div', { className: 'lp-caption lp-conn-url' }, h('code', null, connection.url_masked),
-        sourceText(connection) ? ` · ${sourceText(connection)}` : '', connection.token_set ? ' · 令牌已设置' : '')
-      : null,
+      ok ? '已连上' : bad ? `连接失败：${connection.error || '没有返回原因'}` : '还没有连上'),
+    null,
     ok && connection.summary && !props.brief ? h('div', { className: 'lp-caption' }, `找到：${summaryParts(connection.summary).join(' · ')}`) : null)
 }
 
@@ -104,7 +95,7 @@ function MirobodyLogin(props: { idPrefix: string; onSaved?: () => void }): React
     try {
       const result = await postJson<{ ok?: boolean; url_masked?: string; indicators?: number }>('/api/longpi/mirobody/login', { base_url: base.trim(), email: email.trim(), password })
       setPassword('')
-      setDone(`已登录并连上${typeof result.indicators === 'number' ? `，读到 ${result.indicators} 项` : ''}${result.url_masked ? `（${result.url_masked}）` : ''}。`)
+      setDone(`已登录并连上${typeof result.indicators === 'number' ? `，读到 ${result.indicators} 项` : ''}。`)
       notifyChanged()
       await reload('connection')
       props.onSaved?.()
@@ -115,10 +106,12 @@ function MirobodyLogin(props: { idPrefix: string; onSaved?: () => void }): React
     }
   }
   return h('div', { className: 'lp-conn-login', id: `${props.idPrefix}-login` },
-    h('p', { className: 'lp-muted' }, '用 Mirobody 账号登录。LongPi 会生成你的个人连接，不用去网页复制地址。'),
-    h('div', { className: 'lp-field' },
-      h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-base` }, 'Mirobody 服务地址'),
-      h('input', { id: `${props.idPrefix}-base`, className: 'lp-input', value: base, autoComplete: 'off', spellCheck: false, onChange: (event: React.ChangeEvent<HTMLInputElement>) => setBase(event.target.value) })),
+    h('p', { className: 'lp-muted' }, '用邮箱和密码登录并连接。'),
+    h('details', { className: 'lp-more' },
+      h('summary', null, '高级（给安装的人）'),
+      h('div', { className: 'lp-field' },
+        h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-base` }, '服务地址'),
+        h('input', { id: `${props.idPrefix}-base`, className: 'lp-input', value: base, autoComplete: 'off', spellCheck: false, onChange: (event: React.ChangeEvent<HTMLInputElement>) => setBase(event.target.value) }))),
     h('div', { className: 'lp-field' },
       h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-email` }, '邮箱'),
       h('input', { id: `${props.idPrefix}-email`, type: 'email', className: 'lp-input', value: email, autoComplete: 'username', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setEmail(event.target.value) })),
@@ -189,20 +182,24 @@ export function ConnectionForm(props: { connection: Connection | null; idPrefix:
 
   return h('form', { className: 'lp-conn-form', noValidate: true, onSubmit: (event: React.FormEvent) => { event.preventDefault(); void run('save') } },
     h(MirobodyLogin, { idPrefix: props.idPrefix }),
-    h('div', { className: 'lp-field' },
-      h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-url` }, 'Mirobody 地址', h('span', { className: 'lp-optional' }, '只有在已经复制了个人 MCP 地址时才填')),
-      h('input', {
-        id: `${props.idPrefix}-url`, type: 'url', className: 'lp-input', value: url, autoComplete: 'off', spellCheck: false,
-        placeholder: props.connection?.url_masked ? `现在：${props.connection.url_masked}` : 'https://…/mcp/…',
-        onChange: (event: React.ChangeEvent<HTMLInputElement>) => { setUrl(event.target.value); setError(null) },
-      })),
-    h('div', { className: 'lp-field' },
-      h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-token` }, '访问令牌', h('span', { className: 'lp-optional' }, '选填：地址里已含令牌时留空')),
-      h('input', {
-        id: `${props.idPrefix}-token`, type: 'password', className: 'lp-input', value: token, autoComplete: 'new-password',
-        placeholder: '可不填',
-        onChange: (event: React.ChangeEvent<HTMLInputElement>) => setToken(event.target.value),
-      })),
+    h('details', { className: 'lp-more' },
+      h('summary', null, '高级（给安装的人）'),
+      props.connection?.url_masked ? h('p', { className: 'lp-caption' }, `当前地址 ${props.connection.url_masked}`) : null,
+      h('p', { className: 'lp-caption' }, '安装的人如果已经拿到连接地址，再展开填写。平时不用看。'),
+      h('div', { className: 'lp-field' },
+        h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-url` }, '连接地址'),
+        h('input', {
+          id: `${props.idPrefix}-url`, type: 'url', className: 'lp-input', value: url, autoComplete: 'off', spellCheck: false,
+          placeholder: 'https://…',
+          onChange: (event: React.ChangeEvent<HTMLInputElement>) => { setUrl(event.target.value); setError(null) },
+        })),
+      h('div', { className: 'lp-field' },
+        h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-token` }, '访问口令', h('span', { className: 'lp-optional' }, '地址里已经带了就留空')),
+        h('input', {
+          id: `${props.idPrefix}-token`, type: 'password', className: 'lp-input', value: token, autoComplete: 'new-password',
+          placeholder: '可不填',
+          onChange: (event: React.ChangeEvent<HTMLInputElement>) => setToken(event.target.value),
+        }))),
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
     outcome ? h(TestOutcome, { result: outcome }) : null,
     h('div', { className: 'lp-form-actions' },
@@ -227,7 +224,7 @@ export function ConnectionPanel(props: { idPrefix: string; collapsed?: boolean; 
     h(ConnectionStatus, { connection: data, brief: props.collapsed }),
     showForm
       ? h(ConnectionForm, { connection: data, idPrefix: props.idPrefix, onSaved: (connection) => { setOpen(false); props.onSaved?.(connection) } })
-      : h('button', { type: 'button', className: 'lp-row-link lp-conn-change', onClick: () => setOpen(true) }, '换一个 Mirobody 地址 →'))
+      : h('button', { type: 'button', className: 'lp-row-link lp-conn-change', onClick: () => setOpen(true) }, '换一个连接 →'))
 }
 
 /** One line for places that only point at the connection (档案, the page header). */
@@ -235,11 +232,12 @@ export function connectionLine(connection: Connection | null): string {
   if (!connection) return ''
   if (connection.status === 'ok') {
     const summary = connection.summary
-    return summary ? `Mirobody 已连接 · ${summaryParts(summary).slice(0, 2).join(' · ')}` : 'Mirobody 已连接'
+    return summary ? `已连上 · ${summaryParts(summary).slice(0, 2).join(' · ')}` : '已连上'
   }
-  return connection.status === 'error' ? `Mirobody 连接失败：${connection.error || '没有返回原因'}` : '还没有连接 Mirobody'
+  return connection.status === 'error' ? `连接失败：${connection.error || '没有返回原因'}` : '还没有连上'
 }
 
 export function lastCheckupText(summary: RecordsSummary | null): string {
-  return summary?.last_date ? `最近一次体检：${chineseDate(summary.last_date)}` : ''
+  const when = summary?.last_date ? chineseDate(summary.last_date) : ''
+  return when ? `最近一次体检：${when}` : ''
 }

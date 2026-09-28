@@ -368,9 +368,9 @@ function factsOf(state: State, world: World): QuestFacts & { allActive: IsoDay[]
   }
 }
 
-/** Simulated studies add one ordinary Codex quest. Live stays off, so it adds nothing. */
+/** On-device and simulated studies add one ordinary Codex quest. Off and live add nothing. */
 function attachSimulatedTrial(state: State, season: Season): void {
-  if (effectiveMode() !== 'simulated') return
+  if (effectiveMode() === 'off') return
   if (state.quests.some((quest) => quest.id === 'qs-n-of-1')) return
   const raw = nOf1SeasonQuest(season.id)
   state.quests.push({
@@ -659,7 +659,7 @@ function viewOf(state: State, world: World, dataDir = ''): EngageView {
     invite: world.consent && state.invite.ready && !state.invite.declined && !pressure && season ? {
       show: true,
       title_zh: season.title_zh,
-      body_zh: '这一季跟着你自己的记录走，做几件具体的事，结束在一次真正的复测。图鉴没有付费，概率对每个成年人都一样。未满 18 岁不开放图鉴。',
+      body_zh: '一个赛季大约 8–12 周，从现在到你下次复查。这段时间里有几个小目标，复查那天一起看看成绩，然后开始下一个赛季。长寿图鉴不用花钱，每个成年人抽到各种卡的机会都一样。未满 18 岁不开放图鉴。',
       odds_path: '/api/longpi/codex/odds',
     } : null,
     header: seasonHeader({ pressure, title: season?.title_zh ?? null, week: season ? weekOf(season, world.today) : null }),
@@ -1178,7 +1178,7 @@ export function candidateSeeds(dataDir: string, now: Date = new Date()): Array<{
     })
   }
   const quest = view.quests.find((row) => row.status === 'open')
-  if (quest && view.pressure) out.push({ id: 'nba-season-quest', kind: 'season_quest', priority: 42, title_zh: quest.title_zh, detail_zh: '这一季只做几件事，其余日子不必打开。', prompt_zh: '我这一季现在该做什么？' })
+  if (quest && view.pressure) out.push({ id: 'nba-season-quest', kind: 'season_quest', priority: 42, title_zh: quest.title_zh, detail_zh: '这个赛季只做几件事，其余日子不必打开。', prompt_zh: '这个赛季我现在该做什么？' })
   if (view.codex.enabled && view.codex.draws_available > 0) out.push({ id: 'nba-claim-draw', kind: 'claim_draw', priority: 38, title_zh: '有一次图鉴抽取', detail_zh: '次数来自健康行动。没有付费。', prompt_zh: '我想抽一张长寿图鉴' })
   return out
 }

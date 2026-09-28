@@ -1,6 +1,7 @@
 // Codex collection and the disclosed odds. Hidden when the person is under 18 or has opted out.
 
 import React from 'react'
+import { CODEX_INTRO } from '../../ux/plain.ts'
 
 const h = React.createElement
 
@@ -26,7 +27,17 @@ export function CodexPanel(props: { codex: CodexView | null; onDraw: () => void;
   }
   return h('section', null,
     h('h3', { style: { margin: '8px 0 4px', fontSize: 14 } }, '长寿图鉴'),
-    h('p', { style: { margin: '0 0 8px', lineHeight: 1.5 } }, codex.odds_zh),
+    h('p', { style: { margin: '0 0 8px', lineHeight: 1.5 } }, CODEX_INTRO),
+    h('details', null,
+      h('summary', null, '概率说明'),
+      h('ul', { style: { margin: '8px 0', paddingLeft: 18, lineHeight: 1.5 } },
+        h('li', null, '铜：细胞实验。'),
+        h('li', null, '银：动物实验。'),
+        h('li', null, '紫：观察人群。'),
+        h('li', null, '金：分组做的人体试验，和几种长寿动物。'),
+        h('li', null, '颜色不代表身体好坏。'),
+        h('li', null, '连续 10 次里，至少有一次是银或更好。这不是指标变好了。'),
+        codex.odds_zh ? h('li', null, codex.odds_zh) : null)),
     h('p', { style: { margin: '0 0 8px' } }, `可抽 ${codex.draws_available} 次 · 今天已抽 ${codex.draws_today} / ${codex.daily_cap}`),
     h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
       h('button', { type: 'button', onClick: props.onDraw, disabled: props.busy || codex.draws_available < 1, style: buttonStyle }, '抽一张'),

@@ -172,8 +172,10 @@ interface Config {
     codex: boolean;
     nudgesInWorkflow: boolean;
   };
-  /** 'live' also needs the M11 consents and the owner's switch (D6). */
-  scienceMode: 'off' | 'simulated' | 'live';
+  /** 'local' is on-device research. 'live' still needs a production feed before anything leaves (D6). */
+  scienceMode: 'off' | 'local' | 'simulated' | 'live';
+  /** True only after the person uses the settings switch. The old implicit default is not this. */
+  scienceModeSet: boolean;
 }
 interface AgentConfig {
   enabled: boolean;
@@ -559,7 +561,7 @@ declare function registerApprovals(ctx: Context, guard: Pick<Guard, 'inEmergency
 declare function hasDoseAmount(text: string): boolean;
 //#endregion
 //#region src/version.d.ts
-declare const PRODUCT_VERSION = "0.6.1";
+declare const PRODUCT_VERSION: string;
 declare const TOOL_NAMES: readonly ["read_personal_situation", "list_longevity_intents", "match_longevity_skills", "read_longevity_skill", "run_longevity_skill", "query_longevity_evidence", "list_longevity_domains", "save_personal_profile", "longpi_status", "save_intervention_plan", "draft_intervention_plan", "log_intervention_checkin", "save_self_measurement", "record_medication_statement", "read_intervention_plan", "review_interventions", "model_intervention_goals", "set_followup", "send_followup_message", "read_person_memory", "remember_for_me", "note_page_issue", "read_care_navigation", "prepare_doctor_brief", "log_care_visit"];
 declare const HARNESS_SKILLS: readonly ["longpi-dispatch", "longpi-board", "longpi-boundary", "longpi-interventions"];
 /**
@@ -582,9 +584,9 @@ declare const RESERVED_ROUTES: {
   readonly M2: readonly ["GET /api/longpi/advice"];
   readonly M4: readonly ["GET /api/longpi/feedback"];
   readonly M5: readonly ["GET /api/longpi/surfaces"];
-  readonly M6: readonly ["GET /api/longpi/season", "POST /api/longpi/season", "POST /api/longpi/streak-freeze", "GET /api/longpi/codex", "GET /api/longpi/codex/odds", "POST /api/longpi/codex/draw", "POST /api/longpi/codex/run", "GET /api/longpi/weekly", "POST /api/longpi/nudges"];
+  readonly M6: readonly ["GET /api/longpi/season", "POST /api/longpi/season", "POST /api/longpi/streak-freeze", "GET /api/longpi/schedule", "POST /api/longpi/schedule", "GET /api/longpi/codex", "GET /api/longpi/codex/odds", "POST /api/longpi/codex/draw", "POST /api/longpi/codex/run", "GET /api/longpi/weekly", "POST /api/longpi/nudges"];
   readonly M7: readonly ["POST /api/longpi/upload", "GET /api/longpi/findings", "GET /api/longpi/meds", "POST /api/longpi/meds", "GET /api/longpi/conditions", "POST /api/longpi/conditions", "GET /api/longpi/stores"];
-  readonly M8: readonly ["GET /api/longpi/science/studies", "POST /api/longpi/science/consent", "POST /api/longpi/science/withdraw", "POST /api/longpi/science/run", "GET /api/longpi/science/translog", "GET /api/longpi/science/community", "GET /api/longpi/science/registry", "GET /api/longpi/science/transparency", "POST /api/longpi/science/n-of-1", "POST /api/longpi/science/export"];
+  readonly M8: readonly ["GET /api/longpi/science/studies", "POST /api/longpi/science/consent", "POST /api/longpi/science/withdraw", "POST /api/longpi/science/run", "GET /api/longpi/science/translog", "GET /api/longpi/science/community", "GET /api/longpi/science/registry", "GET /api/longpi/science/transparency", "POST /api/longpi/science/n-of-1", "POST /api/longpi/science/export", "GET /api/longpi/science/invite", "POST /api/longpi/science/invite", "POST /api/longpi/science/preference"];
   readonly M11: readonly ["GET /api/longpi/privacy", "POST /api/longpi/privacy/consent", "GET /api/longpi/privacy/export", "POST /api/longpi/privacy/delete"];
 };
 /** Harness skills reserved for later modules (AA §3.4); HARNESS_SKILLS lists the ones registered. */
@@ -1059,6 +1061,15 @@ interface CompactTable {
     kind: string;
     message: string;
   };
+  /**
+   * Later tables after a blank line, e.g. the catalogue's "reported by the person" section
+   * (constants kind=condition): diagnoses the person reported. They are not rows of the first table.
+   */
+  sections?: Array<{
+    title: string;
+    constants: Record<string, string>;
+    rows: Array<Record<string, string>>;
+  }>;
 }
 declare function parseCompact(text: string): CompactTable;
 /**
@@ -1419,6 +1430,8 @@ interface MethodResult {
   catalog_version: string;
   ran_at: IsoTime;
   limits_zh: string;
+  /** Chinese name for the card. Absent on older rows. */
+  title_zh?: string;
 }
 type StoreKind = 'methylation' | 'taxa' | 'proteins' | 'conditions';
 interface MethylationRow {
@@ -1890,7 +1903,7 @@ interface ChangesContext {
   records: RecordSnapshot;
   today: string;
 }
-declare const CHANGES_NOTE_ZH = "判断依据：两次结果之差超过同一个人正常波动与检测误差合成的参考变化值（RCV，z=1.96）才算真实变化；变异数据来自 longevity-skills 的 data/biological_variation.json，每一行注明期刊出处。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。";
+declare const CHANGES_NOTE_ZH = "判断依据：两次结果之差，要比同一个人平常的起伏更大，才算值得注意的变化。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。";
 /** Low or high against the usual range, with the words for it; null inside it or for other markers. */
 declare function rangeFlag(key: string, value: number, sex: string): {
   flag: 'low' | 'high';
@@ -2164,6 +2177,20 @@ declare function suggestNext(summaries: readonly ItemSummary[], context: {
   levers?: LeverHint[];
 }): Suggestion[];
 //#endregion
+//#region src/ux/body-age.d.ts
+interface PhenoPanel {
+  albumin_gL: number;
+  creat_umol: number;
+  glucose_mmol: number;
+  crp_mg_dl: number;
+  lymph_pct: number;
+  mcv_fl: number;
+  rdw_pct: number;
+  alp_u_l: number;
+  wbc_10e3: number;
+  age: number;
+}
+//#endregion
 //#region src/tracking.d.ts
 declare const PHENOAGE_SKILL = "accelerated-biological-aging-risk";
 declare const RISK_SKILL = "china-par-ascvd-risk";
@@ -2198,6 +2225,11 @@ interface BioAge {
   allows_younger?: boolean;
   /** Days from the earliest to the latest input of the latest panel. 0 is one draw day. */
   panel_span_days: number | null;
+  /** The first and latest complete panels, in the method's units, when both exist. */
+  pheno_compare?: {
+    before: PhenoPanel;
+    after: PhenoPanel;
+  } | null;
 }
 interface ModelCard {
   model: 'phenoage' | 'china-par';
@@ -2947,7 +2979,7 @@ interface FeedbackMessage {
 declare function youngerAllowed(message: Pick<FeedbackMessage, 'subject' | 'grade' | 'delta'>): boolean;
 //#endregion
 //#region src/contracts/science.d.ts
-type ScienceMode = 'off' | 'simulated' | 'live';
+type ScienceMode = 'off' | 'local' | 'simulated' | 'live';
 interface StudyManifest {
   schema: 'longpi.study/1';
   id: string;

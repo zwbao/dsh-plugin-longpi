@@ -71,7 +71,7 @@ try {
     { item: '不存在的项目', done: true },
   ], { today: TODAY, source: 'chat' })
   assert.equal(checkin.saved.length, 2)
-  assert.ok(checkin.problems.some((line) => line.includes('Mirobody')))
+  assert.ok(checkin.problems.some((line) => line.includes('用药计划')))
   assert.ok(checkin.problems.some((line) => line.includes('不存在的项目')))
   assert.equal(mod.preGuard('帮我记录今天快走40分钟，鱼油也吃了'), null, 'a check-in is not a medication question')
 

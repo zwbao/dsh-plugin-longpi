@@ -94,11 +94,11 @@ export function buildReport(input: { name: string; today: string; records: Recor
   const lines: string[] = []
   const profile = input.records.profile
   lines.push(`# ${input.name || '个人'}长寿看板报告`, '')
-  lines.push(`生成日期：${input.today}。数据来自本人的 Mirobody 记录、本人确认过的干预方案和打卡，以及 longevity-skills 技能脚本。本报告不是诊断，也不包含用药建议。`, '')
+  lines.push(`生成日期：${input.today}。数据来自本人的体检记录、本人确认过的方案和打卡。本报告不是诊断，也不包含用药建议。`, '')
   lines.push('## 基本信息', '')
   lines.push(`- 实足年龄：${profile.age ?? '未填写'}；性别：${profile.sex === 'male' ? '男' : profile.sex === 'female' ? '女' : '未填写'}`)
   const count = input.records.indicators.filter((row) => row.source !== 'self').length
-  const status = { ok: `已接入 Mirobody（${count} 项指标）`, partial: `已接入 Mirobody（${count} 项指标），部分读取失败：${input.records.read_errors.join('；')}`, error: `读取失败：${input.records.record_error}`, unconfigured: '未接入' }[input.records.record_status]
+  const status = { ok: `已连上（${count} 项指标）`, partial: `已连上（${count} 项指标），有的这次没读到：${input.records.read_errors.join('；')}`, error: `读取失败：${input.records.record_error}`, unconfigured: '还没有连上' }[input.records.record_status]
   lines.push(`- 记录状态：${status}`, '')
   const tracking = input.tracking
   if (tracking && tracking.changes.length > 0) {
@@ -111,7 +111,7 @@ export function buildReport(input: { name: string; today: string; records: Recor
   }
   if (tracking) {
     const bio = tracking.bioage
-    lines.push('## 表型年龄（PhenoAge，Levine 2018）', '')
+    lines.push('## 身体年龄', '')
     if (bio.points.length > 0) {
       lines.push('| 检查日期 | 表型年龄 | 减实足年龄 | 模型 10 年死亡风险 |', '|---|---|---|---|')
       for (const row of bio.points) lines.push(`| ${row.date} | ${fmt(row.phenoage)} 岁 | ${fmt(row.advance)} 岁 | ${fmt(row.mortality_10y_pct)}% |`)
@@ -157,6 +157,6 @@ export function buildReport(input: { name: string; today: string; records: Recor
       lines.push('')
     }
   }
-  lines.push('---', '', '判断依据：变化超过个体内生物变异与检测误差合成的参考变化值（RCV）才算真实变化；变异数据来自 longevity-skills 的 data/biological_variation.json，每一行都注明期刊出处。试验效应是人群平均，不是个人预测。模型估计不是寿命预测。')
+  lines.push('---', '', '判断依据：变化比平常的起伏更大，才算值得注意的变化。试验里的平均效果不是对你个人的预测。模型估计不是寿命预测。')
   return `${lines.join('\n')}\n`
 }

@@ -83,6 +83,6 @@ export function rememberCondition(dataDir: string, input: {
     ...(applied.applied[0] ? { memory_id: applied.applied[0] } : {}),
   }
   appendJsonl(pathOf(dataDir), row)
-  const readBack = `记下了：${text}${since ? `，${since} 起` : ''}。这只存在这台电脑上，没有写进 Mirobody。`
+  const readBack = `记下了：${text}${since ? `，${since} 起` : ''}。这只存在这台电脑上。`
   return { ok: true, row, read_back: readBack }
 }

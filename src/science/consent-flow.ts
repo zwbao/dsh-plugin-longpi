@@ -92,7 +92,7 @@ export interface GrantInput {
   confirm: boolean
   explained_by: 'agent' | 'page'
   session_id?: string
-  mode: 'simulated'
+  mode: 'simulated' | 'local'
   at?: IsoTime
 }
 

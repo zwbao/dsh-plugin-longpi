@@ -63,12 +63,12 @@ export function keyCertOk(rootPublic: KeyObject, cert: KeyCert, today: string): 
 }
 
 /** Live never accepts the dev key. A production process with acceptDevKey false does not either. */
-export function devKeyAllowed(mode: 'off' | 'simulated' | 'live', acceptDevKey = mode === 'simulated'): boolean {
-  if (mode === 'live') return false
+export function devKeyAllowed(mode: 'off' | 'local' | 'simulated' | 'live', acceptDevKey = mode === 'simulated'): boolean {
+  if (mode !== 'simulated') return false
   return acceptDevKey && mode === 'simulated'
 }
 
-export function signingKeyAllowed(keyId: string, opts: { mode: 'off' | 'simulated' | 'live'; acceptDevKey: boolean }): { ok: true } | { ok: false; reason: string } {
+export function signingKeyAllowed(keyId: string, opts: { mode: 'off' | 'local' | 'simulated' | 'live'; acceptDevKey: boolean }): { ok: true } | { ok: false; reason: string } {
   if (keyId === SIM_KEY_ID && !devKeyAllowed(opts.mode, opts.acceptDevKey)) {
     return { ok: false, reason: '开发签名不能用于 live，也不能用于正式汇总' }
   }

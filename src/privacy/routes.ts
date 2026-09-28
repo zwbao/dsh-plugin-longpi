@@ -89,7 +89,7 @@ export function acceptConsent(runtime: PrivacyRuntime, body: unknown): PrivacySt
   }
   const view = minorView(readProfile(dir))
   if (scope === 'pipl_sensitive' && decision === 'granted' && view.child && raw.guardian !== true) {
-    return fail(`未满 ${CHILD_AGE} 岁需要监护人在这一页同意`)
+    return fail(`未满 ${CHILD_AGE} 岁需要家长（监护人）在这一页同意`)
   }
   const row = recordConsent(dir, {
     scope,
@@ -190,7 +190,7 @@ export function privacyPage(status: PrivacyStatus): string {
         <button class="primary" type="button" id="pipl-grant">${esc(copy.buttons.pipl_grant)}</button>
         <button class="quiet" type="button" id="pipl-decline">${esc(copy.buttons.pipl_decline)}</button>
       </div>
-      <label class="check" id="guardian-row"><input type="checkbox" id="guardian"> 我是监护人，同意为未满 ${CHILD_AGE} 岁的人处理这些健康信息</label>
+      <label class="check" id="guardian-row"><input type="checkbox" id="guardian"> 我是家长（监护人），同意为未满 ${CHILD_AGE} 岁的人处理这些健康信息</label>
     </section>
     <section class="step" id="step-flow" aria-labelledby="flow-title">
       <div class="kicker">第 2 步，共 2 步</div>
@@ -200,7 +200,7 @@ export function privacyPage(status: PrivacyStatus): string {
       <ul>${copy.data_flow.to_deepseek.map((line) => `<li>${esc(line)}</li>`).join('')}</ul>
       <p><strong>留在这台电脑的</strong></p>
       <ul>${copy.data_flow.stays_local.map((line) => `<li>${esc(line)}</li>`).join('')}</ul>
-      <p><strong>留在 Mirobody 的</strong></p>
+      <p><strong>体检原件留在原来的地方</strong></p>
       <ul>${copy.data_flow.mirobody.map((line) => `<li>${esc(line)}</li>`).join('')}</ul>
       <p>${esc(copy.data_flow.name)}</p>
       <div class="actions">
@@ -212,7 +212,7 @@ export function privacyPage(status: PrivacyStatus): string {
       <h2>年龄</h2>
       <p id="minor-note">${esc(minorNote)}</p>
       <p class="note">${esc(rulesLine)}</p>
-      <label>实足年龄<input id="age" type="number" min="0" max="130" inputmode="numeric" value="${esc(ageValue)}"></label>
+      <label>周岁<input id="age" type="number" min="0" max="130" inputmode="numeric" value="${esc(ageValue)}"></label>
     </section>
     <section class="step" id="step-session">
       <h2>会话日志</h2>
@@ -235,7 +235,7 @@ export function privacyPage(status: PrivacyStatus): string {
     </section>
     <p id="privacy-status" role="status"></p>
     <details>
-      <summary>研究还不能收集真人数据</summary>
+      <summary>加入大家的研究要单独点一次。正式开始前，数据只留在这台电脑上。</summary>
       <ul>${status.science.blockers_zh.map((line) => `<li>${esc(line)}</li>`).join('')}</ul>
       <p>基因数据不进入研究。</p>
     </details>
