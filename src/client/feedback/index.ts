@@ -27,7 +27,8 @@ interface BioLoose {
   band_verified?: boolean
 }
 
-export function feedbackInputOf(journey: Journey, tracking: Tracking | null): FeedbackInput {
+/** recordChanges false: leave out markers that only come from record changes (总览 shows those once, elsewhere). */
+export function feedbackInputOf(journey: Journey, tracking: Tracking | null, opts: { recordChanges?: boolean } = {}): FeedbackInput {
   const markers = []
   const seen = new Set<string>()
   for (const item of tracking?.items ?? []) {
@@ -39,7 +40,7 @@ export function feedbackInputOf(journey: Journey, tracking: Tracking | null): Fe
       markers.push(row)
     }
   }
-  for (const change of journey.changes ?? []) {
+  for (const change of opts.recordChanges === false ? [] : journey.changes ?? []) {
     if (seen.has(change.label_zh) || seen.has(change.key)) continue
     seen.add(change.label_zh)
     markers.push(markerFromChange(change))
@@ -79,8 +80,8 @@ export function feedbackInputOf(journey: Journey, tracking: Tracking | null): Fe
   }
 }
 
-export function messagesFor(journey: Journey, tracking: Tracking | null): FeedbackMessage[] {
-  return buildFeedback(feedbackInputOf(journey, tracking))
+export function messagesFor(journey: Journey, tracking: Tracking | null, opts: { recordChanges?: boolean } = {}): FeedbackMessage[] {
+  return buildFeedback(feedbackInputOf(journey, tracking, opts))
 }
 
 export function shareFor(journey: Journey, tracking: Tracking | null): ShareCardModel | null {
@@ -89,9 +90,9 @@ export function shareFor(journey: Journey, tracking: Tracking | null): ShareCard
 
 type Notify = (text: string, tone?: 'info' | 'good' | 'bad') => void
 
-export function FeedbackBlock(props: { journey?: Journey; tracking?: Tracking | null; onNotice?: Notify }): React.ReactElement | null {
+export function FeedbackBlock(props: { journey?: Journey; tracking?: Tracking | null; onNotice?: Notify; recordChanges?: boolean }): React.ReactElement | null {
   if (!props.journey) return null
-  const messages = messagesFor(props.journey, props.tracking ?? null)
+  const messages = messagesFor(props.journey, props.tracking ?? null, { recordChanges: props.recordChanges })
   const summary = messages.find((row) => row.id === 'fb-summary')
   const behaviour = messages.find((row) => row.grade === 'behaviour_done')
   const projection = messages.find((row) => row.grade === 'projection')

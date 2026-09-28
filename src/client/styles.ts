@@ -699,6 +699,10 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
 .lp-notable-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto 140px; align-items: center; gap: 12px; padding: 8px 0; border-top: .5px solid var(--lp-line-2); }
 .lp-notable-row:first-child { border-top: 0; }
 @container lp-root (max-width: 640px) { .lp-notable-row { grid-template-columns: auto minmax(0, 1fr) auto; } .lp-notable-row .lp-change-spark { display: none; } }
+/* Narrow screens: the verdict chip on its own line, then the marker name and its values, so a long name is never a one-character column. */
+@container lp-root (max-width: 480px) { .lp-notable-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 4px; column-gap: 8px; } .lp-notable-row > .lp-chip-c { grid-column: 1 / -1; justify-self: start; } .lp-notable-values { white-space: normal; text-align: right; } }
+.lp-notable-pointer { margin: 8px 0 0; }
+.lp-bioage-gap { margin: 2px 0 0; }
 .lp-notable-values { white-space: nowrap; }
 .lp-basis { margin-top: 12px; }
 .lp-basis .lp-change-notes { margin-top: 8px; }

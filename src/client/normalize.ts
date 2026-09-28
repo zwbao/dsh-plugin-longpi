@@ -303,6 +303,10 @@ export function normalizeJourney(input: unknown): Journey {
     surfaces: surfacesOf(raw.surfaces),
     triage: triageOf(obj(raw.triage)),
     method_results: parseMethodResults(raw.method_results),
+    doctor_first: {
+      stop: obj(raw.doctor_first).stop === true,
+      hits: objects(obj(raw.doctor_first).hits).map((row) => ({ key: str(row.key), short_zh: str(row.short_zh) })).filter((row) => row.key),
+    },
   }
 }
 

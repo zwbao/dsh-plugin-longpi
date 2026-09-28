@@ -8,10 +8,11 @@ import React from 'react'
 import type { MethodResult, ResultLabel } from '../contracts/library.ts'
 import { modelRangeNote } from '../honesty/model-range.ts'
 import {
-  allowsYoungerClaim, facingUnit, olderThanAgeSentence, overviewSlice, parseMethodResults,
-  PHENO_SKILL, primaryOutput, redCellDriverNames, resultSentence, riskBindingNote, RISK_SKILL,
-  speciesOf, stripYoungerClaim, titleOf,
+  allowsYoungerClaim, facingUnit, measuresBodyAge, olderThanAgeSentence, overviewSlice, parseMethodResults,
+  PHENO_SKILL, primaryOutput, redCellDriverNames, resultSentence, RISK_SKILL,
+  speciesOf, stripYoungerClaim, titleOf, versusCalendarAge,
 } from '../core/method-view.ts'
+import { isCovered, NOTHING_COVERED, type Covered } from './overview-facts.ts'
 import { fmt, LineChart } from './charts.ts'
 import { FeedbackBlock, messagesFor } from './feedback/index.ts'
 import { chineseDate, riskText } from './format.ts'
@@ -114,6 +115,7 @@ export function BodyAgeCard(props: {
   onAction: (target: ResultTarget) => void
   onNotice: Notify
   method?: MethodResult
+  covered?: Covered
 }): React.ReactElement {
   const result = props.journey.results.bioage
   if (result.status !== 'ok') {
@@ -159,6 +161,9 @@ export function BodyAgeCard(props: {
       h('span', { className: 'lp-bignum' }, fmt(phenoage)),
       h('span', { className: 'lp-bignum-unit' }, '岁'),
       younger ? h('span', { className: 'lp-pill lp-pill-good' }, '真实的变化') : null),
+    // The method results that measure body age are folded in here as one line in glossary words (INT062 fix 7):
+    // the page's own gap, never a second big number. One draw has no gap (advance is null).
+    !older && versusCalendarAge(result.advance) ? h('p', { className: 'lp-caption lp-bioage-gap' }, versusCalendarAge(result.advance)) : null,
     // Set by the server when an input of this model changed beyond normal fluctuation.
     result.caveat_zh && !concernLine ? h('p', { className: 'lp-caveat', role: 'note' }, h(Icon, { name: 'warn', size: 14 }), h('span', null, result.caveat_zh)) : null,
     points.length > 1 ? h(LineChart, {
@@ -168,12 +173,14 @@ export function BodyAgeCard(props: {
       reference: { value: 0, label: '持平' },
     }) : props.tracking == null ? h(Skeleton, { height: 40 }) : null,
     caption ? h('p', { className: 'lp-caption lp-method-sentence', id: 'lp-bioage-feedback' }, caption) : null,
-    h(KeyTrends, { journey: props.journey, older: (latest?.advance ?? result.advance ?? 0) > 0 }),
+    h(KeyTrends, { journey: props.journey, older: (latest?.advance ?? result.advance ?? 0) > 0, covered: props.covered }),
     h('p', { className: 'lp-fine' }, [count > 0 ? `${count} 次体检` : '', points.length > 1 && band != null ? '浅色带为正常波动（这点变化不算数）' : ''].filter(Boolean).join(' · ')))
 }
 
-function KeyTrends(props: { journey: Journey; older: boolean }): React.ReactElement | null {
-  const trends = pickKeyTrends(props.journey.changes ?? [], props.older)
+function KeyTrends(props: { journey: Journey; older: boolean; covered?: Covered }): React.ReactElement | null {
+  // Values 最重要的一步 is already about are not listed again beside body age (INT062 fix 7).
+  const covered = props.covered ?? NOTHING_COVERED
+  const trends = pickKeyTrends((props.journey.changes ?? []).filter((row) => !isCovered(covered, row)), props.older)
   if (trends.length === 0) return null
   return h('div', { className: 'lp-trends' },
     h('div', { className: 'lp-caption' }, '旁边的变化'),
@@ -208,11 +215,14 @@ export function RiskCard(props: {
   }
   const card: ModelCard | undefined = props.tracking?.models?.find((row) => row.model === 'china-par')
   const goal = card?.goal?.risk_pct
-  const binding = props.method && props.method.label === 'unverified-binding'
-    ? riskBindingNote(props.method, result.risk_pct)
-    : ''
-  return h('div', { className: 'lp-card lp-result', ...(props.method ? { 'data-result-label': props.method.label } : {}) },
-    h(CardHead, { label: '10 年心血管风险', info: h(React.Fragment, null, h('span', { className: 'lp-info-line' }, RISK_INFO), card?.note_zh ? h('span', { className: 'lp-info-line' }, card.note_zh) : null), mark: props.method?.label ?? null }),
+  // The card has its own number (INT062 fix 7). A library run that is still unmatched and gives another number is not
+  // shown on the card, neither as a sentence nor as the card's label; the chat can still explain it.
+  const out = props.method ? primaryOutput(props.method) : null
+  const same = out != null && typeof out.value === 'number' && result.risk_pct != null && Math.abs(out.value - result.risk_pct) < 0.05
+  const method = props.method && (props.method.label !== 'unverified-binding' || same) ? props.method : undefined
+  const binding = method && method.label === 'unverified-binding' ? resultSentence(method, { youngerAllowed: false }) : ''
+  return h('div', { className: 'lp-card lp-result', ...(method ? { 'data-result-label': method.label } : {}) },
+    h(CardHead, { label: '10 年心血管风险', info: h(React.Fragment, null, h('span', { className: 'lp-info-line' }, RISK_INFO), card?.note_zh ? h('span', { className: 'lp-info-line' }, card.note_zh) : null), mark: method?.label ?? null }),
     h('div', { className: 'lp-result-figure' },
       h('span', { className: 'lp-bignum' }, riskText(result.risk_pct)),
       h('span', { className: 'lp-bignum-unit' }, '%'),
@@ -265,19 +275,23 @@ export function ResultsRow(props: {
   tracking: Tracking | null
   onAction: (target: ResultTarget) => void
   onNotice: Notify
+  covered?: Covered
 }): React.ReactElement {
   const focus = props.journey.profile.focus
   const riskAt = focus.findIndex((key) => key === 'cardio' || key === 'weight')
   const bioAt = focus.indexOf('bioage')
   const riskFirst = riskAt >= 0 && (bioAt < 0 || riskAt < bioAt)
   const methods = parseMethodResults(props.journey.method_results)
+  // Every result that measures body age belongs to the one body-age card (INT062 fix 7); its label is the card's.
+  const bodyRows = methods.filter((row) => measuresBodyAge(row))
   const pheno = methods.find((row) => row.skill === PHENO_SKILL && row.label !== 'evidence-only')
+    ?? bodyRows.find((row) => row.label === 'verified') ?? bodyRows[0]
   const riskMethod = methods.find((row) => row.skill === RISK_SKILL && row.label !== 'evidence-only')
   const hide = new Set<string>()
   if (props.journey.results.bioage.status === 'ok') hide.add(PHENO_SKILL)
   if (props.journey.results.risk.status === 'ok') hide.add(RISK_SKILL)
   const slice = overviewSlice(methods)
-  const extras = slice.value.filter((row) => !hide.has(row.skill))
+  const extras = slice.value.filter((row) => !hide.has(row.skill) && !(props.journey.results.bioage.status === 'ok' && measuresBodyAge(row)))
   const block = extras.length > 0 || slice.evidence.length > 0
     ? h('div', { key: 'methods', id: 'lp-methods', className: 'lp-method-block' },
       ...extras.map((row, index) => h(MethodCard, { key: `value-${index}`, result: row })),
@@ -285,7 +299,8 @@ export function ResultsRow(props: {
     : null
   const bio = h(BodyAgeCard, { key: 'bio', ...props, method: pheno })
   const risk = h(RiskCard, { key: 'risk', ...props, method: riskMethod })
-  const feedback = h(FeedbackBlock, { key: 'feedback', journey: props.journey, tracking: props.tracking, onNotice: props.onNotice })
+  // Record changes are on 值得注意的变化 (or 最重要的一步); 这次的变化 keeps the plan's own results, check-ins and targets.
+  const feedback = h(FeedbackBlock, { key: 'feedback', journey: props.journey, tracking: props.tracking, onNotice: props.onNotice, recordChanges: false })
   const style = h('style', { key: 'method-style' }, METHOD_CSS)
   const cards = riskFirst ? [risk, bio] : [bio, risk]
   return h('div', { className: 'lp-results', id: 'lp-results' }, style, ...cards, block, feedback)

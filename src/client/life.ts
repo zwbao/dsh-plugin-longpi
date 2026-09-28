@@ -5,6 +5,7 @@ import { errorText, getJson, postJson } from './api.ts'
 import { IndicatorsTab } from './indicators.ts'
 import { setPendingPrompt, type PageTab } from './store.ts'
 import type { Journey } from './types.ts'
+import { isCovered, type Covered } from './overview-facts.ts'
 import { Btn } from './ui.ts'
 import { insightSentence, SCIENCE_INTRO, SEASON_INTRO, suggestedQuestions, buildTimeline, OUTBOX_ZH } from '../ux/plain.ts'
 
@@ -122,7 +123,7 @@ export function Timeline(props: { journey: Journey }): React.ReactElement {
           h('span', null, `${item.title_zh} · ${item.detail_zh}`)))))
 }
 
-export function InsightCard(props: { journey: Journey }): React.ReactElement | null {
+export function InsightCard(props: { journey: Journey; covered?: Covered }): React.ReactElement | null {
   const [text, setText] = React.useState<string | null>(null)
   React.useEffect(() => {
     let live = true
@@ -140,7 +141,7 @@ export function InsightCard(props: { journey: Journey }): React.ReactElement | n
         }
       }
       const concern = /不一定是好事/.test(props.journey.results.bioage.headline_zh ?? '')
-      const lab = concern ? undefined : (props.journey.changes ?? []).find((row) => row.ask_doctor)
+      const lab = concern ? undefined : (props.journey.changes ?? []).find((row) => row.ask_doctor && !(props.covered && isCovered(props.covered, row)))
       const labNote = lab ? `${lab.label_zh}最近的变化比平常大。睡眠或步数说明不了这个化验，复查时再看。` : null
       setText(insightSentence({ sleepHours: sleep, steps, labNote }))
     }).catch(() => { if (live) setText(null) })

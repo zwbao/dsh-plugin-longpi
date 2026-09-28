@@ -10,6 +10,7 @@ import { LineChart } from './charts.ts'
 import { Icon } from './icons.ts'
 import type { Journey, RecordChange } from './types.ts'
 import { sourceLabel } from '../ux/plain.ts'
+import { isCovered, NOTHING_COVERED, type Covered } from './overview-facts.ts'
 
 const h = React.createElement
 
@@ -31,12 +32,6 @@ const SUPERSCRIPT: Record<string, string> = { 0: '⁰', 1: '¹', 2: '²', 3: '³
 /** Count units as labs print them: 10^12/L → ×10¹²/L. */
 export function prettyUnits(text: string): string {
   return text.replace(/(×)?10\^(\d+)\/L/g, (_, _times: string | undefined, power: string) => `×10${[...power].map((digit) => SUPERSCRIPT[digit] ?? digit).join('')}/L`)
-}
-
-/** The server's sentence opens with the label, which the row already shows in bold just above it. */
-function withoutLabel(row: RecordChange): string {
-  const text = row.text_zh.startsWith(row.label_zh) ? row.text_zh.slice(row.label_zh.length).trim() || row.text_zh : row.text_zh
-  return prettyUnits(text)
 }
 
 function toneOf(row: RecordChange): 'warn' | 'good' | 'neutral' {
@@ -70,22 +65,6 @@ function distinct<T>(items: readonly T[], keyOf: (item: T) => string): T[] {
   })
 }
 
-/** "MCV 的个体内变异非常小…" and "MCH 的个体内变异非常小…" become one line: "MCV、MCH 的个体内变异非常小…". */
-function mergedCaveats(rows: readonly RecordChange[]): string[] {
-  const byRest = new Map<string, Array<{ head: string; text: string }>>()
-  for (const row of rows) {
-    const text = row.caveat_zh ?? ''
-    if (!text) continue
-    const at = text.indexOf('的')
-    const [head, rest] = at > 0 && at <= 12 ? [text.slice(0, at).trim(), text.slice(at)] : ['', text]
-    const members = byRest.get(rest) ?? []
-    if (!members.some((member) => member.text === text)) members.push({ head, text })
-    byRest.set(rest, members)
-  }
-  return [...byRest.entries()].map(([rest, members]) =>
-    members.length > 1 && members.every((member) => member.head) ? `${members.map((member) => member.head).join('、')} ${rest}` : (members[0] as { text: string }).text)
-}
-
 /** Rows shown on 概览; the rest are one tap away on 指标. */
 const NOTABLE = 3
 
@@ -116,28 +95,29 @@ function NotableRow(props: { row: RecordChange }): React.ReactElement {
     h(Spark, { row }))
 }
 
-/** How a change is judged, the caveats and the sources: behind 判断依据, never in the way. */
+/** The one plain sentence behind 判断依据 (INT062 fix 7): what "超出正常波动" means, and what it is not. */
+export const BASIS_ZH = '“超出正常波动”是说两次结果的差别，比同一个人平常的起伏更大。不同医院、不同仪器之间的差别没有算进去，这也不是诊断。'
+
+/**
+ * 判断依据: one plain sentence and where the fluctuation data comes from. Method notes (CV scales, instrument
+ * error, how wide a band may be) are for the chat's tool text, not for this fold.
+ */
 export function Basis(props: { journey: Journey; rows: readonly RecordChange[] }): React.ReactElement | null {
   const { rows } = props
   const unjudged = props.journey.changes_unjudged
   if (rows.length === 0 && unjudged.length === 0) return null
-  const caveats = mergedCaveats(rows)
-  const sources = distinct(rows.map((row) => ({ ...row.source, verified: row.verified })), (source) => source.url || source.title)
+  const sources = distinct(rows.map((row) => row.source), (source) => source.url || source.title)
   return h('details', { className: 'lp-basis' },
     h('summary', null, '判断依据'),
     h('div', { className: 'lp-change-notes' },
-      h('p', { className: 'lp-caption' }, '“超出正常波动”指两次结果之差比你平常的起伏更大。趋势图里的浅色带以比较起点那次结果为基线，落在带外才值得注意。'),
-      ...rows.map((row) => h('p', { key: `text:${row.key}`, className: 'lp-caption' }, h('span', { className: 'lp-strong' }, row.label_zh), `：${withoutLabel(row)}`)),
-      ...caveats.map((text) => h('p', { key: `caveat:${text}`, className: 'lp-caption' }, text)),
-      unjudged.length > 0 ? h('p', { className: 'lp-caption' }, `没有判断：${unjudged.map((row) => `${row.label_zh}（${row.reason_zh || '读取没有完成'}）`).join('、')}`) : null,
+      h('p', { className: 'lp-caption' }, BASIS_ZH),
+      unjudged.length > 0 ? h('p', { className: 'lp-caption' }, `这几项这次没有读全，先不判断：${unjudged.map((row) => row.label_zh).join('、')}。`) : null,
       sources.length > 0 ? h('p', { className: 'lp-caption lp-change-source' },
-        '波动数据来源：',
+        '数据来源：',
         ...sources.flatMap((source, index) => [
           index > 0 ? '；' : null,
           source.url ? h('a', { key: source.url, href: source.url, target: '_blank', rel: 'noopener noreferrer', title: source.title || undefined }, sourceLabel(source.title)) : sourceLabel(source.title),
-          source.verified ? null : '（引用尚未逐字核对）',
-        ])) : null,
-      props.journey.changes_note_zh ? h('p', { className: 'lp-fine' }, props.journey.changes_note_zh) : null))
+        ])) : null))
 }
 
 /**
@@ -145,19 +125,26 @@ export function Basis(props: { journey: Journey; rows: readonly RecordChange[] }
  * said once per group, and a link to 指标 for the rest. The server decides
  * which rows qualify and writes every sentence; nothing here names a cause.
  */
-export function NotableChanges(props: { journey: Journey; onOpenIndicators: () => void }): React.ReactElement | null {
+export function NotableChanges(props: { journey: Journey; onOpenIndicators: () => void; covered?: Covered }): React.ReactElement | null {
   const rows = props.journey.changes
   if (rows.length === 0 && props.journey.changes_unjudged.length === 0) return null
-  const shown = rows.slice(0, NOTABLE)
+  // Values 最重要的一步 is already about are one short line here, not rows and advice again (INT062 fix 7).
+  const covered = props.covered ?? NOTHING_COVERED
+  const onCard = rows.filter((row) => isCovered(covered, row))
+  const shown = rows.filter((row) => !isCovered(covered, row)).slice(0, NOTABLE)
   const advice = groupsOf(shown).filter((group) => group.advice && group.tone === 'warn')
+  const pointer = onCard.length > 0
+    ? `${onCard[0]?.label_zh ?? ''}${onCard.length > 1 ? `等 ${onCard.length} 项` : ''}的变化，就是上面「最重要的一步」说的那件事。`
+    : ''
   return h('section', { className: 'lp-card lp-notable', id: 'lp-changes', 'aria-labelledby': 'lp-changes-title' },
     h('div', { className: 'lp-card-head' },
       h('div', { className: 'lp-label', id: 'lp-changes-title' }, '值得注意的变化', rows.length > 0 ? h('span', { className: 'lp-optional' }, `${rows.length} 项超出正常波动`) : null),
       h('button', { type: 'button', className: 'lp-row-link', onClick: props.onOpenIndicators }, '在「化验」里看全部 →')),
+    pointer ? h('p', { className: 'lp-caption lp-notable-pointer' }, pointer) : null,
     ...advice.map((group) => h('p', { key: group.advice, className: 'lp-change-advice lp-change-warn' },
       h(Icon, { name: 'warn', size: 14 }), h('span', null, group.advice))),
     shown.length > 0
       ? h('ul', { className: 'lp-notable-list' }, ...shown.map((row) => h(NotableRow, { key: row.key, row })))
-      : h('p', { className: 'lp-muted' }, '没有超出正常波动的变化。'),
+      : pointer ? null : h('p', { className: 'lp-muted' }, '没有超出正常波动的变化。'),
     h(Basis, { journey: props.journey, rows }))
 }

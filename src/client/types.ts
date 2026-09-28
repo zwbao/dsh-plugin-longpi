@@ -157,6 +157,8 @@ export interface Journey {
   triage: JourneyTriage
   /** Labeled library results. Older servers omit it. */
   method_results?: MethodResult[]
+  /** The record's doctor-first stop: which values 最重要的一步 is about. Older servers omit it. */
+  doctor_first?: { stop: boolean; hits: Array<{ key: string; short_zh: string }> }
 }
 
 export interface SurfaceCardView { id: string; text_zh: string; detail_zh: string; fact_ids: string[]; tone: string; source: string; prompt_zh: string }

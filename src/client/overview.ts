@@ -15,6 +15,7 @@ import type { Journey, NextAction, Tracking } from './types.ts'
 import { Btn } from './ui.ts'
 import { CareCard } from './triage/care-card.ts'
 import { InsightCard, ScienceIntro } from './life.ts'
+import { coveredByCare } from './overview-facts.ts'
 
 const h = React.createElement
 
@@ -131,14 +132,18 @@ export interface OverviewProps {
 
 export function Overview(props: OverviewProps): React.ReactElement {
   const { journey } = props
+  const doctor = journey.next.action === 'doctor'
+  // Each fact once (INT062 fix 7): the values 最重要的一步 is about stay on that card; the rest of 总览 leaves them out.
+  const covered = coveredByCare(journey)
   return h('div', { className: 'lp-tab-body lp-overview' },
     h(PartialNote, { journey }),
-    h(InsightCard, { journey }),
-    h(ScienceIntro, { goTab: props.goTab }),
-    // A value to show a doctor comes before the day's check-ins and the results (M1: with the brief and the visit answers).
-    journey.next.action === 'doctor' ? h(CareCard, { journey, onNotice: props.onNotice, onIndicators: () => props.goTab('indicators', { filter: 'changed' }), onProfile: props.openOnboarding }) : null,
+    // A value to show a doctor is the top fact: first, before the day's check-ins and the results (M1: with the brief and the visit answers).
+    doctor ? h(CareCard, { journey, onNotice: props.onNotice, onIndicators: () => props.goTab('indicators', { filter: 'changed' }), onProfile: props.openOnboarding }) : null,
+    h(InsightCard, { journey, covered }),
     journey.plan.exists ? h(TodayCard, { journey, tracking: props.tracking, onNotice: props.onNotice }) : null,
-    h(ResultsRow, { journey, tracking: props.tracking, onAction: props.onAction, onNotice: props.onNotice }),
-    journey.next.action === 'doctor' ? null : h(NextCard, props),
-    h(NotableChanges, { journey, onOpenIndicators: () => props.goTab('indicators', { filter: 'changed' }) }))
+    h(ResultsRow, { journey, tracking: props.tracking, onAction: props.onAction, onNotice: props.onNotice, covered }),
+    doctor ? null : h(NextCard, props),
+    h(NotableChanges, { journey, covered, onOpenIndicators: () => props.goTab('indicators', { filter: 'changed' }) }),
+    // The research invitation waits under the person's own results.
+    h(ScienceIntro, { goTab: props.goTab }))
 }

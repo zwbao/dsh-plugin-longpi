@@ -4,13 +4,14 @@
 // longevity-skills checkout; skips without it. Every value is made up.
 
 import assert from 'node:assert/strict'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as mod from '../lib/index.js'
 import { alignBodyAge, bodyAgeFactText, measuresBodyAge, PHENO_SKILL, versusCalendarAge } from '../src/core/method-view.ts'
 import { rankTopFacts } from '../src/core/topfacts.ts'
 import { notOnePersonReason } from '../src/subject.ts'
+import { coveredByCare, isCovered } from '../src/client/overview-facts.ts'
 import { loadRecord, startFakeMirobody } from './fake-mirobody.mjs'
 import { skillsHome } from './lib/skills-home.mjs'
 
@@ -254,7 +255,25 @@ try {
   assert.equal(sglt2.candidates.some((row) => /限时进食|time-restricted|16:8|断食/i.test(`${row.intervention_zh} ${row.id}`)), false)
   for (const row of sglt2.candidates.filter((item) => item.marker_key === 'weight')) assert.doesNotMatch(row.expected_zh, KG, row.id)
 
-  console.log('int-062 ok (two people blocked; one body-age number; one draw has no gap; statin fact; weight medicine without kilograms)')
+  // --- 7. 总览: each fact once, the top fact first, one body-age card ------------------------------------
+  const doctorJourney = {
+    next: { action: 'doctor', title_zh: '请先去看医生：血红蛋白 114 g/L 偏低，平均红细胞体积 72.4 fL 偏低，铁蛋白 8 ng/mL 偏低', detail_zh: '' },
+    doctor_first: { stop: true, hits: [{ key: 'hgb', short_zh: '血红蛋白 114 g/L 偏低' }, { key: 'mcv', short_zh: '平均红细胞体积 72.4 fL 偏低' }, { key: 'ferritin', short_zh: '铁蛋白 8 ng/mL 偏低' }] },
+  }
+  const covered = coveredByCare(doctorJourney)
+  for (const row of [{ key: 'mch', label_zh: '平均红细胞血红蛋白含量' }, { key: 'hb', label_zh: '血红蛋白' }, { key: 'mchc', label_zh: '平均红细胞血红蛋白浓度' }]) assert.equal(isCovered(covered, row), true, row.label_zh)
+  assert.equal(isCovered(covered, { key: 'hba1c', label_zh: '糖化血红蛋白' }), false, 'HbA1c is not a red-cell value')
+  assert.equal(isCovered(coveredByCare({ ...doctorJourney, next: { action: 'plan', title_zh: '', detail_zh: '' } }), { key: 'hb', label_zh: '血红蛋白' }), false, 'no doctor card, nothing hidden')
+  const client = (name) => readFileSync(new URL(`../src/client/${name}`, import.meta.url), 'utf8')
+  const overview = client('overview.ts')
+  assert.ok(overview.indexOf('h(CareCard') < overview.indexOf('h(InsightCard') && overview.indexOf('h(CareCard') < overview.indexOf('h(ScienceIntro'), '最重要的一步 is first on 总览')
+  const changesSrc = client('changes.ts')
+  assert.doesNotMatch(changesSrc, /caveat_zh|引用尚未逐字核对/, '判断依据 keeps one plain sentence and the source link')
+  const resultsSrc = client('results.ts')
+  assert.match(resultsSrc, /measuresBodyAge\(row\)/, 'body-age method results fold into the body-age card')
+  assert.doesNotMatch(resultsSrc, /riskBindingNote/, 'the risk card shows no unmatched alternative next to its own number')
+
+  console.log('int-062 ok (two people blocked; one body-age number; one draw has no gap; statin fact; weight medicine without kilograms; 总览 each fact once)')
 } finally {
   mod.setMethodResults([])
   for (const server of servers) await server.close?.()
