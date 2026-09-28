@@ -78,6 +78,8 @@ body[data-ds-dark-theme] .lp {
 .lp-page { max-width: 1040px; margin: 0 auto; padding: 12px 40px 64px; }
 @container lp-root (max-width: 760px) { .lp-page { padding: 8px 20px 48px; } }
 .lp-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; margin-bottom: 28px; }
+.lp-season-bar { position: static; display: flex; align-items: center; width: 100%; max-width: 100%; margin: -12px 0 16px; padding: 8px 12px; border: 0; border-radius: 12px; background: var(--lp-layer-2); color: var(--lp-ink); font: inherit; text-align: left; cursor: pointer; }
+.lp-season-bar:hover { background: var(--lp-hover); }
 @container lp-root (max-width: 760px) { .lp-header { flex-direction: column; gap: 16px; } }
 .lp-kicker { font-size: 12px; line-height: 18px; color: var(--lp-ink-3); margin-bottom: 6px; }
 .lp-h1 { font-size: 26px; line-height: 34px; font-weight: 500; margin: 0 0 4px; letter-spacing: -.01em; }

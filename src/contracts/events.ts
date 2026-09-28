@@ -15,6 +15,7 @@ export interface HealthEventPayloads {
   'triage.opened': { finding_id: Id; priority: 'emergency' | 'must_surface' | 'should_surface'; rule: string }
   'triage.resolved': { finding_id: Id; how: 'visited' | 'normalised' | 'dismissed_by_person' | 'superseded' }
   'care.advised': { finding_id: Id; department_zh: string }
+  'care.booked': { department_zh: string; day: IsoDay }
   'care.visit_logged': { care_item_id: Id; finding_id?: Id; with_brief: boolean }
   'brief.generated': { brief_id: Id; finding_ids: Id[]; source: 'model' | 'template' }
   'plan.drafted': { draft_id: Id; items: number; source: 'rules' | 'co_designer'; hold: boolean }
@@ -69,7 +70,7 @@ export interface Bus {
 /** Only the owning module emits a given type (AA §3.4). */
 export const EVENT_OWNERS: Readonly<Record<HealthEventType, ModuleId>> = {
   'report.arrived': 'M7', 'record.changed': 'M10', 'memory.changed': 'M0', 'triage.opened': 'M1', 'triage.resolved': 'M1',
-  'care.advised': 'M1', 'care.visit_logged': 'M1', 'brief.generated': 'M1', 'plan.drafted': 'M3', 'plan.saved': 'M3',
+  'care.advised': 'M1', 'care.booked': 'M6', 'care.visit_logged': 'M1', 'brief.generated': 'M1', 'plan.drafted': 'M3', 'plan.saved': 'M3',
   'plan.item_excluded': 'M3', 'checkin.logged': 'M3', 'selfmeasure.logged': 'M7', 'life_event.logged': 'M6', 'streak.frozen': 'M6',
   'retest.due': 'M9', 'retest.arrived': 'M9', 'verdict.changed': 'M9', 'feedback.issued': 'M4', 'season.started': 'M6',
   'season.ended': 'M6', 'quest.completed': 'M6', 'unlock.granted': 'M6', 'codex.draw_earned': 'M6', 'codex.drawn': 'M6',

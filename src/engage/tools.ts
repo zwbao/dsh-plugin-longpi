@@ -1,10 +1,13 @@
 // Chat tools. read_season is read-only. log_life_event records sick and travel days,
 // which can freeze the streak. Neither tool sends the person's name anywhere.
 
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { asJson } from '../json.ts'
-import { logLifeEngage, syncEngage } from './engine.ts'
+import { noteSeasonContext, runCodexMethod, syncEngage, logLifeEngage } from './engine.ts'
+import { validateSeasonDraft, type SeasonDraft, type SeasonFact } from './personal.ts'
 
 const EVENTS = ['sick', 'travel', 'injury', 'surgery', 'pregnancy', 'bereavement', 'shift_work', 'other'] as const
 
@@ -48,4 +51,82 @@ export function registerEngageTools(ctx: Context, dataDir: () => string): void {
       return asJson({ ok: result.ok, error: result.error, froze: result.froze, streak: result.view.streak, season_title_zh: result.view.season?.title_zh ?? null })
     },
   }))
+
+  ctx.tools.register(defineTool({
+    name: 'propose_personal_season',
+    description: 'Propose this season\'s theme and 3 to 5 quests from the fact pack already on file. You choose the wording. The validator keeps the quest events. An invalid proposal is replaced by the template (for example an anaemia pattern becomes 查清贫血: book haematology or gastroenterology, bring the brief, add ferritin and iron studies, recheck the blood count at 8–12 weeks). Do not invent a younger claim, a price, or a quest whose completion depends on a flattering lab.',
+    parameters: {
+      title_zh: { type: 'string', required: true, description: 'Season title, 2–20 characters, no claim that the person got younger.' },
+      focus: { type: 'string', required: true, description: 'care, data, bioage, cardio, glucose, weight, sleep, or plan.' },
+      marker_keys_json: { type: 'string', description: 'JSON array of marker keys named by the facts, such as ["hb","ferritin"].' },
+      quests_json: { type: 'string', required: true, description: 'JSON array of {id, kind, title_zh, event, count, where?}. Events: care.booked, care.visit_logged, selfmeasure.logged, retest.arrived, checkin.logged. 3 to 5 items.' },
+    },
+    output: jsonOut,
+    timeoutMs: 30000,
+    isConcurrencySafe: () => false,
+    async execute(args) {
+      const parsed = parseDraft(args)
+      if (!parsed) return asJson({ ok: false, error: 'quests_json 不是可用的任务列表。' })
+      const current = syncEngage(dataDir())
+      const facts = readFacts(dataDir())
+      const check = validateSeasonDraft(parsed, facts)
+      const view = noteSeasonContext(dataDir(), { facts, draft: parsed })
+      return asJson({
+        ok: check.ok,
+        errors: check.errors,
+        origin: view.personal_origin,
+        title_zh: view.season?.title_zh ?? current.season?.title_zh ?? null,
+        quests: view.quests.map((quest) => quest.title_zh),
+      })
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'run_drawn_method',
+    description: 'Run a method the person already drew, through the same input check as chat. If the card is animal or cell evidence, return that evidence and do not compute a personal number. If inputs are missing, say what to add. This does not hide any other method.',
+    parameters: {
+      card_id: { type: 'string', required: true, description: 'The drawn card id.' },
+    },
+    output: jsonOut,
+    timeoutMs: 30000,
+    isConcurrencySafe: () => false,
+    async execute(args) {
+      const cardId = typeof args.card_id === 'string' ? args.card_id : ''
+      if (!cardId) return asJson({ ok: false, error: '需要 card_id。' })
+      const result = await runCodexMethod(dataDir(), cardId)
+      return asJson({ ok: result.ok, error: result.error, text_zh: result.text_zh, label: result.label, ran: result.ran })
+    },
+  }))
+}
+
+function readFacts(dataDir: string): SeasonFact[] {
+  try {
+    const raw = JSON.parse(readFileSync(join(dataDir, 'engage', 'state.json'), 'utf8')) as { facts?: SeasonFact[] }
+    return Array.isArray(raw.facts) ? raw.facts : []
+  } catch {
+    return []
+  }
+}
+
+function parseDraft(args: Record<string, unknown>): SeasonDraft | null {
+  const title = typeof args.title_zh === 'string' ? args.title_zh.trim() : ''
+  const focus = typeof args.focus === 'string' ? args.focus : 'care'
+  let quests: unknown = []
+  let keys: unknown = []
+  try { quests = JSON.parse(typeof args.quests_json === 'string' ? args.quests_json : '[]') } catch { return null }
+  try { keys = JSON.parse(typeof args.marker_keys_json === 'string' ? args.marker_keys_json : '[]') } catch { keys = [] }
+  if (!Array.isArray(quests)) return null
+  const allowed = new Set(['care', 'data', 'bioage', 'cardio', 'glucose', 'weight', 'sleep', 'plan'])
+  return {
+    title_zh: title,
+    focus: (allowed.has(focus) ? focus : 'care') as SeasonDraft['focus'],
+    marker_keys: Array.isArray(keys) ? keys.filter((item): item is string => typeof item === 'string').slice(0, 8) : [],
+    quests: quests.slice(0, 5).flatMap((item) => {
+      if (!item || typeof item !== 'object') return []
+      const row = item as Record<string, unknown>
+      if (typeof row.id !== 'string' || typeof row.title_zh !== 'string' || typeof row.event !== 'string' || typeof row.kind !== 'string') return []
+      const count = typeof row.count === 'number' ? row.count : 1
+      return [{ id: row.id, kind: row.kind as SeasonDraft['quests'][number]['kind'], title_zh: row.title_zh, event: row.event as SeasonDraft['quests'][number]['event'], count }]
+    }),
+  }
 }

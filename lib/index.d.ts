@@ -571,7 +571,7 @@ declare const RESERVED_TOOL_NAMES: {
   readonly M1: readonly ["read_care_navigation", "prepare_doctor_brief", "log_care_visit"];
   readonly M2: readonly ["advise_on_substance"];
   readonly M4: readonly ["read_progress_feedback"];
-  readonly M6: readonly ["log_life_event", "read_season"];
+  readonly M6: readonly ["log_life_event", "read_season", "propose_personal_season", "run_drawn_method"];
   readonly M7: readonly ["forward_report", "record_condition", "read_narrative_findings"];
   readonly M8: readonly ["list_studies", "explain_study", "design_n_of_1", "log_n_of_1_outcome", "record_study_consent", "withdraw_from_study"];
 };
@@ -582,7 +582,7 @@ declare const RESERVED_ROUTES: {
   readonly M2: readonly ["GET /api/longpi/advice"];
   readonly M4: readonly ["GET /api/longpi/feedback"];
   readonly M5: readonly ["GET /api/longpi/surfaces"];
-  readonly M6: readonly ["GET /api/longpi/season", "POST /api/longpi/season", "POST /api/longpi/streak-freeze", "GET /api/longpi/codex", "POST /api/longpi/codex/draw", "GET /api/longpi/weekly", "POST /api/longpi/nudges"];
+  readonly M6: readonly ["GET /api/longpi/season", "POST /api/longpi/season", "POST /api/longpi/streak-freeze", "GET /api/longpi/codex", "GET /api/longpi/codex/odds", "POST /api/longpi/codex/draw", "POST /api/longpi/codex/run", "GET /api/longpi/weekly", "POST /api/longpi/nudges"];
   readonly M7: readonly ["POST /api/longpi/upload", "GET /api/longpi/findings", "GET /api/longpi/meds", "POST /api/longpi/meds", "GET /api/longpi/conditions", "POST /api/longpi/conditions", "GET /api/longpi/stores"];
   readonly M8: readonly ["GET /api/longpi/science/studies", "POST /api/longpi/science/consent", "POST /api/longpi/science/withdraw", "POST /api/longpi/science/run", "GET /api/longpi/science/translog", "GET /api/longpi/science/community"];
   readonly M11: readonly ["GET /api/longpi/privacy", "POST /api/longpi/privacy/consent", "GET /api/longpi/privacy/export", "POST /api/longpi/privacy/delete"];
@@ -4503,6 +4503,10 @@ interface HealthEventPayloads {
   'care.advised': {
     finding_id: Id;
     department_zh: string;
+  };
+  'care.booked': {
+    department_zh: string;
+    day: IsoDay;
   };
   'care.visit_logged': {
     care_item_id: Id;

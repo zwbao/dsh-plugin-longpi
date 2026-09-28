@@ -2,7 +2,9 @@
 // guardRoute is applied by boot, so these handlers assume the request is already allowed.
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
-import { actEngage, drawEngage, freezeEngage, prefsEngage, syncEngage } from './engine.ts'
+import { oddsDisclosure } from './droptable.ts'
+import { loadCodexPack } from './codex.ts'
+import { actEngage, drawEngage, freezeEngage, prefsEngage, runCodexMethod, shareEngage, syncEngage } from './engine.ts'
 
 type Handler = (req: IncomingMessage, res: ServerResponse) => void
 
@@ -64,15 +66,42 @@ export function mountEngageRoutes(register: (path: string, handler: Handler) => 
         sendJson(res, 200, prefsEngage(dataDir(), { pressure: action === 'opt_in' }))
         return
       }
-      if (action !== 'care_visit' && action !== 'addon' && action !== 'retest' && action !== 'next_season') {
-        sendJson(res, 400, { ok: false, error: 'action 只能是 care_visit、addon、retest、next_season、opt_in 或 opt_out。' })
+      if (action === 'decline_invite') {
+        sendJson(res, 200, prefsEngage(dataDir(), { declineInvite: true }))
         return
       }
+      if (action === 'family_on' || action === 'family_off') {
+        sendJson(res, 200, prefsEngage(dataDir(), { family: action === 'family_on' }))
+        return
+      }
+      if (action === 'share_card' || action === 'share_recap') {
+        const shared = shareEngage(dataDir(), { kind: action === 'share_card' ? 'card' : 'recap', card_id: typeof row.card_id === 'string' ? row.card_id : undefined })
+        sendJson(res, shared.ok ? 200 : 400, shared)
+        return
+      }
+      if (action !== 'care_visit' && action !== 'addon' && action !== 'retest' && action !== 'next_season' && action !== 'book') {
+        sendJson(res, 400, { ok: false, error: 'action 不能识别。' })
+        return
+      }
+      const measurements = Array.isArray(row.measurements)
+        ? row.measurements.flatMap((item) => {
+          if (!item || typeof item !== 'object') return []
+          const record = item as Record<string, unknown>
+          const key = typeof record.key === 'string' ? record.key : ''
+          const value = typeof record.value === 'number' ? record.value : Number.NaN
+          if (!key || !Number.isFinite(value)) return []
+          return [{ key, value, ...(typeof record.date === 'string' ? { date: record.date } : {}) }]
+        })
+        : undefined
       const result = action === 'care_visit'
         ? actEngage(dataDir(), { action, with_brief: row.with_brief === true })
         : action === 'addon'
           ? actEngage(dataDir(), { action, key: typeof row.key === 'string' ? row.key : '' })
-          : actEngage(dataDir(), { action })
+          : action === 'book'
+            ? actEngage(dataDir(), { action, department_zh: typeof row.department_zh === 'string' ? row.department_zh : undefined })
+            : action === 'retest'
+              ? actEngage(dataDir(), { action, ...(measurements ? { measurements } : {}) })
+              : actEngage(dataDir(), { action: 'next_season' })
       sendJson(res, result.ok ? 200 : 400, result)
     }).catch((error) => fail(res, error))
   })
@@ -96,6 +125,30 @@ export function mountEngageRoutes(register: (path: string, handler: Handler) => 
       const view = syncEngage(dataDir())
       sendJson(res, 200, { ok: true, codex: view.codex, season_title_zh: view.season?.title_zh ?? null })
     } catch (error) { fail(res, error) }
+  })
+
+  register('/api/longpi/codex/odds', (req, res) => {
+    if ((req.method ?? '').toUpperCase() !== 'GET') { sendJson(res, 405, { ok: false, error: '只接受 GET。' }); return }
+    try {
+      const pack = loadCodexPack()
+      const text = oddsDisclosure(pack.table, pack.cards)
+      const html = `<!doctype html><html lang="zh"><meta charset="utf-8"><title>长寿图鉴概率</title><body style="font:16px/1.6 sans-serif;max-width:40rem;margin:2rem auto;padding:0 1rem"><h1>长寿图鉴概率</h1><p>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p><p>每个成年人的概率都一样。未满 18 岁不开放图鉴。没有付费，不能交易。稀有度不由指标决定。</p></body></html>`
+      res.statusCode = 200
+      res.setHeader('Content-Type', 'text/html; charset=utf-8')
+      res.setHeader('Cache-Control', 'no-store')
+      res.end(html)
+    } catch (error) { fail(res, error) }
+  })
+
+  register('/api/longpi/codex/run', (req, res) => {
+    if ((req.method ?? '').toUpperCase() !== 'POST') { sendJson(res, 405, { ok: false, error: '只接受 POST。' }); return }
+    void readBody(req).then(async (body) => {
+      const row = isRecord(body) ? body : {}
+      const cardId = typeof row.card_id === 'string' ? row.card_id : ''
+      if (!cardId) { sendJson(res, 400, { ok: false, error: '需要 card_id。' }); return }
+      const result = await runCodexMethod(dataDir(), cardId)
+      sendJson(res, result.ok ? 200 : 400, result)
+    }).catch((error) => fail(res, error))
   })
 
   register('/api/longpi/codex/draw', (req, res) => {

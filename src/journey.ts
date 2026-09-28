@@ -32,7 +32,7 @@ import { careState } from './triage/care.ts'
 import { NO_STOP } from './doctor-first.ts'
 import { currentMedications } from './situation.ts'
 import { findingsFromIndicators } from './datain/narrative.ts'
-import { noteLabsOnFile } from './engage/engine.ts'
+import { noteLabsOnFile, noteSeasonContext } from './engage/engine.ts'
 
 export type Stage = 'consent' | 'profile' | 'records' | 'first_result' | 'plan' | 'routine'
 export type { RecordChange } from './changes.ts'
@@ -566,6 +566,36 @@ function journeyFrom(context: JourneyContext, tracking: Tracking, summary: Recor
     method_results: pack.method_results,
   }
   journey.followup = followupSummary(context.dataDir, followupStateOf(journey, tracking), context.now ?? new Date())
+  try {
+    const identity = calculatorIdentity(profile)
+    noteSeasonContext(context.dataDir, {
+      facts: pack.top_facts.slice(0, 8).map((fact) => ({
+        id: fact.id,
+        rule: fact.rule,
+        text_zh: fact.text_zh,
+        refs: fact.refs.filter((ref) => typeof ref.value === 'number' && Number.isFinite(ref.value)).slice(0, 4).map((ref) => ({
+          key: ref.key,
+          label_zh: ref.label_zh,
+          value: ref.value,
+          unit: ref.unit,
+          date: ref.date,
+        })),
+      })),
+      doctorStep: next.action === 'doctor' || care.stop.stop === true,
+      firstResult: stage === 'first_result' || stage === 'plan' || stage === 'routine' || body.results.bioage.status === 'ok' || body.results.risk.status === 'ok',
+      record: {
+        age: identity.age,
+        sex: identity.sex,
+        indicators: records.indicators.slice(0, 80).map((row) => ({
+          name: row.name,
+          value: row.value,
+          unit: row.unit,
+          ...(row.loinc ? { loinc: row.loinc } : {}),
+          ...(row.date ? { date: row.date } : {}),
+        })),
+      },
+    }, context.now ?? new Date())
+  } catch { /* the season file keeps the last good copy */ }
   return journey
 }
 
