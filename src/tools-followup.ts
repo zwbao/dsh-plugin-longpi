@@ -9,6 +9,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { Config } from './config.ts'
 import { CN_NUMBER, hasDose } from './dose.ts'
+import { bootEngage } from './engage/boot.ts'
 import { followupResponse, inQuiet, maskUrl, readFollowup, sendNow, writeFollowup, WEBHOOK_KINDS, type FollowupState } from './followup.ts'
 import { currentPlan } from './interventions.ts'
 import { asJson } from './json.ts'
@@ -112,6 +113,15 @@ export function followupApprovalReason(args: unknown): string {
 
 export function registerFollowupTools(ctx: Context, config: () => Config, state: () => Promise<FollowupState | null>): void {
   const dataDir = () => resolveDataDir(config().dataDir)
+  try {
+    bootEngage(ctx, {
+      dataDir,
+      codexOn: () => {
+        const current = config() as { engage?: { codex?: boolean } }
+        return current.engage?.codex !== false
+      },
+    })
+  } catch { /* a host without tools still runs the rest of follow-up */ }
 
   // After every other listener allowed it: turning follow-up on, full detail or a webhook address needs the person's yes.
   ctx.on('tools/pre-execute', async (exec, next) => {

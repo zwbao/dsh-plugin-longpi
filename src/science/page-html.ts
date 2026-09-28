@@ -1,0 +1,145 @@
+// A self-contained research page. The React tab renders the same CommunityView once the client registry is wired.
+
+import type { CommunityView } from './community.ts'
+
+function esc(value: string): string {
+  return value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[char] ?? char))
+}
+
+export function communityHtml(view: CommunityView): string {
+  const progress = view.progress.min_cohort > 0 ? Math.min(100, Math.round(100 * view.progress.contributed / view.progress.min_cohort)) : 0
+  const studies = view.studies.map((study) => {
+    const questions = study.questions.map((question) => `
+      <fieldset>
+        <legend>${esc(question.question_zh)}</legend>
+        ${question.options_zh.map((option, index) => `<label><input type="radio" name="${esc(study.id)}::${esc(question.id)}" value="${index}"> ${esc(option)}</label>`).join('')}
+      </fieldset>`).join('')
+    const state = study.consented === 'granted' ? '已参加' : study.consented === 'withdrawn' ? '已退出' : '未参加'
+    return `<article class="card" id="study-${esc(study.id)}">
+      <p class="kicker">${esc(state)} · ${esc(study.kind === 'community_season' ? '社区季' : study.kind === 'n_of_1' ? '个人对照' : '观察')}</p>
+      <h2>${esc(study.title_zh)}</h2>
+      <p>${esc(study.summary_zh)}</p>
+      <p class="note">${esc(study.ethics_zh)}</p>
+      <details><summary>同意说明</summary><p class="prose">${esc(study.text_zh).replace(/\n/g, '<br>')}</p></details>
+      <form data-consent="${esc(study.id)}">
+        ${questions}
+        <label class="confirm"><input type="checkbox" name="confirm"> 我看过说明，同意在这台电脑上参加</label>
+        <button type="submit">提交同意</button>
+        <button type="button" data-withdraw="${esc(study.id)}">退出这项研究</button>
+        <p class="status" data-status="${esc(study.id)}"></p>
+      </form>
+    </article>`
+  }).join('')
+  const topics = view.voting.topics.map((topic) => `
+    <label class="topic"><input type="radio" name="topic" value="${esc(topic.id)}" ${view.voting.mine === topic.id ? 'checked' : ''}> ${esc(topic.title_zh)} <span>${topic.votes}</span></label>`).join('')
+  const cards = view.cards.length === 0
+    ? '<p class="note">还没有贡献卡。完成本机计算后会出现在这里，不和化验结果挂钩。</p>'
+    : view.cards.map((card) => `<article class="card slim"><h3>${esc(card.title_zh)}</h3><p>${esc(card.body_zh)}</p></article>`).join('')
+  const log = view.translog.length === 0
+    ? '<p class="note">还没有记录。同意、计算和发布都会写在这里。</p>'
+    : `<ol class="log">${view.translog.map((row) => `<li><span>${esc(row.at.slice(0, 16).replace('T', ' '))}</span> ${esc(row.detail_zh)}</li>`).join('')}</ol>`
+  const pulse = view.pulse ? `<h2>${esc(view.pulse.headline_zh)}</h2><p>${esc(view.pulse.detail_zh)}</p>` : '<p>群体结果还没发回。一个人的时候不会发布合计。</p>'
+  return `<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LongPi 研究</title>
+<style>
+  :root { color-scheme: light; --ink:#14181f; --muted:#5c6570; --line:#e4e7ec; --card:#fff; --bg:#f4f6f8; --accent:#1f6feb; --wash:#e8f1fe; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:16px/1.55 "PingFang SC","Noto Sans SC",sans-serif; color:var(--ink); background:var(--bg); }
+  main { max-width:720px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:28px; line-height:1.25; margin:8px 0; }
+  h2 { font-size:18px; margin:0 0 8px; }
+  h3 { font-size:16px; margin:0 0 6px; }
+  .kicker { color:var(--muted); font-size:13px; margin:0; }
+  .banner { background:var(--wash); border-radius:12px; padding:12px 14px; margin:16px 0; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; margin:12px 0; }
+  .slim { padding:12px 14px; }
+  .note { color:var(--muted); font-size:14px; }
+  .bar { height:10px; background:#e6eaf0; border-radius:99px; overflow:hidden; }
+  .bar span { display:block; height:100%; background:var(--accent); width:${progress}%; }
+  fieldset { border:1px solid var(--line); border-radius:10px; margin:10px 0; }
+  label { display:block; margin:6px 0; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:10px; padding:10px 14px; font:inherit; margin:6px 6px 0 0; }
+  button[data-withdraw] { background:#fff; color:var(--ink); border:1px solid var(--line); }
+  .status { min-height:1.2em; color:var(--muted); }
+  .log { padding-left:18px; }
+  .log span { color:var(--muted); font-size:13px; }
+  .topic span { color:var(--muted); }
+  @media (max-width:640px) { main { padding:16px 12px 48px; } button { width:100%; } }
+</style>
+<main>
+  <p class="kicker">LongPi · 研究 · 模拟</p>
+  <h1>一起看波动，原始数据留在这台电脑</h1>
+  <div class="banner">${esc(view.reason_zh)}</div>
+  <section class="card">
+    <p class="kicker">本季进度 · 第 ${view.progress.week} / ${view.progress.weeks} 周</p>
+    <h2>${esc(view.progress.label_zh)}</h2>
+    <div class="bar" role="progressbar" aria-valuenow="${view.progress.contributed}" aria-valuemax="${view.progress.min_cohort}"><span></span></div>
+    <p>本机参加了 ${view.progress.studies} 项研究。发布合计至少需要 ${view.progress.min_cohort} 人，这一台电脑只算其中 ${view.progress.contributed} 人。</p>
+  </section>
+  <section class="card" id="pulse"><p class="kicker">群体脉搏</p>${pulse}</section>
+  <section class="card"><p class="kicker">发回给你</p><p>${esc(view.give_back_zh)}</p></section>
+  <section class="card" id="vote">
+    <p class="kicker">下一季题目</p>
+    <h2>你想先研究哪一件</h2>
+    <form id="vote-form">${topics}<button type="submit">记下我的一票</button></form>
+    <p class="note">${esc(view.voting.note_zh)}</p>
+  </section>
+  ${studies}
+  <section><h2>贡献卡</h2>${cards}</section>
+  <section class="card"><h2>透明记录</h2>${log}</section>
+  <p class="note">基因、姓名、原始化验单和图片不参加。live 在这个版本里打不开。</p>
+</main>
+<script>
+async function post(path, body) {
+  const res = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+  const json = await res.json().catch(() => ({}))
+  if (!res.ok || json.ok === false) throw new Error(json.reason_zh || json.error || ('HTTP ' + res.status))
+  return json
+}
+document.querySelectorAll('form[data-consent]').forEach((form) => {
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault()
+    const id = form.getAttribute('data-consent')
+    const status = form.querySelector('[data-status]')
+    const answers = []
+    form.querySelectorAll('fieldset').forEach((field) => {
+      const picked = field.querySelector('input:checked')
+      const name = picked && picked.name.split('::')[1]
+      if (picked) answers.push({ id: name, choice: Number(picked.value) })
+    })
+    try {
+      await post('/api/longpi/science/consent', { confirm: form.confirm.checked === true, study_id: id, answers, explained_by: 'page' })
+      status.textContent = '已记下同意。'
+    } catch (error) { status.textContent = error.message }
+  })
+})
+document.querySelectorAll('[data-withdraw]').forEach((button) => {
+  button.addEventListener('click', async () => {
+    const id = button.getAttribute('data-withdraw')
+    const status = button.parentElement.querySelector('[data-status]')
+    try {
+      await post('/api/longpi/science/withdraw', { study_id: id, confirm: true })
+      status.textContent = '已退出，未发布的合计已删除。'
+    } catch (error) { status.textContent = error.message }
+  })
+})
+document.getElementById('vote-form').addEventListener('submit', async (event) => {
+  event.preventDefault()
+  const picked = document.querySelector('input[name=topic]:checked')
+  if (!picked) return
+  try { await post('/api/longpi/science/community', { topic_id: picked.value }); location.reload() }
+  catch (error) { alert(error.message) }
+})
+</script>`
+}
+
+export function offHtml(reason: string): string {
+  return communityHtml({
+    mode: 'off', configured: 'off', live_refused: false, reason_zh: reason, studies: [],
+    progress: { label_zh: '研究', contributed: 0, studies: 0, min_cohort: 20, week: 0, weeks: 8 },
+    pulse: null, voting: { topics: [], mine: null, note_zh: '' }, give_back_zh: '', cards: [], translog: [],
+  })
+}

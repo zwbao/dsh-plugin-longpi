@@ -1,0 +1,455 @@
+[
+  {
+    "id": "nmn",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "nmn",
+      "烟酰胺单核苷酸",
+      "β-nmn",
+      "beta-nmn"
+    ],
+    "source": "Irie 2020 Endocr J; Yoshino 2021 Science; Yi 2023 GeroScience; Okabe 2022; no established UL (NIH ODS NAD fact sheet)",
+    "say_zh": "人体试验里用过的 NMN 大约每天 250 到 1200 mg（例如 250 mg，或 300、600、900 mg）。没有确立的可耐受最高摄入量，长期安全性数据有限。人体证据弱：样本小、时间短、看的是替代终点，没有证明能延缓衰老或延长寿命。孕期、哺乳期和有肿瘤病史的人不宜自行尝试。",
+    "critical": false
+  },
+  {
+    "id": "nr",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "烟酰胺核糖",
+      "nicotinamide riboside",
+      "nr "
+    ],
+    "source": "Conze 2019 Sci Rep; Martens 2018 Nat Commun; Dollerup 2018; no UL established",
+    "say_zh": "烟酰胺核糖的人体试验大约每天 300 到 1000 mg，短期有用到约 2000 mg 的。没有确立上限。人体抗衰老证据弱。NAD 前体和肿瘤的关系只有理论顾虑，肿瘤患者没有足够的安全数据，应先问肿瘤科。它不能用来预防癌症复发。",
+    "critical": false
+  },
+  {
+    "id": "vitamin-d",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "维生素d",
+      "维他命d",
+      "维生素 d",
+      "维他命 d",
+      "vitamin d",
+      "25羟",
+      "25-羟",
+      "25(oh)",
+      "胆钙化醇"
+    ],
+    "source": "中国居民膳食营养素参考摄入量 DRIs（RNI 10 μg，UL 50 μg 即 2000 IU）；NIH ODS vitamin D UL 4000 IU（19–70 岁）；Holick Endocrine Society 2011",
+    "say_zh": "维生素 D 一般成人常用大约每天 600 到 2000 IU，缺乏时补充常用 1000 到 4000 IU。可耐受上限：美国约 4000 IU 每天，中国 DRIs 约 2000 IU 每天。优先 D3，随餐吃，并留意食物里的钙。大约 8 到 12 周后复查 25 羟维生素 D。高钙血症、肾结石和肾病要谨慎，不要长期每天 10000 IU 还不监测。",
+    "critical": false
+  },
+  {
+    "id": "fish-oil",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "鱼油",
+      "fish oil",
+      "epa",
+      "dha",
+      "omega-3",
+      "omega3",
+      "ω-3",
+      "icosapent"
+    ],
+    "source": "中国膳食指南及 WHO：鱼约每周 2 次；FDA/EFSA 补充剂 EPA+DHA 一般不超过约 5 g/日；REDUCE-IT（Bhatt 2019 NEJM）4 g icosapent ethyl；VITAL（Manson 2019 NEJM）约 1 g；AHA 2019 高甘油三酯处方级 4 g",
+    "say_zh": "鱼油里的 EPA+DHA，一般保健大约每天 250 mg 到 1 g；降甘油三酯才用到大约每天 2 到 4 g，那是处方级。REDUCE-IT 用的是每天 4 g 的 icosapent ethyl，VITAL 大约每天 1 g。EFSA 和 FDA 认为补充剂每天不超过大约 5 g 一般可耐受。大约每天 1 g 以上、尤其 4 g，和房颤风险升高有关，也增加出血。这是一般人群和试验的信息，不是给你的个人处方。计划里仍保留大约每天 2 g EPA+DHA 要先确认出血和房颤这句。盐每天少于 5 g 的上限不变。大约 8 到 12 周后复查血脂，同时先减酒精、管体重、调饮食。",
+    "critical": false
+  },
+  {
+    "id": "magnesium",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "镁",
+      "magnesium"
+    ],
+    "source": "中国 DRIs 与 NIH ODS magnesium：补充剂元素镁 UL 350 mg/日；FDA 药品说明书 PPI 与低镁",
+    "say_zh": "补充剂里的元素镁，一般大约每天 200 到 350 mg，补充剂上限就是 350 mg。氧化镁更容易腹泻，甘氨酸镁通常更温和。这是一般人群的范围。",
+    "critical": false
+  },
+  {
+    "id": "b12-oral",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "b12",
+      "b 12",
+      "维生素b12",
+      "钴胺素",
+      "甲钴胺"
+    ],
+    "source": "NIH ODS vitamin B12（RDA 2.4 μg，无确立 UL）；中国 DRIs；de Jager 2010 二甲双胍与 B12；素食者补充见 NIH",
+    "say_zh": "口服维生素 B12：一般需要量大约每天 2.4 微克，缺乏时常用大约每天 1000 微克。没有确立的可耐受上限。",
+    "critical": false
+  },
+  {
+    "id": "creatine",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "肌酸",
+      "creatine"
+    ],
+    "source": "ISSN position stand 2017（维持 3–5 g/日）；Rawson 2011 Amino Acids；老年人抗阻训练见 Chilibeck 2017 Open Access J Sports Med",
+    "say_zh": "肌酸维持量一般大约每天 3 到 5 g，也可以先大约每天 20 g 分次、连续 5 到 7 天再转入维持。它会让血肌酐读数升高，健康人不等于肾损伤，体检前要告诉医生。已经有肾病的人先问肾内科。老年人配合抗阻训练的试验里，肌量和力量有增加。",
+    "critical": false
+  },
+  {
+    "id": "fibre",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "车前子",
+      "洋车前",
+      "psyllium",
+      "膳食纤维",
+      "纤维粉"
+    ],
+    "source": "中国居民膳食指南膳食纤维约 25–30 g/日；FDA psyllium 5–10 g 分次；McRorie 2017",
+    "say_zh": "洋车前子壳大约每天 5 到 10 g，分次、从小量开始，并且多喝水。膳食纤维总量大约每天 25 到 30 g。便血、体重下降或排便习惯突然改变要就医，可能需要肠镜。",
+    "critical": false
+  },
+  {
+    "id": "melatonin",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "褪黑素",
+      "退黑素",
+      "melatonin"
+    ],
+    "source": "AASM/AASM jet lag 与褪黑素综述（Herxheimer Cochrane；0.5–5 mg）；中国保健食品不适宜少年儿童的标注；氟伏沙明 CYP1A2 抑制见药物相互作用说明书",
+    "say_zh": "倒时差时褪黑素常用大约 0.5 到 5 mg，到达后在当地睡前吃，连用大约 2 到 5 天。吃完不要开车、不要喝酒，第二天可能犯困。抗凝药、镇静药、氟伏沙明和孕期要谨慎。同时用光照和固定作息。",
+    "critical": false
+  },
+  {
+    "id": "coq10",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "辅酶q10",
+      "辅酶 q10",
+      "coq10",
+      "泛醌"
+    ],
+    "source": "Qu 2018 Atherosclerosis 他汀肌痛荟萃（证据不一致）；Q-SYMBIO Mortensen 2014 JACC Heart Fail 300 mg；NIH ODS 常用 100–200 mg",
+    "say_zh": "辅酶 Q10 常用大约每天 100 到 200 mg，试验里有用到几百毫克的。对他汀相关腿酸的证据并不一致。告诉开药的医生，并查肌酸激酶。如果明显无力或尿色变深，尽快就医。不要自行停他汀或减量。",
+    "critical": false
+  },
+  {
+    "id": "folate",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "叶酸",
+      "folate",
+      "folic"
+    ],
+    "source": "中国围产期叶酸 0.4 mg 规范；USPSTF 2017 孕前至少 1 个月至孕早期；高风险 4–5 mg 由医生决定；UL 1 mg 合成叶酸",
+    "say_zh": "备孕叶酸一般每天 0.4 mg（400 微克），至少孕前 3 个月开始，持续到孕早期约 3 个月或更久。以前有过神经管缺陷妊娠，或正在吃抗癫痫药的，要用更高剂量（大约 4 到 5 mg），必须由医生定。一般不需要为了补叶酸去做 MTHFR 基因检测。合成叶酸的上限大约 1 mg，治疗量除外。",
+    "critical": false
+  },
+  {
+    "id": "dha",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "dha",
+      "鱼肝油"
+    ],
+    "source": "中国居民膳食指南哺乳期 DHA 约 200 mg/日；鱼肝油含视黄醇，孕期维生素 A UL 约 3000 μg RAE",
+    "say_zh": "哺乳期 DHA 大约每天 200 mg，或者每周 2 到 3 次低汞的鱼。避开高汞的鱼。鱼肝油里维生素 A 比较多，不能当成鱼油大量吃。",
+    "critical": false
+  },
+  {
+    "id": "vitamin-a",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "维生素a",
+      "维a",
+      "维他命a",
+      "异维a",
+      "异维A"
+    ],
+    "source": "中国 DRIs 视黄醇 UL 3000 μg RAE；Rothman 1995 NEJM 孕期维生素 A；异维A酸说明书妊娠禁用",
+    "say_zh": "孕期不要吃大剂量维生素 A（视黄醇）。上限大约 3000 微克 RAE，约 10000 IU 每天，过量有致畸风险。β-胡萝卜素和食物来源相对安全。异维 A 酸在孕期禁用，不能继续用，今天就告诉产科医生，由医生安排停用。",
+    "critical": false
+  },
+  {
+    "id": "zinc",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "锌",
+      "zinc"
+    ],
+    "source": "中国 DRIs 与 NIH ODS zinc：成人 UL 40 mg/日，男性 RNI 约 12.5 mg、RDA 11 mg；高剂量致铜缺乏",
+    "say_zh": "成人锌的上限是每天 40 mg（中国 UL 同样是 40 mg）。男性一般需要量大约每天 11 到 12.5 mg。长期每天 50 mg 会过上限，可能造成铜缺乏，进而贫血或中性粒细胞减少。已经有贫血的人，这一点更不利，要先就医查贫血原因，不要长期每天 50 mg。",
+    "critical": false
+  },
+  {
+    "id": "calcium",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "钙片",
+      "碳酸钙",
+      "补钙",
+      "阿仑膦"
+    ],
+    "source": "中国 DRIs 钙 UL 2000 mg；NOF 钙 1000–1200 mg（含饮食），单次补充 ≤500 mg；维生素 D 800–1000 IU；阿仑膦酸钠说明书空腹",
+    "say_zh": "钙的每天总量大约 1000 到 1200 mg，把饭里的也算上，上限大约 2000 mg，一次补充不要超过大约 500 mg。维生素 D 常用大约每天 800 到 1000 IU，更高要监测。可以先查血钙、25 羟维生素 D 或肾功能。",
+    "critical": false
+  },
+  {
+    "id": "red-yeast",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "红曲"
+    ],
+    "source": "红曲米含莫纳可林 K（洛伐他汀）；EFSA/FDA 桔霉素警示；他汀说明书肌病与肝酶",
+    "say_zh": "红曲里的莫纳可林 K 就是洛伐他汀。和他汀一起吃等于把他汀叠加，肌病和肝损伤的风险上去。红曲产品含量不标准，还可能有桔霉素。不要叠加。血脂没达标，由医生调整，而不是两个一起吃。",
+    "critical": false
+  },
+  {
+    "id": "berberine",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "黄连素",
+      "小檗碱",
+      "berberine"
+    ],
+    "source": "Yin 2008 Metabolism；Zhang 2008 J Clin Endocrinol Metab，约 0.5 g 每日 2–3 次；孕期无安全数据",
+    "say_zh": "黄连素（小檗碱）试验里大约每天 0.9 到 1.5 g，例如一次 500 mg、每天 2 到 3 次。常见胃肠反应，还会经 CYP 酶和其他药相互作用（例如环孢素），和降糖药叠用可能低血糖。孕期和哺乳期不用。糖尿病前期首先还是饮食、运动和体重，大约 3 个月复查糖化。它不能替代生活方式，也没有被证明能预防糖尿病。",
+    "critical": false
+  },
+  {
+    "id": "vitamin-e",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "维生素e",
+      "维e",
+      "维生素 e",
+      "生育酚"
+    ],
+    "source": "NIH ODS vitamin E UL 1000 mg α-生育酚（约 1100–1500 IU）；中国 UL 约 700 mg α-TE；SELECT 2009 JAMA；HOPE-TOO 2005 JAMA",
+    "say_zh": "维生素 E 的上限大约是每天 1000 mg α-生育酚（约 1100 到 1500 IU），中国大约 700 mg α-TE。每天 800 IU 已经是大剂量。大剂量和出血、出血性卒中有关。没有抗衰老证据：SELECT 和 HOPE 这类大型试验没有显示好处，甚至有害。",
+    "critical": false
+  },
+  {
+    "id": "vitamin-c",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "维生素c",
+      "维c",
+      "维生素 c"
+    ],
+    "source": "中国 DRIs 维生素 C RNI 100 mg、UL 2000 mg；NIH ODS",
+    "say_zh": "维生素 C 的推荐量大约每天 100 mg，上限大约 2000 mg。抗氧化补剂没有延寿证据。维生素 C 能促进非血红素铁吸收，但缺铁要先就医查原因，不能靠维生素 C 解决。",
+    "critical": false
+  },
+  {
+    "id": "probiotic",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "益生菌",
+      "probiotic",
+      "布拉氏",
+      "鼠李糖"
+    ],
+    "source": "Cochrane 2017 抗生素相关腹泻（鼠李糖乳杆菌 GG、布拉氏酵母菌）；免疫缺陷者慎用",
+    "say_zh": "益生菌对预防抗生素相关腹泻有一定证据，例如鼠李糖乳杆菌 GG 和布拉氏酵母菌。和抗生素错开大约 2 小时（布拉氏酵母菌可以除外）。免疫缺陷或重症的人要谨慎。",
+    "critical": false
+  },
+  {
+    "id": "protein",
+    "tier": 1,
+    "kind": "supplement",
+    "aliases": [
+      "蛋白粉",
+      "乳清",
+      "蛋白质"
+    ],
+    "source": "ESPEN 2019 老年人蛋白质 1.0–1.2 g/kg，肌少可到 1.2–1.5；PROT-AGE Bauer 2013",
+    "say_zh": "老年人蛋白质大约每天每公斤 1.0 到 1.2 g，肌少症可以到 1.2 到 1.5，优先从饭里来。肾功能不清楚时，先查 eGFR 再决定要不要加蛋白粉。维生素 D 常用大约每天 800 到 1000 IU。抗阻和平衡训练、防跌倒，以及老年科评估肌少，比只买蛋白粉重要。",
+    "critical": false
+  },
+  {
+    "id": "ben-soreness",
+    "tier": 1,
+    "kind": "benign",
+    "aliases": [
+      "腿很酸",
+      "肌肉酸",
+      "延迟性"
+    ],
+    "source": "延迟性肌肉酸痛通常 24–72 小时；浓茶样尿需排除横纹肌溶解",
+    "say_zh": "第一次跑完第二天腿酸，多半是延迟性肌肉酸痛，通常 1 到 3 天缓解。可以轻活动、拉伸、把觉睡够。如果尿色像浓茶，或者又肿又剧痛，再就医。这不是要拨打 120 的情况。",
+    "critical": false
+  },
+  {
+    "id": "ben-ldl",
+    "tier": 1,
+    "kind": "benign",
+    "aliases": [
+      "低密度",
+      "高密度脂蛋白",
+      "ldl",
+      "hdl"
+    ],
+    "source": "LDL 是动脉粥样硬化的主要干预靶点；HDL 传统上称为好胆固醇",
+    "say_zh": "低密度脂蛋白和动脉粥样硬化相关，是主要的干预靶点。高密度脂蛋白传统上被叫做好胆固醇。两者不是一回事。",
+    "critical": false
+  },
+  {
+    "id": "ben-family-stroke",
+    "tier": 1,
+    "kind": "benign",
+    "aliases": [
+      "中风过",
+      "中风风险",
+      "父亲有中风",
+      "爸以前中风"
+    ],
+    "source": "家族史是心血管风险因素之一；可控因素为血压、血脂、血糖、吸烟",
+    "say_zh": "这不是此刻的急症，不要拨打 120。父亲以前中风，说明家族史是风险因素。能管的是血压、血脂、血糖和吸烟。可以做风险评估，或在下次体检把这些测全。",
+    "critical": false
+  },
+  {
+    "id": "ben-heart",
+    "tier": 1,
+    "kind": "benign",
+    "aliases": [
+      "保护心脏",
+      "没有胸痛"
+    ],
+    "source": "AHA Life’s Essential 8：运动、饮食、血压、血脂、血糖、烟草、睡眠、体重",
+    "say_zh": "没有胸痛就不是急症，不要拨打 120。保护心脏可以：每周大约 150 分钟中等强度活动，蔬菜和少盐（每天食盐少于 5 g），管理血压、血脂、血糖，不吸烟、少酒，睡眠大约 7 到 9 小时。",
+    "critical": false
+  },
+  {
+    "id": "ben-steps",
+    "tier": 1,
+    "kind": "benign",
+    "aliases": [
+      "多少步",
+      "步数"
+    ],
+    "source": "Paluch 2022 Lancet Public Health：约 6000–8000 步后老年获益趋平；较年轻成人约 8000–10000",
+    "say_zh": "走路和死亡风险的研究里，60 岁以下大约每天 8000 到 10000 步、60 岁以上大约 6000 到 8000 步之后，好处趋于平缓，也有汇总大约 7000 步以上。走得稍快一点同样有帮助。",
+    "critical": false
+  },
+  {
+    "id": "ben-bp",
+    "tier": 1,
+    "kind": "benign",
+    "aliases": [
+      "记录",
+      "血压 128",
+      "血压128"
+    ],
+    "source": "家庭血压 128/82 mmHg 处于常规范围附近；记录用 save 工具",
+    "say_zh": "可以记下：今天早上血压 128/82 mmHg。这个读数不算高。我来把它记到自测里。",
+    "critical": false
+  },
+  {
+    "id": "ben-yam",
+    "tier": 1,
+    "kind": "benign",
+    "aliases": [
+      "山药"
+    ],
+    "source": "山药含铁量低；血红素铁来自红肉、动物肝脏和血制品；维生素 C 促进非血红素铁，茶和咖啡抑制",
+    "say_zh": "山药不是药，含铁也很少，不是补铁的好来源。血红素铁更多在红肉、动物肝脏和血制品里。维生素 C 促进吸收，茶和咖啡抑制。饮食替代不了查缺铁的原因。",
+    "critical": false
+  },
+  {
+    "id": "ben-sleep",
+    "tier": 1,
+    "kind": "benign",
+    "aliases": [
+      "睡几个小时",
+      "睡多久",
+      "睡眠时间"
+    ],
+    "source": "AASM/NSF 成人 7–9 小时",
+    "say_zh": "成人一般睡 7 到 9 小时比较合适。固定起床时间、睡前少看屏幕、咖啡因放在下午之前，都有帮助。",
+    "critical": false
+  },
+  {
+    "id": "ben-rhr",
+    "tier": 1,
+    "kind": "benign",
+    "aliases": [
+      "静息心率",
+      "resting heart",
+      "心率"
+    ],
+    "source": "成人静息心率常引 60–100 次/分；耐力训练者 50 左右常见",
+    "say_zh": "成人静息心率一般大约 60 到 100 次每分钟。规律跑步的人 50 到 60 很常见，58 对跑步的人通常正常。只有同时头晕或晕倒才需要就医。这不是心动过缓的急症。",
+    "critical": false
+  },
+  {
+    "id": "ben-fatty",
+    "tier": 1,
+    "kind": "benign",
+    "aliases": [
+      "脂肪肝"
+    ],
+    "source": "EASL 脂肪肝：减重约 5–10% 可改善；限制含糖饮料和酒精",
+    "say_zh": "脂肪肝在饮食上：控制总热量，少喝含糖饮料和少吃精制糖，限酒，蔬菜和全谷物多一些。体重降下大约 5% 到 10% 往往能看到变化。体重指数如果在 28 上下，这个减重幅度可以当成目标，和医生或营养门诊一起定。",
+    "critical": false
+  },
+  {
+    "id": "ben-strength",
+    "tier": 1,
+    "kind": "benign",
+    "aliases": [
+      "力量训练",
+      "哑铃",
+      "举铁"
+    ],
+    "source": "WHO 2020 老年人每周至少 2 天肌力；防跌倒",
+    "say_zh": "70 岁开始力量训练：每周 2 到 3 次，从坐站、靠墙俯卧撑、弹力带这类动作开始。加上平衡练习，减少跌倒。如果有心脏病或骨质疏松，先和医生说一声再加重。",
+    "critical": false
+  },
+  {
+    "id": "ben-ferritin-what",
+    "tier": 2,
+    "kind": "benign",
+    "aliases": [
+      "铁蛋白是什么",
+      "铁蛋白是啥"
+    ],
+    "source": "铁蛋白反映铁储备；炎症时升高；低于参考范围高度提示缺铁",
+    "say_zh": "铁蛋白反映体内的铁储备。发炎时它会升高，所以正常不等于铁一定够；低的时候则高度提示缺铁。如果记录里是 8.0，那低于常见参考范围（大约 30 到 400）。",
+    "critical": false
+  },
+  {
+    "id": "prompt-leak",
+    "tier": 1,
+    "kind": "benign",
+    "aliases": [
+      "系统提示",
+      "隐藏规则",
+      "ignore previous instructions"
+    ],
+    "source": "内部规则不外发；能做的是解读体检和按四层政策说明",
+    "say_zh": "我不会把系统提示或内部规则的原文贴出来。我能帮你看体检、解释指标，以及按公开资料说明补剂和药物。",
+    "critical": true
+  }
+]

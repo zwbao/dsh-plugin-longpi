@@ -14,7 +14,6 @@ import { TOOL_NAMES } from './version.ts'
 export const READ_BACK_MS = 30 * 60_000
 export const NO_READ_BACK = '请先复述方案给用户确认'
 const SAVE_TOOL = 'save_intervention_plan'
-const SKILL_TOOL = 'run_longevity_skill'
 
 function record(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {}
@@ -66,14 +65,20 @@ export function resetReadBacks(): void {
   readBacks.clear()
 }
 
-export function registerApprovals(ctx: Context, guard: Pick<Guard, 'inEmergency' | 'count'> & Partial<Pick<Guard, 'markHealth'>>): void {
+const EMERGENCY_BLOCK = new Set(['run_longevity_skill', 'query_longevity_evidence', 'read_longevity_skill', 'match_longevity_skills', 'read_personal_situation', 'draft_intervention_plan'])
+
+export function registerApprovals(ctx: Context, guard: Pick<Guard, 'inEmergency' | 'count'> & Partial<Pick<Guard, 'markHealth' | 'inAdvice'>>): void {
   // After every other listener allowed it: a confirmed save needs a fresh read-back and then the person's yes.
   ctx.on('tools/pre-execute', async (exec, next) => {
     const decision = await next()
     if (decision.kind !== 'allow') return decision
-    if (exec.name === SKILL_TOOL && guard.inEmergency(exec.agent)) {
+    if (EMERGENCY_BLOCK.has(exec.name) && guard.inEmergency(exec.agent)) {
       guard.count({ skill_blocked: 1 })
-      return { kind: 'deny', reason: '对方可能正处在紧急情况：先让对方拨打 120，这一轮不运行技能。' }
+      return { kind: 'deny', reason: '对方可能正处在紧急情况：先说急救步骤并拨打 120，这一轮不运行技能、不查记录。' }
+    }
+    if ((exec.name === 'query_longevity_evidence' || exec.name === 'draft_intervention_plan') && guard.inAdvice?.(exec.agent)) {
+      guard.count({ skill_blocked: 1 })
+      return { kind: 'deny', reason: '这一轮不要查证据库，也不要起草方案。按安全提示里的人体常用范围、上限、试验方案或风险说明直接回答。动物、细胞、蟋蟀或小鼠的结果不是这个人的证据。不要只说不能回答。' }
     }
     if (exec.name !== SAVE_TOOL || record(exec.arguments).confirm !== true) return decision
     if (!hasReadBack(planKey(exec.arguments))) {

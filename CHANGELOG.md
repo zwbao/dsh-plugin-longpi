@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.5.4
+
+Owner-facing / 给使用者
+
+这一版把各条功能线合到一起。打开健康页，最重要的事仍然排在最前面。看医生仍然是第一步；等就诊的这几天，可以先走路、把每餐的蔬菜和蛋白质备好、把睡眠稳住，烟酒能少就少。不安排断食、大幅减重、补剂或补铁。身体年龄一句话说明这次能不能叫「年轻了」：一次检查、或变化还在正常波动里，不会说你年轻了。图鉴抽卡的概率写在页面上（铜 52%、银 28%、紫 16%、金 4%），十次没有银或以上，下一次至少是银；看病、加测、复测保证从银起抽。未满 18 岁不抽卡。研究页默认关着，模拟模式可以在本机试。安装时，下载的插件和方法库压缩包要先对上公布的 sha256，才安装。
+
+English, same release
+
+The module lanes are one plugin. The doctor step stays first. While that finding is open, LongPi still offers a short plan you can do while you wait: walking, meal quality, sleep, and less smoking or alcohol. It does not add fasting, a large weight-loss target, a supplement, or iron. The body-age sentence is the graded one: one draw, or a move inside the noise band, is not "you got younger". Codex odds on the page are 52/28/16/4, pity 10 to at least rare, daily cap 3, and a care action redraws from rare up. The doctor brief and a sick-day freeze are not cards you have to draw. Under 18, Codex stays off. The research tab is off unless simulated mode is turned on; live mode still refuses. A downloaded plugin or skills tarball is installed only after its sha256 matches the published checksum.
+
+What landed from each lane
+
+- M2 advice: four tiers, first aid first, a usual range is not a personal dose, a bare refusal is filled in from the table.
+- M9 honesty: one series when the same marker was stored under two names; 太早 and 不可比 stay out of 波动内; wearable steps count; China-PAR names the 35–74 range.
+- M10a reliability: flaky indicator reads retry, printed flags parse, the same analyte joins, RDW-CV maps onto the code the body-age method lists.
+- M10b installer: mainland mirrors, and sha256 before a downloaded tarball is unpacked.
+- M7 data in: a report dropped in chat reaches Mirobody; ultrasound grades stay on this computer; login mints the connection; a WeGene PDF is read locally.
+- M4 feedback: the grade is fixed in code; the chip and the chat use that sentence; 年轻了 only past the noise band, and the sentence says 模型估计.
+- M6 engagement: a season tied to a retest, unlocks named as the one missing test, streak freeze for sick or travel days, Codex with the odds above.
+- M11 privacy: two separate unticked consents, the name is not sent, export and delete, Codex off for minors.
+- M8 science: simulated studies, a comprehension check, local statistics with noise, nothing raw leaves the computer. Live stays off.
+
 ## 0.5.3
 
 The agent core (AA steps 0–2) and triage with a doctor brief (M1): one fact pack under the page and the chat, the most important fact first on both, model-written surfaces held to deterministic checks, per-person memory, and the follow-up after "see a doctor". Plus four 0.5.2 open items. Tests: `test/agent-core.mjs`, `test/surfaces-coach.mjs`, `test/contracts.mjs` (new); `npm test` now runs every test file.

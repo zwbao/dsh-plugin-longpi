@@ -9,6 +9,7 @@ import { ConnectionPanel } from './connection.ts'
 import { FollowupPanel } from './followup.ts'
 import { Icon } from './icons.ts'
 import { MethodsSection } from './methods.ts'
+import { settingsSections } from './registry.ts'
 import { useBoard } from './store.ts'
 import type { Face } from './types.ts'
 import { LinkButton, useNotice } from './ui.ts'
@@ -55,7 +56,7 @@ export function LongPiSettings(props: SettingsPageProps): React.ReactElement {
     notice ? h('div', { className: 'lp-notice-slot' }, notice) : null,
     h(Block, { id: 'lp-set-followup', title: '随访提醒', hint: '默认关闭 · 只在 DSH 运行时发送' }, h(FollowupPanel, { onNotice: notify })),
     h(Block, { id: 'lp-set-connection', title: '数据连接', hint: 'Mirobody' }, h(ConnectionPanel, { idPrefix: 'lp-set-conn' })),
-    h(Block, { id: 'lp-set-privacy', title: '隐私与数据' }, h(Privacy)),
+    h(Block, { id: 'lp-set-privacy', title: '隐私与数据' }, h(Privacy), ...settingsSections().map((section) => h(section.Component, { key: section.id }))),
     h('section', { className: 'lp-set-block', id: 'lp-set-methods' },
       h('details', { className: 'lp-more', onToggle: (event: React.SyntheticEvent<HTMLDetailsElement>) => setAdvanced(event.currentTarget.open) },
         h('summary', null, h('span', { className: 'lp-set-title' }, '高级：方法库'), h('span', { className: 'lp-optional' }, '给想看方法细节的人')),

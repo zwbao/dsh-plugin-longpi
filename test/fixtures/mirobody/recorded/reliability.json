@@ -1,0 +1,15 @@
+{
+  "comment": "Shapes seen from Mirobody 1.5.0 and from the field-test failures (FINDINGS 56, H1). Not a live capture of one account.",
+  "flagged_latest": "(constants: date=2024-08-20, time=2024-08-20 12:00:00, system=loinc)\nindicator|name|value|unit|code|file\n空腹血糖|GLU|5.48 ↑|mmol/L|14771-0|lp:checkup:2024-08-20:某体检中心\n收缩压|SBP|120↓|mmHg|8480-6|lp:checkup:2024-08-20:某体检中心\n尿蛋白|PRO|阴性(-)||lp:checkup:2024-08-20:某体检中心|\n促甲状腺激素|TSH|<0.5|mIU/L|3016-3|lp:checkup:2024-08-20:某体检中心\n\n(window=all recorded data, tz=Asia/Shanghai, dates=tz_exact, aggregate=latest/readings, rows=4)",
+  "duplicate_files": "indicator|time|value|unit|file\n肌酐|2024-08-20 12:00:00|90|umol/L|lp:checkup:2024-08-20:某体检中心\n肌酐|2024-08-20 12:00:00|90|umol/L|lp:checkup:2024-08-20:某体检中心-再拍\n\n(window=2024-08-20..2024-08-20, tz=Asia/Shanghai, dates=tz_exact, resolution=raw, rows=2)",
+  "rest_rows": {
+    "rows": [
+      { "indicator": "血红蛋白", "time": "2026-02-11 12:00:00", "value": "124↓", "unit": "g/L", "file": "lp:checkup:2026-02-11:某体检中心" }
+    ],
+    "count": 1,
+    "total": 1,
+    "truncated": false
+  },
+  "db_error": "psycopg.OperationalError: connection to server at \"10.108.0.2\", port 5432 failed: Connection refused",
+  "health": { "service": "mirobody", "version": "1.5.0" }
+}

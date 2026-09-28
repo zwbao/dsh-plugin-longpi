@@ -6,7 +6,8 @@
 
 import React from 'react'
 import { fmt, LineChart } from './charts.ts'
-import { chineseDate, chineseMonth, riskText, versusAge } from './format.ts'
+import { FeedbackBlock, messagesFor } from './feedback/index.ts'
+import { chineseDate, riskText } from './format.ts'
 import { Icon } from './icons.ts'
 import { recordConnected } from './normalize.ts'
 import { InlineSelf } from './self-measure.ts'
@@ -105,19 +106,12 @@ export function BodyAgeCard(props: {
   const latest = points.at(-1)
   const first = points[0]
   const phenoage = latest?.phenoage ?? result.phenoage
-  const advance = latest ? latest.advance : result.advance
   const band = bio?.band_years ?? result.band_years
   const date = latest?.date ?? result.date
   const count = points.length || result.checkups
   const partial = (bio?.band_missing ?? []).length > 0
-  const delta = latest?.advance != null && first?.advance != null && points.length > 1 ? latest.advance - first.advance : null
-  let story = ''
-  if (delta != null && first) {
-    const moved = delta < 0 ? `年轻了 ${fmt(-delta)} 岁` : delta > 0 ? `多了 ${fmt(delta)} 岁` : '没有变化'
-    story = `从 ${chineseMonth(first.date)}到现在，相对实足年龄${moved}`
-    story += band != null ? (Math.abs(delta) > band ? '，超出个体正常波动。' : '，还在个体正常波动以内。') : '。'
-  }
-  const versus = versusAge(advance, count)
+  const graded = messagesFor(props.journey, props.tracking).find((row) => row.subject.kind === 'bioage')
+  const younger = graded?.allowed_claims.includes('younger') === true
   const info = h(React.Fragment, null,
     h('span', { className: 'lp-info-line' }, BIOAGE_INFO),
     band != null ? h('span', { className: 'lp-info-line' }, `浅色带是第一次检查的个体正常波动（±${fmt(band)} 岁${partial ? `，未含${bio?.band_missing?.join('、')}` : ''}），落在带外才算真实变化。`) : null,
@@ -127,7 +121,7 @@ export function BodyAgeCard(props: {
     h('div', { className: 'lp-result-figure' },
       h('span', { className: 'lp-bignum' }, fmt(phenoage)),
       h('span', { className: 'lp-bignum-unit' }, '岁'),
-      versus ? h('span', { className: `lp-pill ${advance != null && advance < -0.5 ? 'lp-pill-good' : ''}` }, versus) : null),
+      younger ? h('span', { className: 'lp-pill lp-pill-good' }, '真实的变化') : null),
     // Set by the server when an input of this model changed beyond normal fluctuation.
     result.caveat_zh ? h('p', { className: 'lp-caveat', role: 'note' }, h(Icon, { name: 'warn', size: 14 }), h('span', null, result.caveat_zh)) : null,
     points.length > 1 ? h(LineChart, {
@@ -136,7 +130,8 @@ export function BodyAgeCard(props: {
       band: band != null && first?.advance != null ? { low: first.advance - band, high: first.advance + band, from: first.date } : null,
       reference: { value: 0, label: '持平' },
     }) : props.tracking == null ? h(Skeleton, { height: 40 }) : null,
-    h('p', { className: 'lp-caption' }, [count > 0 ? `${count} 次体检` : '', points.length > 1 && band != null ? '浅色带为正常波动' : '', story].filter(Boolean).join(' · ')))
+    graded ? h('p', { className: 'lp-caption', id: 'lp-bioage-feedback' }, graded.headline_zh) : null,
+    h('p', { className: 'lp-fine' }, [count > 0 ? `${count} 次体检` : '', points.length > 1 && band != null ? '浅色带为正常波动' : ''].filter(Boolean).join(' · ')))
 }
 
 export function RiskCard(props: {
@@ -182,7 +177,8 @@ export function ResultsRow(props: {
   const riskFirst = riskAt >= 0 && (bioAt < 0 || riskAt < bioAt)
   const bio = h(BodyAgeCard, { key: 'bio', ...props })
   const risk = h(RiskCard, { key: 'risk', ...props })
-  return h('div', { className: 'lp-results', id: 'lp-results' }, ...(riskFirst ? [risk, bio] : [bio, risk]))
+  const feedback = h(FeedbackBlock, { key: 'feedback', journey: props.journey, tracking: props.tracking, onNotice: props.onNotice })
+  return h('div', { className: 'lp-results', id: 'lp-results' }, ...(riskFirst ? [risk, bio, feedback] : [bio, risk, feedback]))
 }
 
 /** The next-checkup add-on list; items the person can measure at home get a field right here. */

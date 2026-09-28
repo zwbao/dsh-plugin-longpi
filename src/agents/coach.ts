@@ -68,12 +68,25 @@ export function coachInput(pack: FactPack, extra: CoachExtra): unknown {
     top_facts: pack.top_facts.slice(0, 5).map(({ id, kind, priority, text_zh }) => ({ id, kind, priority, text_zh })),
     candidates: ranked.map((row) => ({ id: row.id, kind: row.kind, mandatory: row.mandatory, title_zh: row.title_zh, detail_zh: row.detail_zh.slice(0, 200), prompt_zh: row.target.prompt_zh ?? '' })),
     feedback: pack.feedback.map((row) => ({ id: row.id, headline_zh: row.headline_zh, grade: row.grade, allowed_claims: row.allowed_claims })),
-    plan: pack.plan,
+    plan: { ...pack.plan, adherence_pct: null },
     memory_digest: pack.memory_digest_zh,
     asked_recent: pack.asked_recent,
     last_shown_suggestions: extra.lastShown.slice(0, 12),
-    numbers: pack.numbers.slice(0, 40).map((row) => ({ key: row.key, label: row.label_zh, text: row.text, date: row.date })),
+    numbers: pack.numbers.filter((row) => !/adherence|执行率/.test(row.key)).slice(0, 40).map((row) => ({ key: row.key, label: row.label_zh, text: row.text, date: row.date })),
   }
+}
+
+/** Progress wording needs an M4 grade. An adherence percent is not that grade. */
+function ungradedClaim(text: string, pack: FactPack): string | null {
+  if (/执行率/.test(text)) {
+    const backed = pack.feedback.some((row) => row.grade === 'behaviour_done')
+    if (!backed) return '执行率 is not a graded result'
+  }
+  if (/稳住|有效果|改善了/.test(text)) {
+    const backed = pack.feedback.some((row) => row.allowed_claims.some((claim) => claim === 'improved' || claim === 'celebrate' || claim === 'progress_story'))
+    if (!backed) return 'progress claim without a graded feedback row'
+  }
+  return null
 }
 
 function card(kind: SurfaceCard['kind'], id: string, text: string, pack: FactPack, extra: Partial<SurfaceCard> = {}): SurfaceCard {
@@ -115,6 +128,11 @@ export function validateCoach(out: unknown, pack: FactPack, extra: CoachExtra): 
   const sText = str(sRaw.text_zh)
   let status = card('status', 'status', sText, pack, { fact_ids: strings(sRaw.fact_ids).filter((id) => pack.top_facts.some((row) => row.id === id)), tone: (['neutral', 'encourage', 'celebrate', 'care'].includes(str(sRaw.tone)) ? str(sRaw.tone) : 'neutral') as SurfaceCard['tone'] })
   let statusOk = Boolean(sText) && check('status', status)
+  const statusClaim = ungradedClaim(sText, pack)
+  if (statusOk && statusClaim) {
+    failed.push({ rule: 'feedback.graded', card_id: 'status', detail: statusClaim })
+    statusOk = false
+  }
   if (statusOk && urgent && (!status.fact_ids.includes(top.id) || !sText.includes(anchorOf(top.text_zh)))) {
     failed.push({ rule: 'topfact.referenced', card_id: 'status', detail: `the status must be about ${top.id} (${anchorOf(top.text_zh)})` })
     statusOk = false
@@ -145,7 +163,9 @@ export function validateCoach(out: unknown, pack: FactPack, extra: CoachExtra): 
     const c = card('next_step', 'next', text, pack, { detail_zh: detail || action.detail_zh, action_id: action.id, fact_ids: action.fact_ids, tone: action.mandatory ? 'care' : 'neutral' })
     const detailOk = !detail || ([...detail].length <= 80 && runValidators('status', detail, { fact_ids: c.fact_ids, number_keys: c.number_keys }, pack).filter((row) => row.rule !== 'length').length === 0)
     if (!detailOk) failed.push({ rule: 'next.detail', card_id: 'next', detail: 'the detail failed its checks' })
-    if (text && check('next_step', c) && detailOk) next = { action, card: c }
+    const nextClaim = ungradedClaim(`${text} ${detail}`, pack)
+    if (nextClaim) failed.push({ rule: 'feedback.graded', card_id: 'next', detail: nextClaim })
+    if (text && !nextClaim && check('next_step', c) && detailOk) next = { action, card: c }
     else if (action.mandatory) errors.push('the mandatory next step failed its checks')
   }
   if (next === floor.next) next = { ...floor.next, card: { ...floor.next.card, override: { rule: 'fallback', reason: 'next failed' } } }
@@ -165,6 +185,11 @@ export function validateCoach(out: unknown, pack: FactPack, extra: CoachExtra): 
     }
     if (blocked.has('draft_plan') && /制定|起草|方案/.test(prompt) && !/医生/.test(prompt)) {
       failed.push({ rule: 'suggestion.blocked', card_id: `s${index}`, detail: 'a plan prompt while a doctor comes first' })
+      continue
+    }
+    const claim = ungradedClaim(prompt, pack)
+    if (claim) {
+      failed.push({ rule: 'feedback.graded', card_id: `s${index}`, detail: claim })
       continue
     }
     const c = card('suggestion', `s-${index}`, prompt, pack, { prompt_zh: prompt, fact_ids: strings(row.fact_ids), ...(linked ? { action_id: linked.id } : {}) })

@@ -15,6 +15,7 @@ import type { CourseRow, DoseRow, SeriesPoint } from './records.ts'
 import { preferSelf } from './measurements.ts'
 import { foldName, nameVariants } from './units.ts'
 import { effectsFor, markerFor, rcvBand, type Biovar, type BiovarMarker, type EffectRow } from './reference.ts'
+import { labToken } from './honesty/comparability.ts'
 
 export type Verdict = '有效' | '波动内' | '反向' | '无法判断'
 
@@ -38,6 +39,11 @@ export interface ResolvedMarker {
   loinc?: string
   unit: string
   biovar: BiovarMarker | null
+  /**
+   * Other catalogue names of the same marker (a printed Chinese name and a LOINC row).
+   * Their series are read with `indicator`; a baseline that lives on only one of them still counts.
+   */
+  also?: string[]
 }
 
 export interface Adherence {
@@ -141,6 +147,27 @@ function meets(value: number, op: '>=' | '<=', threshold: number): boolean {
 }
 
 /**
+ * The wearable series an item is followed on. An explicit target wins.
+ * An exercise or sleep item with no target still counts steps or sleep:
+ * 7000 steps or 7 hours unless the item's own words name another number.
+ * Check-ins alone are not the only record of those items.
+ */
+export function wearableTargetFor(item: Pick<PlanItem, 'target' | 'mirobody' | 'category' | 'title' | 'detail'>): { metric: string; op: '>=' | '<='; value: number } | null {
+  if (item.target) return { metric: item.target.metric, op: item.target.op, value: item.target.value }
+  if (item.mirobody) return null
+  const text = `${item.title} ${item.detail ?? ''}`
+  if (item.category === 'sleep' || /睡眠|入睡|早睡/.test(text)) {
+    const hours = text.match(/(\d+(?:\.\d+)?)\s*小时/)
+    return { metric: 'dailyTotalSleepTime', op: '>=', value: hours ? Number(hours[1]) : 7 }
+  }
+  if (item.category === 'exercise' || /步|快走|步行|走路|有氧|跑步/.test(text)) {
+    const steps = text.match(/(\d{3,6})\s*步/)
+    return { metric: 'dailySteps', op: '>=', value: steps ? Number(steps[1]) : 7000 }
+  }
+  return null
+}
+
+/**
  * How well one item was followed over [start, end]. Missing data is unknown,
  * never a miss: a dose absent from the log is not evidence it was skipped.
  */
@@ -155,11 +182,21 @@ export function adherenceFor(
   const days = Math.max(0, daysBetween(start, endCap) + 1)
   const status = new Map<string, 'done' | 'missed'>()
   let source: Adherence['source'] = 'none'
-  if (item.target && data.daily) {
+  // An explicit target is wearable even when the series came back empty (coverage 0, not a missed check-in).
+  // An exercise or sleep item with no target uses steps or sleep only when that series has days.
+  const wearable = item.target ? wearableTargetFor(item) : (data.daily && data.daily.length > 0 ? wearableTargetFor(item) : null)
+  if (wearable && data.daily) {
     source = 'wearable'
     for (const point of data.daily) {
       if (point.date < start || point.date > endCap) continue
-      status.set(point.date, meets(point.value, item.target.op, item.target.value) ? 'done' : 'missed')
+      status.set(point.date, meets(point.value, wearable.op, wearable.value) ? 'done' : 'missed')
+    }
+    // A stated check-in fills a day the watch did not record. It does not override a day the watch did record.
+    if (!item.target) {
+      for (const [date, done] of checkinStatus(data.checkins).get(item.id) ?? []) {
+        if (date < start || date > endCap || status.has(date) || !done) continue
+        status.set(date, 'done')
+      }
     }
   } else if (item.mirobody && data.doses) {
     source = 'dose_log'
@@ -339,25 +376,28 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
     confounders: [], combined_with: [], expected: [], next_retest: null, first_due: null,
   }
   const retestDays = biovar?.min_retest_days ?? DEFAULT_RETEST_DAYS
-  if (!marker.indicator && input.record_unread) {
+  const seriesNames = [marker.indicator, ...(marker.also ?? [])].filter((name): name is string => Boolean(name))
+  const openNames = seriesNames.filter((name) => !input.unread?.includes(name))
+  if (seriesNames.length === 0 && input.record_unread) {
     base.unread = true
     base.reason_zh = input.record_unread === 'failed'
       ? `记录读取失败，没有读到${marker.label}的结果，这次无法判断。`
       : `指标目录没有读全，${marker.label}可能在没有读到的部分，这次无法判断。`
     return base
   }
-  if (!marker.indicator) {
+  if (seriesNames.length === 0) {
     base.reason_zh = `记录里还没有${marker.label}。下次检查时加测，才能看这项干预对它的影响。`
     return base
   }
-  if (input.unread?.includes(marker.indicator)) {
+  if (openNames.length === 0) {
     base.reason_zh = `${marker.label}的历次结果没有读全（读取失败或被截断），这次无法判断。`
     return base
   }
   // Every result in the variation row's unit, with the row's own factors (as changes.ts does); a result that
   // cannot be put there is kept aside and named, never compared as it is.
+  // Names of the same marker (printed name and LOINC) are one series: a baseline on either of them counts.
   const unconverted: SeriesPoint[] = []
-  const points = (input.series[marker.indicator] ?? []).slice().sort((a, b) => a.date.localeCompare(b.date)).flatMap((point) => {
+  const points = openNames.flatMap((name) => input.series[name] ?? []).slice().sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)).flatMap((point) => {
     if (!biovar) return [point]
     const factor = factorFor(biovar, point.unit)
     if (factor == null) {
@@ -404,16 +444,33 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
     return base
   }
   if (!followup || (window > 0 && (followMean?.days ?? 0) < window)) {
+    const premature = window > 0 ? [] : points.filter((point) => point.date > item.start && point.date < earliest && point.date <= lastDay)
+    const earlyHit = premature.at(-1)
     base.next_retest = earliest > input.today ? earliest : input.today
     base.first_due = earliest
-    base.reason_zh = earliest > input.today
-      ? `开始才 ${Math.max(0, daysBetween(item.start, input.today))} 天。${marker.label}至少要隔 ${retestDays} 天复测才有意义，${earliest} 之后复测。`
-      : followup
-        ? `需要连续 ${window} 天的${homeZh}：复测只有 ${followMean?.days ?? 0} 天的读数，还不能比较。`
-        : `开始后还没有复测${marker.label}。现在可以复测了。`
+    if (earlyHit) {
+      base.followup = { date: earlyHit.date, value: earlyHit.value }
+      base.reason_zh = `太早：${earlyHit.date} 的${marker.label}距方案开始只有 ${Math.max(0, daysBetween(item.start, earlyHit.date))} 天，这项至少隔 ${retestDays} 天才能比较，${earliest} 之后再测。`
+    } else {
+      base.reason_zh = earliest > input.today
+        ? `太早：开始才 ${Math.max(0, daysBetween(item.start, input.today))} 天。${marker.label}至少要隔 ${retestDays} 天复测才可比，${earliest} 之后再测。`
+        : followup
+          ? `需要连续 ${window} 天的${homeZh}：复测只有 ${followMean?.days ?? 0} 天的读数，还不能比较。`
+          : `开始后还没有复测${marker.label}。现在可以复测了。`
+    }
     return base
   }
   base.followup = { date: followup.date, value: followup.value }
+  const fromLab = labToken(baseline.file)
+  const toLab = labToken(followup.file)
+  const labChange = input.checkins.some((row) => row.tags.includes('lab_change') && row.date > baseline.date && row.date <= followup.date)
+  if ((fromLab && toLab && fromLab !== toLab) || labChange) {
+    const where = fromLab && toLab && fromLab !== toLab
+      ? `${baseline.date} 来自${fromLab}，${followup.date} 来自${toLab}`
+      : `${baseline.date} 到 ${followup.date} 之间记了换检测机构`
+    base.reason_zh = `不可比：${where}，${marker.label}的两次结果不能直接比较。`
+    return base
+  }
   const abs = followup.value - baseline.value
   if (baseline.value === 0) {
     base.reason_zh = '基线为 0，无法计算相对变化。'

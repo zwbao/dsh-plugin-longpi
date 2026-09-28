@@ -18,6 +18,8 @@ import { HealthPane, PANE_ID, PANE_KIND, paneDefinition, setPaneOpener } from '.
 import { ReminderPill } from './pill.ts'
 import { LongPiSettings } from './settings-page.ts'
 import { injectStyles } from './styles.ts'
+import { registerClientModules } from './modules.ts'
+import { toolViewList } from './registry.ts'
 import { TOOL_VIEWS } from './toolviews.ts'
 import { longPiTurnDefinition, selectLongPiTail } from './turn-data.ts'
 import { LongPiTurnTail } from './turn-tail.ts'
@@ -60,6 +62,7 @@ function PanelIcon(props: { size?: number }): React.ReactElement {
 }
 
 export function apply(ctx: ClientContext): void {
+  registerClientModules()
   injectStyles()
   // Looked up at click time: selectPanel throws for a panel that is not (yet) registered.
   const select = (id: string | null) => {
@@ -81,6 +84,9 @@ export function apply(ctx: ClientContext): void {
   ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: SETTINGS_ID, order: 60, label: () => 'LongPi', inject: face }, LongPiSettings))
   for (const [key, view] of Object.entries(TOOL_VIEWS)) {
     ctx.slots.inject('tool.call.toolview', () => ctx.slots.register({ name: 'tool.call.toolview', key, inject: face }, view))
+  }
+  for (const view of toolViewList()) {
+    ctx.slots.inject('tool.call.toolview', () => ctx.slots.register({ name: 'tool.call.toolview', key: view.tool, inject: face }, view.Component))
   }
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'longpi-reminders', order: 50, inject: face }, ReminderPill))
   // Under a finished turn that left something to do: DSH folds the turn's cards, so their actions come back here.

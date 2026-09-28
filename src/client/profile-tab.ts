@@ -3,12 +3,14 @@
 // tests that would unlock a result, the data connection, and the exports.
 
 import React from 'react'
+import { DataInSection } from './datain/index.ts'
 import { ConnectionForm, ConnectionStatus } from './connection.ts'
 import { Icon } from './icons.ts'
 import { RecordsStatusLine } from './journey-steps.ts'
 import { ProfileEditor } from './profile-editor.ts'
 import { AddonList } from './results.ts'
 import { SelfLatestList, SelfMeasureForm, SelfRecent } from './self-measure.ts'
+import { profileSections } from './registry.ts'
 import { useConnection, useSettingsOpener } from './store.ts'
 import type { Journey } from './types.ts'
 import { LinkButton, Section } from './ui.ts'
@@ -48,6 +50,7 @@ export function ProfileTab(props: { journey: Journey; onNotice: Notify }): React
           h(SelfMeasureForm, { journey, idPrefix: 'lp-self', onNotice: props.onNotice }),
           h('p', { className: 'lp-fine' }, '家庭血压按最近 7 天的平均值来判断（欧洲高血压学会的做法），单次读数只作参考。早晚各量一次、每次坐着休息 5 分钟后再量。'),
           h(SelfRecent, { onNotice: props.onNotice })))),
+    h(DataInSection),
     journey.addons.length > 0
       ? h('div', { className: 'lp-card', id: 'lp-addons-card' },
         h('div', { className: 'lp-label' }, '下次体检加测', h('span', { className: 'lp-optional' }, `${journey.addons.length} 项，加上就能算出更多结果`)),
@@ -61,5 +64,6 @@ export function ProfileTab(props: { journey: Journey; onNotice: Notify }): React
         h('div', { className: 'lp-form-actions' },
           h(LinkButton, { href: '/api/longpi/report', icon: 'download', download: `longpi-report-${today}.md` }, '导出报告'),
           h(LinkButton, { href: '/api/longpi/calendar.ics', icon: 'calendar', download: 'longpi.ics' }, '加入日历')),
-        h('p', { className: 'lp-fine' }, h(Icon, { name: 'lock', size: 12 }), ' 导出的文件留在你的电脑上，LongPi 不会发给任何人。'))))
+        h('p', { className: 'lp-fine' }, h(Icon, { name: 'lock', size: 12 }), ' 导出的文件留在你的电脑上，LongPi 不会发给任何人。'))),
+    ...profileSections().map((section) => h(section.Component, { key: section.id, journey, onNotice: props.onNotice })))
 }

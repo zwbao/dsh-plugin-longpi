@@ -4,6 +4,7 @@
 import { randomBytes } from 'node:crypto'
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import { memoryFor } from './core/memory.ts'
 import type { MedicationRow } from './situation.ts'
 
 export interface StatedMedication {
@@ -52,6 +53,13 @@ export function addStatement(dataDir: string, row: Omit<StatedMedication, 'at'>,
   writeFileSync(tmp, `${prior}${JSON.stringify(saved)}\n`, { mode: 0o600 })
   chmodSync(tmp, 0o600)
   renameSync(tmp, path)
+  // The memory mirror imports this log. Touching it here makes the new line visible
+  // before the next journey build. A failure to mirror does not drop the statement.
+  try {
+    memoryFor(dataDir)
+  } catch {
+    // the jsonl line is the record of what they said
+  }
   return saved
 }
 

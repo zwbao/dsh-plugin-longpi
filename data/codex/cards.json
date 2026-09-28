@@ -1,0 +1,2756 @@
+{
+  "version": 1,
+  "cards": [
+    {
+      "id": "m-accelerated-biological-aging-risk",
+      "family": "method",
+      "title_zh": "表型年龄",
+      "body_zh": "九项血液指标和实足年龄的表型年龄。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "accelerated-biological-aging-risk",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-023-38013-7",
+        "skill": "accelerated-biological-aging-risk"
+      }
+    },
+    {
+      "id": "m-aged-skin-il36-osteoarthritis",
+      "family": "method",
+      "title_zh": "老化皮肤与关节炎症",
+      "body_zh": "IL-36 家族，以及 spesolimab 这个名字。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "aged-skin-il36-osteoarthritis",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-026-68399-z",
+        "skill": "aged-skin-il36-osteoarthritis"
+      }
+    },
+    {
+      "id": "m-ageing-clocks-digital-twins",
+      "family": "method",
+      "title_zh": "时钟稳定度",
+      "body_zh": "已经算好的生物年龄的稳定度。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "ageing-clocks-digital-twins",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41746-025-01911-9",
+        "skill": "ageing-clocks-digital-twins"
+      }
+    },
+    {
+      "id": "m-ageing-inflammatory-marker",
+      "family": "method",
+      "title_zh": "衰老相关的炎症标志",
+      "body_zh": "全血图一里的炎症基因，以及 MCU 和 MICU1。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "ageing-inflammatory-marker",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-023-00436-8",
+        "skill": "ageing-inflammatory-marker"
+      }
+    },
+    {
+      "id": "m-ageing-mortality-tradeoffs",
+      "family": "method",
+      "title_zh": "寿命位点类型",
+      "body_zh": "对上的位点的效应类型或 Soma 位点名。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "ageing-mortality-tradeoffs",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-026-10407-9",
+        "skill": "ageing-mortality-tradeoffs"
+      }
+    },
+    {
+      "id": "m-aging-biomarker-framework",
+      "family": "method",
+      "title_zh": "衰老标志物对照",
+      "body_zh": "预测年龄相对实足年龄的偏差。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "aging-biomarker-framework",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-025-00987-y",
+        "skill": "aging-biomarker-framework"
+      }
+    },
+    {
+      "id": "m-aging-mouse-brain-atlas",
+      "family": "method",
+      "title_zh": "小鼠脑区",
+      "body_zh": "小鼠脑区名字。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "aging-mouse-brain-atlas",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1016/j.cell.2023.07.027",
+        "skill": "aging-mouse-brain-atlas"
+      }
+    },
+    {
+      "id": "m-ai4l",
+      "family": "method",
+      "title_zh": "AI4L 1.3.29（forever-healthy/AI4L c3ea3e…",
+      "body_zh": "AI4L 1.3.29（forever-healthy/AI4L c3ea3e9）。按 Forever Healthy 的协议写干预证据综述。已有 Evipedia 综述时先引用综述。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "ai4l",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "skill": "ai4l"
+      }
+    },
+    {
+      "id": "m-amino-acid-biological-age",
+      "family": "method",
+      "title_zh": "氨基酸比例",
+      "body_zh": "氨基酸浓度的比例。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "amino-acid-biological-age",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-026-73371-y",
+        "skill": "amino-acid-biological-age"
+      }
+    },
+    {
+      "id": "m-ampk-aldolase-aldometanib",
+      "family": "method",
+      "title_zh": "醛缩酶抑制剂与空腹血糖",
+      "body_zh": "两次空腹血糖的差。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "ampk-aldolase-aldometanib",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s42255-022-00640-7",
+        "skill": "ampk-aldolase-aldometanib"
+      }
+    },
+    {
+      "id": "m-ampk-gamma1-refeeding-longevity",
+      "family": "method",
+      "title_zh": "再喂食时的调节亚基与预后指数",
+      "body_zh": "八个分项到齐时的平均分和分档。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "ampk-gamma1-refeeding-longevity",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-023-00521-y",
+        "skill": "ampk-gamma1-refeeding-longevity"
+      }
+    },
+    {
+      "id": "m-apoe2-pericyte-lipid",
+      "family": "method",
+      "title_zh": "APOE2 周细胞蛋白质组查表",
+      "body_zh": "iPSC 周细胞里 APOE2 对 APOE3 的显著蛋白查表。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "common",
+      "evidence_tier": "cell",
+      "skill": "apoe2-pericyte-lipid",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1093/brain/awag311",
+        "skill": "apoe2-pericyte-lipid"
+      }
+    },
+    {
+      "id": "m-biological-age-ct-cardiometabolic",
+      "family": "method",
+      "title_zh": "腹部影像生物标志",
+      "body_zh": "腹部影像测量、年龄和性别。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "biological-age-ct-cardiometabolic",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-025-56741-w",
+        "skill": "biological-age-ct-cardiometabolic"
+      }
+    },
+    {
+      "id": "m-biological-aging-generational-shifts",
+      "family": "method",
+      "title_zh": "衰老测量对照",
+      "body_zh": "年龄、出生年和已经算好的衰老测量。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "biological-aging-generational-shifts",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41591-026-04448-w",
+        "skill": "biological-aging-generational-shifts"
+      }
+    },
+    {
+      "id": "m-biomarker-panels-proteomic-profiling",
+      "family": "method",
+      "title_zh": "脑小血管病蛋白",
+      "body_zh": "脑小血管病相关蛋白的符号和数值。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "biomarker-panels-proteomic-profiling",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-026-01081-7",
+        "skill": "biomarker-panels-proteomic-profiling"
+      }
+    },
+    {
+      "id": "m-biomcp",
+      "family": "method",
+      "title_zh": "BioMCP v0.9.0（genomoncology/biomcp a450…",
+      "body_zh": "BioMCP v0.9.0（genomoncology/biomcp a450303）。检索文献、基因、变异、试验、药物、疾病和通路。本机需要 biomcp。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "biomcp",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "skill": "biomcp"
+      }
+    },
+    {
+      "id": "m-blood-based-dna-damage",
+      "family": "method",
+      "title_zh": "血液转录本的长度偏倚",
+      "body_zh": "血液转录本的倍数变化、校正显著性和长度偏倚。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "blood-based-dna-damage",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-025-00926-x",
+        "skill": "blood-based-dna-damage"
+      }
+    },
+    {
+      "id": "m-blood-epigenetic-intrinsic-capacity",
+      "family": "method",
+      "title_zh": "内在能力",
+      "body_zh": "认知、行走、情绪、视力和听力的内在能力。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "blood-epigenetic-intrinsic-capacity",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-025-00883-5",
+        "skill": "blood-epigenetic-intrinsic-capacity"
+      }
+    },
+    {
+      "id": "m-blood-metabolome-brain-health",
+      "family": "method",
+      "title_zh": "中年血液代谢与认知",
+      "body_zh": "中年血液代谢物数值。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "blood-metabolome-brain-health",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-026-01149-4",
+        "skill": "blood-metabolome-brain-health"
+      }
+    },
+    {
+      "id": "m-blood-mtdna-mutation-accumulation",
+      "family": "method",
+      "title_zh": "血液线粒体突变累积",
+      "body_zh": "60 岁以后的重链替换类型，以及正文点名的克隆性造血基因。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "blood-mtdna-mutation-accumulation",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-026-10569-6",
+        "skill": "blood-mtdna-mutation-accumulation"
+      }
+    },
+    {
+      "id": "m-blood-protein-assessment",
+      "family": "method",
+      "title_zh": "血液蛋白与发病",
+      "body_zh": "血液蛋白与发病，可带糖化血红蛋白。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "blood-protein-assessment",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-024-00655-7",
+        "skill": "blood-protein-assessment"
+      }
+    },
+    {
+      "id": "m-bowhead-whale-dna-repair",
+      "family": "method",
+      "title_zh": "弓头鲸的 DNA 修复",
+      "body_zh": "GFP 阳性细胞数除以 DsRed 阳性细胞数，以及人和弓头鲸成纤维细胞的转化组合。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "common",
+      "evidence_tier": "cell",
+      "skill": "bowhead-whale-dna-repair",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-025-09694-5",
+        "skill": "bowhead-whale-dna-repair"
+      }
+    },
+    {
+      "id": "h-bowhead-whale-dna-repair",
+      "family": "species",
+      "title_zh": "弓头鲸",
+      "body_zh": "隐藏物种卡。GFP 阳性细胞数除以 DsRed 阳性细胞数，以及人和弓头鲸成纤维细胞的转化组合。 抽到之前不出现在图鉴里。",
+      "rarity": "legendary",
+      "skill": "bowhead-whale-dna-repair",
+      "species": "bowhead_whale",
+      "hidden": true,
+      "set_id": "set-species",
+      "source": {
+        "doi": "10.1038/s41586-025-09694-5",
+        "skill": "bowhead-whale-dna-repair"
+      }
+    },
+    {
+      "id": "m-butterfly-longevity-slowed-ageing",
+      "family": "method",
+      "title_zh": "蝶类寿命记录",
+      "body_zh": "对上的物种的最长寿命，以及成虫日龄。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "butterfly-longevity-slowed-ageing",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-026-73635-7",
+        "skill": "butterfly-longevity-slowed-ageing"
+      }
+    },
+    {
+      "id": "h-butterfly-longevity-slowed-ageing",
+      "family": "species",
+      "title_zh": "热带蝴蝶",
+      "body_zh": "隐藏物种卡。对上的物种的最长寿命，以及成虫日龄。 抽到之前不出现在图鉴里。",
+      "rarity": "legendary",
+      "skill": "butterfly-longevity-slowed-ageing",
+      "species": "butterfly",
+      "hidden": true,
+      "set_id": "set-species",
+      "source": {
+        "doi": "10.1038/s41467-026-73635-7",
+        "skill": "butterfly-longevity-slowed-ageing"
+      }
+    },
+    {
+      "id": "m-calerie-methylation-clocks",
+      "family": "method",
+      "title_zh": "限食试验时钟",
+      "body_zh": "限食试验里的时钟数值。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "legendary",
+      "evidence_tier": "human_rct",
+      "skill": "calerie-methylation-clocks",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-022-00357-y",
+        "skill": "calerie-methylation-clocks"
+      }
+    },
+    {
+      "id": "m-cardiac-ageing-matrix-mechanics",
+      "family": "method",
+      "title_zh": "心脏基质力学",
+      "body_zh": "与已发表均值的差，以及软硬和年龄组成的四种基质。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "common",
+      "evidence_tier": "cell",
+      "skill": "cardiac-ageing-matrix-mechanics",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41563-025-02234-6",
+        "skill": "cardiac-ageing-matrix-mechanics"
+      }
+    },
+    {
+      "id": "m-cd38-ovarian-aging",
+      "family": "method",
+      "title_zh": "卵巢烟酰胺酶",
+      "body_zh": "20–25 岁或大于 35 岁，以及卵巢相对其他器官的 CD38 和 NAD+ 方向。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "cd38-ovarian-aging",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-023-00532-9",
+        "skill": "cd38-ovarian-aging"
+      }
+    },
+    {
+      "id": "m-cd38-recent-thymic-emigrants",
+      "family": "method",
+      "title_zh": "初始细胞分档",
+      "body_zh": "年龄和转换后的初始细胞标志。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "cd38-recent-thymic-emigrants",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1016/j.immuni.2024.08.019",
+        "skill": "cd38-recent-thymic-emigrants"
+      }
+    },
+    {
+      "id": "m-cell-type-polygenic-regulome",
+      "family": "method",
+      "title_zh": "细胞类型里的调控子",
+      "body_zh": "调控子的细胞类型特异性和遗传相关性。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "cell-type-polygenic-regulome",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-025-01027-5",
+        "skill": "cell-type-polygenic-regulome"
+      }
+    },
+    {
+      "id": "m-centenarian-longevity-genes",
+      "family": "method",
+      "title_zh": "百岁老人功能丧失突变里的长寿基因",
+      "body_zh": "补充表里百岁组过阈值的基因，以及正文点名的基因。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "centenarian-longevity-genes",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-024-52967-2",
+        "skill": "centenarian-longevity-genes"
+      }
+    },
+    {
+      "id": "m-cerebrospinal-fluid-molecular-subtypes",
+      "family": "method",
+      "title_zh": "脑脊液里的阿尔茨海默病亚型",
+      "body_zh": "脑脊液蛋白。分型载荷不在已读材料里时，报告停在蛋白读出。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "cerebrospinal-fluid-molecular-subtypes",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-023-00550-7",
+        "skill": "cerebrospinal-fluid-molecular-subtypes"
+      }
+    },
+    {
+      "id": "m-cgas-sting-ageing-inflammation",
+      "family": "method",
+      "title_zh": "胞质核酸感受与老年炎症",
+      "body_zh": "同时带有倍数和校正 P 值、并过扩展数据图十门槛的基因。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "cgas-sting-ageing-inflammation",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-023-06373-1",
+        "skill": "cgas-sting-ageing-inflammation"
+      }
+    },
+    {
+      "id": "m-chaperone-autophagy-tissue-aging",
+      "family": "method",
+      "title_zh": "组织里的伴侣介导自噬",
+      "body_zh": "双阳性点数和 LAMP1 点数都有时，有能力溶酶体的百分比。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "chaperone-autophagy-tissue-aging",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-024-00799-6",
+        "skill": "chaperone-autophagy-tissue-aging"
+      }
+    },
+    {
+      "id": "m-china-par-ascvd-risk",
+      "family": "method",
+      "title_zh": "中国人群 10 年动脉粥样硬化性心血管病风险预测（China-PAR）",
+      "body_zh": "收缩压、血脂、腰围、年龄和几个是否项到齐时，按 China-PAR 算中国成人的 10 年心血管病风险，男女都算。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "china-par-ascvd-risk",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1161/circulationaha.116.022367",
+        "skill": "china-par-ascvd-risk"
+      }
+    },
+    {
+      "id": "m-chromatin-rna-ageing-brain",
+      "family": "method",
+      "title_zh": "染色质互作",
+      "body_zh": "每个核的短程互作计数。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "chromatin-rna-ageing-brain",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-024-07239-w",
+        "skill": "chromatin-rna-ageing-brain"
+      }
+    },
+    {
+      "id": "m-cilia-autophagy-cognitive-resilience",
+      "family": "method",
+      "title_zh": "海马神经元的纤毛与自噬",
+      "body_zh": "纤毛–自噬轴上的蛋白，以及纤毛长度。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "cilia-autophagy-cognitive-resilience",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-024-00791-0",
+        "skill": "cilia-autophagy-cognitive-resilience"
+      }
+    },
+    {
+      "id": "m-circadian-caloric-restriction-longevity",
+      "family": "method",
+      "title_zh": "限食时刻与寿命",
+      "body_zh": "30% 削减、进食时相和 2 小时或 12 小时窗口对应的实验组别。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "circadian-caloric-restriction-longevity",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1126/science.abk0297",
+        "skill": "circadian-caloric-restriction-longevity"
+      }
+    },
+    {
+      "id": "m-circadian-frailty-older-adults",
+      "family": "method",
+      "title_zh": "昼夜活动与衰弱",
+      "body_zh": "由 M10 和 L5 计算的相对振幅，以及两道题相加的疲劳分。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "circadian-frailty-older-adults",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-023-42727-z",
+        "skill": "circadian-frailty-older-adults"
+      }
+    },
+    {
+      "id": "m-circadian-insulin-peptide-aging",
+      "family": "method",
+      "title_zh": "果蝇胰岛素样肽与节律",
+      "body_zh": "果蝇日龄是 3 天还是 40 天，以及胰岛素肽基因。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "circadian-insulin-peptide-aging",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-024-47740-4",
+        "skill": "circadian-insulin-peptide-aging"
+      }
+    },
+    {
+      "id": "m-circadian-nad-meibomian-aging",
+      "family": "method",
+      "title_zh": "睑板腺的局部甾体合成",
+      "body_zh": "NAD 浓度相对 HSD3B1 和 HSD3B2 的米氏常数。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "circadian-nad-meibomian-aging",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-021-00167-8",
+        "skill": "circadian-nad-meibomian-aging"
+      }
+    },
+    {
+      "id": "m-ddx5-cartilage-fibrosis",
+      "family": "method",
+      "title_zh": "软骨纤维化解旋酶",
+      "body_zh": "delta PSI 和错误发现率是否过正文门槛。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "ddx5-cartilage-fibrosis",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-024-00624-0",
+        "skill": "ddx5-cartilage-fibrosis"
+      }
+    },
+    {
+      "id": "m-dermal-fibroblast-aging-cytometry",
+      "family": "method",
+      "title_zh": "真皮成纤维细胞的纳米传感器表型",
+      "body_zh": "第 5 代或第 15 代；置信度高于 0.50 时保留。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "common",
+      "evidence_tier": "cell",
+      "skill": "dermal-fibroblast-aging-cytometry",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-025-61590-8",
+        "skill": "dermal-fibroblast-aging-cytometry"
+      }
+    },
+    {
+      "id": "m-digital-telomere-measurement-sequencing",
+      "family": "method",
+      "title_zh": "端粒长度分布",
+      "body_zh": "端粒长度的分布。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "digital-telomere-measurement-sequencing",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-024-49007-4",
+        "skill": "digital-telomere-measurement-sequencing"
+      }
+    },
+    {
+      "id": "m-dissecting-genetic-proteomic-risk",
+      "family": "method",
+      "title_zh": "谵妄相关蛋白",
+      "body_zh": "谵妄相关蛋白，以及两个 APOE 位点的基因型。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "dissecting-genetic-proteomic-risk",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-025-01018-6",
+        "skill": "dissecting-genetic-proteomic-risk"
+      }
+    },
+    {
+      "id": "m-divergent-white-matter-metabolic",
+      "family": "method",
+      "title_zh": "白质葡萄糖代谢的差值",
+      "body_zh": "预期白质和非典型白质的 SUVR 之差。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "divergent-white-matter-metabolic",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-026-70707-6",
+        "skill": "divergent-white-matter-metabolic"
+      }
+    },
+    {
+      "id": "m-elastin-fragments-innate-aging",
+      "family": "method",
+      "title_zh": "弹性蛋白片段",
+      "body_zh": "弹性蛋白片段相对 1500 pg/ml 和 250–680 pg/ml 的分组。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "elastin-fragments-innate-aging",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-025-00961-8",
+        "skill": "elastin-fragments-innate-aging"
+      }
+    },
+    {
+      "id": "m-endothelial-cebpb-aep-nampt",
+      "family": "method",
+      "title_zh": "内皮 C/EBPβ/AEP 通路与血管—系统性衰老",
+      "body_zh": "内皮 C/EBPβ–AEP–NAMPT 通路里点名的分子和方向。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "endothelial-cebpb-aep-nampt",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1126/sciadv.aed1961",
+        "skill": "endothelial-cebpb-aep-nampt"
+      }
+    },
+    {
+      "id": "m-environmental-genetic-aging-mortality",
+      "family": "method",
+      "title_zh": "暴露对照",
+      "body_zh": "暴露回答。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "environmental-genetic-aging-mortality",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41591-024-03483-9",
+        "skill": "environmental-genetic-aging-mortality"
+      }
+    },
+    {
+      "id": "m-epigenetic-age-single-cells",
+      "family": "method",
+      "title_zh": "单细胞甲基化月龄",
+      "body_zh": "位点取值为 0 或 1 时的单细胞月龄。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "epigenetic-age-single-cells",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-021-00134-3",
+        "skill": "epigenetic-age-single-cells"
+      }
+    },
+    {
+      "id": "m-epigenetic-aging-naked-mole",
+      "family": "method",
+      "title_zh": "裸鼹鼠血液时钟",
+      "body_zh": "26 个位点到齐时的裸鼹鼠血液甲基化年龄。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "epigenetic-aging-naked-mole",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-022-27959-9",
+        "skill": "epigenetic-aging-naked-mole"
+      }
+    },
+    {
+      "id": "h-epigenetic-aging-naked-mole",
+      "family": "species",
+      "title_zh": "裸鼹鼠",
+      "body_zh": "隐藏物种卡。26 个位点到齐时的裸鼹鼠血液甲基化年龄。 抽到之前不出现在图鉴里。",
+      "rarity": "legendary",
+      "skill": "epigenetic-aging-naked-mole",
+      "species": "naked_mole_rat",
+      "hidden": true,
+      "set_id": "set-species",
+      "source": {
+        "doi": "10.1038/s41467-022-27959-9",
+        "skill": "epigenetic-aging-naked-mole"
+      }
+    },
+    {
+      "id": "m-epigenetic-clock-reliability",
+      "family": "method",
+      "title_zh": "两次甲基化年龄的差",
+      "body_zh": "同一个时钟两次年龄的差。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "epigenetic-clock-reliability",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-022-00248-2",
+        "skill": "epigenetic-clock-reliability"
+      }
+    },
+    {
+      "id": "m-epigenetic-frailty-risk-score",
+      "family": "method",
+      "title_zh": "衰弱风险分",
+      "body_zh": "甲基化数值，可带衰弱指数。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "epigenetic-frailty-risk-score",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-022-32893-x",
+        "skill": "epigenetic-frailty-risk-score"
+      }
+    },
+    {
+      "id": "m-evipedia",
+      "family": "method",
+      "title_zh": "Evipedia 0.1.30（forever-healthy/evipedi…",
+      "body_zh": "Evipedia 0.1.30（forever-healthy/evipedia-mcp b94febd）。已发布的干预证据综述。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "evipedia",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "skill": "evipedia"
+      }
+    },
+    {
+      "id": "m-face-aging-rate-cancer",
+      "family": "method",
+      "title_zh": "面容老化速率",
+      "body_zh": "两次面容年龄和间隔天数算出的面容老化速率。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "face-aging-rate-cancer",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-025-66758-w",
+        "skill": "face-aging-rate-cancer"
+      }
+    },
+    {
+      "id": "m-facial-skin-somatic-mutations",
+      "family": "method",
+      "title_zh": "面部皮肤的体细胞突变",
+      "body_zh": "NOTCH1、NOTCH2、NOTCH3、TP53 和 FAT1。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "facial-skin-somatic-mutations",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41588-023-01468-x",
+        "skill": "facial-skin-somatic-mutations"
+      }
+    },
+    {
+      "id": "m-fasting-mimicking-diet",
+      "family": "method",
+      "title_zh": "临床生物年龄的前后差",
+      "body_zh": "两次已经算好的临床生物年龄之差。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "legendary",
+      "evidence_tier": "human_rct",
+      "skill": "fasting-mimicking-diet",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-024-45260-9",
+        "skill": "fasting-mimicking-diet"
+      }
+    },
+    {
+      "id": "m-foxo-oser1-oxidative-lifespan",
+      "family": "method",
+      "title_zh": "FOXO 调节的 OSER1 与多种生物的寿命",
+      "body_zh": "OSER1，以及补充表里的位点和名义关联。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "foxo-oser1-oxidative-lifespan",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-024-51542-z",
+        "skill": "foxo-oser1-oxidative-lifespan"
+      }
+    },
+    {
+      "id": "m-foxo3-osteoarthritis-ferroptosis",
+      "family": "method",
+      "title_zh": "用 p53 与 FOXO3 调节肥胖引起的骨关节炎",
+      "body_zh": "FOXO3 和正文点名的铁死亡相关基因，以及方向。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "foxo3-osteoarthritis-ferroptosis",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-025-59883-z",
+        "skill": "foxo3-osteoarthritis-ferroptosis"
+      }
+    },
+    {
+      "id": "m-gdf11-neuronal-autophagy",
+      "family": "method",
+      "title_zh": "血清生长分化因子与神经元自噬",
+      "body_zh": "血清 GDF11 浓度。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "gdf11-neuronal-autophagy",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-022-00352-3",
+        "skill": "gdf11-neuronal-autophagy"
+      }
+    },
+    {
+      "id": "m-genetic-architecture-biological-age",
+      "family": "method",
+      "title_zh": "器官年龄差",
+      "body_zh": "各器官预测年龄相对实足年龄。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "genetic-architecture-biological-age",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-024-00662-8",
+        "skill": "genetic-architecture-biological-age"
+      }
+    },
+    {
+      "id": "m-genome-wide-proteomics-frailty",
+      "family": "method",
+      "title_zh": "医院衰弱风险分组",
+      "body_zh": "已经算好的医院衰弱风险分。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "genome-wide-proteomics-frailty",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-025-00925-y",
+        "skill": "genome-wide-proteomics-frailty"
+      }
+    },
+    {
+      "id": "m-gompertz-celegans-decrepitude",
+      "family": "method",
+      "title_zh": "衰弱期比例",
+      "body_zh": "健康期天数和衰弱期天数的相对比例。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "gompertz-celegans-decrepitude",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-026-71780-7",
+        "skill": "gompertz-celegans-decrepitude"
+      }
+    },
+    {
+      "id": "h-gompertz-celegans-decrepitude",
+      "family": "species",
+      "title_zh": "秀丽隐杆线虫",
+      "body_zh": "隐藏物种卡。健康期天数和衰弱期天数的相对比例。 抽到之前不出现在图鉴里。",
+      "rarity": "legendary",
+      "skill": "gompertz-celegans-decrepitude",
+      "species": "c_elegans",
+      "hidden": true,
+      "set_id": "set-species",
+      "source": {
+        "doi": "10.1038/s41467-026-71780-7",
+        "skill": "gompertz-celegans-decrepitude"
+      }
+    },
+    {
+      "id": "m-grainyhead-drug-inducible-lifespan",
+      "family": "method",
+      "title_zh": "线虫寿命试验里的化合物",
+      "body_zh": "线虫寿命试验里点名的化合物。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "grainyhead-drug-inducible-lifespan",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-021-27732-4",
+        "skill": "grainyhead-drug-inducible-lifespan"
+      }
+    },
+    {
+      "id": "m-hemispheric-brain-age",
+      "family": "method",
+      "title_zh": "半球侧化",
+      "body_zh": "左右测量的侧化。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "hemispheric-brain-age",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-024-45282-3",
+        "skill": "hemispheric-brain-age"
+      }
+    },
+    {
+      "id": "m-hepassocin-ampk-liver-aging",
+      "family": "method",
+      "title_zh": "肝促泌素经 AMPK 对抗肝衰老",
+      "body_zh": "肝细胞因子 HPS 经 ANXA2–ERK–LKB1 激活 AMPK 的通路清单。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "hepassocin-ampk-liver-aging",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41392-026-02773-7",
+        "skill": "hepassocin-ampk-liver-aging"
+      }
+    },
+    {
+      "id": "m-hgps-skin-base-editor",
+      "family": "method",
+      "title_zh": "早衰皮肤的碱基编辑",
+      "body_zh": "等位基因是不是 LMNA c.1824C>T。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "hgps-skin-base-editor",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-022-30800-y",
+        "skill": "hgps-skin-base-editor"
+      }
+    },
+    {
+      "id": "m-hippocampal-neurogenesis-adulthood-ageing",
+      "family": "method",
+      "title_zh": "情景记忆对照",
+      "body_zh": "年龄，以及情景记忆是持平或更好、更差，还是未知。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "hippocampal-neurogenesis-adulthood-ageing",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-026-10169-4",
+        "skill": "hippocampal-neurogenesis-adulthood-ageing"
+      }
+    },
+    {
+      "id": "m-histological-aging-signatures",
+      "family": "method",
+      "title_zh": "组织切片年龄差",
+      "body_zh": "组织切片的预测年龄相对实足年龄。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "histological-aging-signatures",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41591-026-04566-5",
+        "skill": "histological-aging-signatures"
+      }
+    },
+    {
+      "id": "m-hospital-infection-epilepsy-risk",
+      "family": "method",
+      "title_zh": "感染与晚年癫痫",
+      "body_zh": "感染距指数日的年数和部位。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "hospital-infection-epilepsy-risk",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-025-01005-x",
+        "skill": "hospital-infection-epilepsy-risk"
+      }
+    },
+    {
+      "id": "m-hsc-inflammatory-memory",
+      "family": "method",
+      "title_zh": "造血干细胞的炎症记忆",
+      "body_zh": "补充表九里按 MarkerScore 排在炎症记忆一侧的基因。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "hsc-inflammatory-memory",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-026-10522-7",
+        "skill": "hsc-inflammatory-memory"
+      }
+    },
+    {
+      "id": "m-human-longevity-progress-review",
+      "family": "method",
+      "title_zh": "人类寿命可持续进展的潜力与挑战",
+      "body_zh": "这篇综述没有给出可核对的基因或变异名单。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "human-longevity-progress-review",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-026-68828-z",
+        "skill": "human-longevity-progress-review"
+      }
+    },
+    {
+      "id": "m-human-ovarian-aging-foxp1",
+      "family": "method",
+      "title_zh": "人卵巢时空转录组",
+      "body_zh": "18–28、36–39 或 47–49 岁，以及细胞标志和 FOXP1。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "human-ovarian-aging-foxp1",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-024-00607-1",
+        "skill": "human-ovarian-aging-foxp1"
+      }
+    },
+    {
+      "id": "m-human-ovarian-aging-multiomics",
+      "family": "method",
+      "title_zh": "人卵巢单核多组学",
+      "body_zh": "23–29 或 49–54 岁，细胞比例方向，以及补充表六的基因列。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "human-ovarian-aging-multiomics",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-024-00762-5",
+        "skill": "human-ovarian-aging-multiomics"
+      }
+    },
+    {
+      "id": "m-human-skeletal-muscle-aging-atlas",
+      "family": "method",
+      "title_zh": "人类骨骼肌衰老图谱",
+      "body_zh": "点到的细胞或纤维，以及正文里的方向。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "human-skeletal-muscle-aging-atlas",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-024-00613-3",
+        "skill": "human-skeletal-muscle-aging-atlas"
+      }
+    },
+    {
+      "id": "m-imaging-organ-aging-clock",
+      "family": "method",
+      "title_zh": "影像器官年龄差",
+      "body_zh": "影像器官预测年龄相对实足年龄。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "imaging-organ-aging-clock",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41746-026-02488-7",
+        "skill": "imaging-organ-aging-clock"
+      }
+    },
+    {
+      "id": "m-immune-aging-clock-runx1",
+      "family": "method",
+      "title_zh": "人类免疫衰老时钟指出 RUNX1 会减缓 T 细胞衰老",
+      "body_zh": "细胞比例、对数表达或 TCR 指标。pAge、tAge 和 TCRAge 用 Table S3 的系数。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "immune-aging-clock-runx1",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1016/j.immuni.2026.02.007",
+        "skill": "immune-aging-clock-runx1"
+      }
+    },
+    {
+      "id": "m-immune-mendelian-dementia",
+      "family": "method",
+      "title_zh": "痴呆研究里的用药类别",
+      "body_zh": "痴呆研究里点名的用药类别。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "immune-mendelian-dementia",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-022-00293-x",
+        "skill": "immune-mendelian-dementia"
+      }
+    },
+    {
+      "id": "m-insulin-igf-pten-longevity",
+      "family": "method",
+      "title_zh": "胰岛素通路里的磷酸酶变体",
+      "body_zh": "是不是论文点名的 PTEN 替换。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "insulin-igf-pten-longevity",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-021-25920-w",
+        "skill": "insulin-igf-pten-longevity"
+      }
+    },
+    {
+      "id": "m-iron-fibrosis-senescence",
+      "family": "method",
+      "title_zh": "铁与纤维化衰老",
+      "body_zh": "与 128 个基因的交集，以及纤维化的 ABSENT-MILD 或 MODERATE-SEVERE。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "iron-fibrosis-senescence",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s42255-023-00928-2",
+        "skill": "iron-fibrosis-senescence"
+      }
+    },
+    {
+      "id": "m-lamin-cysteine-epigenome-reprogramming",
+      "family": "method",
+      "title_zh": "核纤层半胱氨酸与干细胞命运",
+      "body_zh": "CTH、CBS、半胱氨酸相关代谢物和组蛋白标记的方向。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "common",
+      "evidence_tier": "cell",
+      "skill": "lamin-cysteine-epigenome-reprogramming",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s42255-025-01443-2",
+        "skill": "lamin-cysteine-epigenome-reprogramming"
+      }
+    },
+    {
+      "id": "m-lensage-index-biological-age",
+      "family": "method",
+      "title_zh": "晶状体年龄指数",
+      "body_zh": "晶状体年龄相对实足年龄。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "lensage-index-biological-age",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-023-42934-8",
+        "skill": "lensage-index-biological-age"
+      }
+    },
+    {
+      "id": "m-leukocyte-telomere-length",
+      "family": "method",
+      "title_zh": "白细胞端粒",
+      "body_zh": "已经 z 标准化的对数端粒。未标准化的比值留在原值。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "leukocyte-telomere-length",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-021-00166-9",
+        "skill": "leukocyte-telomere-length"
+      }
+    },
+    {
+      "id": "m-life-cycle-biological-clock",
+      "family": "method",
+      "title_zh": "临床时钟对照",
+      "body_zh": "年龄和常规检验对照临床时钟。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "life-cycle-biological-clock",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41591-025-04006-w",
+        "skill": "life-cycle-biological-clock"
+      }
+    },
+    {
+      "id": "m-longevity-evidence",
+      "family": "method",
+      "title_zh": "收录论文里点名的药物、补剂、基因和干预的说法，按人群、动物、细胞分组查询，每条…",
+      "body_zh": "收录论文里点名的药物、补剂、基因和干预的说法，按人群、动物、细胞分组查询，每条带出处。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "longevity-evidence",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "skill": "longevity-evidence"
+      }
+    },
+    {
+      "id": "m-longevitybench",
+      "family": "method",
+      "title_zh": "LongevityBench readout",
+      "body_zh": "DrugAge 的回顾性排序，以及 Longevity Claw 的标志物向量场顺序。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "longevitybench",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1016/j.cell.2026.08.026",
+        "skill": "longevitybench"
+      }
+    },
+    {
+      "id": "m-longitudinal-serum-proteome-mapping",
+      "family": "method",
+      "title_zh": "血清蛋白记录",
+      "body_zh": "血清蛋白的记录。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "longitudinal-serum-proteome-mapping",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s42255-024-01185-7",
+        "skill": "longitudinal-serum-proteome-mapping"
+      }
+    },
+    {
+      "id": "m-lung-parenchyma-aging-clock",
+      "family": "method",
+      "title_zh": "肺实质年龄残差",
+      "body_zh": "肺实质预测年龄相对实足年龄。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "lung-parenchyma-aging-clock",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-026-75427-5",
+        "skill": "lung-parenchyma-aging-clock"
+      }
+    },
+    {
+      "id": "m-mammal-cancer-risk-lifespan",
+      "family": "method",
+      "title_zh": "哺乳动物的癌症死亡",
+      "body_zh": "物种的癌症死亡比例。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "mammal-cancer-risk-lifespan",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-021-04224-5",
+        "skill": "mammal-cancer-risk-lifespan"
+      }
+    },
+    {
+      "id": "h-mammal-cancer-risk-lifespan",
+      "family": "species",
+      "title_zh": "哺乳动物与癌症",
+      "body_zh": "隐藏物种卡。物种的癌症死亡比例。 抽到之前不出现在图鉴里。",
+      "rarity": "legendary",
+      "skill": "mammal-cancer-risk-lifespan",
+      "species": "multi_species",
+      "hidden": true,
+      "set_id": "set-species",
+      "source": {
+        "doi": "10.1038/s41586-021-04224-5",
+        "skill": "mammal-cancer-risk-lifespan"
+      }
+    },
+    {
+      "id": "m-mammal-somatic-mutation-lifespan",
+      "family": "method",
+      "title_zh": "哺乳动物的体细胞突变率",
+      "body_zh": "隐窝替换数除以年龄，以及补充表里的物种年均替换率。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "mammal-somatic-mutation-lifespan",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-022-04618-z",
+        "skill": "mammal-somatic-mutation-lifespan"
+      }
+    },
+    {
+      "id": "h-mammal-somatic-mutation-lifespan",
+      "family": "species",
+      "title_zh": "哺乳动物的突变率",
+      "body_zh": "隐藏物种卡。隐窝替换数除以年龄，以及补充表里的物种年均替换率。 抽到之前不出现在图鉴里。",
+      "rarity": "legendary",
+      "skill": "mammal-somatic-mutation-lifespan",
+      "species": "multi_species",
+      "hidden": true,
+      "set_id": "set-species",
+      "source": {
+        "doi": "10.1038/s41586-022-04618-z",
+        "skill": "mammal-somatic-mutation-lifespan"
+      }
+    },
+    {
+      "id": "m-mci-cognitive-signatures",
+      "family": "method",
+      "title_zh": "认知域读出",
+      "body_zh": "认知域读出。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "mci-cognitive-signatures",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41746-026-02597-3",
+        "skill": "mci-cognitive-signatures"
+      }
+    },
+    {
+      "id": "m-metabolomic-frailty-subtypes",
+      "family": "method",
+      "title_zh": "代谢衰弱亚型",
+      "body_zh": "十一个核磁共振代谢物对应的衰弱亚型。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "metabolomic-frailty-subtypes",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41746-025-02075-2",
+        "skill": "metabolomic-frailty-subtypes"
+      }
+    },
+    {
+      "id": "m-mitophagy-inducers-alzheimers",
+      "family": "method",
+      "title_zh": "线粒体自噬诱导物的名单",
+      "body_zh": "正文点名的线粒体自噬诱导物。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "common",
+      "evidence_tier": "cell",
+      "skill": "mitophagy-inducers-alzheimers",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41551-021-00819-5",
+        "skill": "mitophagy-inducers-alzheimers"
+      }
+    },
+    {
+      "id": "m-mri-multi-organ-clocks",
+      "family": "method",
+      "title_zh": "磁共振器官年龄差",
+      "body_zh": "磁共振器官预测年龄相对实足年龄。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "mri-multi-organ-clocks",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41591-025-03999-8",
+        "skill": "mri-multi-organ-clocks"
+      }
+    },
+    {
+      "id": "m-mtdna-cell-level-selection",
+      "family": "method",
+      "title_zh": "细胞水平的线粒体选择",
+      "body_zh": "错义异质性相对约 56% 和约 60% 的位置，以及 UMI 是否达到 64。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "common",
+      "evidence_tier": "cell",
+      "skill": "mtdna-cell-level-selection",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-024-07332-0",
+        "skill": "mtdna-cell-level-selection"
+      }
+    },
+    {
+      "id": "m-mtdna-copy-number-heteroplasmy",
+      "family": "method",
+      "title_zh": "核基因与线粒体拷贝数",
+      "body_zh": "异质性质控分档、覆盖度、拷贝数、污染和 70 岁切点。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "mtdna-copy-number-heteroplasmy",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-023-06426-5",
+        "skill": "mtdna-copy-number-heteroplasmy"
+      }
+    },
+    {
+      "id": "m-mtdna-ribonucleotide-inflammation",
+      "family": "method",
+      "title_zh": "线粒体核糖核苷酸与炎症",
+      "body_zh": "热图上印出的干扰素刺激基因。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "mtdna-ribonucleotide-inflammation",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-025-09541-7",
+        "skill": "mtdna-ribonucleotide-inflammation"
+      }
+    },
+    {
+      "id": "m-multi-organ-metabolome-age",
+      "family": "method",
+      "title_zh": "代谢组器官年龄差",
+      "body_zh": "代谢组器官预测年龄相对实足年龄。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "multi-organ-metabolome-age",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-025-59964-z",
+        "skill": "multi-organ-metabolome-age"
+      }
+    },
+    {
+      "id": "m-multiomic-human-longevity",
+      "family": "method",
+      "title_zh": "表观遗传年龄与人类长寿的多组学基础",
+      "body_zh": "正文表 1 和表 2 里的基因，以及表上的正负号。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "multiomic-human-longevity",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-023-37729-w",
+        "skill": "multiomic-human-longevity"
+      }
+    },
+    {
+      "id": "m-muscle-chaperone-autophagy",
+      "family": "method",
+      "title_zh": "骨骼肌分子伴侣自噬",
+      "body_zh": "伴侣介导自噬里点名的测量。权重列不在已打开的表里。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "muscle-chaperone-autophagy",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s42255-025-01412-9",
+        "skill": "muscle-chaperone-autophagy"
+      }
+    },
+    {
+      "id": "m-muscle-regeneration-lifespan",
+      "family": "method",
+      "title_zh": "肌肉再生的干细胞状态",
+      "body_zh": "单向 FBR 衰老分对照论文里的界值。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "muscle-regeneration-lifespan",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-024-00756-3",
+        "skill": "muscle-regeneration-lifespan"
+      }
+    },
+    {
+      "id": "m-muscle-regeneration-somatic-mutation",
+      "family": "method",
+      "title_zh": "再生中的体细胞突变",
+      "body_zh": "基因名是否落在补充表加粗的小鼠行。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "muscle-regeneration-somatic-mutation",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-025-00941-y",
+        "skill": "muscle-regeneration-somatic-mutation"
+      }
+    },
+    {
+      "id": "m-naked-mole-ovarian-reserve",
+      "family": "method",
+      "title_zh": "裸鼹鼠的卵巢储备",
+      "body_zh": "切片计数按正文的校正因子换成卵巢储备。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "naked-mole-ovarian-reserve",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-023-36284-8",
+        "skill": "naked-mole-ovarian-reserve"
+      }
+    },
+    {
+      "id": "h-naked-mole-ovarian-reserve",
+      "family": "species",
+      "title_zh": "裸鼹鼠的卵巢储备",
+      "body_zh": "隐藏物种卡。切片计数按正文的校正因子换成卵巢储备。 抽到之前不出现在图鉴里。",
+      "rarity": "legendary",
+      "skill": "naked-mole-ovarian-reserve",
+      "species": "naked_mole_rat",
+      "hidden": true,
+      "set_id": "set-species",
+      "source": {
+        "doi": "10.1038/s41467-023-36284-8",
+        "skill": "naked-mole-ovarian-reserve"
+      }
+    },
+    {
+      "id": "m-naked-mole-queen-methylation-clock",
+      "family": "method",
+      "title_zh": "裸鼹鼠甲基化时钟",
+      "body_zh": "Supplementary Table 20 的甲基化年龄。位点不齐时只保留相对年龄的输入，不补 0。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "naked-mole-queen-methylation-clock",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-021-00152-1",
+        "skill": "naked-mole-queen-methylation-clock"
+      }
+    },
+    {
+      "id": "h-naked-mole-queen-methylation-clock",
+      "family": "species",
+      "title_zh": "裸鼹鼠蚁后",
+      "body_zh": "隐藏物种卡。Supplementary Table 20 的甲基化年龄。位点不齐时只保留相对年龄的输入，不补 0。 抽到之前不出现在图鉴里。",
+      "rarity": "legendary",
+      "skill": "naked-mole-queen-methylation-clock",
+      "species": "naked_mole_rat",
+      "hidden": true,
+      "set_id": "set-species",
+      "source": {
+        "doi": "10.1038/s43587-021-00152-1",
+        "skill": "naked-mole-queen-methylation-clock"
+      }
+    },
+    {
+      "id": "m-nanopore-parent-origin-methylation",
+      "family": "method",
+      "title_zh": "印记位点甲基化读出",
+      "body_zh": "甲基化年龄，或一个位点的父本与母本甲基化。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "nanopore-parent-origin-methylation",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-026-76240-w",
+        "skill": "nanopore-parent-origin-methylation"
+      }
+    },
+    {
+      "id": "m-neurodegeneration-proteomics-biomarker",
+      "family": "method",
+      "title_zh": "神经退行蛋白",
+      "body_zh": "神经退行相关血浆蛋白的符号和数值。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "neurodegeneration-proteomics-biomarker",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41591-025-03834-0",
+        "skill": "neurodegeneration-proteomics-biomarker"
+      }
+    },
+    {
+      "id": "m-neurogenic-aging-clocks",
+      "family": "method",
+      "title_zh": "神经发生区细胞时钟",
+      "body_zh": "细胞类型，可带月龄和已经算好的预测月龄。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "neurogenic-aging-clocks",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-022-00335-4",
+        "skill": "neurogenic-aging-clocks"
+      }
+    },
+    {
+      "id": "m-neuron-aging-clocks",
+      "family": "method",
+      "title_zh": "神经元预测年龄",
+      "body_zh": "线虫神经元名字。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "neuron-aging-clocks",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-026-01067-5",
+        "skill": "neuron-aging-clocks"
+      }
+    },
+    {
+      "id": "h-neuron-aging-clocks",
+      "family": "species",
+      "title_zh": "线虫的神经元",
+      "body_zh": "隐藏物种卡。线虫神经元名字。 抽到之前不出现在图鉴里。",
+      "rarity": "legendary",
+      "skill": "neuron-aging-clocks",
+      "species": "c_elegans",
+      "hidden": true,
+      "set_id": "set-species",
+      "source": {
+        "doi": "10.1038/s43587-026-01067-5",
+        "skill": "neuron-aging-clocks"
+      }
+    },
+    {
+      "id": "m-nicotinamide-riboside-airway-inflammation",
+      "family": "method",
+      "title_zh": "痰液白细胞介素的变化",
+      "body_zh": "痰液白细胞介素-8 从基线到第六周的变化。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "legendary",
+      "evidence_tier": "human_rct",
+      "skill": "nicotinamide-riboside-airway-inflammation",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-024-00758-1",
+        "skill": "nicotinamide-riboside-airway-inflammation"
+      }
+    },
+    {
+      "id": "m-omicmage-biological-age-multiomics",
+      "family": "method",
+      "title_zh": "多组学保留特征",
+      "body_zh": "多组学测定里保留下来的特征。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "omicmage-biological-age-multiomics",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-026-01073-7",
+        "skill": "omicmage-biological-age-multiomics"
+      }
+    },
+    {
+      "id": "m-omniage-mitotic-clonal-hematopoiesis",
+      "family": "method",
+      "title_zh": "干细胞分裂次数",
+      "body_zh": "探针甲基化对应的干细胞分裂次数。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "omniage-mitotic-clonal-hematopoiesis",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-026-76038-w",
+        "skill": "omniage-mitotic-clonal-hematopoiesis"
+      }
+    },
+    {
+      "id": "m-one-year-mortality-aging-marker",
+      "family": "method",
+      "title_zh": "一年死亡标记",
+      "body_zh": "年龄和性别。一年死亡概率的回归系数没有印出。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "one-year-mortality-aging-marker",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-024-00657-5",
+        "skill": "one-year-mortality-aging-marker"
+      }
+    },
+    {
+      "id": "m-oocyte-mitochondrial-complex-i",
+      "family": "method",
+      "title_zh": "卵母细胞线粒体复合体",
+      "body_zh": "卵母细胞阶段在复合体组装和鱼藤酮存活上的方向。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "common",
+      "evidence_tier": "cell",
+      "skill": "oocyte-mitochondrial-complex-i",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-022-04979-5",
+        "skill": "oocyte-mitochondrial-complex-i"
+      }
+    },
+    {
+      "id": "m-opengenes",
+      "family": "method",
+      "title_zh": "OpenGenes 0.2.0（longevity-genie/opengen…",
+      "body_zh": "OpenGenes 0.2.0（longevity-genie/opengenes-mcp 02accbd）。寿命干预、衰老标志和人类长寿相关变异。只读 SQL。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "opengenes",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "skill": "opengenes"
+      }
+    },
+    {
+      "id": "m-oral-microbiome-signatures",
+      "family": "method",
+      "title_zh": "口腔微生物年龄加速",
+      "body_zh": "已经算好的口腔微生物年龄残差。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "oral-microbiome-signatures",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-026-72096-2",
+        "skill": "oral-microbiome-signatures"
+      }
+    },
+    {
+      "id": "m-organ-aging-genetic-architecture",
+      "family": "method",
+      "title_zh": "器官衰老遗传结构",
+      "body_zh": "点到的器官。这是遗传结构，不是上面的蛋白质年龄差。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "organ-aging-genetic-architecture",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-025-67223-4",
+        "skill": "organ-aging-genetic-architecture"
+      }
+    },
+    {
+      "id": "m-organ-aging-plasma-proteome",
+      "family": "method",
+      "title_zh": "器官蛋白齐套",
+      "body_zh": "SomaScan 序列号是否齐套。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "organ-aging-plasma-proteome",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-023-06802-1",
+        "skill": "organ-aging-plasma-proteome"
+      }
+    },
+    {
+      "id": "m-organ-specific-proteomic-aging",
+      "family": "method",
+      "title_zh": "器官蛋白质年龄差",
+      "body_zh": "器官蛋白质的 z，可带出生到体检的天数。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "organ-specific-proteomic-aging",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-025-01016-8",
+        "skill": "organ-specific-proteomic-aging"
+      }
+    },
+    {
+      "id": "m-ovarian-ageing-cancer-mutation",
+      "family": "method",
+      "title_zh": "卵巢衰老与癌症突变",
+      "body_zh": "正文写出的绝经年龄差，以及 PALB2 和 PNPLA8 在补充表里的 Beta。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "ovarian-ageing-cancer-mutation",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-024-07931-x",
+        "skill": "ovarian-ageing-cancer-mutation"
+      }
+    },
+    {
+      "id": "m-parabiosis-brain-transcriptome",
+      "family": "method",
+      "title_zh": "异时联体脑转录组",
+      "body_zh": "正文写明方向的基因。双向基因表没有倍数列。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "parabiosis-brain-transcriptome",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-023-00373-6",
+        "skill": "parabiosis-brain-transcriptome"
+      }
+    },
+    {
+      "id": "m-parabiosis-noncoding-rna-aging",
+      "family": "method",
+      "title_zh": "非编码核糖核酸衰老轨迹",
+      "body_zh": "八个全局衰老 miRNA，以及 Eln、Col1a1 和 Col3a1 的方向。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "parabiosis-noncoding-rna-aging",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41587-023-01751-6",
+        "skill": "parabiosis-noncoding-rna-aging"
+      }
+    },
+    {
+      "id": "m-paracrine-senescence-inflammation",
+      "family": "method",
+      "title_zh": "感染后的旁分泌衰老",
+      "body_zh": "旁分泌衰老里点名的标志和方向。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "common",
+      "evidence_tier": "cell",
+      "skill": "paracrine-senescence-inflammation",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-022-00170-7",
+        "skill": "paracrine-senescence-inflammation"
+      }
+    },
+    {
+      "id": "m-planarian-regeneration-rejuvenation",
+      "family": "method",
+      "title_zh": "涡虫再生与组织回春",
+      "body_zh": "正文点名的方向。头部面积和全身面积都在时计算相对头大小。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "planarian-regeneration-rejuvenation",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-025-00847-9",
+        "skill": "planarian-regeneration-rejuvenation"
+      }
+    },
+    {
+      "id": "m-plasma-protein-risk-score",
+      "family": "method",
+      "title_zh": "髋部骨折蛋白读出",
+      "body_zh": "髋部骨折相关蛋白，可带足跟超声 BUA 和 SOS。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "plasma-protein-risk-score",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-024-00639-7",
+        "skill": "plasma-protein-risk-score"
+      }
+    },
+    {
+      "id": "m-plasma-proteome-dementia-biomarkers",
+      "family": "method",
+      "title_zh": "痴呆血浆蛋白",
+      "body_zh": "痴呆相关血浆蛋白的符号和数值。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "plasma-proteome-dementia-biomarkers",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-026-01162-7",
+        "skill": "plasma-proteome-dementia-biomarkers"
+      }
+    },
+    {
+      "id": "m-plasma-proteome-future-dementia",
+      "family": "method",
+      "title_zh": "痴呆相关的四个血浆蛋白",
+      "body_zh": "四个血浆蛋白的数值。梯度提升树的权重没有印出。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "plasma-proteome-future-dementia",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-023-00565-0",
+        "skill": "plasma-proteome-future-dementia"
+      }
+    },
+    {
+      "id": "m-plasma-proteomic-cellular-aging",
+      "family": "method",
+      "title_zh": "细胞类型蛋白年龄",
+      "body_zh": "SomaScan 蛋白和性别对应的细胞类型蛋白年龄。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "plasma-proteomic-cellular-aging",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41591-026-04446-y",
+        "skill": "plasma-proteomic-cellular-aging"
+      }
+    },
+    {
+      "id": "m-plasma-proteomics-brain-immune",
+      "family": "method",
+      "title_zh": "器官年龄差",
+      "body_zh": "各器官已经算好的 z。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "plasma-proteomics-brain-immune",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41591-025-03798-1",
+        "skill": "plasma-proteomics-brain-immune"
+      }
+    },
+    {
+      "id": "m-platelet-factors-ageing-cognition",
+      "family": "method",
+      "title_zh": "血小板因子与老年认知",
+      "body_zh": "正文点名的血小板因子和炎症标志。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "platelet-factors-ageing-cognition",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-023-06436-3",
+        "skill": "platelet-factors-ageing-cognition"
+      }
+    },
+    {
+      "id": "m-polygenic-gut-metagenomic-risk",
+      "family": "method",
+      "title_zh": "多基因与肠道菌群",
+      "body_zh": "病种，可带年龄、多基因分数和菌群分数。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "polygenic-gut-metagenomic-risk",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-024-00590-7",
+        "skill": "polygenic-gut-metagenomic-risk"
+      }
+    },
+    {
+      "id": "m-principal-component-clinical-aging",
+      "family": "method",
+      "title_zh": "临床指数",
+      "body_zh": "并存病、可替宁、自评健康和尿白蛋白肌酐比。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "principal-component-clinical-aging",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-024-00646-8",
+        "skill": "principal-component-clinical-aging"
+      }
+    },
+    {
+      "id": "m-proteomic-aging-clock",
+      "family": "method",
+      "title_zh": "蛋白质年龄差",
+      "body_zh": "蛋白质年龄相对实足年龄。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "proteomic-aging-clock",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41591-024-03164-7",
+        "skill": "proteomic-aging-clock"
+      }
+    },
+    {
+      "id": "m-proteomic-apoe-alzheimers-signatures",
+      "family": "method",
+      "title_zh": "载脂蛋白蛋白名单",
+      "body_zh": "e2 或 e4，以及蛋白符号。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "proteomic-apoe-alzheimers-signatures",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-026-01123-0",
+        "skill": "proteomic-apoe-alzheimers-signatures"
+      }
+    },
+    {
+      "id": "m-proteomic-clocks-eye-aging",
+      "family": "method",
+      "title_zh": "眼衰老蛋白时钟",
+      "body_zh": "已经算好的 ProAge 或 cProAge。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "proteomic-clocks-eye-aging",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41746-026-02805-0",
+        "skill": "proteomic-clocks-eye-aging"
+      }
+    },
+    {
+      "id": "m-pyaging",
+      "family": "method",
+      "title_zh": "pyaging 0.5.2（lucascamillomd/pyaging ed…",
+      "body_zh": "pyaging 0.5.2（lucascamillomd/pyaging edb1b37）。在用户提供的特征矩阵上运行衰老时钟。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "pyaging",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "skill": "pyaging"
+      }
+    },
+    {
+      "id": "m-ramanomics-senescence",
+      "family": "method",
+      "title_zh": "RamanOmics 衰老差异基因查表",
+      "body_zh": "拉曼组学衰老研究里 p21 阳性细胞差异基因的查表。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "ramanomics-senescence",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-026-01219-7",
+        "skill": "ramanomics-senescence"
+      }
+    },
+    {
+      "id": "m-rapamycin-early-adult-autophagy",
+      "family": "method",
+      "title_zh": "短暂雷帕霉素与肠自噬",
+      "body_zh": "绿色荧光面积占肠段总面积的比例；计数到齐时还有弥漫溶菌酶比例。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "rapamycin-early-adult-autophagy",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-022-00278-w",
+        "skill": "rapamycin-early-adult-autophagy"
+      }
+    },
+    {
+      "id": "m-rapamycin-enterocyte-sex",
+      "family": "method",
+      "title_zh": "肠细胞性别与雷帕霉素",
+      "body_zh": "处理后面积除以对照面积，并按雌雄写自噬方向。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "rapamycin-enterocyte-sex",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-022-00308-7",
+        "skill": "rapamycin-enterocyte-sex"
+      }
+    },
+    {
+      "id": "m-ras-titration-senescent-state",
+      "family": "method",
+      "title_zh": "剂量分箱",
+      "body_zh": "--system rpe1 或 --system liver 和一个剂量箱。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "common",
+      "evidence_tier": "cell",
+      "skill": "ras-titration-senescent-state",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-024-07797-z",
+        "skill": "ras-titration-senescent-state"
+      }
+    },
+    {
+      "id": "m-replicative-senescence-proteome",
+      "family": "method",
+      "title_zh": "复制性衰老蛋白质组查表",
+      "body_zh": "IMR90 复制性衰老显著蛋白的基因和 UniProt 查表。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "common",
+      "evidence_tier": "cell",
+      "skill": "replicative-senescence-proteome",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-026-77686-8",
+        "skill": "replicative-senescence-proteome"
+      }
+    },
+    {
+      "id": "m-retinal-aging-biomarkers-longitudinal",
+      "family": "method",
+      "title_zh": "视网膜年龄差",
+      "body_zh": "眼底照片（视网膜）的预测年龄或年龄箱概率。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "retinal-aging-biomarkers-longitudinal",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41746-025-01751-7",
+        "skill": "retinal-aging-biomarkers-longitudinal"
+      }
+    },
+    {
+      "id": "m-scepiage-single-cell-ageing",
+      "family": "method",
+      "title_zh": "单细胞甲基化周龄",
+      "body_zh": "单细胞甲基化周龄。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "scepiage-single-cell-ageing",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-024-51833-5",
+        "skill": "scepiage-single-cell-ageing"
+      }
+    },
+    {
+      "id": "m-selective-senolytic-platform",
+      "family": "method",
+      "title_zh": "脂褐素导向的清除平台",
+      "body_zh": "两个浓度都给出时，LC50 除以 IC50。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "common",
+      "evidence_tier": "cell",
+      "skill": "selective-senolytic-platform",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-024-00747-4",
+        "skill": "selective-senolytic-platform"
+      }
+    },
+    {
+      "id": "m-semaglutide-epigenetic-aging-trial",
+      "family": "method",
+      "title_zh": "表观遗传时钟变化",
+      "body_zh": "同一时钟在基线和第 32 周的变化。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "legendary",
+      "evidence_tier": "human_rct",
+      "skill": "semaglutide-epigenetic-aging-trial",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-026-72861-3",
+        "skill": "semaglutide-epigenetic-aging-trial"
+      }
+    },
+    {
+      "id": "m-senescent-cells-gene-set",
+      "family": "method",
+      "title_zh": "衰老相关基因",
+      "body_zh": "一份基因表达表对照的衰老相关基因。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "senescent-cells-gene-set",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-022-32552-1",
+        "skill": "senescent-cells-gene-set"
+      }
+    },
+    {
+      "id": "m-senescent-glia-mitochondria-lipid",
+      "family": "method",
+      "title_zh": "衰老胶质与脂质堆积",
+      "body_zh": "衰老胶质的标志、爬管高度占瓶高的比例，以及脂质方向。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "senescent-glia-mitochondria-lipid",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-024-07516-8",
+        "skill": "senescent-glia-mitochondria-lipid"
+      }
+    },
+    {
+      "id": "m-senescent-macrophage-muscle-atrophy",
+      "family": "method",
+      "title_zh": "衰老巨噬细胞与肌萎缩",
+      "body_zh": "总铁减亚铁得到的三价铁。小鼠实验化合物只出现名字。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "senescent-macrophage-muscle-atrophy",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-025-00907-0",
+        "skill": "senescent-macrophage-muscle-atrophy"
+      }
+    },
+    {
+      "id": "m-senolytic-car-t-metabolic",
+      "family": "method",
+      "title_zh": "尿激酶受体的嵌合抗原受体",
+      "body_zh": "两个对照 P 值是否都低于 0.05。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "senolytic-car-t-metabolic",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-023-00560-5",
+        "skill": "senolytic-car-t-metabolic"
+      }
+    },
+    {
+      "id": "m-senolytic-human-brain-aging",
+      "family": "method",
+      "title_zh": "衰老细胞清除与脑类器官",
+      "body_zh": "用负的 P 值乘 logfc 的符号给基因排序。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "common",
+      "evidence_tier": "cell",
+      "skill": "senolytic-human-brain-aging",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-023-00519-6",
+        "skill": "senolytic-human-brain-aging"
+      }
+    },
+    {
+      "id": "m-serum-proteomics-apoe-signatures",
+      "family": "method",
+      "title_zh": "载脂蛋白相关的血清蛋白",
+      "body_zh": "APOE 基因型，可带四个血清蛋白。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "serum-proteomics-apoe-signatures",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-024-00693-1",
+        "skill": "serum-proteomics-apoe-signatures"
+      }
+    },
+    {
+      "id": "m-sex-specific-immune-aging",
+      "family": "method",
+      "title_zh": "单细胞免疫衰老轨迹",
+      "body_zh": "单细胞免疫衰老轨迹。补充材料没有保存多层感知机。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "sex-specific-immune-aging",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-026-76737-4",
+        "skill": "sex-specific-immune-aging"
+      }
+    },
+    {
+      "id": "m-single-cell-somatic-mutational",
+      "family": "method",
+      "title_zh": "软骨细胞里的体细胞突变",
+      "body_zh": "每个软骨细胞的突变计数、覆盖和灵敏度。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "single-cell-somatic-mutational",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-025-01011-z",
+        "skill": "single-cell-somatic-mutational"
+      }
+    },
+    {
+      "id": "m-sirt1-hepatocyte-nampt",
+      "family": "method",
+      "title_zh": "肝细胞烟酰胺磷酸核糖转移酶的两类效应",
+      "body_zh": "效应属于依赖肝细胞 SIRT1，还是不依赖。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "sirt1-hepatocyte-nampt",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-022-28717-7",
+        "skill": "sirt1-hepatocyte-nampt"
+      }
+    },
+    {
+      "id": "m-sirtuin2-opc-remyelination",
+      "family": "method",
+      "title_zh": "少突胶质前体细胞里的核内去乙酰化酶",
+      "body_zh": "核内量除以总量。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "sirtuin2-opc-remyelination",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-022-28844-1",
+        "skill": "sirtuin2-opc-remyelination"
+      }
+    },
+    {
+      "id": "m-skin-il17-aging",
+      "family": "method",
+      "title_zh": "淋巴来源白介素与皮肤老化",
+      "body_zh": "小鼠周龄落在成年、年老或中和开始的哪一个窗口，以及 Il17 基因。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "skin-il17-aging",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-023-00431-z",
+        "skill": "skin-il17-aging"
+      }
+    },
+    {
+      "id": "m-sleep-chart-biological-ageing",
+      "family": "method",
+      "title_zh": "睡眠时长分组",
+      "body_zh": "睡眠小时数的分组。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "sleep-chart-biological-ageing",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-026-10524-5",
+        "skill": "sleep-chart-biological-ageing"
+      }
+    },
+    {
+      "id": "m-sleep-study-life-expectancy",
+      "family": "method",
+      "title_zh": "睡眠年龄差",
+      "body_zh": "年龄估计减实足年龄。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "sleep-study-life-expectancy",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41746-022-00630-9",
+        "skill": "sleep-study-life-expectancy"
+      }
+    },
+    {
+      "id": "m-spatial-mapping-senolytic-targeting",
+      "family": "method",
+      "title_zh": "白质里的衰老小胶质细胞",
+      "body_zh": "白质里 GAL3 阳性和阴性细胞的表达。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "spatial-mapping-senolytic-targeting",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-026-01154-7",
+        "skill": "spatial-mapping-senolytic-targeting"
+      }
+    },
+    {
+      "id": "m-steeramed-core",
+      "family": "method",
+      "title_zh": "SteeraMed Core",
+      "body_zh": "个人甲基化报告。技能自行下载 GEO、STRING 和 STITCH，给出对齐假设。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "steeramed-core",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "skill": "steeramed-core"
+      }
+    },
+    {
+      "id": "m-stochastic-epigenetic-aging",
+      "family": "method",
+      "title_zh": "表观遗传随机成分",
+      "body_zh": "一个时钟的两个决定系数和一个效应大小。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "stochastic-epigenetic-aging",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-024-00600-8",
+        "skill": "stochastic-epigenetic-aging"
+      }
+    },
+    {
+      "id": "m-structural-signature-plasma-proteins",
+      "family": "method",
+      "title_zh": "血浆蛋白的结构可及性",
+      "body_zh": "补体 C1q A 链、丛集蛋白或载脂蛋白 B 的结构可及性。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "structural-signature-plasma-proteins",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-026-01078-2",
+        "skill": "structural-signature-plasma-proteins"
+      }
+    },
+    {
+      "id": "m-synergy-age",
+      "family": "method",
+      "title_zh": "SynergyAge 0.1.0（longevity-genie/synerg…",
+      "body_zh": "SynergyAge 0.1.0（longevity-genie/synergy-age-mcp af1f1fc）。模式生物基因互作对寿命的影响。只读 SQL。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "synergy-age",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "skill": "synergy-age"
+      }
+    },
+    {
+      "id": "m-tcell-age-molecular-reprogramming",
+      "family": "method",
+      "title_zh": "T细胞年龄分子重编程",
+      "body_zh": "正文点名的 T 细胞基因和亚群随年龄的方向。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "tcell-age-molecular-reprogramming",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41590-023-01641-8",
+        "skill": "tcell-age-molecular-reprogramming"
+      }
+    },
+    {
+      "id": "m-terpenoid-autophagy-sarcopenia",
+      "family": "method",
+      "title_zh": "草本萜类与自噬",
+      "body_zh": "正文点名的自噬激活物。香芹酚和百里香酚保留斑马鱼实验里的名次。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "terpenoid-autophagy-sarcopenia",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-025-00957-4",
+        "skill": "terpenoid-autophagy-sarcopenia"
+      }
+    },
+    {
+      "id": "m-testis-transcriptomic-atlas-lifespan",
+      "family": "method",
+      "title_zh": "睾丸衰老阶段",
+      "body_zh": "年龄，可带体质指数，对照睾丸衰老阶段。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "testis-transcriptomic-atlas-lifespan",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-025-00824-2",
+        "skill": "testis-transcriptomic-atlas-lifespan"
+      }
+    },
+    {
+      "id": "m-time-seq-dna-methylation",
+      "family": "method",
+      "title_zh": "血液甲基化年龄",
+      "body_zh": "血液甲基化百分比。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "time-seq-dna-methylation",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-023-00555-2",
+        "skill": "time-seq-dna-methylation"
+      }
+    },
+    {
+      "id": "m-transcriptomic-hallmarks-mammalian-ageing",
+      "family": "method",
+      "title_zh": "转录组特征",
+      "body_zh": "基因表达对照的转录组特征。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "transcriptomic-hallmarks-mammalian-ageing",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41586-026-10542-3",
+        "skill": "transcriptomic-hallmarks-mammalian-ageing"
+      }
+    },
+    {
+      "id": "m-trigonelline-nad-precursor-muscle",
+      "family": "method",
+      "title_zh": "葫芦巴碱记录",
+      "body_zh": "血清葫芦巴碱。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "trigonelline-nad-precursor-muscle",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s42255-024-00997-x",
+        "skill": "trigonelline-nad-precursor-muscle"
+      }
+    },
+    {
+      "id": "m-ulk1-autophagy-alzheimers",
+      "family": "method",
+      "title_zh": "血清和脑脊液里的自噬激酶",
+      "body_zh": "血清或脑脊液 ULK1 的基线和随访。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "ulk1-autophagy-alzheimers",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-026-01108-z",
+        "skill": "ulk1-autophagy-alzheimers"
+      }
+    },
+    {
+      "id": "m-urinary-senescence-fibrosis-probe",
+      "family": "method",
+      "title_zh": "尿液衰老探针",
+      "body_zh": "背景均值加三倍标准差的检出限，以及肽是可切开肽还是对照肽。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "rare",
+      "evidence_tier": "animal",
+      "skill": "urinary-senescence-fibrosis-probe",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s43587-026-01116-z",
+        "skill": "urinary-senescence-fibrosis-probe"
+      }
+    },
+    {
+      "id": "m-vulnerable-brain-regions",
+      "family": "method",
+      "title_zh": "脆弱脑网络因素",
+      "body_zh": "自己报告了的脆弱脑网络因素。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "vulnerable-brain-regions",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-024-46344-2",
+        "skill": "vulnerable-brain-regions"
+      }
+    },
+    {
+      "id": "m-wearable-aging-clock",
+      "family": "method",
+      "title_zh": "腕部脉搏波年龄差",
+      "body_zh": "腕部脉搏波年龄相对实足年龄。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "wearable-aging-clock",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41467-025-64275-4",
+        "skill": "wearable-aging-clock"
+      }
+    },
+    {
+      "id": "m-wearable-circadian-aging-biomarker",
+      "family": "method",
+      "title_zh": "可穿戴加速度的昼夜年龄",
+      "body_zh": "MESOR、振幅、峰值相位和年龄到齐时的 CosinorAge。缺一项就不算。 这张卡讲的是研究方法，不是你的检查结果。",
+      "rarity": "epic",
+      "evidence_tier": "human_obs",
+      "skill": "wearable-circadian-aging-biomarker",
+      "hidden": false,
+      "set_id": "set-library",
+      "source": {
+        "doi": "10.1038/s41746-024-01111-x",
+        "skill": "wearable-circadian-aging-biomarker"
+      }
+    },
+    {
+      "id": "u-streak-freeze",
+      "family": "utility",
+      "title_zh": "连续记录冻结",
+      "body_zh": "多一天可以记成生病或出行。记上之后，这一天不算中断。不能买卖。",
+      "rarity": "rare",
+      "utility": "streak_freeze",
+      "hidden": false,
+      "set_id": "set-utility",
+      "source": {}
+    },
+    {
+      "id": "u-doctor-questions",
+      "family": "utility",
+      "title_zh": "要问医生的问题",
+      "body_zh": "展开一张问题清单：这次最该问医生的三件事。不代替就诊，也不按指标结果分稀有度。",
+      "rarity": "rare",
+      "utility": "doctor_questions",
+      "hidden": false,
+      "set_id": "set-utility",
+      "source": {}
+    },
+    {
+      "id": "u-deep-dive",
+      "family": "utility",
+      "title_zh": "把一张方法卡读完",
+      "body_zh": "从已经抽到的方法卡里挑一张，打开它的说明。不新增结论，也不按指标结果分稀有度。",
+      "rarity": "rare",
+      "utility": "deep_dive",
+      "hidden": false,
+      "set_id": "set-utility",
+      "source": {}
+    },
+    {
+      "id": "i-three-weeks",
+      "family": "insight",
+      "title_zh": "连续三周的记录",
+      "body_zh": "你已经有至少 21 天自己记下的测量、打卡或就诊。这张卡只说明记录在继续，不说明任何指标变好或变差。",
+      "rarity": "rare",
+      "insight": {
+        "min_days_of_data": 21
+      },
+      "hidden": true,
+      "set_id": "set-insight",
+      "source": {}
+    },
+    {
+      "id": "i-four-weeks",
+      "family": "insight",
+      "title_zh": "满四周的记录",
+      "body_zh": "你已经有至少 28 天自己的记录。这张卡只说明时间够长，可以开始讲进展，不按数值高低分稀有度。",
+      "rarity": "rare",
+      "insight": {
+        "min_days_of_data": 28
+      },
+      "hidden": true,
+      "set_id": "set-insight",
+      "source": {}
+    }
+  ]
+}

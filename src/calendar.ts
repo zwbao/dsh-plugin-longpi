@@ -108,6 +108,26 @@ export function buildCalendar(journey: Journey, tracking: Tracking, opts: { now:
       'END:VEVENT',
     )
   }
+  // No saved plan: remind the missing checks that unlock a result, once a week.
+  // With nothing missing there is no event; the follow-up answer says why it is quiet.
+  if (!journey.plan.exists) {
+    for (const addon of (journey.addons ?? []).slice(0, 3)) {
+      const summary = `LongPi：${addon.item_zh} → 解锁${addon.unlocks_zh}`
+      lines.push(
+        'BEGIN:VEVENT',
+        `UID:longpi-unlock-${slug(addon.item_zh)}${UID_HOST}`,
+        `DTSTAMP:${dtstamp}`,
+        'SEQUENCE:0',
+        `DTSTART:${compactDate(journey.today)}T200000`,
+        'DURATION:PT15M',
+        'RRULE:FREQ=WEEKLY;COUNT=12',
+        `SUMMARY:${escapeText(summary)}`,
+        `DESCRIPTION:${escapeText('没有日常打卡方案。每周提醒这一项待解锁的检查，做完就不需要再看「还差几项检查」。没有别的事要催时，也不会每天响。')}`,
+        ...alarm(summary, 'PT0M'),
+        'END:VEVENT',
+      )
+    }
+  }
   lines.push('END:VCALENDAR')
   return `${lines.map(foldLine).join('\r\n')}\r\n`
 }

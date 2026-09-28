@@ -85,6 +85,52 @@ function TestOutcome(props: { result: ConnectionResult }): React.ReactElement {
  * The form: address, optional token, 测试连接 and 保存, and 清除 for a saved
  * address. Nothing is saved unless the test inside 保存 succeeds.
  */
+function MirobodyLogin(props: { idPrefix: string; onSaved?: () => void }): React.ReactElement {
+  const [base, setBase] = React.useState('http://127.0.0.1:18060')
+  const [email, setEmail] = React.useState('')
+  const [password, setPassword] = React.useState('')
+  const [busy, setBusy] = React.useState(false)
+  const [error, setError] = React.useState('')
+  const [done, setDone] = React.useState('')
+  async function login(): Promise<void> {
+    const problem = addressProblem(base)
+    if (problem) {
+      setError(problem)
+      return
+    }
+    setBusy(true)
+    setError('')
+    setDone('')
+    try {
+      const result = await postJson<{ ok?: boolean; url_masked?: string; indicators?: number }>('/api/longpi/mirobody/login', { base_url: base.trim(), email: email.trim(), password })
+      setPassword('')
+      setDone(`已登录并连上${typeof result.indicators === 'number' ? `，读到 ${result.indicators} 项` : ''}${result.url_masked ? `（${result.url_masked}）` : ''}。`)
+      notifyChanged()
+      await reload('connection')
+      props.onSaved?.()
+    } catch (err) {
+      setError(errorText(err, '没有登录成功'))
+    } finally {
+      setBusy(false)
+    }
+  }
+  return h('div', { className: 'lp-conn-login', id: `${props.idPrefix}-login` },
+    h('p', { className: 'lp-muted' }, '用 Mirobody 账号登录。LongPi 会生成你的个人连接，不用去网页复制地址。'),
+    h('div', { className: 'lp-field' },
+      h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-base` }, 'Mirobody 服务地址'),
+      h('input', { id: `${props.idPrefix}-base`, className: 'lp-input', value: base, autoComplete: 'off', spellCheck: false, onChange: (event: React.ChangeEvent<HTMLInputElement>) => setBase(event.target.value) })),
+    h('div', { className: 'lp-field' },
+      h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-email` }, '邮箱'),
+      h('input', { id: `${props.idPrefix}-email`, type: 'email', className: 'lp-input', value: email, autoComplete: 'username', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setEmail(event.target.value) })),
+    h('div', { className: 'lp-field' },
+      h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-password` }, '密码'),
+      h('input', { id: `${props.idPrefix}-password`, type: 'password', className: 'lp-input', value: password, autoComplete: 'current-password', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setPassword(event.target.value) })),
+    error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
+    done ? h('p', { className: 'lp-conn-ok', role: 'status' }, done) : null,
+    h('div', { className: 'lp-form-actions' },
+      h(Btn, { type: 'button', disabled: busy || !email.trim() || password.length < 8, onClick: () => { void login() } }, busy ? '正在登录…' : '登录并连接')))
+}
+
 export function ConnectionForm(props: { connection: Connection | null; idPrefix: string; onSaved?: (connection: Connection) => void }): React.ReactElement {
   const [url, setUrl] = React.useState('')
   const [token, setToken] = React.useState('')
@@ -142,8 +188,9 @@ export function ConnectionForm(props: { connection: Connection | null; idPrefix:
   }
 
   return h('form', { className: 'lp-conn-form', noValidate: true, onSubmit: (event: React.FormEvent) => { event.preventDefault(); void run('save') } },
+    h(MirobodyLogin, { idPrefix: props.idPrefix }),
     h('div', { className: 'lp-field' },
-      h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-url` }, 'Mirobody 地址', h('span', { className: 'lp-optional' }, '在 Mirobody 网页生成的个人 MCP 地址')),
+      h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-url` }, 'Mirobody 地址', h('span', { className: 'lp-optional' }, '只有在已经复制了个人 MCP 地址时才填')),
       h('input', {
         id: `${props.idPrefix}-url`, type: 'url', className: 'lp-input', value: url, autoComplete: 'off', spellCheck: false,
         placeholder: props.connection?.url_masked ? `现在：${props.connection.url_masked}` : 'https://…/mcp/…',

@@ -7,6 +7,7 @@
 // other surfaces open a tab (and a section in it) through the store.
 
 import React from 'react'
+import { getJson } from './api.ts'
 import { BOUNDARY_FALLBACK } from './constants.ts'
 import { chineseDate, goTo, greeting, localToday, weekday } from './format.ts'
 import { Icon } from './icons.ts'
@@ -15,7 +16,9 @@ import { RecordsStatusLine } from './journey-steps.ts'
 import { Onboarding, ONBOARDING_TITLES, stepOfStage } from './onboarding.ts'
 import { Overview } from './overview.ts'
 import { PlanTab } from './plan.ts'
+import { registerClientModules } from './modules.ts'
 import { ProfileTab } from './profile-tab.ts'
+import { pageTabs } from './registry.ts'
 import type { ResultTarget } from './results.ts'
 import {
   clearViewRequest, setPendingPrompt, useJourney, usePageShown, useTracking, useViewRequest,
@@ -33,12 +36,15 @@ const TABS: Array<TabSpec<PageTab>> = [
   { key: 'plan', label: '方案' },
   { key: 'profile', label: '档案' },
 ]
+
+registerClientModules()
 /** How long a request from elsewhere waits for its section to be on screen. */
 const SCROLL_WAIT_MS = 2000
 
-function storedTab(): PageTab {
+function storedTab(extra: readonly string[]): PageTab {
   const saved = readPref(TAB_KEY)
-  return TABS.some((tab) => tab.key === saved) ? saved as PageTab : 'overview'
+  if (saved && (TABS.some((tab) => tab.key === saved) || extra.includes(saved))) return saved as PageTab
+  return 'overview'
 }
 
 /** Onboarding steps still open, for the banner: none once the record is connected. */
@@ -123,7 +129,20 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
   const { journey, loading, error, refresh } = useJourney()
   const tracking = useTracking()
   const [notice, notify] = useNotice()
-  const [tab, setTabState] = React.useState<PageTab>(storedTab)
+  const [scienceOn, setScienceOn] = React.useState(false)
+  React.useEffect(() => {
+    void getJson<{ mode?: string }>('/api/longpi/science/community').then((row) => {
+      if (row?.mode && row.mode !== 'off') setScienceOn(true)
+    }).catch(() => { /* science stays hidden while the mode is off or the route is down */ })
+  }, [])
+  const registered = pageTabs().filter((item) => item.id !== 'science' || scienceOn)
+  const tabs: Array<TabSpec<PageTab>> = [
+    ...TABS,
+    ...registered
+      .filter((item) => item.id === 'season' || item.id === 'science')
+      .map((item) => ({ key: item.id as PageTab, label: item.label_zh })),
+  ]
+  const [tab, setTabState] = React.useState<PageTab>(storedTab(registered.map((item) => item.id)))
   const [filter, setFilter] = React.useState<IndicatorFilter>('all')
   const [refreshing, setRefreshing] = React.useState(false)
   const [onboarding, setOnboarding] = React.useState(false)
@@ -182,12 +201,15 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
       panel = h(IndicatorsTab, { filter, onFilter: setFilter, onConnect: () => goTab('profile', { id: 'lp-connection-card' }) })
     } else if (tab === 'plan') {
       panel = h(PlanTab, { journey, tracking: tracking.data, loading: tracking.loading, error: tracking.error, onNotice: notify, onPrompt })
-    } else {
+    } else if (tab === 'profile') {
       panel = h(ProfileTab, { journey, onNotice: notify })
+    } else {
+      const extra = registered.find((item) => item.id === tab)
+      panel = extra ? h(extra.Component, { journey, onNotice: notify }) : h(ProfileTab, { journey, onNotice: notify })
     }
     body = h('div', { className: `lp-body ${refreshing ? 'lp-refreshing' : ''}` },
       h(Banner, { journey, onOpen: () => setOnboarding(true) }),
-      h(Tabs<PageTab>, { tabs: TABS, value: tab, onChange: setTab, label: 'LongPi 健康页', idPrefix: 'lp-page' }),
+      h(Tabs<PageTab>, { tabs, value: tab, onChange: setTab, label: 'LongPi 健康页', idPrefix: 'lp-page' }),
       h('div', { className: 'lp-tab-panel', role: 'tabpanel', id: 'lp-page-panel', 'aria-labelledby': `lp-page-tab-${tab}` }, panel))
   }
 

@@ -93,7 +93,7 @@ export {
 } from './followup.ts'
 export type { FollowupSettings, FollowupState, FollowupLogRow, FollowupDeps, SendResult } from './followup.ts'
 export { followupTextProblem, followupApprovalReason } from './tools-followup.ts'
-export { briefOptionsOf, buildPlanBrief, draftPlan, settleDraft, replyForDraft, acceptedPlan, expectedText, DRAFT_CATEGORIES } from './planner.ts'
+export { briefOptionsOf, buildPlanBrief, draftPlan, softHoldDraft, settleDraft, replyForDraft, acceptedPlan, expectedText, DRAFT_CATEGORIES } from './planner.ts'
 export { clinicalStop, hypoglycaemiaNow, leadsWithHypoFirstStep, exclusionsFromText, medicationClasses, HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH, FISH_OIL_CAUTION, type StopResult, type StopHit } from './plan-safety.ts'
 export { buildDoctorFirst } from './doctor-first.ts'
 export { planDraftHeld, holdPlanDraft, releasePlanDraft } from './plan-hold.ts'

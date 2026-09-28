@@ -16,6 +16,8 @@ import { useModelStatus } from './model-status.ts'
 import { recordConnected } from './normalize.ts'
 import { DRAFT_PROMPT } from './plan-draft.ts'
 import { ProfileEditor } from './profile-editor.ts'
+import { DataPage } from './privacy/data-page.ts'
+import { SensitiveConsentScreen } from './privacy/consent-screen.ts'
 import { requestView, setPendingPrompt, setSettingsOpener, useJourney, useSettingsOpener } from './store.ts'
 import type { Face, Stage } from './types.ts'
 import { Btn, Skeleton, useNotice } from './ui.ts'
@@ -115,6 +117,7 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
   const [step, setStep] = React.useState<number | null>(null)
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
+  const [privacyOpen, setPrivacyOpen] = React.useState(false)
   const [computing, setComputing] = React.useState(false)
   const [timedOut, setTimedOut] = React.useState(false)
   const [retrying, setRetrying] = React.useState(false)
@@ -197,7 +200,13 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
     h('div', { className: 'lp lp-onb', ref: content },
       h(Dots, { step }),
       h('h2', { className: 'lp-onb-title', tabIndex: -1 }, ONBOARDING_TITLES[step]),
-      step === 0 ? h('div', { className: 'lp-onb-body' },
+      privacyOpen ? h('div', { className: 'lp-onb-body' },
+        h('p', { className: 'lp-onb-lead' }, '下面两件事分开记，都没有预先勾选，也不是刚才的产品说明。'),
+        h(SensitiveConsentScreen, {}),
+        h(DataPage, {}),
+        h('div', { className: 'lp-modal-actions' },
+          h(Btn, { onClick: () => { setPrivacyOpen(false); go(1) } }, '继续填写档案'))) : null,
+      !privacyOpen && step === 0 ? h('div', { className: 'lp-onb-body' },
         h(ModelHint, { onOpen: toSettings }),
         h(ConsentText),
         error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
@@ -208,7 +217,7 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
             onClick: () => {
               setBusy(true)
               acceptConsent()
-                .then(() => go(1))
+                .then(() => setPrivacyOpen(true))
                 .catch((err: unknown) => setError(`没有记下：${errorText(err, '请稍后再试')}`))
                 .finally(() => setBusy(false))
             },

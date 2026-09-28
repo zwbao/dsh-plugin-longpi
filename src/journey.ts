@@ -13,6 +13,7 @@ import { measurementInputs } from './measurements.ts'
 import type { MountState } from './mirobody.ts'
 import type { RecordStatus } from './records.ts'
 import { CONSENT_VERSION, FOCUS, FOCUS_ZH, RISK_FACTS, RISK_FACT_ZH, type Focus, type Profile, type RiskFact } from './profile.ts'
+import { calculatorIdentity } from './subject.ts'
 import { loadReference } from './reference.ts'
 import { latestSelf, readSelf, SELF_KEYS, SELF_SPEC, type SelfKey } from './selfmeasure.ts'
 import { buildTracking, PHENOAGE_SKILL, trackingGeneration, type BioAge, type Tracking, type TrackingContext } from './tracking.ts'
@@ -60,7 +61,7 @@ export interface Journey {
      * band_verified and band_missing are additions for the model: with band_missing the band is a lower bound.
      * caveat_zh is set when a PhenoAge input changed beyond normal fluctuation in a direction to show a doctor.
      */
-    bioage: { status: 'ok' | 'blocked'; phenoage: number | null; advance: number | null; date: string | null; checkups: number; band_years: number | null; band_verified: boolean; band_missing: string[]; blocker_zh: string; missing: string[]; caveat_zh?: string }
+    bioage: { status: 'ok' | 'blocked'; phenoage: number | null; advance: number | null; date: string | null; checkups: number; band_years: number | null; band_verified: boolean; band_missing: string[]; blocker_zh: string; missing: string[]; caveat_zh?: string; headline_zh?: string; allows_younger?: boolean }
     risk: { status: 'ok' | 'blocked'; risk_pct: number | null; category_zh: string; date: string | null; blocker_zh: string; missing_labs: string[]; missing_facts: string[] }
   }
   addons: Array<{ item_zh: string; unlocks_zh: string; self_measurable: boolean; self_key?: SelfKey }>
@@ -229,6 +230,8 @@ function bioageResult(bioage: BioAge): Journey['results']['bioage'] {
     band_missing: last ? [...bioage.band_missing] : [],
     blocker_zh: blocker,
     missing: [...bioage.missing],
+    ...(bioage.headline_zh ? { headline_zh: bioage.headline_zh } : {}),
+    allows_younger: bioage.allows_younger === true,
   }
 }
 
@@ -482,7 +485,7 @@ function journeyFrom(context: JourneyContext, tracking: Tracking, summary: Recor
   // One fact pack and one fact-ranked set of surfaces; next and suggestions below are that set.
   const pack = packFrom({
     dataDir: context.dataDir, today, stage,
-    person: { display_name: profile.displayName, age: profile.age, sex: profile.sex },
+    person: { display_name: profile.displayName, age: calculatorIdentity(profile).age, sex: calculatorIdentity(profile).sex },
     care, hits: recordStop.hits, needsSex: recordStop.needs_sex === true && care.stop.stop,
     medications: currentMedications(records.medications), changes: tracking.changes,
     results: { bioage: { phenoage: bioage.phenoage, advance: bioage.advance, date: bioage.date }, risk: { risk_pct: risk.risk_pct, date: risk.date } },

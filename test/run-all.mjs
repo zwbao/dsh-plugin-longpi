@@ -21,7 +21,10 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const failed = []
   for (const name of testFiles().filter((file) => only.length === 0 || only.some((part) => file.includes(part)))) {
     const started = Date.now()
-    const run = spawnSync(process.execPath, [join(root, name)], { stdio: 'inherit', env: process.env })
+    // M7's medication mirror imports core/store.ts, which uses TypeScript parameter
+    // properties. Node's strip-only loader cannot load those, so every file runs
+    // with the transform flag (M8's science suite needs the same thing).
+    const run = spawnSync(process.execPath, ['--experimental-transform-types', join(root, name)], { stdio: 'inherit', env: process.env })
     const seconds = ((Date.now() - started) / 1000).toFixed(1)
     if (run.status !== 0) {
       failed.push(name)

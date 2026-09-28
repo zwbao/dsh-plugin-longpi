@@ -11,9 +11,13 @@ import { buildChanges, CHANGES_NOTE_ZH, type RecordChange, type UnjudgedChange }
 import { buildDoctorFirst, NO_STOP } from './doctor-first.ts'
 import type { StopResult } from './plan-safety.ts'
 import type { Config } from './config.ts'
-import { adherenceFor, evaluatePlan, resolveMarkers, suggestNext, type Adherence, type ItemSummary, type LeverHint, type ResolvedMarker, type Suggestion } from './evaluate.ts'
+import { adherenceFor, evaluatePlan, resolveMarkers, suggestNext, wearableTargetFor, type Adherence, type ItemSummary, type LeverHint, type ResolvedMarker, type Suggestion } from './evaluate.ts'
+import { bodyAgeWording, codedRecords, missedPlanChanges, PHENOAGE_WINDOW_DAYS, siblingNames } from './honesty/comparability.ts'
+import { roundPercentPoints } from './honesty/format.ts'
+import { modelRangeNote } from './honesty/model-range.ts'
 import { readHistory, type HistoryRow } from './history.ts'
 import { addDays, CATEGORY_ZH, currentPlan, daysBetween, readCheckIns, readPlans, type CheckIn, type PlanItem, type PlanVersion } from './interventions.ts'
+import { calculatorIdentity } from './subject.ts'
 import { RISK_FACT_ZH, type RiskFact } from './profile.ts'
 import type { InputSpec } from './catalog.ts'
 import { aliasIndex, candidatesFor, indicatorFor, measurementInputs, notRead, resolveInput, stageMeasurements, type MeasurementIn } from './measurements.ts'
@@ -21,6 +25,7 @@ import { loadCourses, loadDoseLog, loadSeries, readFlags, recordReadable, sameMe
 import { expandMarkerNames, loadReference, markerFor, rcvBand, type Reference } from './reference.ts'
 import { runSkill, type Levers } from './runner.ts'
 import { readSelf, selfKeyOf, selfSeries, SELF_DEVICE_NAMES, SELF_SPEC } from './selfmeasure.ts'
+import { currentMedications, GLUCOSE_LOWERING } from './situation.ts'
 import { normalizeUnit } from './units.ts'
 
 export const PHENOAGE_SKILL = 'accelerated-biological-aging-risk'
@@ -58,6 +63,12 @@ export interface BioAge {
   /** Inputs with no published within-person variation, left out of the band (so the band is a lower bound). */
   band_missing: string[]
   runs: number
+  /** The sentence the page chip and the chat both use. Empty until a panel is computed. */
+  headline_zh: string
+  /** True only when the move is past the noise band toward a lower phenotypic age, with the gates met. */
+  allows_younger?: boolean
+  /** Days from the earliest to the latest input of the latest panel. 0 is one draw day. */
+  panel_span_days: number | null
 }
 
 export interface ModelCard {
@@ -154,7 +165,7 @@ export async function buildTracking(context: TrackingContext): Promise<Tracking>
   // The record, the profile and self measurements change results too; a stale memo must not answer for them.
   const key = [
     context.dataDir, context.skillsHome, context.today, plan?.version ?? 0, checkins.length, context.catalog.revision, status,
-    JSON.stringify([profile.age, profile.sex, profile.risk]),
+    JSON.stringify([calculatorIdentity(profile).age, calculatorIdentity(profile).sex, profile.risk, profile.subject ?? null]),
     createHash('sha1').update(indicators.map((row) => `${row.name}=${row.value}@${row.date ?? ''}`).join('\n')).digest('hex'),
   ].join('\u0000')
   const now = Date.now()
@@ -179,7 +190,8 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
   const errors: string[] = []
   const versions = readPlans(context.dataDir).map((row) => ({ version: row.version, saved_at: row.saved_at, title: row.title, items: row.items.length }))
   // Read alongside the skill runs; a failed read is named rather than taking the rest down, never shown as no change.
-  const changesRead = buildChanges(context).catch((error: unknown) => ({
+  // Uncoded printed names join the LOINC row of the same marker before the changes card is built.
+  const changesRead = buildChanges({ ...context, records: codedRecords(context.records, reference.biovar) }).catch((error: unknown) => ({
     changes: [] as RecordChange[], note_zh: CHANGES_NOTE_ZH,
     unjudged: [{ label_zh: '记录里的变化', reason_zh: `读取失败：${error instanceof Error ? error.message.slice(0, 200) : '原因未知'}，这次没有判断。` }],
   }))
@@ -189,10 +201,16 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
   const goals = plan?.goals ?? []
   const models = await modelCards(context, reference, goals)
   const levers = models.find((card) => card.model === 'phenoage')?.levers ?? []
-  const { changes, note_zh: changesNote, unjudged } = await changesRead
+  const readChanges = await changesRead
+  // 反向 is the plan-verdict word for a worsening past the band. The changes card uses the same word in the sentence.
+  let changes = readChanges.changes.map((row) => row.verdict === 'worse' && !row.text_zh.includes('反向')
+    ? { ...row, text_zh: `${row.text_zh}（反向）` }
+    : row)
+  const changesNote = readChanges.note_zh
+  let unjudged = readChanges.unjudged
   const doctorFirst = await doctorRead
-  if (unjudged.length > 0) errors.push(`没有判断变化：${unjudged.map((row) => row.label_zh).join('、')}（读取失败或不完整）`)
   if (!plan) {
+    if (unjudged.length > 0) errors.push(`没有判断变化：${unjudged.map((row) => row.label_zh).join('、')}（读取失败或不完整）`)
     return {
       status: 'no_plan', today: context.today, plan: null, versions, items: [], suggestions: [], charts: [], bioage, models,
       checkins: [], reference: referenceStats(reference), errors, changes, changes_note_zh: changesNote, changes_unjudged: unjudged, doctor_first: doctorFirst,
@@ -204,9 +222,14 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
   const judged: PlanVersion = { ...plan, items: plan.items.map((item) => ({ ...item, markers: expandMarkerNames(reference.biovar, item.markers) })) }
   const names = [...new Set([...judged.items.flatMap((item) => item.markers), ...goals.map((goal) => goal.marker)])]
   const resolvedList = resolveMarkers(names, context.records.indicators, reference.biovar)
+  for (const marker of resolvedList) {
+    const extra = siblingNames(context.records.indicators, reference.biovar, marker.biovar, marker.indicator)
+    if (extra.length > 0) marker.also = extra
+    if (!marker.indicator && extra[0]) marker.indicator = extra[0]
+  }
   const markers: Record<string, ResolvedMarker> = Object.fromEntries(resolvedList.map((row) => [row.asked, row]))
   const earliest = plan.items.map((item) => item.start).sort()[0] ?? context.today
-  const resolvedNames = [...new Set(resolvedList.map((row) => row.indicator).filter((name): name is string => Boolean(name)))]
+  const resolvedNames = [...new Set(resolvedList.flatMap((row) => [row.indicator, ...(row.also ?? [])]).filter((name): name is string => Boolean(name)))]
   // A marker resolved to the person's own measurement still has its record history (a wearable cuff, a
   // checkup waist): keep that row's name so it is read from Mirobody, and add the self points to it below.
   const displaced = recordCounterparts(resolvedList, context.records.indicators, reference)
@@ -230,6 +253,16 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
     // Sorted by date, then time: on the same date the self daily mean (dated without a time) comes first.
     series[name] = [...record, ...own].sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time))
   }
+  // The changes read can miss a plan marker (an unlisted LOINC, or 「不是指标表」). The series just loaded for the verdict is enough to judge it.
+  const glucoseTreated = context.records.profile.risk.diabetes === true
+    || currentMedications(context.records.medications).some((name) => GLUCOSE_LOWERING.test(name))
+  const filled = missedPlanChanges({
+    changes, unjudged, resolved: resolvedList, series, unread: new Set([...labs.failed, ...labs.cut]),
+    z: reference.biovar.z, glucoseTreated, sex: context.records.profile.sex,
+  })
+  changes = filled.changes
+  unjudged = filled.unjudged
+  if (unjudged.length > 0) errors.push(`没有判断变化：${unjudged.map((row) => row.label_zh).join('、')}（读取失败或不完整）`)
 
   const adherence: Record<string, Adherence> = {}
   const calendarStart = addDays(context.today, -83)
@@ -238,10 +271,13 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
     const window = { start: calendarStart, end: context.today }
     let daily: SeriesPoint[] | undefined
     let doses
-    if (item.target && recordReadable(context.records)) {
-      const read = await loadSeries(context.config, [item.target.metric], { start: item.start < calendarStart ? item.start : calendarStart, end: context.today, resolution: 'day' })
-      if (read.error) errors.push(`读取${item.target.metric}：${read.error}`)
-      daily = read.series[item.target.metric]?.points ?? []
+    const wearable = item.target ?? (!item.mirobody ? wearableTargetFor(item) : null)
+    if (wearable && recordReadable(context.records)) {
+      const read = await loadSeries(context.config, [wearable.metric], { start: item.start < calendarStart ? item.start : calendarStart, end: context.today, resolution: 'day' })
+      if (read.error) errors.push(`读取${wearable.metric}：${read.error}`)
+      const points = read.series[wearable.metric]?.points ?? []
+      // An inferred step/sleep target counts only when the series is actually there. Otherwise check-ins still count.
+      if (item.target || points.length > 0) daily = points
     } else if (item.mirobody && recordReadable(context.records)) {
       const read = await loadDoseLog(context.config, item.mirobody.medication, item.start, context.today)
       if (read.error) errors.push(`读取${item.mirobody.medication}的服用记录：${read.error}`)
@@ -362,34 +398,83 @@ function ageOn(date: string, today: string, ageNow: number): number {
   return Math.round((ageNow - daysBetween(date, today) / 365.25) * 10) / 10
 }
 
+interface CheckupDays {
+  /** One map per panel, keyed by the panel's end date. A windowed panel's inputs are copied onto that date. */
+  byDate: Map<string, Map<string, SeriesPoint>>
+  complete: string[]
+  /** Days from the earliest input to the end date. 0 means every input was drawn that day. */
+  spans: Map<string, number>
+  error: string
+}
+
 /**
- * Each checkup day's value of every input: from whichever of its series has one that day, the earlier code in
- * skill.json order on a tie (the last reading of the day within one series). A complete checkup has all of them.
+ * Each input's value by day, then the panels those days make.
+ * A panel is every required input on one day, or, when that never happens, every input inside
+ * PHENOAGE_WINDOW_DAYS ending on the latest of them. A same-day panel is kept on its own and is
+ * not folded into a neighbour. The chosen points are stored under the panel's end date.
  */
-async function checkupDays(context: TrackingContext, pairs: readonly Pair[]): Promise<{ byDate: Map<string, Map<string, SeriesPoint>>; complete: string[]; error: string }> {
+async function checkupDays(context: TrackingContext, pairs: readonly Pair[]): Promise<CheckupDays> {
   const names = [...new Set(pairs.flatMap((pair) => pair.names))]
+  const empty = (error: string): CheckupDays => ({ byDate: new Map(), complete: [], spans: new Map(), error })
   const read = await loadSeries(context.config, names, { start: addDays(context.today, -LOOKBACK_DAYS), end: context.today, resolution: 'raw' })
-  const byDate = new Map<string, Map<string, SeriesPoint>>()
+  const raw = new Map<string, Map<string, SeriesPoint>>()
   // Any series that failed to read, or came back cut, makes the days unknown: a value not read is never taken
   // for a checkup without it.
-  if (read.failed.length > 0) return { byDate, complete: [], error: read.error || '读取失败' }
-  if (read.cut.length > 0) return { byDate, complete: [], error: '读数太多被截断，没有读全' }
+  if (read.failed.length > 0) return empty(read.error || '读取失败')
+  if (read.cut.length > 0) return empty('读数太多被截断，没有读全')
   for (const pair of pairs) {
     const rank = new Map<string, number>()
     pair.names.forEach((name, index) => {
       for (const point of read.series[name]?.points ?? []) {
-        const day = byDate.get(point.date) ?? new Map<string, SeriesPoint>()
+        const day = raw.get(point.date) ?? new Map<string, SeriesPoint>()
         const held = rank.get(point.date)
         if (held == null || index <= held) {
           day.set(pair.spec.key, point)
           rank.set(point.date, index)
         }
-        byDate.set(point.date, day)
+        raw.set(point.date, day)
       }
     })
   }
-  const complete = [...byDate.entries()].filter(([, day]) => pairs.every((pair) => day.has(pair.spec.key))).map(([date]) => date).sort()
-  return { byDate, complete, error: '' }
+  const keys = pairs.map((pair) => pair.spec.key)
+  const dates = [...raw.keys()].sort()
+  const full = (day: Map<string, SeriesPoint> | undefined) => Boolean(day) && keys.every((key) => (day as Map<string, SeriesPoint>).has(key))
+  const sameDay = dates.filter((date) => full(raw.get(date)))
+  const byDate = new Map<string, Map<string, SeriesPoint>>()
+  const spans = new Map<string, number>()
+  for (const date of sameDay) {
+    byDate.set(date, raw.get(date) as Map<string, SeriesPoint>)
+    spans.set(date, 0)
+  }
+  const seen = new Set<string>()
+  for (const end of dates) {
+    const start = addDays(end, -PHENOAGE_WINDOW_DAYS)
+    if (sameDay.some((date) => date >= start && date <= end)) continue
+    const chosen = new Map<string, SeriesPoint>()
+    for (const date of dates) {
+      if (date < start || date > end) continue
+      for (const [key, point] of raw.get(date) ?? []) {
+        const prev = chosen.get(key)
+        if (!prev || date >= prev.date) chosen.set(key, point)
+      }
+    }
+    if (!keys.every((key) => chosen.has(key))) continue
+    let oldest = end
+    let latest = oldest
+    for (const point of chosen.values()) {
+      if (point.date < oldest) oldest = point.date
+      if (point.date > latest) latest = point.date
+    }
+    // Only the window that ends on its own latest input. Later empty days do not spawn another panel.
+    if (latest !== end) continue
+    const signature = keys.map((key) => `${key}@${(chosen.get(key) as SeriesPoint).date}`).join('|')
+    if (seen.has(signature)) continue
+    seen.add(signature)
+    byDate.set(end, chosen)
+    spans.set(end, daysBetween(oldest, end))
+  }
+  const complete = [...byDate.keys()].sort()
+  return { byDate, complete, spans, error: '' }
 }
 
 /** What one checkup's phenotypic age is computed from (with the age as saved); a stored result with another key is stale. */
@@ -401,6 +486,7 @@ function inputsKey(context: TrackingContext, date: string, measurements: Measure
 async function ensureBioAge(context: TrackingContext, reference: Reference): Promise<BioAge> {
   const empty = (status: BioAge['status'], note: string, missing: string[] = []): BioAge => ({
     status, note_zh: note, missing, points: [], band_years: null, band_verified: false, band_missing: [], runs: 0,
+    headline_zh: '', panel_span_days: null,
   })
   const card = context.catalog.cards.find((item) => item.name === PHENOAGE_SKILL)
   if (!card || !card.script) return empty('no_skill', '技能库里没有身体年龄（表型年龄）方法。')
@@ -417,14 +503,15 @@ async function ensureBioAge(context: TrackingContext, reference: Reference): Pro
   if (unread.some((pair) => pair.names.length === 0)) {
     return empty('error', `指标目录没有读全，${unread.map((pair) => pair.spec.label_zh).join('、')}可能在没有读到的部分，暂时算不出身体年龄。`)
   }
-  const ageNow = context.records.profile.age
-  if (ageNow == null) return empty('no_age', '档案里还没有实足年龄。保存年龄后才能回算身体年龄。')
+  const who = calculatorIdentity(context.records.profile)
+  const ageNow = who.age
+  if (ageNow == null) return empty('no_age', who.subject ? '这份记录是家人的，档案里还没有他或她的年龄。' : '档案里还没有实足年龄。保存年龄后才能回算身体年龄。')
 
   const days = await checkupDays(context, pairs)
   if (days.error) return empty('error', `读取历次血检失败：${days.error}`)
-  // Only dates where all nine were measured the same day; a missing marker is never carried over from another date.
+  // A panel is one day, or every input inside PHENOAGE_WINDOW_DAYS. Nothing is carried further than that.
   const checkups = days.complete.slice(-BIOAGE_CHECKUPS)
-  if (checkups.length === 0) return empty('no_checkup', '没有一次检查同时测齐九项血检，还不能算身体年龄。')
+  if (checkups.length === 0) return empty('no_checkup', `没有一次检查在 ${PHENOAGE_WINDOW_DAYS} 天内测齐九项血检，还不能算身体年龄。`)
   // Each checkup's inputs, its age then and the skill version; a stored result for other inputs is recomputed.
   const wanted = new Map(checkups.map((date) => {
     const measurements = latestMeasurements(pairs, days.byDate, date)
@@ -438,11 +525,11 @@ async function ensureBioAge(context: TrackingContext, reference: Reference): Pro
   let lastError = ''
   for (const [date, want] of wanted) {
     if (have.has(date)) continue
-    const failedKey = JSON.stringify([context.dataDir, want.key, context.records.profile.sex])
+    const failedKey = JSON.stringify([context.dataDir, want.key, who.sex])
     if (recentlyFailed(failedKey)) continue
     const result = await runSkill({
       home: context.skillsHome, dataDir: context.dataDir, name: PHENOAGE_SKILL, args: [], files: [], measurements: want.measurements,
-      profile: { age: want.age, sex: context.records.profile.sex }, useProfile: true,
+      profile: { age: want.age, sex: who.sex }, useProfile: true,
       python: context.config.skillPython, runtimes: context.config.skillRuntimes, timeoutMs: context.config.skillTimeoutMs,
       revision: context.catalog.revision, measuredAt: date, inputsKey: want.key,
     })
@@ -457,11 +544,31 @@ async function ensureBioAge(context: TrackingContext, reference: Reference): Pro
   const band = await bioAgeBand(context, reference, card, pairs, days.byDate, latest, ageNow)
   // A result for the latest complete checkup, computed from today's inputs; an older point never stands in for it.
   const current = points.at(-1)?.date === latest
+  const span = days.spans.get(latest) ?? 0
+  const latestPoint = points.at(-1)
+  const wording = current && latestPoint
+    ? bodyAgeWording({
+      phenoage: latestPoint.phenoage,
+      advance: latestPoint.advance,
+      bandYears: band?.years ?? null,
+      dates: points.map((row) => row.date),
+      advances: points.map((row) => row.advance),
+      spanDays: span,
+      date: latest,
+    })
+    : null
+  const sameDayCount = checkups.filter((date) => (days.spans.get(date) ?? 0) === 0).length
+  const windowNote = span > 0
+    ? `最近一次九项血检在 ${span} 天内测齐（截至 ${latest}，不超过 ${PHENOAGE_WINDOW_DAYS} 天），不是同一天抽血。`
+    : `按 ${points.length} 次同一天测齐九项血检的检查回算${sameDayCount < points.length ? '（另有不在同一天、但在窗口内的检查）' : ''}。`
   return {
     status: current ? 'ok' : 'error',
     note_zh: current
-      ? `按 ${points.length} 次同时测齐九项血检的检查回算。`
+      ? `${wording?.headline_zh ?? ''} ${windowNote}`.trim()
       : `${latest} 这次血检的身体年龄没有算出来${lastError ? `：${lastError}` : ''}。请在对话里运行身体年龄（表型年龄）方法查看原因。`,
+    headline_zh: wording?.headline_zh ?? '',
+    allows_younger: wording?.allows_younger === true,
+    panel_span_days: current ? span : null,
     missing: [], points, band_years: band?.years ?? null, band_verified: band?.verified ?? false, band_missing: band?.missing ?? [], runs,
   }
 }
@@ -489,7 +596,13 @@ function pointsOf(rows: Map<string, HistoryRow>): BioAgePoint[] {
   }
   return [...rows.entries()].sort(([a], [b]) => a.localeCompare(b)).flatMap(([date, row]) => {
     const phenoage = number(row, 'phenoage')
-    return phenoage == null ? [] : [{ date, phenoage, advance: number(row, 'phenoage_advance'), mortality_10y_pct: number(row, 'mortality_10y_pct') }]
+    if (phenoage == null) return []
+    return [{
+      date,
+      phenoage: Math.round(phenoage * 10) / 10,
+      advance: roundPercentPoints(number(row, 'phenoage_advance'), 1),
+      mortality_10y_pct: roundPercentPoints(number(row, 'mortality_10y_pct'), 2),
+    }]
   }).slice(-BIOAGE_CHECKUPS)
 }
 
@@ -677,14 +790,14 @@ async function modelCards(context: TrackingContext, reference: Reference, goals:
   const cards: ModelCard[] = []
   const pheno = context.catalog.cards.find((item) => item.name === PHENOAGE_SKILL)
   const boundary = '模型估计，基于人群数据拟合，不是对你个人的预测，也不是寿命预测。'
-  if (pheno && pheno.entry?.levers_json && recordReadable(context.records) && context.records.profile.age != null) {
+  if (pheno && pheno.entry?.levers_json && recordReadable(context.records) && calculatorIdentity(context.records.profile).age != null) {
     const pairs = pairsFor(pheno, context.records)
     if (pairs.every((pair) => pair.names.length > 0)) {
       const days = await checkupDays(context, pairs)
       const date = days.complete.at(-1)
       if (date) {
         const { targets, problems } = stagedGoals(pheno, goals, reference)
-        const age = ageOn(date, context.today, context.records.profile.age)
+        const age = ageOn(date, context.today, calculatorIdentity(context.records.profile).age as number)
         const current = latestMeasurements(pairs, days.byDate, date)
         const levers = await leversAt(context, pheno, current, age, targets.map((row) => row.staged), date)
         // Show each lever in the units of the person's own report and goal, not the method's.
@@ -712,8 +825,16 @@ async function modelCards(context: TrackingContext, reference: Reference, goals:
                 ? `方案目标没有用于计算：${problems.join(' ')}`
                 : '方案里还没有和九项血检对应的目标值。设定目标（如空腹血糖、超敏 CRP）后，这里会算出达到目标时的表型年龄。',
             measured_on: date,
-            now: { phenoage: numberOrNull(levers.current.phenoage), mortality_10y_pct: numberOrNull(levers.current.mortality_10y_pct), age },
-            goal: target ? { phenoage: target.phenoage ?? null, mortality_10y_pct: target.mortality_10y_pct ?? null, phenoage_delta: target.phenoage_delta ?? null } : null,
+            now: {
+              phenoage: roundPercentPoints(numberOrNull(levers.current.phenoage), 1),
+              mortality_10y_pct: roundPercentPoints(numberOrNull(levers.current.mortality_10y_pct), 2),
+              age,
+            },
+            goal: target ? {
+              phenoage: roundPercentPoints(target.phenoage ?? null, 1),
+              mortality_10y_pct: roundPercentPoints(target.mortality_10y_pct ?? null, 2),
+              phenoage_delta: roundPercentPoints(target.phenoage_delta ?? null, 1),
+            } : null,
             levers: levers.levers.map((row) => ({
               label: row.label_zh,
               ...inTheirUnits(row.key, { from: `${fmt(row.from)} ${row.unit}`, to: `${fmt(row.to)} ${row.unit}` }),
@@ -772,7 +893,7 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
   const base: ModelCard = {
     model: 'china-par', title_zh: '10 年动脉粥样硬化性心血管病风险（China-PAR）', status: 'unavailable', note_zh: '', measured_on: null,
     now: {}, goal: null, missing: [], missing_labs: [], missing_facts: [], levers: [], sensitivity: [],
-    boundary_zh: '模型估计：China-PAR 按中国成人队列建立，给出的是和你条件相同的人群平均风险，不是诊断，也不决定是否用药。',
+    boundary_zh: `模型估计：China-PAR 按中国成人队列建立，给出的是和你条件相同的人群平均风险，不是诊断，也不决定是否用药。${modelRangeNote('china-par', context.records.profile.age) ?? ''}`,
   }
   if (!card || !card.script) {
     base.note_zh = '方法库里没有 China-PAR 方法，请更新 longevity-skills。'
@@ -782,7 +903,8 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
     base.note_zh = '风险模型还没有通过系数校验，暂不显示数值。'
     return base
   }
-  const profile = context.records.profile
+  const who = calculatorIdentity(context.records.profile)
+  const profile = { ...context.records.profile, age: who.age, sex: who.sex }
   const missingFacts: string[] = []
   if (profile.age == null) missingFacts.push('实足年龄')
   // China-PAR has one equation for men and one for women; 'other' or unknown cannot pick one.
@@ -853,6 +975,7 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
     return base
   }
   const target = run.levers.targets as { risk_pct?: number; risk_delta_pct?: number; category?: string } | undefined
+  const rangeNote = modelRangeNote('china-par', profile.age)
   const category = typeof run.levers.current.category === 'string' ? run.levers.current.category
     : typeof run.outputs.risk_category?.value === 'string' ? run.outputs.risk_category.value : ''
   const inTheirUnits = (key: string, fallback: { from: string; to: string }) => {
@@ -871,18 +994,19 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
     const key = marker?.key ?? (codes.includes(SELF_SPEC.waist.loinc) || spec?.label_zh === SELF_SPEC.waist.label_zh ? 'waist' : undefined)
     return { label: row.label_zh, unit: row.unit, years_per_step: (row.per_unit ?? 0) * stepValue, step: `${fmt(stepValue)} ${row.unit}`, ...(key ? { key } : {}) }
   }).filter((row) => Number.isFinite(row.years_per_step)).sort((a, b) => Math.abs(b.years_per_step) - Math.abs(a.years_per_step))
+  const riskNow = roundPercentPoints(numberOrNull(run.levers.current.risk_pct), 1)
   return {
     ...base,
     sensitivity,
     status: target ? 'ok' : 'no_goal',
-    note_zh: target
+    note_zh: `${target
       ? '达到方案目标时的 10 年风险按同一模型计算。'
       : problems.length > 0
         ? `方案目标没有用于计算：${problems.join(' ')}`
-        : '方案里还没有血压、总胆固醇、HDL-C 或腰围的目标。设定后，这里会算出达到目标时的风险。',
+        : '方案里还没有血压、总胆固醇、HDL-C 或腰围的目标。设定后，这里会算出达到目标时的风险。'}${rangeNote ? ` ${rangeNote}` : ''}`,
     measured_on: measuredOn || context.today,
-    now: { risk_pct: numberOrNull(run.levers.current.risk_pct) },
-    goal: target ? { risk_pct: target.risk_pct ?? null, risk_delta_pct: target.risk_delta_pct ?? null } : null,
+    now: { risk_pct: riskNow },
+    goal: target ? { risk_pct: roundPercentPoints(target.risk_pct ?? null, 1), risk_delta_pct: roundPercentPoints(target.risk_delta_pct ?? null, 2) } : null,
     category_zh: { now: category, goal: target?.category ?? null },
     levers: run.levers.levers.map((row) => ({
       label: row.label_zh,

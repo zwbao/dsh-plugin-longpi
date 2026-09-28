@@ -6,9 +6,10 @@ import { readProfile, estimatedAge, type Profile } from './profile.ts'
 import { rememberMedications } from './guardrails.ts'
 import { presentMedications, readStatements } from './meds-stated.ts'
 import { loincCode, summarizeIndicators, summarizeMedications, type IndicatorRow, type MedicationRow } from './situation.ts'
-import { cellNumber, tableOf } from './compact.ts'
+import { parsePrinted, tableOf, type PrintedFlag } from './compact.ts'
 import { readSelf, selfIndicators, selfKeyOf, SELF_ALIASES, SELF_DEVICE_NAMES, SELF_KEYS, SELF_SPEC, SELF_SUFFIX, type SelfKey } from './selfmeasure.ts'
-import { foldName, nameVariants } from './units.ts'
+import { foldName, nameVariants, normalizeUnit } from './units.ts'
+import { checkupMarkerFor, loadReference, type Biovar, type BiovarMarker } from './reference.ts'
 import { loadCatalog, type InputSpec } from './catalog.ts'
 import { indicatorFor, matchesInputName } from './measurements.ts'
 
@@ -111,9 +112,394 @@ async function cached<T>(key: string, load: () => Promise<T>, failed: (value: T)
   return value
 }
 
+let healthMemo: { at: number; origin: string; up: boolean | null } | null = null
+
 /** Forget cached record reads, after a change the next read must see. */
 export function invalidateRecords(): void {
   cache.clear()
+  healthMemo = null
+}
+
+/**
+ * How many indicator reads run at once. A page asks for every series together;
+ * Mirobody then drops some of them (a non-table payload, or a database error
+ * while /api/health still says the service is up). FINDINGS 56.
+ */
+const READ_PARALLEL = 3
+const READ_ATTEMPTS = 3
+let readsActive = 0
+const readQueue: Array<() => void> = []
+
+function withReadSlot<T>(fn: () => Promise<T>): Promise<T> {
+  if (readsActive >= READ_PARALLEL) {
+    return new Promise<T>((resolve, reject) => {
+      readQueue.push(() => { withReadSlot(fn).then(resolve, reject) })
+    })
+  }
+  readsActive += 1
+  return fn().finally(() => {
+    readsActive -= 1
+    const next = readQueue.shift()
+    if (next) next()
+  })
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** A database fault, not a slow query. The test fixture's "database timeout" is not this. */
+const DB_DOWN = /OperationalError|InterfaceError|connection refused|could not connect to server|server closed the connection unexpectedly|too many clients already|the database system is starting up|the database system is shutting down|password authentication failed|remaining connection slots|psycopg|asyncpg/i
+
+const DB_DOWN_HEALTHY_ZH = 'Mirobody 显示服务正常，但数据库没有连上，体检记录暂时读不到。请稍后再试。'
+const DB_DOWN_ZH = 'Mirobody 的数据库没有连上，体检记录暂时读不到。请稍后再试。'
+const AUTH_ZH = 'Mirobody 没有认出这次登录，请在设置里重新连接体检记录。'
+
+function isDbDown(text: string): boolean {
+  return DB_DOWN.test(text)
+}
+
+function isAuthBlob(payload: unknown): boolean {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return false
+  const record = payload as Record<string, unknown>
+  if (typeof record.authorization_url === 'string') return true
+  const message = typeof record.message === 'string' ? record.message : ''
+  return /oauth/i.test(message)
+}
+
+/** /api/health does not look at the database. True means the process answered, not that reads work. */
+async function serviceLooksHealthy(mcpUrl: string, timeoutMs: number): Promise<boolean | null> {
+  let origin = ''
+  try {
+    origin = new URL(mcpUrl).origin
+  } catch {
+    return null
+  }
+  const now = Date.now()
+  if (healthMemo && healthMemo.origin === origin && now - healthMemo.at < 15_000) return healthMemo.up
+  let up: boolean | null = null
+  try {
+    const response = await fetch(`${origin}/api/health`, { signal: AbortSignal.timeout(Math.min(timeoutMs, 4000)) })
+    if (!response.ok) up = false
+    else {
+      const body = await response.json() as { service?: unknown; version?: unknown }
+      up = Boolean(body && (typeof body.service === 'string' || typeof body.version === 'string'))
+    }
+  } catch {
+    up = null
+  }
+  healthMemo = { at: now, origin, up }
+  return up
+}
+
+interface ToolRead {
+  payload: unknown | null
+  error: string
+  kind: 'ok' | 'denied' | 'db' | 'auth' | 'not_table' | 'unavailable' | 'internal'
+}
+
+/** One tool call, retried when the answer is a transient failure rather than a table. */
+async function readTool(config: Config, name: string, args: Record<string, unknown>, secrets: readonly string[]): Promise<ToolRead> {
+  let lastError = 'read failed'
+  let lastKind: ToolRead['kind'] = 'internal'
+  for (let attempt = 1; attempt <= READ_ATTEMPTS; attempt += 1) {
+    const call = await withReadSlot(() => callMcpTool({
+      url: config.mcpUrl,
+      token: config.mcpToken,
+      name,
+      args,
+      timeoutMs: config.timeoutMs,
+    }))
+    if (call.success === false) {
+      lastError = redact(call.error || 'read failed', secrets)
+      lastKind = call.error_kind === 'denied' ? 'denied' : call.error_kind === 'unavailable' ? 'unavailable' : 'internal'
+      if (isDbDown(lastError)) lastKind = 'db'
+      if (lastKind === 'denied' || attempt === READ_ATTEMPTS) break
+      await delay(25 * attempt)
+      continue
+    }
+    const payload = payloadOf(call)
+    if (tableOf(payload)) return { payload, error: '', kind: 'ok' }
+    if (isAuthBlob(payload)) {
+      lastError = AUTH_ZH
+      lastKind = 'auth'
+      if (attempt === READ_ATTEMPTS) break
+      await delay(25 * attempt)
+      continue
+    }
+    lastError = '返回的不是指标表'
+    lastKind = 'not_table'
+    if (attempt === READ_ATTEMPTS) break
+    await delay(25 * attempt)
+  }
+  if (lastKind === 'db') {
+    const healthy = await serviceLooksHealthy(config.mcpUrl, config.timeoutMs)
+    lastError = healthy === true ? DB_DOWN_HEALTHY_ZH : DB_DOWN_ZH
+  }
+  return { payload: null, error: lastError, kind: lastKind }
+}
+
+function formatMeasured(value: number): string {
+  if (!Number.isFinite(value)) return ''
+  const text = Number(value.toPrecision(12)).toString()
+  return text === '-0' ? '0' : text
+}
+
+/** Arrow flags become a number plus a flag. Inequalities and 阴性 stay text, with the flag beside them. */
+function presentIndicator(row: IndicatorRow): IndicatorRow {
+  const parsed = parsePrinted(row.value)
+  const next: IndicatorRow = { ...row }
+  if (parsed.value != null && parsed.flag) {
+    next.value = formatMeasured(parsed.value)
+    Object.assign(next, { flag: parsed.flag, printed: parsed.printed ?? row.value })
+  } else if (parsed.qualitative) {
+    next.value = parsed.qualitative
+    Object.assign(next, { flag: parsed.flag, ...(parsed.printed ? { printed: parsed.printed } : {}) })
+  } else if (parsed.bound != null && parsed.comparator) {
+    Object.assign(next, { flag: parsed.flag, printed: parsed.printed ?? row.value, bound: parsed.bound, comparator: parsed.comparator })
+  }
+  return next
+}
+
+/** hs-CRP and conventional CRP share one variation row and must not become one series. */
+const SPLIT_LOINC = new Set(['30522-7', '1988-5'])
+
+/** The code whose unit is the marker's unit, when the marker lists more than one. */
+const CANONICAL_LOINC: Record<string, string> = {
+  creatinine: '14682-9',
+  glucose: '14771-0',
+  tc: '2093-3',
+  ldl: '13457-7',
+  hdl: '2085-9',
+  tg: '2571-8',
+  wbc: '6690-2',
+  hb: '718-7',
+  hct: '4544-3',
+  mchc: '786-4',
+}
+
+/** Converted values outside this window are a wrong unit, not a different lab. Left as printed. */
+const PLAUSIBLE: Record<string, [number, number]> = {
+  creatinine: [15, 2000],
+  glucose: [1, 40],
+  tc: [0.5, 20],
+  ldl: [0.2, 15],
+  hdl: [0.1, 5],
+  tg: [0.05, 30],
+  hb: [30, 250],
+  hct: [0.1, 0.75],
+  mchc: [200, 450],
+  wbc: [0.1, 200],
+  crp: [0, 500],
+  vitd: [1, 250],
+}
+
+/** Same analyte, different printed name, and Mirobody left it uncoded (or used 30385-9 for RDW-CV). */
+const LOCAL_ANALYTES: ReadonlyArray<{ key: string; label_zh: string; loinc: string; names: string[] }> = [
+  { key: 'rdw_cv', label_zh: '红细胞分布宽度', loinc: '788-0', names: ['rdw-cv', 'rdwcv', 'rdw', '红细胞分布宽度', '红细胞分布宽度-变异系数'] },
+  { key: 'waist', label_zh: '腰围', loinc: '', names: ['腰围', '腹围'] },
+]
+
+const RDW_EQUIV = '30385-9'
+
+function isDeviceHandle(name: string): boolean {
+  return /^[a-z]+(?:[A-Z][a-z0-9]*)+$/.test(name)
+}
+
+function urineCreatinine(name: string): boolean {
+  return /尿/.test(name) && /肌酐|creatinine|crea/i.test(name) && !/尿酸/.test(name)
+}
+
+function stripSpecimen(text: string): string {
+  return text.replace(/血清|血浆/g, '').replace(/^血(?!红|压|糖)/, '')
+}
+
+function localFor(name: string): (typeof LOCAL_ANALYTES)[number] | null {
+  if (/标准差|rdw-sd|rdwsd/i.test(name)) return null
+  const folded = foldName(name)
+  const stripped = foldName(name.replace(/-?变异系数/g, '').replace(/-?cv$/i, ''))
+  for (const item of LOCAL_ANALYTES) {
+    if (item.names.some((alias) => {
+      const key = foldName(alias)
+      return key === folded || key === stripped
+    })) return item
+  }
+  return null
+}
+
+/** CRP names stay on their own code. Anything else returns null. */
+function splitAssay(name: string, loinc: string | undefined): string | null {
+  if (loinc && SPLIT_LOINC.has(loinc)) return loinc
+  const folded = foldName(name)
+  if (!folded.includes('crp') && !folded.includes('c反应蛋白')) return null
+  if (folded.includes('超敏') || folded.includes('hs')) return '30522-7'
+  return '1988-5'
+}
+
+/** Codes Mirobody assigns that are the same analyte as a variation-table marker but are not on its list. */
+const LOINC_EQUIV_KEY: Record<string, string> = {
+  '22748-8': 'ldl',
+}
+
+function markerForReading(biovar: Biovar, row: Pick<IndicatorRow, 'name' | 'label' | 'loinc'>): BiovarMarker | null {
+  if (isDeviceHandle(row.name) && !row.loinc) return null
+  if (urineCreatinine(row.name) || urineCreatinine(row.label ?? '')) return null
+  // A code the marker does not list is a different measurement (urine glucose, urine creatinine).
+  // Only an explicit equivalence, or no code at all, may join on the name.
+  const equiv = row.loinc ? LOINC_EQUIV_KEY[row.loinc] : undefined
+  if (equiv) {
+    return biovar.markers.find((item) => item.key === equiv) ?? null
+  }
+  const named = [row, { name: stripSpecimen(row.name), label: stripSpecimen(row.label ?? ''), loinc: row.loinc }]
+  for (const item of named) {
+    const hit = checkupMarkerFor(biovar, item)
+    if (hit) return hit
+  }
+  return null
+}
+
+function groupOfRow(row: IndicatorRow, biovar: Biovar): string {
+  if (row.source === 'self' || (isDeviceHandle(row.name) && !row.loinc)) return `keep:${row.name.toLowerCase()}`
+  if (urineCreatinine(row.name) || urineCreatinine(row.label ?? '')) return `keep:${foldName(row.name)}`
+  const local = !row.loinc || row.loinc === RDW_EQUIV ? localFor(row.label || row.name) : null
+  if (local) return local.loinc ? `loinc:${local.loinc}` : `local:${local.key}`
+  const assay = splitAssay(row.label || row.name, row.loinc)
+  if (assay) return `assay:${assay}`
+  const marker = markerForReading(biovar, row)
+  if (marker && marker.key !== 'crp') return `marker:${marker.key}`
+  if (row.loinc) return `loinc:${row.loinc}`
+  return `name:${foldName(row.label || row.name)}`
+}
+
+function stampLabel(row: IndicatorRow, label: string): void {
+  if (!label) return
+  const current = row.label ?? ''
+  if (current === label) return
+  Object.assign(row, { ...(current ? { label_original: current } : {}), label })
+}
+
+function convertTo(value: number, unit: string, marker: BiovarMarker): number | null {
+  const given = normalizeUnit(unit)
+  const target = normalizeUnit(marker.unit)
+  if (!given || !target) return null
+  if (given === target) return value
+  for (const [name, factor] of Object.entries(marker.convert ?? {})) {
+    if (normalizeUnit(name) === given && typeof factor === 'number') return value * factor
+  }
+  return null
+}
+
+function plausible(key: string, value: number): boolean {
+  const range = PLAUSIBLE[key]
+  if (!range) return true
+  return value >= range[0] && value <= range[1]
+}
+
+function rememberOriginal(row: IndicatorRow, fields: { value?: boolean; unit?: boolean; loinc?: boolean }): void {
+  const extra = row as IndicatorRow & { value_original?: string; unit_original?: string; loinc_original?: string }
+  if (fields.value && extra.value_original == null) extra.value_original = row.value
+  if (fields.unit && extra.unit_original == null) extra.unit_original = row.unit
+  if (fields.loinc && row.loinc && extra.loinc_original == null) extra.loinc_original = row.loinc
+}
+
+function setCode(row: IndicatorRow, code: string): void {
+  if (!code || row.loinc === code) return
+  rememberOriginal(row, { loinc: true })
+  row.loinc = code
+}
+
+/**
+ * One catalogue row per analyte. Different Chinese names, LOINC codes and units
+ * of the same marker share a code and a unit; each row keeps its Mirobody name
+ * and the value as it was printed. hs-CRP is not merged with conventional CRP.
+ * A conversion that lands outside a loose human range is left alone.
+ */
+function reconcileIndicators(rows: readonly IndicatorRow[], skillsHome: string): IndicatorRow[] {
+  const presented = rows.map(presentIndicator)
+  const home = skillsHome.trim()
+  if (!home) return presented
+  let biovar: Biovar
+  try {
+    const reference = loadReference(home)
+    if (reference.error || reference.biovar.markers.length === 0) return presented
+    biovar = reference.biovar
+  } catch {
+    return presented
+  }
+  const groups = new Map<string, IndicatorRow[]>()
+  for (const row of presented) {
+    const key = groupOfRow(row, biovar)
+    const list = groups.get(key) ?? []
+    list.push(row)
+    groups.set(key, list)
+  }
+  for (const [key, group] of groups) reconcileGroup(key, group, biovar)
+  return presented
+}
+
+function reconcileGroup(key: string, group: IndicatorRow[], biovar: Biovar): void {
+  if (key.startsWith('keep:') || group.length === 0) return
+  const sample = group[0]
+  if (!sample) return
+  const local = localAnalyteForKey(key, sample, biovar)
+  if (local) {
+    for (const row of group) {
+      // 30385-9 is the same RDW-CV ratio as 788-0; PhenoAge lists only 788-0.
+      if (local.loinc && (!row.loinc || row.loinc === '30385-9')) setCode(row, local.loinc)
+      stampLabel(row, local.label_zh)
+      Object.assign(row, { series_key: local.key })
+    }
+    return
+  }
+  if (key.startsWith('assay:')) {
+    const code = key.slice('assay:'.length)
+    for (const row of group) {
+      if (!row.loinc) setCode(row, code)
+      Object.assign(row, { series_key: code === '30522-7' ? 'hscrp' : 'crp' })
+    }
+    return
+  }
+  const marker = markerForReading(biovar, sample)
+  if (!marker || marker.key === 'crp') return
+  for (const row of group) Object.assign(row, { series_key: marker.key })
+  // A lone code stays as Mirobody stored it. Two codes, or a coded row and an
+  // uncoded alias, become one code in the marker's unit.
+  if (group.length < 2) return
+  const codes = new Set(group.map((row) => row.loinc).filter((code): code is string => Boolean(code)))
+  if (codes.size < 2 && group.every((row) => row.loinc)) return
+  const listed = CANONICAL_LOINC[marker.key]
+  const canonical = listed && marker.loinc.includes(listed) ? listed : (marker.loinc[0] ?? '')
+  for (const row of group) {
+    const numeric = parsePrinted(row.value).value
+    if (numeric == null || !normalizeUnit(row.unit)) {
+      if (canonical && !row.loinc) setCode(row, canonical)
+      stampLabel(row, marker.label_zh)
+      continue
+    }
+    const converted = convertTo(numeric, row.unit, marker)
+    if (converted == null) continue
+    if (!plausible(marker.key, converted)) {
+      Object.assign(row, { unit_suspect: true })
+      continue
+    }
+    if (normalizeUnit(row.unit) !== normalizeUnit(marker.unit)) {
+      rememberOriginal(row, { value: true, unit: true })
+      row.value = formatMeasured(converted)
+      row.unit = marker.unit
+    }
+    if (canonical) setCode(row, canonical)
+    stampLabel(row, marker.label_zh)
+  }
+}
+
+/** A local alias group, and not a code that already belongs to a variation-table marker. */
+function localAnalyteForKey(key: string, sample: IndicatorRow, biovar: Biovar): (typeof LOCAL_ANALYTES)[number] | null {
+  if (!localFor(sample.label || sample.name) && !localFor(sample.name)) return null
+  if (key.startsWith('local:')) return LOCAL_ANALYTES.find((item) => item.key === key.slice('local:'.length)) ?? null
+  if (!key.startsWith('loinc:')) return null
+  const code = key.slice('loinc:'.length)
+  if (biovar.markers.some((item) => item.loinc.includes(code))) return null
+  return LOCAL_ANALYTES.find((item) => item.loinc === code) ?? null
 }
 
 export async function loadRecords(config: Config, dataDir: string, pluginHome: string): Promise<RecordSnapshot> {
@@ -183,28 +569,23 @@ async function loadRemote(config: Config, pluginHome: string): Promise<Remote> {
   if (!configured) return snapshot
 
   const secrets = [config.mcpToken, config.mcpUrl]
-  const catalogue = await callMcpTool({
-    url: config.mcpUrl,
-    token: config.mcpToken,
-    name: 'query_health_indicators',
-    args: memberArgs(config.member),
-    timeoutMs: config.timeoutMs,
-  })
-  if (catalogue.success === false) {
+  const catalogue = await readTool(config, 'query_health_indicators', memberArgs(config.member), secrets)
+  if (catalogue.kind !== 'ok') {
     snapshot.record_status = 'error'
-    snapshot.record_error = redact(catalogue.error || 'record read failed', secrets)
+    snapshot.record_error = catalogue.error
     return snapshot
   }
-  const table = tableOf(payloadOf(catalogue))
+  const cataloguePayload = catalogue.payload
+  const table = tableOf(cataloguePayload)
   if (table?.error) {
     snapshot.record_status = 'error'
     snapshot.record_error = redact(`${table.error.kind}: ${table.error.message}`, secrets)
     return snapshot
   }
-  const listed = summarizeIndicators(payloadOf(catalogue), MAX_INDICATORS + 1)
+  const listed = summarizeIndicators(cataloguePayload, MAX_INDICATORS + 1)
   snapshot.indicators = listed.slice(0, MAX_INDICATORS)
   // Mirobody cannot page its catalogue (no offset or cursor), so a cut catalogue is read as far as it goes and said so.
-  const cut = catalogueCut(payloadOf(catalogue), table, listed.length)
+  const cut = catalogueCut(cataloguePayload, table, listed.length)
   if (cut) {
     snapshot.catalog_truncated = true
     snapshot.read_errors.push(cut)
@@ -215,19 +596,13 @@ async function loadRemote(config: Config, pluginHome: string): Promise<Remote> {
     const unread: string[] = []
     for (let start = 0; start < names.length; start += LATEST_CHUNK) {
       const chunk = names.slice(start, start + LATEST_CHUNK)
-      const latest = await callMcpTool({
-        url: config.mcpUrl,
-        token: config.mcpToken,
-        name: 'query_health_indicators',
-        args: { ...memberArgs(config.member), indicators: chunk, aggregate: 'latest' },
-        timeoutMs: config.timeoutMs,
-      })
-      const problem = latest.success === false ? latest.error || 'read failed' : batchProblem(payloadOf(latest))
+      const latest = await readTool(config, 'query_health_indicators', { ...memberArgs(config.member), indicators: chunk, aggregate: 'latest' }, secrets)
+      const problem = latest.kind === 'ok' ? batchProblem(latest.payload) : latest.error
       if (problem) {
-        snapshot.read_errors.push(`${chunk.length} 项指标的最新值读取失败：${redact(problem, secrets)}`)
+        snapshot.read_errors.push(`${chunk.length} 项指标的最新值读取失败：${problem}`)
         unread.push(...chunk)
         // Mirobody is down or refuses this account: the other batches would fail the same way, each after a timeout.
-        if (latest.success === false && (latest.error_kind === 'unavailable' || latest.error_kind === 'denied')) {
+        if (latest.kind === 'unavailable' || latest.kind === 'denied' || latest.kind === 'db' || latest.kind === 'auth') {
           unread.push(...names.slice(start + LATEST_CHUNK))
           if (start + LATEST_CHUNK < names.length) snapshot.read_errors.push(`其余 ${names.length - start - LATEST_CHUNK} 项没有再读。`)
           break
@@ -235,7 +610,7 @@ async function loadRemote(config: Config, pluginHome: string): Promise<Remote> {
         continue
       }
       const got = new Set<string>()
-      for (const row of summarizeIndicators(payloadOf(latest), MAX_INDICATORS)) {
+      for (const row of summarizeIndicators(latest.payload, MAX_INDICATORS)) {
         got.add(row.name.toLowerCase())
         if (row.value) filled.set(row.name.toLowerCase(), row)
       }
@@ -259,18 +634,13 @@ async function loadRemote(config: Config, pluginHome: string): Promise<Remote> {
     snapshot.missing_reads = [...new Set(unread)]
   }
   if (snapshot.catalog_truncated) await supplementCutCatalog(config, snapshot, secrets)
-  const meds = await callMcpTool({
-    url: config.mcpUrl,
-    token: config.mcpToken,
-    name: 'query_medications',
-    args: { ...memberArgs(config.member), view: 'plan' },
-    timeoutMs: config.timeoutMs,
-  })
-  const medsProblem = meds.success === false ? meds.error || 'medication read failed' : tableOf(payloadOf(meds))?.error?.message ?? ''
+  snapshot.indicators = reconcileIndicators(snapshot.indicators, config.skillsHome ?? '')
+  const meds = await readTool(config, 'query_medications', { ...memberArgs(config.member), view: 'plan' }, secrets)
+  const medsProblem = meds.kind === 'ok' ? tableOf(meds.payload)?.error?.message ?? '' : meds.error
   if (medsProblem) {
-    snapshot.read_errors.push(`用药计划读取失败：${redact(medsProblem, secrets)}`)
+    snapshot.read_errors.push(`用药计划读取失败：${medsProblem}`)
   } else {
-    snapshot.medications = summarizeMedications(payloadOf(meds))
+    snapshot.medications = summarizeMedications(meds.payload)
     rememberMedications(snapshot.medications.map((item) => item.name))
   }
   if (snapshot.read_errors.length > 0) {
@@ -387,20 +757,14 @@ async function supplementCutCatalog(config: Config, snapshot: Remote, secrets: s
   for (let start = 0; start < selectors.length; start += LATEST_CHUNK) {
     const chunk = selectors.slice(start, start + LATEST_CHUNK)
     const names = [...new Set(chunk.map((item) => item.selector))]
-    const latest = await callMcpTool({
-      url: config.mcpUrl,
-      token: config.mcpToken,
-      name: 'query_health_indicators',
-      args: { ...memberArgs(config.member), indicators: names, aggregate: 'latest' },
-      timeoutMs: config.timeoutMs,
-    })
-    if (latest.success === false) {
-      snapshot.read_errors.push(`${names.length} 项模型指标的最新值读取失败：${redact(latest.error || 'read failed', secrets)}`)
+    const latest = await readTool(config, 'query_health_indicators', { ...memberArgs(config.member), indicators: names, aggregate: 'latest' }, secrets)
+    if (latest.kind !== 'ok') {
+      snapshot.read_errors.push(`${names.length} 项模型指标的最新值读取失败：${latest.error}`)
       for (const item of chunk) failed.add(item.key)
-      if (latest.error_kind === 'unavailable' || latest.error_kind === 'denied') break
+      if (latest.kind === 'unavailable' || latest.kind === 'denied' || latest.kind === 'db' || latest.kind === 'auth') break
       continue
     }
-    const payload = payloadOf(latest)
+    const payload = latest.payload
     if (lookupAbsent(payload)) continue
     const problem = batchProblem(payload)
     if (problem) {
@@ -413,18 +777,12 @@ async function supplementCutCatalog(config: Config, snapshot: Remote, secrets: s
   const still = specs.filter((spec) => !failed.has(spec.key) && !indicatorFor(spec, snapshot.indicators))
   const labels = [...new Set(still.map((spec) => spec.label_zh).filter(Boolean))].slice(0, 20)
   if (labels.length > 0) {
-    const call = await callMcpTool({
-      url: config.mcpUrl,
-      token: config.mcpToken,
-      name: 'query_health_indicators',
-      args: { ...memberArgs(config.member), keywords: labels, aggregate: 'latest' },
-      timeoutMs: config.timeoutMs,
-    })
-    if (call.success === false) {
-      snapshot.read_errors.push(`模型指标按名称读取失败：${redact(call.error || 'read failed', secrets)}`)
+    const call = await readTool(config, 'query_health_indicators', { ...memberArgs(config.member), keywords: labels, aggregate: 'latest' }, secrets)
+    if (call.kind !== 'ok') {
+      snapshot.read_errors.push(`模型指标按名称读取失败：${call.error}`)
       for (const spec of still) failed.add(spec.key)
     } else {
-      const payload = payloadOf(call)
+      const payload = call.payload
       if (!lookupAbsent(payload) && !batchProblem(payload)) {
         const rows = summarizeIndicators(payload, MAX_INDICATORS).filter((row) => still.some((spec) => rowMatchesSpec(spec, row)))
         mergeFound(snapshot, rows)
@@ -445,12 +803,42 @@ function batchProblem(payload: unknown): string {
   return ''
 }
 
+/** Where one plotted point came from. The point's value is the number; this keeps the printed cell and the lab. */
+export interface ReadingProvenance {
+  indicator: string
+  label?: string
+  loinc?: string
+  unit: string
+  value: number
+  printed?: string
+  flag?: PrintedFlag
+  file?: string
+  /** Hospital or source named in the file handle (lp:checkup:date:lab). */
+  lab?: string
+  /** Other files that carried the same value at the same time (a page uploaded twice). */
+  files?: string[]
+}
+
 export interface SeriesPoint {
   date: string
   time: string
   value: number
   unit: string
   file?: string
+  flag?: PrintedFlag
+  printed?: string
+  provenance?: ReadingProvenance
+}
+
+/** A result that is not a measurement: "<0.5", "阴性(-)". Kept, never plotted as the bound. */
+export interface OtherReading {
+  date: string
+  time: string
+  text: string
+  flag: PrintedFlag | null
+  unit: string
+  file?: string
+  lab?: string
 }
 
 export interface Series {
@@ -459,6 +847,7 @@ export interface Series {
   loinc?: string
   unit: string
   points: SeriesPoint[]
+  other?: OtherReading[]
 }
 
 export interface SeriesResult {
@@ -494,10 +883,10 @@ function filedRow(row: Record<string, string>, asked: readonly string[], claimUn
 /**
  * Dated values of named indicators, oldest first. resolution raw returns every
  * reading (labs); day returns one daily value per indicator (wearables; Mirobody's
- * elected day, or the newest reading of that civil day). Values that are not
- * numbers ("Positive", "<0.5") are left out, never guessed. A batch that fails
- * does not stop the others (unless Mirobody is down or refuses the account);
- * its names are listed in failed.
+ * elected day, or the newest reading of that civil day). "5.48 ↑" and "120↓"
+ * are the number plus a flag. "<0.5" and "阴性(-)" are kept on `other` and are
+ * not plotted as the bound. A batch that fails is tried again, then named;
+ * a database or login failure stops the remaining batches.
  *
  * A day read asks for one indicator at a time. Mirobody 1.5.0 and 1.5.1 select
  * `display` for a day bucket and not the printed name, and an uncoded series
@@ -536,17 +925,17 @@ export async function loadSeries(
         aggregate: 'none',
       }
       if (options.resolution === 'raw') args.limit = RAW_LIMIT
-      const call = await callMcpTool({ url: config.mcpUrl, token: config.mcpToken, name: 'query_health_indicators', args, timeoutMs: config.timeoutMs })
-      if (call.success === false) {
+      const call = await readTool(config, 'query_health_indicators', args, secrets)
+      if (call.kind !== 'ok') {
         fail(chunk, call.error || 'series read failed')
         // Down or refused: the other batches would fail the same way, each after a timeout.
-        if (call.error_kind === 'unavailable' || call.error_kind === 'denied') {
+        if (call.kind === 'unavailable' || call.kind === 'denied' || call.kind === 'db' || call.kind === 'auth') {
           out.failed.push(...wanted.slice(start + chunkSize))
           break
         }
         continue
       }
-      const payload = payloadOf(call)
+      const payload = call.payload
       const table = tableOf(payload)
       if (!table) {
         fail(chunk, '返回的不是指标表')
@@ -572,14 +961,52 @@ export async function loadSeries(
       }
       for (const row of [...rows.values()].flat()) {
         const indicator = (row.indicator ?? '').trim()
-        const value = cellNumber(options.resolution === 'raw' ? row.value : row.avg)
+        const cell = options.resolution === 'raw' ? row.value : row.avg
+        const parsed = parsePrinted(cell)
         const date = options.resolution === 'raw' ? (row.date || (row.time ?? '').slice(0, 10)) : (row.period ?? '').slice(0, 10)
-        if (value == null || !/^\d{4}-\d{2}-\d{2}$/.test(date)) continue
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue
         const series = out.series[indicator] ?? (out.series[indicator] = { indicator, unit: (row.unit ?? '').trim(), points: [] })
         if (row.name && row.name !== indicator && !series.label) series.label = row.name
         const code = loincCode(row.system, row.code)
         if (code && !series.loinc) series.loinc = code
-        series.points.push({ date, time: row.time ?? date, value, unit: (row.unit ?? series.unit).trim(), ...(row.file ? { file: row.file } : {}) })
+        const file = (row.file ?? '').trim()
+        const lab = labOf(file)
+        const unit = (row.unit ?? series.unit).trim()
+        if (parsed.value != null) {
+          addPoint(series, {
+            date,
+            time: row.time ?? date,
+            value: parsed.value,
+            unit,
+            ...(file ? { file } : {}),
+            ...(parsed.flag ? { flag: parsed.flag } : {}),
+            ...(parsed.printed ? { printed: parsed.printed } : {}),
+            provenance: {
+              indicator,
+              ...(row.name && row.name !== indicator ? { label: row.name } : {}),
+              ...(code ? { loinc: code } : {}),
+              unit,
+              value: parsed.value,
+              ...(parsed.printed ? { printed: parsed.printed } : {}),
+              ...(parsed.flag ? { flag: parsed.flag } : {}),
+              ...(file ? { file } : {}),
+              ...(lab ? { lab } : {}),
+            },
+          })
+          continue
+        }
+        if (parsed.qualitative || parsed.bound != null) {
+          const list = series.other ?? (series.other = [])
+          list.push({
+            date,
+            time: row.time ?? date,
+            text: parsed.printed ?? parsed.qualitative ?? (cell ?? ''),
+            flag: parsed.flag,
+            unit,
+            ...(file ? { file } : {}),
+            ...(lab ? { lab } : {}),
+          })
+        }
       }
       // Cut: a series still full after its older readings were read again, or a table Mirobody marked cut (by its
       // limit or its text cap) with no series to pin it on.
@@ -593,6 +1020,32 @@ export async function loadSeries(
     for (const series of Object.values(out.series)) series.points.sort((a, b) => a.time.localeCompare(b.time))
     return out
   }, (value) => value.failed.length > 0)
+}
+
+function labOf(file: string): string {
+  const parts = file.split(':')
+  if (parts[0] === 'lp' && parts.length >= 4) return parts.slice(3).join(':')
+  return ''
+}
+
+/** Same instant, same number, two uploads: one point, both files. */
+function addPoint(series: Series, point: SeriesPoint): void {
+  const same = series.points.find((item) => item.time === point.time && item.value === point.value && item.unit === point.unit)
+  if (!same) {
+    series.points.push(point)
+    return
+  }
+  if (!point.file || !same.file || point.file === same.file) return
+  const provenance = same.provenance ?? {
+    indicator: series.indicator,
+    unit: same.unit,
+    value: same.value,
+    file: same.file,
+  }
+  same.provenance = provenance
+  const files = provenance.files ?? [same.file]
+  if (!files.includes(point.file)) files.push(point.file)
+  provenance.files = files
 }
 
 function rowDate(row: Record<string, string>): string {
@@ -622,9 +1075,9 @@ async function readOlder(
     if (!oldest || dates.at(-1) === oldest) return null
     kept.push(...page.filter((row) => rowDate(row) > oldest))
     const args = { ...memberArgs(config.member), indicators: [name], start: options.start, end: oldest, resolution: 'raw', aggregate: 'none', limit: RAW_LIMIT }
-    const call = await callMcpTool({ url: config.mcpUrl, token: config.mcpToken, name: 'query_health_indicators', args, timeoutMs: config.timeoutMs })
-    if (call.success === false) return null
-    const table = tableOf(payloadOf(call))
+    const call = await readTool(config, 'query_health_indicators', args, [config.mcpToken, config.mcpUrl])
+    if (call.kind !== 'ok') return null
+    const table = tableOf(call.payload)
     if (!table || table.error) return null
     const next = table.rows.filter((row) => (row.indicator ?? '').trim() === name && rowDate(row) <= oldest)
     if (next.length < RAW_LIMIT) {
@@ -671,15 +1124,9 @@ export async function loadDoseLog(config: Config, medication: string, start: str
     let from = start
     while (from <= end) {
       const to = [addDays(from, LOG_WINDOW_DAYS - 1), end].sort()[0] ?? end
-      const call = await callMcpTool({
-        url: config.mcpUrl,
-        token: config.mcpToken,
-        name: 'query_medications',
-        args: { ...memberArgs(config.member), view: 'log', keywords: [medication], start: from, end: to },
-        timeoutMs: config.timeoutMs,
-      })
-      if (call.success === false) return { rows, error: redact(call.error || 'dose log read failed', [config.mcpToken, config.mcpUrl]) }
-      const table = tableOf(payloadOf(call))
+      const call = await readTool(config, 'query_medications', { ...memberArgs(config.member), view: 'log', keywords: [medication], start: from, end: to }, [config.mcpToken, config.mcpUrl])
+      if (call.kind !== 'ok') return { rows, error: call.error || 'dose log read failed' }
+      const table = tableOf(call.payload)
       if (table?.error) return { rows, error: `${table.error.kind}: ${table.error.message}` }
       for (const row of table?.rows ?? []) {
         if (!row.date || !row.medication) continue
@@ -695,15 +1142,9 @@ export async function loadDoseLog(config: Config, medication: string, start: str
 export async function loadCourses(config: Config): Promise<{ rows: CourseRow[]; error?: string }> {
   if (!config.mcpUrl.trim()) return { rows: [], error: 'mcpUrl is not set' }
   return cached(cacheKey(config, 'courses'), async () => {
-    const call = await callMcpTool({
-      url: config.mcpUrl,
-      token: config.mcpToken,
-      name: 'query_medications',
-      args: { ...memberArgs(config.member), view: 'history' },
-      timeoutMs: config.timeoutMs,
-    })
-    if (call.success === false) return { rows: [], error: redact(call.error || 'course history read failed', [config.mcpToken, config.mcpUrl]) }
-    const table = tableOf(payloadOf(call))
+    const call = await readTool(config, 'query_medications', { ...memberArgs(config.member), view: 'history' }, [config.mcpToken, config.mcpUrl])
+    if (call.kind !== 'ok') return { rows: [], error: call.error || 'course history read failed' }
+    const table = tableOf(call.payload)
     if (table?.error) return { rows: [], error: `${table.error.kind}: ${table.error.message}` }
     return {
       rows: (table?.rows ?? []).filter((row) => row.medication).map((row) => ({

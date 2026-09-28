@@ -17,10 +17,11 @@ import { connectionKey } from './connection.ts'
 import { resolveMarkers } from './evaluate.ts'
 import { GROUP_KEYS, GROUP_ZH, groupOf, type GroupKey } from './groups.ts'
 import { addDays, currentPlan } from './interventions.ts'
+import { codedRecords, compareGate, judgeSeries } from './honesty/comparability.ts'
 import { loadSeries, type RecordSnapshot, type SeriesPoint, type SeriesResult } from './records.ts'
 import { checkupMarkerFor, expandMarkerNames, loadReference, markerFor, rcvBand, type BiovarMarker } from './reference.ts'
 import { readSelf, selfSeries, SELF_DEVICE_NAMES, SELF_KEYS, SELF_SPEC, SELF_SUFFIX, type SelfKey, type SelfRow } from './selfmeasure.ts'
-import type { IndicatorRow } from './situation.ts'
+import { currentMedications, GLUCOSE_LOWERING, type IndicatorRow } from './situation.ts'
 import { trackingGeneration } from './tracking.ts'
 import { foldName, normalizeUnit, parseNumber } from './units.ts'
 
@@ -53,6 +54,10 @@ export interface IndicatorEntry {
   plan_marker: boolean
   /** The series read failed or timed out: show this, never "no data". */
   read_error?: string
+  /** Set when the last two draws are too close, or from different institutions. Not 波动内. */
+  gate?: 'too_early' | 'not_comparable'
+  /** The 太早 or 不可比 sentence. The indicators page shows it next to the chip. */
+  reason_zh?: string
 }
 
 export interface IndicatorsResponse {
@@ -305,7 +310,8 @@ function bandPct(marker: BiovarMarker, z: number): { up: number; down: number } 
 }
 
 function changeOf(change: RecordChange): IndicatorChange {
-  return { verdict: change.verdict, ask_doctor: change.ask_doctor, pct: change.compare.pct, band_pct: { ...change.band_pct }, text_zh: change.text_zh }
+  const text = change.verdict === 'worse' && !change.text_zh.includes('反向') ? `${change.text_zh}（反向）` : change.text_zh
+  return { verdict: change.verdict, ask_doctor: change.ask_doctor, pct: change.compare.pct, band_pct: { ...change.band_pct }, text_zh: text }
 }
 
 /** Plan markers, goals and wearable targets of the current plan, as the rows they point at. */
@@ -361,10 +367,11 @@ async function build(context: IndicatorsContext): Promise<Built> {
       .catch((error: unknown) => ({ series: {}, truncated: false, error: error instanceof Error ? error.message : 'series read failed' }) as SeriesResult)
       .then((result) => { read.result = result })),
     readable
-      ? buildChanges({ config: context.config, skillsHome: context.skillsHome, records, today }).then((result) => { changes = result.changes }, () => undefined)
+      ? buildChanges({ config: context.config, skillsHome: context.skillsHome, records: codedRecords(records, reference.biovar), today }).then((result) => { changes = result.changes }, () => undefined)
       : Promise.resolve(),
   ]
   await deadline(Promise.all(work), context.budgetMs ?? BUDGET_MS)
+  const glucoseTreated = records.profile.risk.diabetes === true || currentMedications(records.medications).some((name) => GLUCOSE_LOWERING.test(name))
   const isPlanMarker = planMatcher(context, markers)
   const details = new Map<string, Omit<IndicatorDetail, 'row'>>()
   const rows: Array<IndicatorEntry & { group: GroupKey }> = []
@@ -386,6 +393,8 @@ async function build(context: IndicatorsContext): Promise<Built> {
     let latest: IndicatorEntry['latest'] = null
     let judged: IndicatorEntry['judged'] = 'unjudged'
     let change: IndicatorChange | null = null
+    let gate: IndicatorEntry['gate']
+    let reason: string | undefined
     let allPoints: IndicatorDetail['all_points'] = []
     let biovar: IndicatorDetail['biovar']
 
@@ -409,12 +418,28 @@ async function build(context: IndicatorsContext): Promise<Built> {
           ...(marker.caveat_zh ? { caveat_zh: marker.caveat_zh } : {}),
         }
         const judgedDays = daily(readings, marker.unit, marker, true).slice(-JUDGE_POINTS)
-        const listed = changes.find((row) => row.key === marker.key && judgedDays.some((point) => point.date === row.compare.to_date))
-        if (listed) {
-          judged = 'changed'
-          change = changeOf(listed)
-        } else if (judgedDays.length >= 2 && !truncated && insideBand(judgedDays, rcvBand(marker, reference.biovar.z)) === true) {
-          judged = 'within'
+        const blocked = compareGate(judgedDays, readings, marker)
+        if (blocked) {
+          // A short interval or a different lab is not 波动内 and not a real change.
+          gate = blocked.gate
+          reason = blocked.reason_zh
+          biovar = { ...biovar, caveat_zh: [blocked.reason_zh, biovar.caveat_zh].filter(Boolean).join(' ') }
+        } else {
+          const listed = changes.find((row) => row.key === marker.key && judgedDays.some((point) => point.date === row.compare.to_date))
+          const bandHit = judgedDays.length >= 2 && !truncated ? insideBand(judgedDays, rcvBand(marker, reference.biovar.z)) : null
+          if (listed) {
+            judged = 'changed'
+            change = changeOf(listed)
+          } else if (bandHit === true) {
+            judged = 'within'
+          } else if (bandHit === false) {
+            // The changes read missed this row. The series on the page is already past the band, so it is still a change.
+            const built = judgeSeries(marker, readings, reference.biovar.z, glucoseTreated, records.profile.sex)
+            if (built.change) {
+              judged = 'changed'
+              change = changeOf(built.change)
+            }
+          }
         }
       }
     } else if (spec.source === 'device') {
@@ -434,7 +459,8 @@ async function build(context: IndicatorsContext): Promise<Built> {
 
     const entry: IndicatorEntry & { group: GroupKey } = {
       id: spec.id, label_zh: spec.label, unit: spec.unit, source: spec.source, latest, points, change, judged,
-      plan_marker: isPlanMarker(spec), ...(readError ? { read_error: readError } : {}), group: spec.group,
+      plan_marker: isPlanMarker(spec), ...(readError ? { read_error: readError } : {}),
+      ...(gate ? { gate, reason_zh: reason } : {}), group: spec.group,
     }
     rows.push(entry)
     details.set(spec.id, { all_points: allPoints.slice(-DETAIL_POINTS), ...(biovar ? { biovar } : {}) })

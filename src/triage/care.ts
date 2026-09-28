@@ -7,7 +7,7 @@ import type { CareItem, NewMemoryItem } from '../contracts/memory.ts'
 import type { TriageFinding } from '../contracts/triage.ts'
 import { currentBus } from '../core/bus.ts'
 import { memoryFor } from '../core/memory.ts'
-import type { StopResult } from '../plan-safety.ts'
+import { DOCTOR_ZH, type StopResult } from '../plan-safety.ts'
 import { findingsFrom, patterns } from './rules.ts'
 
 export type CareStatus = CareItem['care_status']
@@ -139,7 +139,7 @@ export function careState(dataDir: string, stop: StopResult, today: string): Car
   if (left.length === stop.hits.length) return { stop, findings, seen }
   if (left.length === 0) return { stop: { stop: false, sentence_zh: '', title_zh: '', hits: [] }, findings, seen }
   // Some findings seen, others not: the sentence is rebuilt from the hits still open.
-  const sentence = `请先去看医生：${left.map((hit) => hit.text_zh).join('；')}。请带着这几次体检报告去看医生，查清原因。在医生看过之前，LongPi 不起草生活方式方案。`
+  const sentence = `请先去看医生：${left.map((hit) => hit.text_zh).join('；')}。请带着这几次体检报告去看医生，查清原因。${DOCTOR_ZH}`
   return { stop: { stop: true, sentence_zh: sentence, title_zh: `请先去看医生：${left.map((hit) => hit.short_zh).slice(0, 3).join('，')}`, hits: left }, findings, seen }
 }
 
