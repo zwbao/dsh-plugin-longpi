@@ -544,7 +544,8 @@ const CARD_LIST: AdviceCard[] = [
     aliases: ['山药'],
     source: '山药含铁量低；血红素铁来自红肉、动物肝脏和血制品；维生素 C 促进非血红素铁，茶和咖啡抑制',
     say: '山药不是药，含铁也很少，不是补铁的好来源。血红素铁更多在红肉、动物肝脏和血制品里。维生素 C 促进吸收，茶和咖啡抑制。饮食替代不了查缺铁的原因。',
-    anchors: ['山药', '红肉', '很少'],
+    // The foods and the absorption tips are the answer; 山药 and 很少 are in almost every reply and never trigger the steer.
+    anchors: ['红肉', '肝', '茶'],
   },
   {
     id: 'ben-sleep', tier: 1, kind: 'benign',
