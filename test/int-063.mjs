@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import * as mod from '../lib/index.js'
 import { personaLines } from '../src/prompt.ts'
-import { completenessGaps, medicationReview, retestDue, saysWhenToRetest, BRIEF_SENTENCE } from '../src/advice/complete.ts'
+import { completenessGaps, doctorLineGap, medicationReview, retestDue, saysWhenToRetest, BRIEF_SENTENCE } from '../src/advice/complete.ts'
 import { isSaveConsent, pendingConfirmedSave, SAVE_NOW_NOTE } from '../src/save-consent.ts'
 import { latestToolResult, turnTools } from '../src/guard-llm.ts'
 import { startFakeMirobody } from './fake-mirobody.mjs'
@@ -105,6 +105,14 @@ try {
   assert.equal(gaps.length, 0, 'no doctor-first finding, no offer needed')
   gaps = completenessGaps({ userText: '这几项变化要紧吗？', reply: '白细胞这次变化超出了正常波动，建议带着这几次报告去看医生。', tools: [{ name: 'read_personal_situation', args: {}, result: { record_changes: [{ label_zh: '白细胞计数', ask_doctor: true }] } }] })
   assert.deepEqual(gaps.map((gap) => gap.id), ['doctor_brief'], 'a change to show a doctor is a doctor step too')
+
+  const withDepts = '请先去看医生：血红蛋白 101 g/L（2026-05-02）偏低，铁蛋白 6 ng/mL 偏低。请带着这几次体检报告去看医生（可以先看全科或血液科，缺铁的原因常要消化科一起查，尽量在 1 到 2 周内去），查清原因。'
+  assert.equal(doctorLineGap(withDepts, '请先去看全科或血液科。'), '缺铁的原因常要消化科一起查，尽量在 1 到 2 周内去。', 'a dropped specialist and time come back')
+  assert.equal(doctorLineGap(withDepts, '请先去看血液科和消化科，1 到 2 周内去。'), null)
+  assert.equal(doctorLineGap(withDepts, '去消化科和血液科查，尽量两周内。'), null, 'two weeks in words is a time too')
+  assert.equal(doctorLineGap(withDepts, '去消化科和血液科查。'), '尽量在 1 到 2 周内去。')
+  gaps = completenessGaps({ userText: '帮我根据体检做一个 3 个月减脂方案', reply: '请先去看全科或血液科，尽量 1 到 2 周内去。等医生看过之前先走路。我可以按这些结果整理一份给医生看的简报。', tools: [{ name: 'read_personal_situation', args: {}, result: { doctor_first_zh: withDepts } }] })
+  assert.deepEqual(gaps.map((gap) => [gap.id, gap.say]), [['doctor_line', '缺铁的原因常要消化科一起查。']])
 
   // --- 4. an older person's medication review ----------------------------------------------------------------------------
   const asked = '我爸82岁，每天吃6种药：氨氯地平、厄贝沙坦、格列齐特、唑吡坦、瑞舒伐他汀、阿司匹林，最近总头晕，哪个能停？'

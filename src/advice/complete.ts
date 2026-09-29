@@ -2,7 +2,8 @@
 // 0.6.2 length budget dropped three things the person needs:
 //   - the earliest retest date, when a plan verdict is 波动内 or it is too early to judge;
 //   - the offer to put the values and the questions for the doctor on one page, when the reply sends the person
-//     to a doctor about a finding in their record;
+//     to a doctor about a finding in their record, and in that doctor line every specialist and the time the
+//     doctor-first sentence names (缺铁的原因常要消化科一起查，尽量在 1 到 2 周内去);
 //   - for an older person's list of medicines: a pharmacist or medication review with every box, falls
 //     prevention, and each named drug of concern with the reason.
 // These are checks, not wording rules: the guard reads the reply that closes a turn and, when one of them is
@@ -11,7 +12,7 @@
 import { addDays, daysBetween, retestAdvice } from '../feedback/retest-timing.ts'
 import { normalizeAdviceText } from './playbook.ts'
 
-export type GapId = 'retest_date' | 'doctor_brief' | 'med_review'
+export type GapId = 'retest_date' | 'doctor_line' | 'doctor_brief' | 'med_review'
 
 export interface CompletenessGap {
   id: GapId
@@ -138,6 +139,37 @@ export function hasDoctorFinding(result: unknown): boolean {
   return changes.some((row) => record(row).ask_doctor === true)
 }
 
+/** The doctor-first sentence a read_personal_situation (doctor_first_zh) or review_interventions (doctor_first) result carries. */
+export function doctorFirstText(result: unknown): string {
+  const data = record(result)
+  if (typeof data.doctor_first_zh === 'string' && data.doctor_first_zh.trim()) return data.doctor_first_zh
+  const doctor = record(data.doctor_first)
+  return typeof doctor.sentence_zh === 'string' ? doctor.sentence_zh : ''
+}
+
+// Specialists a doctor-first sentence names. 全科 is the way in, not a specialist the reply must repeat.
+const SPECIALIST = /血液科|消化科|内分泌科|心内科|肾内科|眼科|泌尿外科|乳腺外科|乳腺专科|妇科|产科|神经内科|老年科/g
+const WEEKS = /(?:\d+|[一二两三四])\s*(?:(?:到|至|-|–|~)\s*(?:\d+|[一二两三四])\s*)?(?:个)?(?:周|星期)(?:内|之内)/
+
+/**
+ * The doctor line keeps what makes it actionable: every specialist the doctor-first sentence names and the time it
+ * gives (缺铁的原因常要消化科一起查，尽量在 1 到 2 周内去). Returns the clauses to add, or null.
+ */
+export function doctorLineGap(doctorFirst: string, reply: string): string | null {
+  const sentence = String(doctorFirst ?? '')
+  if (!sentence.trim()) return null
+  const clauses = sentence.split(/[，。；（）()]/).map((part) => part.trim()).filter(Boolean)
+  const add: string[] = []
+  for (const dept of new Set(sentence.match(SPECIALIST) ?? [])) {
+    if (reply.includes(dept)) continue
+    const clause = clauses.find((part) => part.includes(dept))
+    if (clause && !add.includes(clause)) add.push(clause)
+  }
+  const time = clauses.find((part) => WEEKS.test(part))
+  if (time && !WEEKS.test(reply) && !add.includes(time)) add.push(time)
+  return add.length > 0 ? `${add.join('，')}。` : null
+}
+
 export const BRIEF_SENTENCE = '我可以按这些结果整理一份给医生看的简报（数值、日期和要问医生的几个问题），你去看病时直接给医生看。'
 
 // ------------------------------------------------------------------------------------------ medication review
@@ -226,8 +258,11 @@ export function completenessGaps(input: CompletenessInput): CompletenessGap[] {
     ...input.tools.filter((tool) => tool.name === 'read_personal_situation' || tool.name === 'review_interventions').map((tool) => tool.result),
     ...(input.situation === undefined ? [] : [input.situation]),
   ]
-  if (situations.some(hasDoctorFinding) && ABOUT_RESULTS.test(userText) && DOCTOR_VISIT.test(reply) && !BRIEF_OFFER.test(reply)) {
-    gaps.push({ id: 'doctor_brief', say: BRIEF_SENTENCE })
+  if (situations.some(hasDoctorFinding) && ABOUT_RESULTS.test(userText) && DOCTOR_VISIT.test(reply)) {
+    const doctorFirst = situations.map(doctorFirstText).find((text) => text.trim()) ?? ''
+    const line = doctorLineGap(doctorFirst, reply)
+    if (line) gaps.push({ id: 'doctor_line', say: line })
+    if (!BRIEF_OFFER.test(reply)) gaps.push({ id: 'doctor_brief', say: BRIEF_SENTENCE })
   }
 
   const meds = medicationReview(userText)
