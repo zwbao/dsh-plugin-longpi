@@ -10,7 +10,7 @@ Life-area navigation (总览、化验、睡眠、运动、日程、问 LongPi), 
 
 在吃他汀的人，血脂降下来会写明主要是他汀的作用，不算走路或方案的效果。在用司美格鲁肽这类药（或这段时间就要开始用），方案里不写试验的减重公斤数，也不设体重目标，并说清这段时间体重的变化主要来自药；限时进食照样可以做，但先告诉开药的医生，吃得太少、恶心时先停。没有这类药的人，照常给出试验里的公斤数作为目标参考。
 
-回答先直接回答问的那件事：能不能、吃什么、多少、怎么做，并尽量对上你自己的数字；短不是把这些具体内容删掉的理由。贫血加上铁蛋白低或红细胞偏小时，看医生那句话会写上「缺铁的原因常要消化科一起查，尽量在 1 到 2 周内去」。
+回答先直接回答问的那件事：能不能、吃什么、多少、怎么做，并尽量对上你自己的数字；短不是把这些具体内容删掉的理由。问二甲双胍抗衰老时，回答会对照你自己的化验：血糖正常就没有糖尿病这个用药理由；已经贫血时，它导致的 B12 缺乏会让贫血更复杂。贫血加上铁蛋白低或红细胞偏小时，看医生那句话会写上「缺铁的原因常要消化科一起查，尽量在 1 到 2 周内去」。
 
 总览每件事只说一次：要先去看医生的那一步放在最上面，其余卡片不再重复那几项；身体年龄的几种算法合成一张卡；「判断依据」只留一句大白话和来源；心血管风险卡只显示自己的一个数；窄屏上「值得注意的变化」一行一行排开。
 
@@ -20,7 +20,7 @@ Body age is one number: the page, the fact list and the chat quote the same figu
 
 For someone on a statin, the lipid drop is credited to the statin, not to walking or the plan. While a medicine that moves weight by itself (a GLP-1, SGLT2 or insulin) is current or about to start, the plan gives no trial kilogram figure and no weight goal, and says the weight change will mostly come from the medicine. Time-restricted eating stays possible on a GLP-1, with 「先告诉开药的医生」 and a note on low intake and nausea. People on no such medicine keep the kilogram projection.
 
-A reply answers the question itself first, with the specific foods, amounts, ranges or steps, tied to the person's own numbers; a short reply never drops them. With a low haemoglobin plus low ferritin or small red cells, the doctor line adds that the cause of iron deficiency is often looked for by a gastroenterologist too, within one to two weeks.
+A reply answers the question itself first, with the specific foods, amounts, ranges or steps, tied to the person's own numbers; a short reply never drops them. Asked about metformin for ageing, the answer checks the person's own labs: a normal glucose means no diabetes indication, and an existing anaemia is made worse by the B12 deficiency it can cause. With a low haemoglobin plus low ferritin or small red cells, the doctor line adds that the cause of iron deficiency is often looked for by a gastroenterologist too, within one to two weeks.
 
 总览 says each fact once: the doctor step comes first and the other cards leave its values out; the body-age methods fold into one card; 判断依据 is one plain sentence and its source; the risk card shows its own number only; 值得注意的变化 stacks on narrow screens.
 
