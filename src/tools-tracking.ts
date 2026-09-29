@@ -19,6 +19,7 @@ import { planDraftHeld, sessionKey } from './plan-hold.ts'
 import { HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH } from './plan-safety.ts'
 import { briefOptionsOf, buildPlanBrief, replyForDraft, settleDraft } from './planner.ts'
 import { FOCUS } from './profile.ts'
+import { retestDue, retestSentence } from './advice/complete.ts'
 
 function jsonText(value: unknown): [{ type: 'text'; text: string }] {
   return [{ type: 'text', text: JSON.stringify(value, null, 2) }]
@@ -66,10 +67,11 @@ const HOW_TO_READ = [
   'goal_problems_zh on a model card: those goals could not be modelled (unit or range); no goal value is shown. Tell the person what to fix.',
   'expected rows are trial averages for a population, not a prediction for this person.',
   'Model cards (phenoage, china-par) are model estimates. Say 模型估计 and quote boundary_zh. Never turn them into "you will live X more years".',
+  'retest_next lists, for each marker that is 波动内 or too early, the earliest date a retest can show a real change. Say that date and how many weeks it is (最早 … 再复查), whatever else the reply says.',
   'suggestions are the next steps to offer for the saved plan. A change to the plan is a new draft (draft_intervention_plan), read back and confirmed like any plan. Never add a medicine or a dose.',
 ]
 
-const DRAFT_HOW_TO_USE = 'Send reply_zh as your reply, in the person\'s language, then stop: do not call another tool in this turn (no save_intervention_plan, no query_longevity_evidence, no bash, no read). If brief.safety.stop_zh is set, that sentence comes first: say plainly to see a doctor about those values. A short safe-while-you-wait draft may follow (walking, meal quality, sleep, smoking or drinking less). Do not add fasting, time-restricted eating, a large weight-loss target, a supplement, or iron. If brief.notes_zh says the record has changes beyond normal fluctuation (超出正常波动), say that first: suggest they have a doctor look at those changes before starting the plan, name no cause, and suggest no supplement or dose for them. Items the person excluded stay excluded in every later draft. State each item\'s evidence only as reply_zh does, and that individual results vary. Supplements are options to confirm with a doctor, without a dose. Never start, stop or change a prescription medicine or any dose. Save later, only after they agree: save_intervention_plan confirm=false, read it back, then confirm=true.'
+const DRAFT_HOW_TO_USE = 'Send reply_zh as your reply, in the person\'s language, then stop: do not call another tool in this turn (no save_intervention_plan, no query_longevity_evidence, no bash, no read). If brief.safety.stop_zh is set, that sentence comes first: say plainly to see a doctor about those values. A short safe-while-you-wait draft may follow (walking, meal quality, sleep, smoking or drinking less). Do not add fasting, time-restricted eating, a large weight-loss target, a supplement, or iron. If brief.notes_zh says the record has changes beyond normal fluctuation (超出正常波动), say that first: suggest they have a doctor look at those changes before starting the plan, name no cause, and suggest no supplement or dose for them. Items the person excluded stay excluded in every later draft. State each item\'s evidence only as reply_zh does, and that individual results vary. Supplements are options to confirm with a doctor, without a dose. Never start, stop or change a prescription medicine or any dose. Save later, only after they agree. This reply already read the draft to them: when they then say to save it (可以，就按这份方案保存吧), call save_intervention_plan confirm=false and, in that same turn, with the same plan, confirm=true. Do not read it back a second time or ask them to say 保存 again.'
 /** Past this the tool answers anyway (the build goes on in the background and the next call picks it up). */
 const DRAFT_DEADLINE_MS = 60_000
 
@@ -183,7 +185,7 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
           goals: normalized.plan.goals,
           warnings: normalized.warnings,
           ...(goalIssues.length > 0 ? { goal_problems: goalIssues } : {}),
-          next: 'Read all of read_back (the plan line and every item with its 说明), the warnings and any goal_problems to the person. Save only after they confirm, by calling again with confirm=true.',
+          next: 'If their message in this turn already agreed to save this plan and it was read to them before (a draft you read them, or an earlier read-back), that is the confirmation: call again now with the same plan and confirm=true, and do not read it back again or ask them to say 保存. Otherwise read all of read_back (the plan line and every item with its 说明), the warnings and any goal_problems to the person, and save only after they confirm, by calling again with confirm=true.',
         })
       }
       const saved = savePlan(dataDir, normalized.plan)
@@ -377,7 +379,9 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
     isConcurrencySafe: () => false,
     async execute() {
       const result = await tracking()
-      return asJson({ how_to_read: HOW_TO_READ, ...result, items: result.items.map((item) => ({ ...item, adherence: { ...item.adherence, calendar: undefined } })) })
+      const items = result.items.map((item) => ({ ...item, adherence: { ...item.adherence, calendar: undefined } }))
+      const retestNext = retestDue({ today: result.today, items }).map((row) => ({ marker: row.marker, date: row.date, text_zh: retestSentence(row) }))
+      return asJson({ how_to_read: HOW_TO_READ, ...result, items, ...(retestNext.length > 0 ? { retest_next: retestNext } : {}) })
     },
   }))
 

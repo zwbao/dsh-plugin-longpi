@@ -15,6 +15,8 @@ import {
 } from './guardrails.ts'
 import { adviceBrief, emergencyScript, fastingGap, keepsValidatedComputation, matchCards, renderSay, safeChinese, steerNeed } from './advice/playbook.ts'
 import { mountAdvice } from './advice/register.ts'
+import { completenessGaps, type TurnTool } from './advice/complete.ts'
+import { pendingConfirmedSave, SAVE_NOW_NOTE } from './save-consent.ts'
 import { hasDoseAmount } from './guard-dose.ts'
 import { holdPlanDraft, releasePlanDraft, sessionKey } from './plan-hold.ts'
 import { rememberPersonText } from './core/turn-text.ts'
@@ -516,6 +518,89 @@ export function turnText(session: SessionLike, turn: number): { reply: string; u
   return { reply: replies.join('\n'), userText, last }
 }
 
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
+function toolResultValue(data: unknown): { callId: string; value: unknown } | null {
+  const message = (data as { message?: { source?: { callId?: string }; content?: unknown } } | undefined)?.message
+  const blocks = Array.isArray(message?.content) ? message.content as Array<{ type?: string; toolCallId?: string; content?: unknown }> : []
+  const block = blocks.find((part) => part && part.type === 'tool-result')
+  const callId = String(block?.toolCallId ?? message?.source?.callId ?? '')
+  if (!callId) return null
+  const text = Array.isArray(block?.content)
+    ? (block.content as Array<{ type?: string; text?: unknown }>).filter((part) => part?.type === 'text').map((part) => String(part.text ?? '')).join('\n')
+    : typeof block?.content === 'string' ? block.content : ''
+  return { callId, value: parseJson(text) }
+}
+
+/** This turn's tool calls, in order, with their parsed results (null when a result is not JSON). */
+export function turnTools(session: SessionLike, turn: number): TurnTool[] {
+  const events: EventLike[] = []
+  if (typeof session.eventAt === 'function' && typeof session.seq === 'number') {
+    for (let seq = session.seq - 1, seen = 0; seq >= 0 && seen < 5000; seq -= 1, seen += 1) {
+      const event = session.eventAt(seq)
+      if (!event) continue
+      events.unshift(event)
+      if (event.type === 'turn/start' && (event.data as { turn?: number } | undefined)?.turn === turn) break
+    }
+  } else {
+    const all = session.snapshotEvents?.() ?? []
+    let start = all.length - 1
+    while (start > 0 && !(all[start]?.type === 'turn/start' && (all[start]?.data as { turn?: number } | undefined)?.turn === turn)) start -= 1
+    events.push(...all.slice(Math.max(0, start)))
+  }
+  const calls: Array<TurnTool & { id: string }> = []
+  for (const event of events) {
+    const data = event.data as { turn?: number; callId?: string; name?: string; arguments?: unknown } | undefined
+    if (data?.turn !== undefined && data.turn !== turn) continue
+    if (event.type === 'tool/call' && data?.name) {
+      const raw = data.arguments
+      const args = typeof raw === 'string' ? parseJson(raw) : raw
+      calls.push({ id: String(data.callId ?? ''), name: String(data.name), args: args && typeof args === 'object' && !Array.isArray(args) ? args as Record<string, unknown> : {}, result: null })
+    } else if (event.type === 'tool/result') {
+      const hit = toolResultValue(event.data)
+      const call = hit ? calls.find((row) => row.id === hit.callId) : undefined
+      if (call && hit) call.result = hit.value
+    }
+  }
+  return calls.map(({ id: _id, ...call }) => call)
+}
+
+/** The newest result of one tool anywhere in the session (at most `limit` events back), parsed. */
+export function latestToolResult(session: SessionLike, name: string, limit = 5000): unknown {
+  const ids = new Set<string>()
+  const results: Array<{ callId: string; value: unknown }> = []
+  const visit = (event: EventLike | undefined) => {
+    if (!event) return
+    if (event.type === 'tool/result') {
+      const hit = toolResultValue(event.data)
+      if (hit) results.push(hit)
+    } else if (event.type === 'tool/call' && (event.data as { name?: string } | undefined)?.name === name) {
+      ids.add(String((event.data as { callId?: string }).callId ?? ''))
+    }
+  }
+  if (typeof session.eventAt === 'function' && typeof session.seq === 'number') {
+    for (let seq = session.seq - 1, seen = 0; seq >= 0 && seen < limit; seq -= 1, seen += 1) {
+      visit(session.eventAt(seq))
+      const found = results.find((row) => ids.has(row.callId))
+      if (found) return found.value
+    }
+  } else {
+    const all = session.snapshotEvents?.() ?? []
+    for (let index = all.length - 1, seen = 0; index >= 0 && seen < limit; index -= 1, seen += 1) {
+      visit(all[index])
+      const found = results.find((row) => ids.has(row.callId))
+      if (found) return found.value
+    }
+  }
+  return undefined
+}
+
 export interface Guard {
   preStep(payload: PreStepPayload, next: () => Promise<PreStepDecision>): Promise<PreStepDecision>
   turnStopping(payload: TurnStoppingPayload): Promise<void>
@@ -763,6 +848,15 @@ export function createGuard(ctx: Context, options: GuardOptions): Guard {
           keepFlag = true
           return
         }
+        // They agreed to save a plan they already heard, and the turn stopped after the read-back.
+        const tools = turnTools(session, payload.turn)
+        if (!flagged.has(agent) && pendingConfirmedSave(userText, tools)) {
+          count({ output_checked: 1, output_steered: 1 })
+          remember(steered, turnKey)
+          agent.steer(noteMessage({ summary: 'LongPi 检查：你已经同意保存', text: SAVE_NOW_NOTE }))
+          keepFlag = true
+          return
+        }
         const check = await checkReply(reply, { call: callFor(agent), userText, timeoutMs, ...(payload.signal ? { signal: payload.signal } : {}) })
         count({
           output_checked: 1,
@@ -780,19 +874,31 @@ export function createGuard(ctx: Context, options: GuardOptions): Guard {
           keepFlag = true
           return
         }
-        if (needed && (needed.kind === 'concrete' || needed.kind === 'fasting') && !payload.signal?.aborted) {
+        // What a reply must carry whatever its shape: the earliest retest date, the doctor-brief offer, and an
+        // older person's medication review. Added to the same single correction.
+        const gaps = flagged.has(agent) ? [] : completenessGaps({
+          userText,
+          reply,
+          tools,
+          ...(tools.some((tool) => tool.name === 'read_personal_situation') ? {} : { situation: latestToolResult(session, 'read_personal_situation') }),
+        })
+        const concrete = needed && (needed.kind === 'concrete' || needed.kind === 'fasting') ? needed : null
+        if ((concrete || gaps.length > 0) && !payload.signal?.aborted) {
           count({ output_steered: 1 })
           remember(steered, turnKey)
           const keepComputation = keepsValidatedComputation(reply)
+          const say = [concrete?.say ?? '', ...gaps.map((gap) => gap.say)].filter(Boolean).join('\n')
           agent.steer(noteMessage({
-            summary: needed.summary,
+            summary: concrete?.summary ?? 'LongPi 检查：把该说的补全',
             text: [
               '[LongPi safety check: added by the plugin, not written by the person.]',
               keepComputation
                 ? 'Add one sentence. Keep the computed result (表型年龄 / 身体年龄, the number, and 模型估计) exactly. Do not send a new answer that drops it, and do not leave that result only in the previous draft.'
-                : 'Add the missing point as one sentence. Keep every sentence that is already right. Do not replace the reply with a different essay, and do not leave the earlier text as an unsent draft.',
+                : gaps.length === 0
+                  ? 'Add the missing point as one sentence. Keep every sentence that is already right. Do not replace the reply with a different essay, and do not leave the earlier text as an unsent draft.'
+                  : 'Add the missing points below, one short sentence each. Keep every sentence that is already right. Do not replace the reply with a different essay, and do not leave the earlier text as an unsent draft.',
               'If a lab needs a doctor, one sentence is enough. Do not give an individual prescription dose. Do not say to start, stop, or switch a prescription. Do not call tools.',
-              needed.say,
+              say,
             ].join('\n'),
           }))
           keepFlag = true

@@ -30,7 +30,7 @@ export function AskTab(props: { journey: Journey; openChat?: () => void }): Reac
   return h('div', { className: 'lp-tab-body lp-ask' },
     h('section', { className: 'lp-card' },
       h('div', { className: 'lp-label' }, '问 LongPi'),
-      h('p', { className: 'lp-muted' }, '想问就问，不用攒着。回答通常分三小段：我看到的、数据说明不了的、下一步。'),
+      h('p', { className: 'lp-muted' }, '想问就问，不用攒着。问吃药、补剂、饮食、检查或身体不舒服，会先直接回答，再把该知道的说全；问记录的变化和进度，回答分三小段：我看到的、数据说明不了的、下一步。'),
       h('ul', { className: 'lp-ask-list' },
         ...questions.map((text) => h('li', { key: text },
           h('button', { type: 'button', className: 'lp-ask-q', onClick: () => ask(text) }, text))))))
