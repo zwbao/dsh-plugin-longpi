@@ -101,7 +101,8 @@ export function FeedbackBlock(props: { journey?: Journey; tracking?: Tracking | 
   if (shown.length === 0 && !share) return null
   return h(React.Fragment, null,
     shown.length > 0 ? h(FeedbackCard, { messages: shown }) : null,
-    share ? h(ShareCard, { card: share, onNotice: props.onNotice }) : null)
+    // The body-age card already shows a younger sentence it is allowed to; the share card then only offers the copy.
+    share ? h(ShareCard, { card: share, onNotice: props.onNotice, compact: messages.some((row) => row.subject.kind === 'bioage' && row.headline_zh === share.headline_zh) }) : null)
 }
 
 registerOverviewCard({
