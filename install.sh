@@ -24,11 +24,12 @@
 #   bash install.sh status
 #   npx dsh-plugin-longpi install
 #
-# longevity-skills is resolved from node_modules first, then the git and
-# mirror fallbacks below. SKILLS_PIN_DEFAULT is the curl|bash fallback for
-# the exact dependency in package.json. Bump both together (docs/dev/packaging.md).
+# longevity-skills is not an npm dependency. It is resolved from node_modules
+# if one is there, then LONGPI_SKILLS_URL, then a git clone of GitHub main
+# (or a mirror). An empty SKILLS_PIN_DEFAULT leaves skillsVersion empty, so the
+# running catalog is the reference (docs/dev/packaging.md).
 
-SKILLS_PIN_DEFAULT=2026.39.1
+SKILLS_PIN_DEFAULT=
 
 main() {
   set -euo pipefail

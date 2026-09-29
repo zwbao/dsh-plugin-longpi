@@ -619,7 +619,7 @@ export LONGPI_SKILLS_SHA256="$SKILLS_SHA"
 HIDE_TOOLS=1
 run_case cn-npm --mirror cn
 need "$OUT" "npm=1 pypi=1 github=1 docker=1"
-need "$TRACE" "npm view longevity-skills@2026.39.1 dist.tarball --registry https://registry.npmmirror.com"
+need "$TRACE" "npm view longevity-skills@ dist.tarball --registry https://registry.npmmirror.com"
 need "$TRACE" "npm view dsh-plugin-longpi dist.tarball --registry https://registry.npmmirror.com"
 need "$TRACE" "--registry https://registry.npmmirror.com"
 need "$TRACE" "pip -m pip install --quiet --upgrade -i https://mirrors.cloud.tencent.com/pypi/simple --trusted-host mirrors.cloud.tencent.com mirobody numpy scipy openpyxl"

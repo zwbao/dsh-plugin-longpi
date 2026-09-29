@@ -77,9 +77,6 @@
     "mirobody"
   ],
   "license": "MIT",
-  "dependencies": {
-    "longevity-skills": "2026.39.1"
-  },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=0.1.0 || >=4.0.0",
     "@deepseek-ai/dsh-tools": ">=0.1.0",
