@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.6.3
+
+给使用者
+
+问吃药、补剂、饮食、检查，问身体不舒服，问某个化验结果是什么意思，或者问「我的方案有没有效果」，回答不再压成三小段短话：先直接回答，再把分层的具体建议说全。只有你说「简单说」「一句话」，或者随口问一句闲话时，才会短答。问记录里变了什么、现在进度怎么样、方案的日常安排，仍然分三小段：我看到的、数据说明不了的、下一步。遇到急症，仍然先说急救怎么做。
+
+不管回答多长，下面几件事该有的一定会有：方案效果还在正常波动里、或者复查得太早时，会告诉你最早哪天再复查、离上次隔几周；让你去看医生的，会说清该挂哪个科、多久内去（比如缺铁要消化科一起查、尽量 1 到 2 周内去），并问一句要不要整理一份给医生看的简报；替家里老人问一大堆药能不能停时，会建议带上全部药盒去老年科或药师门诊做用药评估，提醒防跌倒，并把容易引起头晕、跌倒或低血糖的那几种药点名说清楚。
+
+方案读给你听过以后，你说「可以，就按这份方案保存吧」，这一句就算确认：当场保存，DeepSeek Harness 只请你点一次同意，不会再读一遍、也不会再让你打「保存」两个字。
+
+English
+
+Advice questions (a medicine, a supplement, a diet, a test), a symptom, what a result means, and "did my plan work" are answered directly first and then in full, with the tiered specifics; the three short parts and their length budget are gone for these. Only "keep it short" or a one-line small-talk question gets a short reply. Questions about what changed in the record, about progress, and plan chatter keep the three parts (我看到的 / 数据说明不了的 / 下一步). Emergencies still start with first aid.
+
+Whatever the length, three things are there when they apply, and the plugin adds them when a reply leaves them out: the earliest retest date and how many weeks away it is, when a plan result is within normal fluctuation or it is too early to tell; when the reply sends the person to a doctor about a finding in their record, the specialists and the time the doctor line names (the gastroenterologist for iron deficiency, within one to two weeks) and the offer to prepare a one-page doctor brief; and for an older person's list of medicines, a medication review by a pharmacist or the geriatrics clinic with every medicine box, falls prevention, and each named drug that can cause dizziness, falls or low blood sugar.
+
+After a plan has been read to the person, 「可以，就按这份方案保存吧」 is the confirmation: the plan is saved in that turn with one approval in DeepSeek Harness, without a second read-back or a request to type 「保存」.
+
 ## 0.6.2
 
 Life-area navigation (总览、化验、睡眠、运动、日程、问 LongPi), movement-first lab cards, a quieter season, and plain Chinese on the screens a person reads. On-device research is the default. Joining a group study is a separate tap, and nothing leaves the device until a production-signed study is published.
