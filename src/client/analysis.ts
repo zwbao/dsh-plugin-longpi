@@ -47,6 +47,7 @@ export function AnalysisTab(props: { openChat?: () => void; onNotice?: (text: st
   const [status, setStatus] = React.useState<Status | null>(null)
   const [busy, setBusy] = React.useState('')
   const [error, setError] = React.useState('')
+  const [folder, setFolder] = React.useState('')
   const load = React.useCallback(() => {
     void getJson<Status>('/api/longpi/analysis').then((s) => { setStatus(s); setError('') })
       .catch((e: unknown) => setError(errText(e, '读取深度分析状态失败')))
@@ -72,7 +73,7 @@ export function AnalysisTab(props: { openChat?: () => void; onNotice?: (text: st
     }
   }
   const start = () => act('start', async () => {
-    const res = await postJson<{ ok: boolean; prompt_zh?: string }>('/api/longpi/analysis/start', {})
+    const res = await postJson<{ ok: boolean; prompt_zh?: string }>('/api/longpi/analysis/start', folder.trim() ? { data_folder: folder.trim() } : {})
     if (!res.prompt_zh) throw new Error('现在不能发起。')
     setPendingPrompt(res.prompt_zh)
     props.openChat?.()
@@ -105,6 +106,13 @@ export function AnalysisTab(props: { openChat?: () => void; onNotice?: (text: st
       aside: h(Btn, { onClick: () => { void start() }, disabled: Boolean(busy) || Boolean(running) || Boolean(blocked) }, running ? '分析进行中' : '发起深度分析'),
     },
     h('p', { className: 'lp-muted' }, '用你的全基因组、甲基化、肠道菌、蛋白组和体检数据，算生物学年龄、各器官状况和以后的疾病风险，提出针对你的问题并逐一查证，最后给一份能照着做的方案。分析在对话里进行，需要你确认的步骤会在对话里问你。'),
+    !running && !blocked ? h('label', { className: 'lp-field' },
+      h('span', { className: 'lp-label' }, '检测文件所在的文件夹（可选）'),
+      h('input', {
+        className: 'lp-input', type: 'text', value: folder, placeholder: '例如 ~/Documents/我的多组学报告',
+        onChange: (e: React.ChangeEvent<HTMLInputElement>) => setFolder(e.target.value), 'aria-label': '检测文件所在的文件夹',
+      }),
+      h('span', { className: 'lp-muted' }, '全基因组、甲基化、肠道菌、蛋白组的原始文件不在 Mirobody 里，放在这台电脑的一个文件夹中；只会读取，不会改动。体检和手表数据从 Mirobody 读。')) : null,
     blocked ? h('div', { className: 'lp-card', role: 'status' }, h('div', { className: 'lp-label' }, '发起前还需要'), h('p', null, blocked.reply_zh)) : null,
     running ? h('div', { className: 'lp-card' },
       h('div', { className: 'lp-label' }, `进行中：${running.done}/${running.stages.length} 步`),
