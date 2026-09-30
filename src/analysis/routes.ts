@@ -3,7 +3,8 @@
 
 import type { CoreDeps } from '../contracts/index.ts'
 import { currentReportHtml } from './store.ts'
-import { abandon, acceptPlan, importLatest, planReadBack, statusNow } from './service.ts'
+import { abandon, acceptPlan, COST_ZH, importLatest, planReadBack, setAutoEnabled, statusNow } from './service.ts'
+import { resolveRootDir } from '../paths.ts'
 
 /** The report is written by an LLM-driven pipeline: shown in a sandboxed frame with no script and no network. */
 export const REPORT_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; sandbox; frame-ancestors 'self'"
@@ -11,7 +12,7 @@ export const REPORT_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-sr
 export function registerAnalysisRoutes(deps: CoreDeps): void {
   deps.http.route('GET', '/api/longpi/analysis', async () => {
     const status = await statusNow(deps)
-    return { ok: true, ...status, plan_read_back: status.current ? await planReadBack(deps) : null }
+    return { ok: true, ...status, cost_zh: COST_ZH, plan_read_back: status.current ? await planReadBack(deps) : null }
   })
 
   deps.http.route('GET', '/api/longpi/analysis/report', async () => {
@@ -30,6 +31,14 @@ export function registerAnalysisRoutes(deps: CoreDeps): void {
     const value = body && typeof body === 'object' ? body as Record<string, unknown> : {}
     const res = await acceptPlan(deps, { run_id: value.run_id, plan_key: value.plan_key })
     return res.ok ? res : { ok: false, status: res.stale ? 409 : 400, error: res.error_zh, problems: res.problems }
+  })
+
+  // The switch: on lets the AI start a deep analysis by itself when there is new data; off (default) it only asks.
+  deps.http.route('POST', '/api/longpi/analysis/settings', async (_req, body) => {
+    const value = body && typeof body === 'object' ? body as Record<string, unknown> : {}
+    if (typeof value.auto !== 'boolean') return { ok: false, status: 400, error: 'body must be {"auto": true|false}' }
+    setAutoEnabled(resolveRootDir(deps.config().dataDir), value.auto)
+    return { ok: true, auto: value.auto }
   })
 
   deps.http.route('POST', '/api/longpi/analysis/abandon', async (_req, body) => {

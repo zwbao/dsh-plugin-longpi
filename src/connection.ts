@@ -14,7 +14,7 @@ import type { Config } from './config.ts'
 import { within } from './journey.ts'
 import { callMcpTool, redact, type McpCallResult } from './mcp.ts'
 import { tokenKey } from './records.ts'
-import { resolveDataDir } from './paths.ts'
+import { resolveDataDir, resolveRootDir } from './paths.ts'
 import { summarizeIndicators } from './situation.ts'
 
 export const CONNECTION_FILE = 'connection.json'
@@ -76,7 +76,7 @@ export function clearConnection(dataDir: string): boolean {
   return true
 }
 
-let memo: { config: Config; stamp: string; value: Config } | null = null
+let memo: { config: Config; stamp: string; value: Config; dir: string } | null = null
 
 /**
  * The configuration every module reads: the plugin's own, with mcpUrl and mcpToken taken from the saved
@@ -92,10 +92,14 @@ export function effectiveConfig(config: Config): Config {
   } catch {
     stamp = '-'
   }
-  if (memo && memo.config === config && memo.stamp === stamp) return memo.value
+  if (memo && memo.config === config && memo.stamp === stamp && memo.dir === path) return memo.value
   const saved = stamp === '-' ? null : readConnection(resolveDataDir(config.dataDir))
-  const value = saved ? { ...config, mcpUrl: saved.mcp_url, mcpToken: saved.mcp_token ?? '' } : config
-  memo = { config, stamp, value }
+  // A family member reads only through their own saved link, never the configured (holder's) address or token:
+  // with none saved they are simply not connected.
+  const family = resolveDataDir(config.dataDir) !== resolveRootDir(config.dataDir)
+  const value = saved ? { ...config, mcpUrl: saved.mcp_url, mcpToken: saved.mcp_token ?? '' }
+    : family ? { ...config, mcpUrl: '', mcpToken: '' } : config
+  memo = { config, stamp, value, dir: path }
   return value
 }
 

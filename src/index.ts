@@ -35,6 +35,8 @@ import { registerTools } from './tools.ts'
 import { registerTrackingTools } from './tools-tracking.ts'
 import { registerFollowupTools } from './tools-followup.ts'
 import { readiness, readinessLine } from './analysis/service.ts'
+import { activePerson } from './people/store.ts'
+import { resolveRootDir } from './paths.ts'
 import { startFollowup, type FollowupState } from './followup.ts'
 import { buildJourneyFull, followupStateOf, within } from './journey.ts'
 import { loadCatalog } from './catalog.ts'
@@ -308,7 +310,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     } catch {
       analysisZh = ''
     }
-    return { page: pageStateOf(row.set, row.pack), memory_zh: memoryFor(dataDir).digest({ purpose: 'chat', maxChars: 500 }), care_due_zh: careDue, noted_zh: noted.slice(0, 4).join('；'), analysis_zh: analysisZh }
+    const who = activePerson(resolveRootDir(source().dataDir))
+    const personZh = who.person
+      ? `当前查看：${who.label_zh}（${who.person.name || who.label_zh}，${who.person.sex === 'male' ? '男' : '女'}${who.person.birth_year ? `，${who.person.birth_year} 年生` : ''}）的记录，不是正在对话的人自己的。`
+      : ''
+    return { page: pageStateOf(row.set, row.pack), memory_zh: memoryFor(dataDir).digest({ purpose: 'chat', maxChars: 500 }), care_due_zh: careDue, noted_zh: noted.slice(0, 4).join('；'), analysis_zh: analysisZh, person_zh: personZh }
   }
   const orchestrator = registerOrchestrator(ctx, {
     mount,
@@ -412,3 +418,9 @@ export { deleteLocalStore } from './privacy/delete.ts'
 export { REPORT_CSP } from './analysis/routes.ts'
 export { bindPrivacy } from './privacy/index.ts'
 export { recordConsent } from './privacy/consents.ts'
+// 0.7.0 M13 people (exported for tests)
+export { readRegistry, addPerson, setActive, removePerson, activePerson, personDir, SELF } from './people/store.ts'
+export { holderAuth, createManagedMember, mintMemberLink, saveMemberLink, ensureMemberLink, RENEW_AFTER_MS } from './people/mirobody.ts'
+export { resolveRootDir } from './paths.ts'
+export { pushToMirobody } from './datain/upload.ts'
+export { setAutoEnabled, autoEnabled, COST_ZH } from './analysis/service.ts'

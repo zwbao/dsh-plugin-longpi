@@ -1,11 +1,12 @@
 // M12 deep analysis: the checks and actions the tools and the page share.
 
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { rootDir } from '../people/store.ts'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { CoreDeps } from '../contracts/index.ts'
 import { currentPlan, normalizePlan, savePlan } from '../interventions.ts'
-import { consentGranted, personMinor } from '../privacy/index.ts'
+import { personMinor } from '../privacy/index.ts'
 import { readProfile } from '../profile.ts'
 import { planKey } from '../tools-approval.ts'
 import {
@@ -46,16 +47,6 @@ export function analystSkillVersion(): { version: string | null; ok: boolean } {
   return { version, ok: newer && harness }
 }
 
-function consentsMissing(): { reply_zh: string; missing: string } | null {
-  if (!consentGranted('pipl_sensitive')) {
-    return { missing: 'pipl_sensitive', reply_zh: '深度分析会处理基因、化验等敏感健康信息。请先在健康页「档案」里同意处理敏感个人信息。' }
-  }
-  if (!consentGranted('data_flow_deepseek')) {
-    return { missing: 'data_flow_deepseek', reply_zh: '深度分析由对话里的 AI 完成，你的数据会交给模型服务处理。请先在健康页「档案」里同意数据交给模型服务。' }
-  }
-  return null
-}
-
 /** Everything that must hold before a run is prepared. Returns the first thing missing, in the person's words. */
 export function startBlockers(dataDir: string, config: { member?: string } = {}): { reply_zh: string; missing: string } | null {
   const skill = analystSkillVersion()
@@ -70,8 +61,6 @@ export function startBlockers(dataDir: string, config: { member?: string } = {})
   }
   const minor = personMinor()
   if (minor?.minor) return { missing: 'adult', reply_zh: '深度分析只为成年人做。' }
-  const consent = consentsMissing()
-  if (consent) return consent
   const profile = readProfile(dataDir)
   if (!profile.age) return { missing: 'profile', reply_zh: '深度分析要用到你的年龄。请先在健康页「档案」里填好。' }
   if (profile.sex !== 'male' && profile.sex !== 'female') {
@@ -82,6 +71,22 @@ export function startBlockers(dataDir: string, config: { member?: string } = {})
 
 /** Days between two automatic starts. A member's own request is not held by it. */
 export const AUTO_MIN_DAYS = 30
+/** Measured on the test runs: one deep analysis used about 0.5–0.6 M model tokens and 1.5–3 hours. Shown on the page. */
+export const COST_ZH = '每次深度分析实测约消耗 50–60 万 token，耗时 1.5–3 小时'
+
+/** The install-wide switch: off (default) means the AI only offers a deep analysis at key moments and the person decides. */
+export function autoEnabled(root: string): boolean {
+  try {
+    return (JSON.parse(readFileSync(join(root, 'analysis-settings.json'), 'utf8')) as { auto?: unknown }).auto === true
+  } catch {
+    return false
+  }
+}
+
+export function setAutoEnabled(root: string, on: boolean): void {
+  mkdirSync(root, { recursive: true })
+  writeFileSync(join(root, 'analysis-settings.json'), JSON.stringify({ auto: on, at: new Date().toISOString() }), { mode: 0o600 })
+}
 
 export interface Readiness {
   blockers: { reply_zh: string; missing: string } | null
@@ -92,7 +97,9 @@ export interface Readiness {
   newest_file: string | null
   folder: string | null
   new_data: boolean
-  /** The harness's gate for an AI-started run: new data since the last analysis, no run going, 30 days since the last automatic start. */
+  /** The switch on the page: when off the AI may only offer a run and start it when the person says yes. */
+  auto_on: boolean
+  /** The harness's gate for an AI-started run: switch on, new data since the last analysis, no run going, 30 days since the last automatic start. */
   auto_allowed: boolean
   why_zh: string
 }
@@ -108,7 +115,8 @@ function daysFrom(a: string, b: string): number {
 /**
  * The facts the AI decides on; no judgment here. `records` is the member's Mirobody record as LongPi read it.
  */
-export function readiness(dataDir: string, config: { member?: string }, records: { indicators?: Array<{ date?: string; last_date?: string }> } | null, today: string): Readiness {
+export function readiness(dataDir: string, config: { member?: string; dataDir?: string }, records: { indicators?: Array<{ date?: string; last_date?: string }> } | null, today: string): Readiness {
+  const autoOn = autoEnabled(rootDir(config.dataDir ?? ''))
   const blockers = startBlockers(dataDir, config)
   const runs = listRuns(dataDir).map((run) => ({ run, status: runStatus(run) }))
   const running = runs.find((r) => r.status.active)?.run.id ?? null
@@ -122,7 +130,7 @@ export function readiness(dataDir: string, config: { member?: string }, records:
   const newest = [newestRecord, newestFile].filter((d): d is string => Boolean(d)).sort().at(-1) ?? null
   const newData = Boolean(newest) && (!lastAnalysis || (newest as string) > lastAnalysis)
   const spaced = !lastAuto || daysFrom(lastAuto, today) >= AUTO_MIN_DAYS
-  const autoAllowed = !blockers && !running && newData && spaced
+  const autoAllowed = autoOn && !blockers && !running && newData && spaced
   const why = blockers ? `不能开始：${blockers.reply_zh}`
     : running ? '有一次深度分析正在进行。'
       : !newest ? '还没有可分析的数据。'
@@ -130,16 +138,18 @@ export function readiness(dataDir: string, config: { member?: string }, records:
           : !spaced ? `上次自动分析在 ${lastAuto}，距今不足 ${AUTO_MIN_DAYS} 天；会员主动要求时可以做。`
             : lastAnalysis ? `上次分析（${lastAnalysis}）之后有新数据（最新 ${newest}）。` : `有数据（最新 ${newest}），还没有做过深度分析。`
   return { blockers, running, last_analysis: lastAnalysis, last_auto_start: lastAuto, newest_record: newestRecord, newest_file: newestFile,
-    folder, new_data: newData, auto_allowed: autoAllowed, why_zh: why }
+    folder, new_data: newData, auto_on: autoOn, auto_allowed: autoAllowed, why_zh: why }
 }
 
 /** One line for the health snapshot: the facts and what the AI may do with them. */
 export function readinessLine(r: Readiness): string {
   if (r.blockers?.missing === 'skill' || r.blockers?.missing === 'skill_version') return ''
-  const act = r.auto_allowed ? '可以由你决定现在开始（run_deep_analysis，写明理由），开始后告诉用户为什么做、大约要多久'
-    : r.running ? '做完后用 import_analysis 导入'
-      : '现在不自动开始；用户要求时可以做'
-  return `深度分析：${r.why_zh}${act ? `——${act}` : ''}`
+  let act = ''
+  if (r.running) act = '做完后用 import_analysis 导入'
+  else if (r.auto_allowed) act = '自动深度分析已打开，可以由你决定现在开始（run_deep_analysis，trigger ai，写明理由），开始后告诉用户为什么做、大约要多久'
+  else if (!r.auto_on && r.new_data && !r.blockers) act = `自动深度分析没有打开。这是一个关键节点：在回答完用户的问题后，用一句话问他要不要做一次深度分析，并说明${COST_ZH}；他说要，才用 trigger member 开始。每批新数据只问一次，他说不用就记下（remember_for_me），不要再问`
+  else act = '现在不开始；用户要求时可以做（trigger member）'
+  return `深度分析：${r.why_zh}——${act}`
 }
 
 export type StartResult =
@@ -169,6 +179,9 @@ export async function startRun(deps: CoreDeps, opts: { dataFolder?: string | nul
   const folder = memberFolder(opts.dataFolder ?? registeredFolder(dataDir))
   if (folder.error) return { ok: false, missing: 'folder', reply_zh: folder.error }
   if (opts.trigger === 'ai') {
+    if (!autoEnabled(rootDir(config.dataDir))) {
+      return { ok: false, missing: 'auto_off', reply_zh: `自动深度分析没有打开（健康页「深度分析」里的开关）。可以问用户要不要做，并说明${COST_ZH}；他同意后用 trigger member。` }
+    }
     const context = await deps.context()
     const ready = readiness(dataDir, config, context.records, context.today)
     if (!ready.auto_allowed) return { ok: false, missing: 'not_now', reply_zh: ready.why_zh }
@@ -207,7 +220,6 @@ export async function statusNow(deps: CoreDeps) {
 }
 
 export function currentSummary(dataDir: string) {
-  if (consentsMissing()) return null                // after a consent is withdrawn nothing of the analysis is shown or sent
   const cur = currentImport(dataDir)
   if (!cur) return null
   const v = cur.value
@@ -242,8 +254,6 @@ export type ImportResult =
 
 export async function importLatest(deps: CoreDeps, runId?: string | null): Promise<ImportResult> {
   const dataDir = deps.dataDir()
-  const consent = consentsMissing()
-  if (consent) return { ok: false, error_zh: consent.reply_zh, problems: [consent.missing] }
   const run = findRun(dataDir, runId)
   if (!run) return { ok: false, error_zh: '还没有做完的深度分析可以导入。', problems: [] }
   const checked = readExport(run)
@@ -274,7 +284,7 @@ export interface PlanReadBack {
 
 export async function planReadBack(deps: CoreDeps): Promise<PlanReadBack> {
   const dataDir = deps.dataDir()
-  const cur = consentsMissing() ? null : currentImport(dataDir)
+  const cur = currentImport(dataDir)
   if (!cur) return { ok: false, run_id: null, plan_key: null, title: '', items: [], warnings: [], errors: ['还没有导入深度分析。'], plan: null }
   const context = await deps.context()
   const input = planInput(cur.value, context.today)
@@ -300,8 +310,6 @@ export async function planReadBack(deps: CoreDeps): Promise<PlanReadBack> {
  * (run id and the plan's key); a plan that changed since is not saved.
  */
 export async function acceptPlan(deps: CoreDeps, seen: { run_id?: unknown; plan_key?: unknown } = {}): Promise<{ ok: true; version: number; items: number } | { ok: false; error_zh: string; problems: string[]; stale?: boolean }> {
-  const consent = consentsMissing()
-  if (consent) return { ok: false, error_zh: consent.reply_zh, problems: [consent.missing] }
   const back = await planReadBack(deps)
   if (!back.ok || !back.plan) return { ok: false, error_zh: back.errors[0] ?? '方案不能保存。', problems: back.errors }
   if (seen.run_id !== back.run_id || seen.plan_key !== back.plan_key) {

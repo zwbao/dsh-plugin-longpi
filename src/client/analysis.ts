@@ -11,7 +11,7 @@ const h = React.createElement
 interface Readout { id: string; label_zh: string; value: unknown; unit?: string; kind?: string; low?: number; high?: number; horizon_years?: number }
 interface Stage { key: string; label_zh: string; done: boolean }
 interface Run { id: string; started_at: string; stages: Stage[]; done: number; report_ready: boolean; active: boolean; state_error: string | null; trigger: 'ai' | 'member'; reason_zh: string }
-interface Readiness { why_zh: string; auto_allowed: boolean; last_analysis: string | null; newest_record: string | null; newest_file: string | null; folder: string | null }
+interface Readiness { why_zh: string; auto_on: boolean; auto_allowed: boolean; last_analysis: string | null; newest_record: string | null; newest_file: string | null; folder: string | null }
 interface BoardRow { id: string; title_zh: string; verdict_zh: string; confidence: string | null; summary_zh: string | null; next_step_zh: string | null; limitations_zh?: string | null }
 interface OrganRow { organ: string; label_zh: string; measured: Readout[]; indices: Readout[]; ai_age: Readout | null; ai_risks: Readout[]; overrides: Array<{ disease: string; message_zh: string }> }
 interface Current {
@@ -20,7 +20,7 @@ interface Current {
   retests: Array<{ what: string; after_weeks: number; due: string }>; boundary_zh: string
 }
 interface ReadBack { ok: boolean; run_id: string | null; plan_key: string | null; title: string; items: Array<{ id: string; category: string; title: string; detail: string; markers: string[] }>; warnings: string[]; errors: string[] }
-interface Status { ok: boolean; runs: Run[]; current: Current | null; plan_read_back: ReadBack | null; blockers: { reply_zh: string; missing: string } | null; readiness: Readiness | null }
+interface Status { ok: boolean; runs: Run[]; current: Current | null; plan_read_back: ReadBack | null; blockers: { reply_zh: string; missing: string } | null; readiness: Readiness | null; cost_zh: string }
 
 const CONF_ZH: Record<string, string> = { low: '低', moderate: '中' }
 
@@ -71,6 +71,10 @@ export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone
       load()
     }
   }
+  const toggle = (on: boolean) => act('auto', async () => {
+    await postJson('/api/longpi/analysis/settings', { auto: on })
+    notice(on ? '已打开自动深度分析：有新数据时 LongPi 会自己开始。' : '已关闭自动深度分析：只在关键时间点问你要不要做。', 'info')
+  }, '设置失败')
   const doImport = (runId: string) => act('import', async () => {
     await postJson('/api/longpi/analysis/import', { run_id: runId })
     notice('结果已导入。', 'good')
@@ -94,10 +98,15 @@ export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone
   return h('div', { className: 'lp-tab-body lp-analysis' },
     error ? h('p', { className: 'lp-muted', role: 'alert' }, error) : null,
     h(Section, { title: '深度分析', kicker: '多组学 · 器官 · 问题看板' },
-    h('p', { className: 'lp-muted' }, '用你的全基因组、甲基化、肠道菌、蛋白组和体检数据，算生物学年龄、各器官状况和以后的疾病风险，提出针对你的问题并逐一查证，最后给一份能照着做的方案。什么时候做由 LongPi 判断：有了新数据才会做，在对话里进行，需要你确认的步骤会在对话里问你；你也可以在对话里直接要求做一次。'),
+    h('p', { className: 'lp-muted' }, '用全基因组、甲基化、肠道菌、蛋白组和体检数据，算生物学年龄、各器官状况和以后的疾病风险，提出针对性的问题并逐一查证，最后给一份能照着做的方案。分析在对话里进行；也可以随时在对话里直接要求做一次。'),
+    h('div', { className: 'lp-card lp-analysis-auto' },
+      h('label', { className: 'lp-switch' },
+        h('input', { type: 'checkbox', checked: Boolean(status.readiness?.auto_on), disabled: Boolean(busy), onChange: (e: React.ChangeEvent<HTMLInputElement>) => { void toggle(e.target.checked) }, 'aria-describedby': 'lp-auto-cost' }),
+        h('span', { className: 'lp-label' }, '自动深度分析')),
+      h('p', { id: 'lp-auto-cost', className: 'lp-muted' }, `注意：${t(status.cost_zh)}，会消耗大量 token。打开后，有新的体检、化验或检测文件时，LongPi 会自己判断并开始分析（两次自动分析至少间隔 30 天）；关闭时（默认），只在关键时间点问你要不要做，你同意才开始。`)),
     blocked ? h('div', { className: 'lp-card', role: 'status' }, h('div', { className: 'lp-label' }, '现在还不能做'), h('p', null, blocked.reply_zh)) : null,
     !blocked && status.readiness ? h('div', { className: 'lp-card', role: 'status' },
-      h('div', { className: 'lp-label' }, 'LongPi 的判断'),
+      h('div', { className: 'lp-label' }, status.readiness.auto_on ? 'LongPi 的判断' : '现在的情况'),
       h('p', null, t(status.readiness.why_zh)),
       status.readiness.folder ? h('p', { className: 'lp-muted' }, `检测文件夹：${t(status.readiness.folder)}（只读）`) : null) : null,
     running ? h('div', { className: 'lp-card' },

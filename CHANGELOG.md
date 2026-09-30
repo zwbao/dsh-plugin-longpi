@@ -4,12 +4,23 @@
 
 给使用者
 
-深度分析什么时候做由 LongPi 判断，不再需要你去点按钮：有了新的体检、化验或检测文件，它会在对话里自己开始，并告诉你为什么现在做、大概要多久；没有新数据时不会重复做，自动发起最多每 30 天一次。你也可以在对话里直接要求做一次。「深度分析」页显示它的判断和进度。
+可以管理家人了：在健康页顶部「在看」里切换我、爸爸、妈妈，点「添加家人」为家人在你的 Mirobody 账号下建一份独立档案（家人不需要自己的账号）。每个人的体检、方案、打卡、记忆和深度分析都分开，给家人上传的报告存进家人的档案；对话里 LongPi 知道你在看谁的记录。
+
+深度分析有一个开关（「深度分析」页，默认关闭），页面上写明每次实测约消耗 50–60 万 token、耗时 1.5–3 小时。关闭时，LongPi 只在关键时间点（有了新的体检、化验或检测文件）问你要不要做，你同意才开始；打开后，有新数据时由它自己判断并开始，两次自动分析至少间隔 30 天。你也可以随时在对话里要求做一次。
 
 健康页多了「深度分析」：用你的全基因组、甲基化、肠道菌、蛋白组和体检数据，算生物学年龄、各器官状况和以后的疾病风险，针对你提出问题并逐一查证，最后给一份能照着做的方案。点「发起深度分析」会把请求放进对话输入框，发送后在对话里进行，需要你确认的步骤会在对话里问你；页面显示做到了哪一步。做完点「导入结果」，报告、器官体检表和问题看板就出现在这一页；方案先读给你看，你点「接受方案」才保存，方案里要复测的指标会进复测提醒。发起前需要你已同意处理敏感个人信息和数据交给模型服务，并在档案里填好年龄和性别。
 
 English
 
+- M13 people: people.json (registry + active person) in the LongPi home; the holder's store is the home itself (an
+  older install keeps its data), a family member's is people/<id>/; resolveDataDir returns the active person's store, so
+  every module follows. A member is created as a Mirobody managed member (POST /user/virtual) and read through a personal
+  MCP link minted for them (POST /personal/mcp {user_id}), saved in their store with no token and renewed after 7 days
+  with the holder's token; a member without a link is not connected (never the holder's configured address). Uploads for
+  a member use the holder's token with query_user_id (Mirobody checks write access). Deleting the holder's store keeps
+  family stores. The health snapshot names whose record is shown; the page has a 在看 picker and 添加家人.
+- Deep analysis needs no consent (owner decision). The automatic switch (analysis-settings.json, off by default) gates
+  trigger "ai"; with it off the snapshot tells the AI to ask once at the key moment, with the token cost.
 - M12 deep analysis, started by the AI: the health snapshot carries a 深度分析 line (new Mirobody data or new files in
   the remembered folder since the last analysis, a run going, consent); run_deep_analysis takes trigger ai|member and
   reason_zh, and the harness refuses an "ai" start with no new data, with a run going, or within 30 days of the last

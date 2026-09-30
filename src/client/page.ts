@@ -21,6 +21,7 @@ import { ProfileTab } from './profile-tab.ts'
 import { SeasonBar } from './engage/index.ts'
 import { AskTab, CalendarTab, SleepTab, Subnav, TrainingTab } from './life.ts'
 import { AnalysisTab } from './analysis.ts'
+import { PeoplePicker } from './people.ts'
 import { pageTabs } from './registry.ts'
 import type { ResultTarget } from './results.ts'
 import {
@@ -75,6 +76,7 @@ function Header(props: { journey: Journey | null; failed: boolean; refreshing: b
       h('p', { className: 'lp-lead' }, `${chineseDate(today)} ${weekday(today)}${plan}`),
       journey ? h(RecordsStatusLine, { journey }) : props.failed ? null : h(Skeleton, { height: 18, width: 240 })),
     h('div', { className: 'lp-actions' },
+      h(PeoplePicker),
       h('button', { type: 'button', className: 'lp-linkbtn', onClick: props.onRefresh, disabled: props.refreshing, 'aria-busy': props.refreshing },
         h(Icon, { name: 'refresh', size: 14, className: props.refreshing ? 'lp-spin' : '' }), props.refreshing ? '刷新中' : '刷新')))
 }

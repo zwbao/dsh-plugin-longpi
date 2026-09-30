@@ -960,6 +960,15 @@ div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; 
   .lp-card, .lp-win, .lp-pop, .lp-skeleton, .lp-hero, .lp-home-row, .lp-task-ring, .lp-pill-wrap, .lp-notice, .lp-spin, .lp-info-pop, .lp-task-menu { animation: none; }
   .lp-ring-fill, .lp-body, .lp-dot, .lp-dot-step, .lp-switch-track, .lp-switch-thumb { transition: none; }
 }
+.lp-people { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.lp-people-pick { display: inline-flex; align-items: center; gap: 6px; }
+.lp-people-pick select { height: 30px; min-width: 120px; }
+.lp-people-add { flex-basis: 100%; display: grid; gap: 8px; max-width: 420px; }
+.lp-field { display: grid; gap: 4px; }
+.lp-input { height: 32px; padding: 0 10px; border: 1px solid var(--lp-line, #ddd); border-radius: 8px; background: transparent; color: var(--lp-ink); font-size: 13px; }
+.lp-switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.lp-switch input { width: 18px; height: 18px; }
+.lp-analysis-auto { margin: 12px 0; }
 `
 
 export function injectStyles(): void {

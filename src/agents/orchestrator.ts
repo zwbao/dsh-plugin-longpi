@@ -27,7 +27,8 @@ export const ORCHESTRATOR_RULES = [
   '4. When the person states a goal, something they do not want (不要…), a condition, a medicine they take or stopped, a sick or travel day, or whether they drink, call remember_for_me with their exact words as quote. read_person_memory shows what is already kept; do not ask again.',
   '5. Use the job skills for the job at hand. Never send the person\'s name anywhere; call them 你.',
   '6. Write only Chinese to the person. Do not narrate what you are about to do (no "I\'ll …", "Let me …" before a tool call): call the tool, then answer.',
-  '7. Deep analysis is your decision, not a button: when the snapshot line 深度分析 says it can start now, start it yourself with run_deep_analysis (trigger "ai", reason_zh naming the new data), say in one sentence why and that it runs in the background of this chat, then follow the longevity-analyst skill; import the result with import_analysis when it is done and read the plan back for the person to adopt. Start one for trigger "member" only when they ask. Never start one they declined, and never around a missing consent: ask for the consent instead.',
+  '7. Deep analysis: follow the snapshot line 深度分析. With automatic deep analysis switched on and the line saying it can start, start it yourself with run_deep_analysis (trigger "ai", reason_zh naming the new data) and say in one sentence why and that it runs in the background of this chat. With the switch off, at the key moment the line names, ask once whether to do one, saying how many tokens and how long it takes; start it with trigger "member" only on a yes. Then follow the longevity-analyst skill, import the result with import_analysis when it is done, and read the plan back for them to adopt.',
+  '8. The snapshot line 当前查看 names whose record the page shows. When it is a family member, every record, plan and analysis you read or write is theirs: speak about them (你爸爸 / 你妈妈), not about the person chatting, and never mix the two.',
 ]
 
 export function orchestratorPrompt(mount: MountState): string {
@@ -64,12 +65,15 @@ export interface SnapshotInput {
   noted_zh?: string
   /** The deep-analysis facts (M12): new data since the last analysis, a run going, what the AI may do. */
   analysis_zh?: string
+  /** Whose record the page shows now (M13), when it is a family member rather than the person chatting. */
+  person_zh?: string
 }
 
 /** The snapshot text (Chinese), at most about 1.5k tokens. */
 export function snapshotText(input: SnapshotInput): string {
   const { page } = input
   const lines = ['【LongPi 健康页快照】以下是 LongPi 健康页此刻显示的内容，由插件提供，不是用户说的话。']
+  if (input.person_zh) lines.push(input.person_zh)
   const top = page.top_facts[0]
   const urgent = (row: PageState['top_facts'][number] | undefined) => Boolean(row) && (row?.priority === 'must_surface' || row?.priority === 'emergency')
   // Only a doctor-first finding or a screening topic is said first; a medicine or condition that changes

@@ -41,6 +41,8 @@ export function deleteLocalStore(dataDir: string, fallbackMcpUrl = '', now = new
   }
   if (existsSync(dataDir)) {
     for (const entry of readdirSync(dataDir)) {
+      // The holder's store is also the LongPi home: family members' stores and the registry are theirs, not the holder's.
+      if (entry === 'people' || entry === 'people.json' || entry === 'analysis-settings.json') continue
       rmSync(join(dataDir, entry), { recursive: true, force: true })
       deleted += 1
     }

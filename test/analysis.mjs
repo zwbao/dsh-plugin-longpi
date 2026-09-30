@@ -29,7 +29,7 @@ function depsFor(dataDir, config = {}) {
   let invalidated = 0
   return {
     dataDir: () => dataDir,
-    config: () => ({ mcpUrl: '', member: '', skillsHome: '/lib/longevity-skills', ...config }),
+    config: () => ({ mcpUrl: '', member: '', skillsHome: '/lib/longevity-skills', dataDir, ...config }),
     context: async () => ({ today: '2026-09-30', records: { medications: [] } }),
     invalidate: () => { invalidated += 1 },
     get invalidated() { return invalidated },
@@ -81,10 +81,7 @@ function exportFor(run, over = {}) {
   assert.equal(mod.startBlockers(dataDir)?.missing, 'skill_version', 'a harness without export/mirobody is too old')
   process.env.LONGPI_ANALYST_SKILL = GOOD_SKILL
   assert.equal(mod.startBlockers(dataDir, { member: 'family-2' })?.missing, 'member', 'a care-circle member is never analysed from the holder\'s data')
-  assert.equal(mod.startBlockers(dataDir)?.missing, 'pipl_sensitive')
-  grant(dataDir, 'pipl_sensitive')
-  assert.equal(mod.startBlockers(dataDir)?.missing, 'data_flow_deepseek')
-  grant(dataDir, 'data_flow_deepseek')
+  // no consent is asked for a deep analysis (owner decision): the profile is the next thing missing
   assert.equal(mod.startBlockers(dataDir)?.missing, 'profile')
   mod.writeProfile(dataDir, { ...mod.EMPTY_PROFILE, age: 40, birthYear: 1986, sex: 'other' })
   assert.match(mod.startBlockers(dataDir)?.reply_zh ?? '', /生理性别/)
@@ -180,12 +177,6 @@ function exportFor(run, over = {}) {
   assert.equal(mod.currentImport(dataDir).meta.plan_accepted_version, plan.version)
   assert.equal((await mod.acceptPlan(deps, { run_id: fresh.run_id, plan_key: fresh.plan_key })).ok, false)
 
-  // consent withdrawn: nothing of the analysis is shown, read or imported
-  grant(dataDir, 'data_flow_deepseek', 'withdrawn')
-  assert.equal(mod.currentSummary(dataDir), null)
-  assert.equal((await mod.importLatest(deps)).ok, false)
-  grant(dataDir, 'data_flow_deepseek')
-
   // abandon hides a run
   assert.equal(mod.abandonAnalysis(deps, run.id), true)
   assert.ok(!mod.listRuns(dataDir).some((r) => r.id === run.id))
@@ -217,7 +208,13 @@ function exportFor(run, over = {}) {
   let records = { indicators: [{ name: 'LDL', value: '3.8', unit: 'mmol/L', date: '2026-09-10' }] }
   const deps = { ...base, context: async () => ({ today: '2026-09-30', records: { ...records, medications: [] } }) }
   assert.equal((await mod.startRun(deps, { trigger: 'ai', reasonZh: '' })).missing, 'reason', 'a start without a reason is refused')
-  let ready = mod.analysisReadiness(dataDir, {}, records, '2026-09-30')
+  // the switch is off by default: the AI may only ask, and says what it costs
+  let ready = mod.analysisReadiness(dataDir, { dataDir }, records, '2026-09-30')
+  assert.equal(ready.auto_on, false); assert.equal(ready.auto_allowed, false); assert.equal(ready.new_data, true)
+  assert.match(mod.analysisReadinessLine(ready), /自动深度分析没有打开.*问他要不要做.*token/)
+  assert.equal((await mod.startRun(deps, { trigger: 'ai', reasonZh: '有新数据' })).missing, 'auto_off')
+  mod.setAutoEnabled(dataDir, true)
+  ready = mod.analysisReadiness(dataDir, { dataDir }, records, '2026-09-30')
   assert.equal(ready.auto_allowed, true, ready.why_zh)
   assert.match(mod.analysisReadinessLine(ready), /可以由你决定现在开始/)
   const first = await mod.startRun(deps, { trigger: 'ai', reasonZh: '有 9 月体检的新化验，还没做过深度分析' })
@@ -229,12 +226,12 @@ function exportFor(run, over = {}) {
   // it finished: nothing new since, so no automatic run
   const run = mod.listRuns(dataDir).at(-1)
   exportFor(run)
-  ready = mod.analysisReadiness(dataDir, {}, records, '2026-09-30')
+  ready = mod.analysisReadiness(dataDir, { dataDir }, records, '2026-09-30')
   assert.equal(ready.new_data, false); assert.equal(ready.auto_allowed, false)
   assert.equal((await mod.startRun(deps, { trigger: 'ai', reasonZh: 'x' })).missing, 'not_now')
   // new data, but within 30 days of the last automatic start: still no; the member asking is allowed
   records = { indicators: [{ name: 'LDL', value: '3.4', unit: 'mmol/L', date: '2026-10-05' }] }
-  ready = mod.analysisReadiness(dataDir, {}, records, '2026-10-06')
+  ready = mod.analysisReadiness(dataDir, { dataDir }, records, '2026-10-06')
   assert.equal(ready.new_data, true); assert.equal(ready.auto_allowed, false)
   assert.match(ready.why_zh, /不足 30 天/)
   const asked = await mod.startRun({ ...deps, context: async () => ({ today: '2026-10-06', records: { ...records, medications: [] } }) }, { trigger: 'member', reasonZh: '用户要求复查后再分析' })
@@ -242,7 +239,7 @@ function exportFor(run, over = {}) {
   // after 30 days and with new data, the AI may start again
   mod.abandonAnalysis(deps, mod.listRuns(dataDir).at(-1).id)
   records = { indicators: [{ name: 'LDL', value: '3.1', unit: 'mmol/L', date: '2026-11-20' }] }
-  ready = mod.analysisReadiness(dataDir, {}, records, '2026-11-21')
+  ready = mod.analysisReadiness(dataDir, { dataDir }, records, '2026-11-21')
   assert.equal(ready.auto_allowed, true, ready.why_zh)
 }
 

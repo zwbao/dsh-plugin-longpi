@@ -8,6 +8,8 @@ import { readFileSync, statSync } from 'node:fs'
 import { extname, join } from 'node:path'
 import type { CoreDeps } from '../contracts/index.ts'
 import { readConnection } from '../connection.ts'
+import { resolveRootDir } from '../paths.ts'
+import { activePerson } from '../people/store.ts'
 import { appendJsonl, newId, readJsonl } from '../core/store.ts'
 import type { StoreKind } from '../contracts/library.ts'
 import { confirmMessage, parseReport, saveReportText, storeLabel, storeReadBack } from '../stores/index.ts'
@@ -136,6 +138,8 @@ export async function pushToMirobody(opts: {
   note?: string
   deadlineMs?: number
   open?: SocketOpener
+  /** A family member's Mirobody id: the holder's token uploads into their record (Mirobody checks write access). */
+  queryUserId?: string
 }): Promise<MirobodyPush> {
   const messageId = randomUUID()
   const sessionId = randomUUID()
@@ -176,6 +180,7 @@ export async function pushToMirobody(opts: {
           query: opts.note || 'LongPi checkup upload',
           isFirstMessage: false,
           files: [{ filename: opts.filename, contentType: opts.contentType, size: opts.bytes.length }],
+          ...(opts.queryUserId ? { query_user_id: opts.queryUserId } : {}),
         }))
         for (let index = 0; index < total; index += 1) {
           const piece = opts.bytes.subarray(index * CHUNK, (index + 1) * CHUNK)
@@ -414,16 +419,32 @@ async function finishForward(deps: Pick<CoreDeps, 'config' | 'dataDir' | 'bus' |
 }): Promise<IngestResult> {
   const dataDir = deps.dataDir()
   const config = deps.config()
-  const saved = readConnection(dataDir)
-  const mcpUrl = saved?.mcp_url || config.mcpUrl
-  const token = saved?.mcp_token || config.mcpToken
+  const root = resolveRootDir(config.dataDir)
+  let mcpUrl = ''
+  let token = ''
+  let queryUserId: string | undefined
+  if (dataDir === root) {
+    const saved = readConnection(dataDir)
+    mcpUrl = saved?.mcp_url || config.mcpUrl
+    token = saved?.mcp_token || config.mcpToken
+  } else {
+    // A family member: never the holder's own address. The holder's token uploads into the member's record, named
+    // explicitly; a member LongPi did not create in Mirobody gets no upload rather than the wrong record.
+    const member = activePerson(root).person
+    const holder = readConnection(root)
+    if (member?.mirobody_user_id && holder?.mcp_token && holder.mcp_url) {
+      mcpUrl = holder.mcp_url
+      token = holder.mcp_token
+      queryUserId = member.mirobody_user_id
+    }
+  }
   const origin = mcpUrl ? originOf(mcpUrl) : null
   const connected = Boolean(origin && token)
   let push: MirobodyPush | null = null
   if (input.upload && connected && origin && token && input.bytes.length > 0 && input.bytes.length <= LAB_CAP_BYTES) {
     push = await pushToMirobody({
       origin, token, filename: input.filename, bytes: input.bytes, contentType: input.contentType,
-      note: 'LongPi checkup upload', open: input.open,
+      note: 'LongPi checkup upload', open: input.open, ...(queryUserId ? { queryUserId } : {}),
     })
   }
   const day = push?.checkup_day || /(20\d{2}-\d{2}-\d{2})/.exec(input.text)?.[1] || null
