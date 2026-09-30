@@ -106,7 +106,7 @@ function Shell(props: { call: ParsedCall; icon: string; title: string; summary?:
   const rawText = call.state === 'running' ? '' : prettyRaw(call.text)
   return h('div', { className: `lp lp-tool ${props.quiet ? 'lp-tool-quiet' : 'lp-tool-card'} ${call.state === 'error' ? 'lp-tool-error' : ''}`, 'data-state': call.state },
     h('div', { className: 'lp-tool-head' },
-      h('span', { className: `lp-tool-icon ${running ? 'lp-tool-running' : ''}`, 'aria-hidden': true }, h(Icon, { name: running ? 'refresh' : call.state === 'error' ? 'warn' : props.icon, size: 14, className: running ? 'lp-spin' : '' })),
+      h('span', { className: 'lp-tool-icon', 'aria-hidden': true }, h(Icon, { name: running ? 'refresh' : call.state === 'error' ? 'warn' : props.icon, size: 14, className: running ? 'lp-spin' : '' })),
       h('span', { className: 'lp-tool-title' }, props.title),
       props.summary != null ? h('span', { className: `lp-tool-summary ${props.tone ? `lp-tool-${props.tone}` : ''}` }, props.summary) : null,
       props.action ?? null,
@@ -161,9 +161,9 @@ function DraftCard(props: { callId: string; data: PlanDraftResponse; draft: Plan
   const openPlan = props.openPage ? () => { requestView({ tab: 'plan', id: 'lp-plan' }); props.openPage?.() } : null
   if (saved) {
     return h('div', { className: 'lp-tool-saved' },
-      h('span', { className: 'lp-chip-saved' }, h(Icon, { name: 'check', size: 12, strokeWidth: 2 }), `已保存为方案第 ${saved.version} 版`),
+      h('span', { className: 'lp-badge lp-badge-good' }, h(Icon, { name: 'check', size: 12, strokeWidth: 2 }), `已保存为方案第 ${saved.version} 版`),
       saved.reminder ? h('span', { className: 'lp-caption' }, `打卡提醒没有打开：${saved.reminder}`) : null,
-      openPlan ? h('button', { type: 'button', className: 'lp-row-link', onClick: openPlan }, '在健康页查看 →') : null)
+      openPlan ? h('button', { type: 'button', className: 'lp-textbtn', onClick: openPlan }, '在健康页查看 →') : null)
   }
   return h('div', { className: 'lp-tool-draft' },
     h(DraftItems, { draft, removed, onToggle: toggle, compact: true }),
@@ -234,7 +234,7 @@ export function SaveToolView(props: ToolViewProps): React.ReactElement {
     const openPlan = props.openPage ? () => { requestView({ tab: 'plan', id: 'lp-plan' }); props.openPage?.() } : null
     return h(Shell, {
       call, icon: 'check', title: '保存方案', quiet: true,
-      summary: h('span', { className: 'lp-chip-saved' }, h(Icon, { name: 'check', size: 12, strokeWidth: 2 }), version != null ? `已保存为方案第 ${version} 版` : '已保存'),
+      summary: h('span', { className: 'lp-badge lp-badge-good' }, h(Icon, { name: 'check', size: 12, strokeWidth: 2 }), version != null ? `已保存为方案第 ${version} 版` : '已保存'),
       action: openPlan ? h('button', { type: 'button', className: 'lp-tool-undo', onClick: openPlan }, '在健康页查看 →') : null,
     })
   }
@@ -243,7 +243,7 @@ export function SaveToolView(props: ToolViewProps): React.ReactElement {
       ...readBack.map((text, index) => {
         const row = readBackRow(text)
         return h('li', { key: index },
-          row.category ? h('span', { className: 'lp-cat' }, row.category) : null,
+          row.category ? h('span', { className: 'lp-tag' }, row.category) : null,
           h('span', { className: 'lp-strong' }, row.title),
           row.rest ? h('span', { className: 'lp-caption' }, ` ${row.rest}`) : null)
       })) : null,
@@ -319,7 +319,7 @@ export function CheckinToolView(props: ToolViewProps): React.ReactElement {
   }
   return h(Shell, {
     call, icon: 'check', title: '打卡', quiet: true,
-    summary: h('span', { className: `lp-chip-saved ${onlyTaken ? 'lp-chip-undone' : ''}` },
+    summary: h('span', { className: `lp-badge ${onlyTaken ? 'lp-badge-neutral' : 'lp-badge-good'}` },
       h(Icon, { name: onlyTaken ? 'close' : 'check', size: 12, strokeWidth: 2 }), parts.join('；')),
     action: !undone && undoable.length > 0
       ? h('button', { type: 'button', className: 'lp-tool-undo', disabled: undoing, onClick: () => { void undo() }, 'aria-label': `撤销今天的打卡：${undoable.map((row) => nameOf(row, true)).join('、')}` }, undoing ? '撤销中' : '撤销')
@@ -356,7 +356,7 @@ function skillName(board: ReturnType<typeof useCachedBoard>, name: string, resul
 
 function ResultFigure(props: { figure: string; unit: string; lines: string[]; label: string; info: string }): React.ReactElement {
   return h('div', { className: 'lp-tool-result' },
-    h('span', { className: 'lp-tool-figure' }, props.figure, h('span', { className: 'lp-bignum-unit' }, props.unit)),
+    h('span', { className: 'lp-num-md lp-tool-figure' }, props.figure, h('span', { className: 'lp-unit' }, props.unit)),
     h('span', { className: 'lp-tag', title: '模型根据你的记录计算的估计值，不是诊断' }, '模型估计'),
     h(Info, { label: props.label }, props.info),
     ...props.lines.filter(Boolean).map((line) => h('span', { key: line, className: 'lp-caption' }, line)))

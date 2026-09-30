@@ -51,11 +51,12 @@ function WeekStrip(props: { tracking: Tracking | null; today: string }): React.R
   const retest = retestDates(props.tracking)[0]
   const retestText = retest ? (retest.date <= props.today ? `现在可以复测${retest.marker}` : `${chineseDate(retest.date)}可复测${retest.marker}`) : ''
   return h('div', { className: 'lp-week' },
-    h('span', { className: 'lp-caption' }, '本周'),
-    h('ol', { className: 'lp-week-cells', 'aria-label': `近 7 天：${week.map((day) => `${chineseDate(day.date)}${DAY_ZH[day.state]}`).join('，')}` },
-      ...week.map((day) => h('li', { key: day.date, className: `lp-week-cell lp-week-${day.state}`, title: `${chineseDate(day.date)} ${DAY_ZH[day.state]}` },
-        h('span', { className: 'lp-week-day', 'aria-hidden': true }, WEEK_ZH[new Date(`${day.date}T12:00:00Z`).getUTCDay()])))),
-    retestText ? h('span', { className: 'lp-caption' }, `· ${retestText}`) : null)
+    h('div', { className: 'lp-week-line' },
+      h('span', { className: 'lp-caption' }, '本周'),
+      h('ol', { className: 'lp-week-cells', 'aria-label': `近 7 天：${week.map((day) => `${chineseDate(day.date)}${DAY_ZH[day.state]}`).join('，')}` },
+        ...week.map((day) => h('li', { key: day.date, className: `lp-week-cell lp-week-${day.state}`, title: `${chineseDate(day.date)} ${DAY_ZH[day.state]}` },
+          h('span', { className: 'lp-week-day', 'aria-hidden': true }, WEEK_ZH[new Date(`${day.date}T12:00:00Z`).getUTCDay()]))))),
+    retestText ? h('p', { className: 'lp-caption' }, retestText) : null)
 }
 
 function TodayCard(props: { journey: Journey; tracking: Tracking | null; onNotice: Notify }): React.ReactElement {
@@ -63,7 +64,7 @@ function TodayCard(props: { journey: Journey; tracking: Tracking | null; onNotic
   const counts = todayCounts(props.journey)
   return h('section', { className: 'lp-card lp-today-card', id: 'lp-today', 'aria-labelledby': 'lp-today-title' },
     h('div', { className: 'lp-card-head' },
-      h('div', { className: 'lp-label', id: 'lp-today-title' }, '今天', counts.total > 0 ? h('span', { className: 'lp-optional' }, `${counts.done} / ${counts.total}`) : null),
+      h('h3', { className: 'lp-card-title', id: 'lp-today-title' }, '今天', counts.total > 0 ? h('span', { className: 'lp-caption lp-num' }, `${counts.done} / ${counts.total}`) : null),
       props.journey.plan.days != null ? h('span', { className: 'lp-caption' }, `方案第 ${props.journey.plan.days} 天`) : null),
     h(TodayList, { journey: props.journey, stateOf, busy, onAnswer: answer }),
     h(WeekStrip, { tracking: props.tracking, today: props.journey.today }))
@@ -101,10 +102,10 @@ function NextCard(props: OverviewProps): React.ReactElement | null {
   const cta = ctaOf(next.action, props)
   return h('section', { className: 'lp-card lp-next-card', 'aria-label': '下一步' },
     h('div', { className: 'lp-next-text' },
-      h('div', { className: 'lp-label' }, '下一步'),
-      h('div', { className: 'lp-strong' }, next.title_zh),
-      next.detail_zh && next.detail_zh !== next.title_zh ? h('p', { className: 'lp-muted' }, next.detail_zh) : null),
-    cta ? h(Btn, { size: 'sm', onClick: cta.run }, cta.label, h(Icon, { name: 'arrow', size: 14 })) : null)
+      h('div', { className: 'lp-caption' }, '下一步'),
+      h('h3', { className: 'lp-h3' }, next.title_zh),
+      next.detail_zh && next.detail_zh !== next.title_zh ? h('p', { className: 'lp-muted lp-small' }, next.detail_zh) : null),
+    cta ? h(Btn, { size: 'sm', onClick: cta.run }, cta.label) : null)
 }
 
 /** Some reads failed: the missing values are unknown, not "not measured". */
@@ -113,7 +114,7 @@ function PartialNote(props: { journey: Journey }): React.ReactElement | null {
   if (records.status !== 'partial') return null
   const missing = records.missing_reads.filter((name) => name && !isDiagnosisName(name)).map((name) => scrubVisible(name)).filter(Boolean)
   const errors = records.read_errors.map((line) => scrubVisible(line)).filter(Boolean)
-  return h('p', { className: 'lp-blocker lp-blocker-bad lp-partial', role: 'note' },
+  return h('div', { className: 'lp-callout lp-callout-warn', role: 'note' },
     h(Icon, { name: 'warn', size: 14 }),
     h('span', null,
       `有一部分记录这次没有读到${errors.length > 0 ? `（${errors.slice(0, 2).join('；')}）` : ''}。`,
@@ -135,7 +136,7 @@ export function Overview(props: OverviewProps): React.ReactElement {
   const doctor = journey.next.action === 'doctor'
   // Each fact once (INT062 fix 7): the values 最重要的一步 is about stay on that card; the rest of 总览 leaves them out.
   const covered = coveredByCare(journey)
-  return h('div', { className: 'lp-tab-body lp-overview' },
+  return h('div', { className: 'lp-tab-body' },
     h(PartialNote, { journey }),
     // A value to show a doctor is the top fact: first, before the day's check-ins and the results (M1: with the brief and the visit answers).
     doctor ? h(CareCard, { journey, onNotice: props.onNotice, onIndicators: () => props.goTab('indicators', { filter: 'changed' }), onProfile: props.openOnboarding }) : null,

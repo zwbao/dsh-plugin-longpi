@@ -138,13 +138,21 @@ export function whenText(iso: string | null, today = localToday()): string {
   return `${label} ${time}`.trim()
 }
 
+function nextParts(data: FollowupResponse): Array<[string, string]> {
+  const parts: Array<[string, string | null]> = [['下次打卡', data.next.checkin], ['下次复测', data.next.retest], ['下次小结', data.next.weekly]]
+  return parts.filter((row): row is [string, string] => Boolean(row[1])).map(([label, iso]) => [label, whenText(iso)])
+}
+
 function nextLine(data: FollowupResponse): string {
-  const parts = [
-    data.next.checkin ? `打卡 ${whenText(data.next.checkin)}` : '',
-    data.next.retest ? `复测 ${whenText(data.next.retest)}` : '',
-    data.next.weekly ? `小结 ${whenText(data.next.weekly)}` : '',
-  ].filter(Boolean)
-  return parts.length > 0 ? `下次：${parts.join(' · ')}` : '近期没有要发的提醒'
+  const parts = nextParts(data)
+  return parts.length > 0 ? parts.map(([label, when]) => `${label} ${when}`).join('，') : '近期没有要发的提醒'
+}
+
+/** 下次打卡 / 复测 / 小结 as a short key-value list; nothing when nothing is scheduled. */
+function NextList(props: { data: FollowupResponse }): React.ReactElement {
+  const parts = nextParts(props.data)
+  if (parts.length === 0) return h('p', { className: 'lp-caption' }, '近期没有要发的提醒。')
+  return h('dl', { className: 'lp-kv' }, ...parts.flatMap(([label, when]) => [h('dt', { key: `t:${label}` }, label), h('dd', { key: `d:${label}`, className: 'lp-num' }, when)]))
 }
 
 function TimeField(props: { id: string; label: string; value: string; onChange: (value: string) => void; hint?: string }): React.ReactElement {
@@ -162,7 +170,7 @@ function Check(props: { id: string; checked: boolean; onChange: (checked: boolea
       id: props.id, type: 'checkbox', checked: props.checked, disabled: props.disabled,
       onChange: (event: React.ChangeEvent<HTMLInputElement>) => props.onChange(event.target.checked),
     }),
-    h('span', null, props.children))
+    h('span', { className: 'lp-check-text' }, props.children))
 }
 
 function channelsText(row: FollowupLogRow): string {
@@ -186,7 +194,7 @@ function Log(props: { rows: FollowupLogRow[] }): React.ReactElement {
             row.error ? h('span', { className: 'lp-caption' }, `  ${row.error}`) : null),
           h('span', { className: 'lp-row-end' },
             channelsText(row) ? h('span', { className: 'lp-caption' }, channelsText(row)) : null,
-            h('span', { className: `lp-sent ${row.ok ? 'lp-sent-ok' : 'lp-sent-bad'}` },
+            h('span', { className: `lp-badge ${row.ok ? 'lp-badge-good' : 'lp-badge-warn'}` },
               h(Icon, { name: row.ok ? 'check' : 'close', size: 12, strokeWidth: 2 }),
               row.ok ? '已发送' : Object.values(row.channels).some(Boolean) ? '部分失败' : '失败'))))))
 }
@@ -197,7 +205,7 @@ function TestResult(props: { result: FollowupTestResponse; kind: WebhookKind | n
   if (props.result.channels.webhook) rows.push({ name: props.kind ? KIND_ZH[props.kind] : 'Webhook', ...props.result.channels.webhook })
   if (rows.length === 0) return h('span', { className: 'lp-caption', role: 'status' }, '没有可用的渠道：打开桌面通知或填写 Webhook 后再试。')
   return h('span', { className: 'lp-test-result', role: 'status' },
-    ...rows.map((row) => h('span', { key: row.name, className: `lp-sent ${row.ok ? 'lp-sent-ok' : 'lp-sent-bad'}` },
+    ...rows.map((row) => h('span', { key: row.name, className: `lp-badge ${row.ok ? 'lp-badge-good' : 'lp-badge-warn'}` },
       h(Icon, { name: row.ok ? 'check' : 'close', size: 12, strokeWidth: 2 }),
       `${row.name}：${row.ok ? '已发送' : `失败${row.error ? `（${row.error}）` : ''}`}`)))
 }
@@ -285,7 +293,7 @@ function Settings(props: { data: FollowupResponse; onNotice: Notify; hideSwitch?
         : '关闭时不会发送任何提醒。开启后按下面的时间提醒打卡、到期复测和每周小结。')),
     h('div', { className: 'lp-grid-2 lp-followup-grid' },
       h('fieldset', { className: 'lp-fieldset' },
-        h('legend', { className: 'lp-label' }, '什么时候'),
+        h('legend', { className: 'lp-followup-legend' }, '什么时候'),
         h('div', { className: 'lp-followup-times' },
           h(TimeField, { id: 'lp-fu-checkin', label: '打卡提醒', hint: '当天还有未完成时', value: form.checkin_time, onChange: (value) => set('checkin_time', value) }),
           h(TimeField, { id: 'lp-fu-retest', label: '复测提醒', hint: '到期当天', value: form.retest_time, onChange: (value) => set('retest_time', value) })),
@@ -307,9 +315,9 @@ function Settings(props: { data: FollowupResponse; onNotice: Notify; hideSwitch?
             h('span', { className: 'lp-unit' }, '至'),
             h('input', { type: 'time', className: 'lp-input lp-input-time', value: form.quietEnd, 'aria-label': '免打扰结束', onChange: (event: React.ChangeEvent<HTMLInputElement>) => { if (event.target.value) set('quietEnd', event.target.value) } })) : null)),
       h('fieldset', { className: 'lp-fieldset' },
-        h('legend', { className: 'lp-label' }, '发到哪里'),
+        h('legend', { className: 'lp-followup-legend' }, '发到哪里'),
         h(Check, { id: 'lp-fu-desktop', checked: form.desktop && data.platform_desktop, disabled: !data.platform_desktop, onChange: (checked) => set('desktop', checked) },
-          '桌面通知', h('span', { className: 'lp-caption' }, data.platform_desktop ? '  这台电脑的系统通知' : '  这台电脑的系统不支持')),
+          '桌面通知', h('span', { className: 'lp-caption' }, data.platform_desktop ? '这台电脑的系统通知' : '这台电脑的系统不支持')),
         h('div', { className: 'lp-field' },
           h('label', { className: 'lp-field-label', htmlFor: 'lp-fu-kind' }, 'Webhook 渠道', h('span', { className: 'lp-optional' }, '可选：发到手机上的群机器人或 App')),
           h('select', {
@@ -390,8 +398,8 @@ function ReminderSwitch(props: { data: FollowupResponse; onNotice: Notify }): Re
     }
   }
 
-  return h('div', { className: 'lp-remind' },
-    h('div', { className: 'lp-remind-row' },
+  return h('div', { className: 'lp-reminder' },
+    h('div', { className: 'lp-reminder-row' },
       h(Switch, {
         id: 'lp-remind-on', checked: settings.enabled, busy, disabled: busy, label: '每晚提醒我打卡',
         onChange: (next) => { void post(next ? { enabled: true, ...(hasChannel ? {} : { desktop: true }) } : { enabled: false }, next ? '打卡提醒已开启。' : '提醒已关闭。') },
@@ -401,7 +409,8 @@ function ReminderSwitch(props: { data: FollowupResponse; onNotice: Notify }): Re
         onChange: (event: React.ChangeEvent<HTMLInputElement>) => { if (event.target.value) setTime(event.target.value) },
         onBlur: () => { if (time !== settings.checkin_time) void post({ checkin_time: time }, `提醒时间改为 ${time}。`) },
       })),
-    h('p', { className: 'lp-caption' }, settings.enabled ? `${switchCaption(data)}${hasChannel ? ` ${nextLine(data)}` : ''}` : `关闭时不会发送任何提醒。开启后：${switchCaption(data)}`),
+    h('p', { className: 'lp-caption' }, settings.enabled ? switchCaption(data) : `关闭时不会发送提醒。开启后：${switchCaption(data)}`),
+    settings.enabled && hasChannel ? h(NextList, { data }) : null,
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null)
 }
 
@@ -410,10 +419,12 @@ export function FollowupPanel(props: { onNotice: Notify }): React.ReactElement {
   const { data, loading, error } = useFollowup()
   if (!data && loading) return h(Skeleton, { height: 88 })
   if (!data) return h(LoadError, { what: '随访设置', error, onRetry: () => reload('followup') })
-  return h('div', { className: 'lp-followup-panel' },
+  return h('div', { className: 'lp-followup-box' },
     h(ReminderSwitch, { data, onNotice: props.onNotice }),
-    h(EngageSettingsNote),
-    h('details', { className: 'lp-more' },
+    h('div', { className: 'lp-callout lp-callout-info lp-followup-note' },
+      h(Icon, { name: 'info', size: 14 }),
+      h('div', { className: 'lp-callout-body' }, h(EngageSettingsNote))),
+    h('details', null,
       h('summary', null, '更多设置', h('span', { className: 'lp-optional' }, '复测提醒、每周小结、免打扰、发到飞书或手机、内容详略')),
       h(Settings, { data, onNotice: props.onNotice, hideSwitch: true })))
 }

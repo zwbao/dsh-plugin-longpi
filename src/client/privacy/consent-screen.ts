@@ -45,14 +45,15 @@ export function SensitiveConsentScreen(props: { onDone?: () => void } & Record<s
 
   const copy = status?.copy
   const paragraphs = copy?.pipl?.paragraphs ?? []
-  return h('section', { className: 'lp-consent', id: 'lp-pipl-consent' },
-    h('h2', { className: 'lp-onb-title' }, copy?.pipl?.title ?? '单独同意：处理你的健康信息'),
-    h('p', { className: 'lp-onb-lead' }, copy?.pipl?.lead ?? '这一页是单独的一次同意。'),
-    ...paragraphs.map((line) => h('p', { key: line }, line)),
-    status?.minor?.child ? h('p', { className: 'lp-fine' }, copy?.minor?.under_14) : null,
-    h('label', { className: 'lp-field' }, '实足年龄',
+  return h('section', { className: 'lp-pipl', id: 'lp-pipl-consent' },
+    h('h2', { className: 'lp-h2' }, copy?.pipl?.title ?? '单独同意：处理你的健康信息'),
+    h('p', { className: 'lp-text lp-muted' }, copy?.pipl?.lead ?? '这一页是单独的一次同意。'),
+    ...paragraphs.map((line) => h('p', { key: line, className: 'lp-text' }, line)),
+    status?.minor?.child && copy?.minor?.under_14 ? h('p', { className: 'lp-callout lp-callout-warn' }, copy.minor.under_14) : null,
+    h('div', { className: 'lp-field lp-consent-age' },
+      h('label', { className: 'lp-field-label', htmlFor: 'lp-pipl-age' }, '实足年龄'),
       h('input', { className: 'lp-input', id: 'lp-pipl-age', inputMode: 'numeric', value: age, onChange: (event: React.ChangeEvent<HTMLInputElement>) => setAge(event.target.value) })),
-    h('label', { className: 'lp-check' },
+    h('label', { className: 'lp-checkrow' },
       h('input', { type: 'checkbox', checked: guardian, onChange: (event: React.ChangeEvent<HTMLInputElement>) => setGuardian(event.target.checked) }),
       '我是监护人，同意为未满 14 岁的人处理这些健康信息'),
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,

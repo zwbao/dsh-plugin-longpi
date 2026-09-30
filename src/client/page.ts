@@ -20,9 +20,9 @@ import { PlanTab } from './plan.ts'
 import { registerClientModules } from './modules.ts'
 import { ProfileTab } from './profile-tab.ts'
 import { SeasonBar } from './engage/index.ts'
-import { AskTab, CalendarTab, SleepTab, Subnav, TrainingTab } from './life.ts'
+import { AskTab, CalendarTab, SleepTab, TrainingTab } from './life.ts'
 import { AnalysisTab } from './analysis.ts'
-import { PeoplePicker } from './people.ts'
+import { PeoplePicker, PersonNotice } from './people.ts'
 import { pageTabs } from './registry.ts'
 import type { ResultTarget } from './results.ts'
 import {
@@ -43,6 +43,14 @@ const TABS: Array<TabSpec<PageTab>> = [
   { key: 'calendar', label: '日程' },
   { key: 'analysis', label: '深度分析' },
   { key: 'ask', label: '问 LongPi' },
+]
+
+/** The secondary pages, reached from 更多 at the right end of the tab row. */
+const SECONDARY: Array<{ key: PageTab; label: string }> = [
+  { key: 'plan', label: '方案' },
+  { key: 'profile', label: '档案' },
+  { key: 'season', label: '赛季' },
+  { key: 'science', label: '研究' },
 ]
 
 registerClientModules()
@@ -67,18 +75,21 @@ function Header(props: { journey: Journey | null; failed: boolean; refreshing: b
   const journey = props.journey
   const today = journey?.today ?? localToday()
   const name = journey?.profile.displayName.trim() ?? ''
-  const plan = journey?.plan.exists && journey.plan.days != null ? ` · 方案第 ${journey.plan.days} 天` : ''
+  const meta = [`${chineseDate(today)} ${weekday(today)}`, journey?.plan.exists && journey.plan.days != null ? `方案第 ${journey.plan.days} 天` : ''].filter(Boolean)
+  const sep = () => h('span', { className: 'lp-header-sep', 'aria-hidden': true }, '·')
   return h('header', { className: 'lp-header' },
     h('div', { className: 'lp-header-text' },
-      h('div', { className: 'lp-kicker' }, `LongPi${journey?.version ? ` ${journey.version}` : ''} · 健康`),
+      h('div', { className: 'lp-kicker' }, 'LongPi · 健康'),
       h('h1', { className: 'lp-h1' }, `${greeting(new Date())}${name ? `，${name}` : ''}`),
-      h('p', { className: 'lp-lead' }, `${chineseDate(today)} ${weekday(today)}${plan}`),
-      journey ? h(RecordsStatusLine, { journey }) : props.failed ? null : h(Skeleton, { height: 18, width: 240 })),
-    h('div', { className: 'lp-actions' },
-      h(PeoplePicker),
-      h(HealthChatButton),
-      h('button', { type: 'button', className: 'lp-linkbtn', onClick: props.onRefresh, disabled: props.refreshing, 'aria-busy': props.refreshing },
-        h(Icon, { name: 'refresh', size: 14, className: props.refreshing ? 'lp-spin' : '' }), props.refreshing ? '刷新中' : '刷新')))
+      h('div', { className: 'lp-header-meta' },
+        ...meta.flatMap((text, index) => [index > 0 ? h(React.Fragment, { key: `s${index}` }, sep()) : null, h('span', { key: `m${index}` }, text)]),
+        journey ? h(React.Fragment, null, sep(), h(RecordsStatusLine, { journey, inline: true }))
+          : props.failed ? null : h(Skeleton, { height: 18, width: 160 }))),
+    h('div', { className: 'lp-header-actions' },
+      h(PeoplePicker, null,
+        h(HealthChatButton),
+        h('button', { type: 'button', className: 'lp-linkbtn', onClick: props.onRefresh, disabled: props.refreshing, 'aria-busy': props.refreshing },
+          h(Icon, { name: 'refresh', size: 14, className: props.refreshing ? 'lp-spin' : '' }), props.refreshing ? '刷新中' : '刷新'))))
 }
 
 function Banner(props: { journey: Journey; onOpen: () => void }): React.ReactElement | null {
@@ -86,14 +97,73 @@ function Banner(props: { journey: Journey; onOpen: () => void }): React.ReactEle
   if (!banner) return null
   return h('button', { type: 'button', className: 'lp-banner', onClick: props.onOpen },
     h(Icon, { name: 'spark', size: 14 }),
-    h('span', null, `还差 ${banner.left} 步完成设置：${banner.title}`),
-    h('span', { className: 'lp-banner-go' }, '继续 →'))
+    h('span', { className: 'lp-banner-text' }, `还差 ${banner.left} 步完成设置：${banner.title}`),
+    h('span', { className: 'lp-banner-go' }, '继续', h(Icon, { name: 'chevron', size: 14 })))
+}
+
+/** 更多: a small menu of the secondary pages; a click elsewhere or Escape closes it. */
+function MoreMenu(props: { items: Array<{ key: PageTab; label: string }>; current: PageTab; onPick: (tab: PageTab) => void }): React.ReactElement {
+  const [open, setOpen] = React.useState(false)
+  const wrap = React.useRef<HTMLDivElement>(null)
+  const button = React.useRef<HTMLButtonElement>(null)
+  const menuId = React.useId()
+  React.useEffect(() => {
+    if (!open) return undefined
+    wrap.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus()
+    const onDown = (event: PointerEvent) => { if (!wrap.current?.contains(event.target as Node)) setOpen(false) }
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      setOpen(false)
+      button.current?.focus()
+    }
+    document.addEventListener('pointerdown', onDown)
+    document.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('pointerdown', onDown)
+      document.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+  const onMenuKey = (event: React.KeyboardEvent) => {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+    event.preventDefault()
+    const items = Array.from(wrap.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [])
+    const at = items.indexOf(document.activeElement as HTMLButtonElement)
+    items[(at + (event.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length]?.focus()
+  }
+  return h('div', { className: 'lp-more', ref: wrap },
+    h('button', {
+      type: 'button', className: 'lp-more-btn', ref: button, 'aria-haspopup': 'menu', 'aria-expanded': open, 'aria-controls': menuId,
+      onClick: () => setOpen((current) => !current),
+    }, '更多', h(Icon, { name: 'chevron', size: 14 })),
+    open ? h('div', { className: 'lp-more-pop', role: 'menu', id: menuId, 'aria-label': '更多页面', onKeyDown: onMenuKey },
+      ...props.items.map((item) => h('button', {
+        key: item.key, type: 'button', role: 'menuitem', className: 'lp-row-btn', 'aria-current': item.key === props.current ? 'page' : undefined,
+        onClick: () => { setOpen(false); props.onPick(item.key) },
+      }, item.label))) : null)
+}
+
+/**
+ * The tab row: the primary tabs; while a secondary page is open, a temporary selected tab for it with × back to
+ * 总览; and 更多 at the right end.
+ */
+function TabBar(props: { tab: PageTab; setTab: (tab: PageTab) => void; science: boolean }): React.ReactElement {
+  const secondary = SECONDARY.filter((item) => item.key !== 'science' || props.science)
+  const value: PageTab = props.tab === 'indicators' ? 'labs' : props.tab
+  const primary = TABS.some((item) => item.key === value)
+  const extra = primary ? null : secondary.find((item) => item.key === value) ?? null
+  const tabs: Array<TabSpec<PageTab>> = extra ? [...TABS, { key: extra.key, label: extra.label }] : TABS
+  return h('div', { className: 'lp-tabbar' },
+    h(Tabs<PageTab>, { tabs, value, onChange: props.setTab, label: 'LongPi 健康页', idPrefix: 'lp-page' }),
+    extra ? h('button', {
+      type: 'button', className: 'lp-iconbtn lp-tab-close', 'aria-label': `关闭「${extra.label}」，回到总览`, onClick: () => props.setTab('overview'),
+    }, h(Icon, { name: 'close', size: 12 })) : null,
+    h(MoreMenu, { items: secondary, current: value, onPick: props.setTab }))
 }
 
 function Loading(): React.ReactElement {
   return h('div', { className: 'lp-loading', 'aria-busy': true, 'aria-label': '正在读取' },
     h(Skeleton, { height: 36, width: 320 }),
-    h('div', { className: 'lp-results' }, h(Skeleton, { height: 180, className: 'lp-card-skeleton' }), h(Skeleton, { height: 180, className: 'lp-card-skeleton' })),
+    h('div', { className: 'lp-grid-2' }, h(Skeleton, { height: 180, className: 'lp-card-skeleton' }), h(Skeleton, { height: 180, className: 'lp-card-skeleton' })),
     h(Skeleton, { height: 120, className: 'lp-card-skeleton' }))
 }
 
@@ -145,7 +215,6 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
     }).catch(() => setScienceOn(true))
   }, [])
   const registered = pageTabs().filter((item) => item.id !== 'science' || scienceOn)
-  const tabs: Array<TabSpec<PageTab>> = TABS
   const [tab, setTabState] = React.useState<PageTab>(storedTab(registered.map((item) => item.id)))
   const [filter, setFilter] = React.useState<IndicatorFilter>('all')
   const [refreshing, setRefreshing] = React.useState(false)
@@ -176,6 +245,8 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
     }
   }, [refresh])
 
+  const onConnect = () => goTab('profile', { id: 'lp-connection-card' })
+
   const onAction = (target: ResultTarget) => {
     if (target === 'records') goTab('profile', { id: 'lp-connection-card' }) // profile stays reachable from 总览
     else if (target === 'addons') goTab('profile', { id: 'lp-addons-card' })
@@ -203,11 +274,11 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
     if (tab === 'overview') {
       panel = h(Overview, { journey, tracking: tracking.data, onNotice: notify, onAction, goTab, openOnboarding: () => setOnboarding(true) })
     } else if (tab === 'indicators' || tab === 'labs') {
-      panel = h(IndicatorsTab, { filter, onFilter: setFilter, onConnect: () => goTab('profile', { id: 'lp-connection-card' }), area: 'labs' })
+      panel = h(IndicatorsTab, { filter, onFilter: setFilter, onConnect, area: 'labs' })
     } else if (tab === 'sleep') {
-      panel = h(SleepTab)
+      panel = h(SleepTab as React.FC<{ onConnect?: () => void }>, { onConnect })
     } else if (tab === 'training') {
-      panel = h(TrainingTab)
+      panel = h(TrainingTab as React.FC<{ onConnect?: () => void }>, { onConnect })
     } else if (tab === 'calendar') {
       panel = h(CalendarTab, { journey })
     } else if (tab === 'ask') {
@@ -224,19 +295,19 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
     }
     body = h('div', { className: `lp-body ${refreshing ? 'lp-refreshing' : ''}` },
       h(Banner, { journey, onOpen: () => setOnboarding(true) }),
-      h(Tabs<PageTab>, { tabs, value: (tab === 'indicators' ? 'labs' : tab), onChange: setTab, label: 'LongPi 健康页', idPrefix: 'lp-page' }),
-      h(Subnav, { onTab: setTab, science: scienceOn, current: tab }),
+      h(TabBar, { tab, setTab, science: scienceOn }),
       h('div', { className: 'lp-tab-panel', role: 'tabpanel', id: 'lp-page-panel', 'aria-labelledby': `lp-page-tab-${tab}` }, panel))
   }
 
   return h('div', { className: 'lp lp-page-root', ref: root },
     h('div', { className: 'lp-page' },
       h(Header, { journey, failed: !journey && !loading, refreshing, onRefresh: () => { void doRefresh() } }),
+      h(PersonNotice),
       notice ? h('div', { className: 'lp-notice-slot' }, notice) : null,
       journey ? h(SeasonBar, { onOpen: () => setTab('season') }) : null,
       body,
+      // One line (#37): the boundary, then where the data stays.
       h('footer', { className: 'lp-footer' },
-        h('p', null, journey?.boundary_zh || BOUNDARY_FALLBACK),
-        h('p', { className: 'lp-caption' }, '档案和记录只保存在这台电脑上。你同意后，提问时相关健康数值才会发送给 DeepSeek 模型。'))),
+        h('p', { className: 'lp-caption' }, `${journey?.boundary_zh || BOUNDARY_FALLBACK} 档案和记录只保存在这台电脑上；你同意后，提问时相关健康数值才会发送给 DeepSeek 模型。`))),
     onboarding ? h(Onboarding, { explicit: true, complete: () => setOnboarding(false), openPage: () => {} }) : null)
 }

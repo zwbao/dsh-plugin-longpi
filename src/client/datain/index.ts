@@ -27,15 +27,17 @@ function GeneticsCard(): React.ReactElement {
     }).catch(() => { if (!gone) setRow(null) })
     return () => { gone = true }
   }, [])
-  if (!row) return h('p', { className: 'lp-muted', id: 'lp-genetics-empty' }, '还没有基因摘要。叙述版 PDF 请发到健康对话。普通体检不要选基因文件。')
-  return h('div', { id: 'lp-genetics' },
+  if (!row) return h('p', { className: 'lp-small lp-muted', id: 'lp-genetics-empty' }, '还没有基因摘要。叙述版 PDF 请发到健康对话。普通体检不要选基因文件。')
+  return h('div', { className: 'lp-stack', id: 'lp-genetics' },
     h('p', null, (row.headlines_zh ?? []).join('；') || '已记下基因报告。'),
     (row.variants ?? []).length > 0
-      ? h('ul', { className: 'lp-list' }, ...(row.variants ?? []).slice(0, 12).map((item) => h('li', { key: item.rsid }, `${item.note_zh ? `${item.note_zh} ` : ''}${item.rsid} ${item.genotype}`)))
+      ? h('ul', { className: 'lp-rows' }, ...(row.variants ?? []).slice(0, 12).map((item) => h('li', { key: item.rsid, className: 'lp-row' },
+        h('span', { className: 'lp-row-main' }, item.note_zh || item.rsid),
+        h('span', { className: 'lp-row-end lp-num' }, item.note_zh ? `${item.rsid} ${item.genotype}` : item.genotype))))
       : null,
-    h('ul', { className: 'lp-list' }, ...(row.caveats_zh ?? []).map((line) => h('li', { key: line }, line))),
-    row.raw_export_zh ? h('p', { className: 'lp-fine' }, row.raw_export_zh) : null,
-    row.sample_id ? h('p', { className: 'lp-fine' }, `样本号存在这台电脑上，不会发给模型。`) : null)
+    (row.caveats_zh ?? []).length > 0 ? h('ul', { className: 'lp-bullets' }, ...(row.caveats_zh ?? []).map((line) => h('li', { key: line }, line))) : null,
+    row.raw_export_zh ? h('p', { className: 'lp-caption' }, row.raw_export_zh) : null,
+    row.sample_id ? h('p', { className: 'lp-caption' }, `样本号存在这台电脑上，不会发给模型。`) : null)
 }
 
 function MedsForm(): React.ReactElement {
@@ -58,18 +60,23 @@ function MedsForm(): React.ReactElement {
       setError(errorText(err, '没有记下'))
     }
   }
-  return h('div', { id: 'lp-meds' },
-    lines.length > 0 ? h('ul', { className: 'lp-list' }, ...lines.map((line) => h('li', { key: line }, line))) : h('p', { className: 'lp-muted' }, '还没有你让 LongPi 记下的药。'),
-    h('div', { className: 'lp-field' },
-      h('label', { className: 'lp-field-label', htmlFor: 'lp-med-name' }, '药名'),
-      h('input', { id: 'lp-med-name', className: 'lp-input', value: name, onChange: (event: React.ChangeEvent<HTMLInputElement>) => setName(event.target.value) })),
-    h('div', { className: 'lp-field' },
-      h('label', { className: 'lp-field-label', htmlFor: 'lp-med-dose' }, '用法', h('span', { className: 'lp-optional' }, '照处方抄，可不填')),
-      h('input', { id: 'lp-med-dose', className: 'lp-input', value: dose, placeholder: '10 mg', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setDose(event.target.value) })),
-    h('div', { className: 'lp-field' },
-      h('input', { id: 'lp-med-times', className: 'lp-input', value: times, placeholder: '每天早上一次', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setTimes(event.target.value) })),
+  return h('div', { className: 'lp-stack', id: 'lp-meds' },
+    lines.length > 0
+      ? h('ul', { className: 'lp-rows' }, ...lines.map((line) => h('li', { key: line, className: 'lp-row' }, h('span', { className: 'lp-row-main' }, line))))
+      : h('p', { className: 'lp-small lp-muted' }, '还没有你让 LongPi 记下的药。'),
+    h('div', { className: 'lp-form-grid' },
+      h('div', { className: 'lp-field lp-field-full' },
+        h('label', { className: 'lp-field-label', htmlFor: 'lp-med-name' }, '药名'),
+        h('input', { id: 'lp-med-name', className: 'lp-input', value: name, onChange: (event: React.ChangeEvent<HTMLInputElement>) => setName(event.target.value) })),
+      h('div', { className: 'lp-field' },
+        h('label', { className: 'lp-field-label', htmlFor: 'lp-med-dose' }, '用法', h('span', { className: 'lp-optional' }, '照处方抄，可不填')),
+        h('input', { id: 'lp-med-dose', className: 'lp-input', value: dose, placeholder: '10 mg', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setDose(event.target.value) })),
+      h('div', { className: 'lp-field' },
+        h('label', { className: 'lp-field-label', htmlFor: 'lp-med-times' }, '什么时候吃', h('span', { className: 'lp-optional' }, '可不填')),
+        h('input', { id: 'lp-med-times', className: 'lp-input', value: times, placeholder: '每天早上一次', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setTimes(event.target.value) }))),
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
-    h(Btn, { type: 'button', size: 'sm', disabled: !name.trim(), onClick: () => { void save() } }, '记下这味药'))
+    h('div', { className: 'lp-actions' },
+      h(Btn, { type: 'button', size: 'sm', disabled: !name.trim(), onClick: () => { void save() } }, '记下这味药')))
 }
 
 function ConditionsForm(): React.ReactElement {
@@ -90,28 +97,33 @@ function ConditionsForm(): React.ReactElement {
       setError(errorText(err, '没有记下'))
     }
   }
-  return h('div', { id: 'lp-conditions' },
-    h('p', { className: 'lp-fine' }, '诊断记在这台电脑上。体检原件那边不接收病情。'),
-    rows.length > 0 ? h('ul', { className: 'lp-list' }, ...rows.map((row) => h('li', { key: row.id }, row.text_zh))) : null,
+  return h('div', { className: 'lp-stack', id: 'lp-conditions' },
+    rows.length > 0
+      ? h('ul', { className: 'lp-rows' }, ...rows.map((row) => h('li', { key: row.id, className: 'lp-row' }, h('span', { className: 'lp-row-main' }, row.text_zh))))
+      : h('p', { className: 'lp-small lp-muted' }, '还没有记下病情。'),
     h('div', { className: 'lp-field' },
       h('label', { className: 'lp-field-label', htmlFor: 'lp-cond-name' }, '病情或诊断'),
       h('input', { id: 'lp-cond-name', className: 'lp-input', value: name, placeholder: '脂肪肝', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setName(event.target.value) })),
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
-    h(Btn, { type: 'button', size: 'sm', disabled: !name.trim(), onClick: () => { void save() } }, '记下'))
+    h('div', { className: 'lp-actions' },
+      h(Btn, { type: 'button', size: 'sm', disabled: !name.trim(), onClick: () => { void save() } }, '记下')),
+    h('p', { className: 'lp-caption' }, '诊断记在这台电脑上。体检原件那边不接收病情。'))
 }
 
 export function DataInSection(): React.ReactElement {
   const [tick, setTick] = React.useState(0)
   return h('div', { className: 'lp-grid-2 lp-grid-top', id: 'lp-datain' },
     h('div', { className: 'lp-card', id: 'lp-findings-card' },
-      h('div', { className: 'lp-label' }, '报告里的叙述'),
+      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '报告里的叙述')),
       h(FindingsList, { reloadKey: tick }),
       h(ReportUpload, { onDone: () => setTick((value) => value + 1) })),
-    h('div', { className: 'lp-card' },
-      h('div', { className: 'lp-label' }, '用药'),
-      h(MedsForm),
-      h('div', { className: 'lp-label' }, '病情'),
-      h(ConditionsForm),
-      h('div', { className: 'lp-label' }, '基因'),
+    h('div', { className: 'lp-card', id: 'lp-meds-card' },
+      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '用药')),
+      h(MedsForm)),
+    h('div', { className: 'lp-card', id: 'lp-conditions-card' },
+      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '病情')),
+      h(ConditionsForm)),
+    h('div', { className: 'lp-card', id: 'lp-genetics-card' },
+      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '基因')),
       h(GeneticsCard)))
 }

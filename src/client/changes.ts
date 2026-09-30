@@ -7,6 +7,7 @@
 
 import React from 'react'
 import { LineChart } from './charts.ts'
+import { plainUnits } from './format.ts'
 import { Icon } from './icons.ts'
 import type { Journey, RecordChange } from './types.ts'
 import { sourceLabel } from '../ux/plain.ts'
@@ -29,9 +30,9 @@ function Spark(props: { row: RecordChange }): React.ReactElement | null {
 
 const SUPERSCRIPT: Record<string, string> = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' }
 
-/** Count units as labs print them: 10^12/L → ×10¹²/L. */
+/** Units as labs print them: 10^12/L → ×10¹²/L, umol/L → μmol/L, kg/m2 → kg/m². */
 export function prettyUnits(text: string): string {
-  return text.replace(/(×)?10\^(\d+)\/L/g, (_, _times: string | undefined, power: string) => `×10${[...power].map((digit) => SUPERSCRIPT[digit] ?? digit).join('')}/L`)
+  return plainUnits(text).replace(/(×)?10\^(\d+)\/L/g, (_, _times: string | undefined, power: string) => `×10${[...power].map((digit) => SUPERSCRIPT[digit] ?? digit).join('')}/L`)
 }
 
 function toneOf(row: RecordChange): 'warn' | 'good' | 'neutral' {
@@ -69,7 +70,7 @@ const VERDICT_ZH: Record<RecordChange['verdict'], string> = { better: '变好', 
 
 export function ChangeChip(props: { verdict: RecordChange['verdict']; askDoctor?: boolean }): React.ReactElement {
   const tone = props.verdict === 'better' && !props.askDoctor ? 'good' : props.verdict === 'worse' || props.askDoctor ? 'warn' : 'neutral'
-  return h('span', { className: `lp-chip-c lp-chip-c-${tone}` },
+  return h('span', { className: `lp-badge lp-badge-${tone}` },
     h(Icon, { name: tone === 'good' ? 'check' : tone === 'warn' ? 'warn' : 'info', size: 12 }), VERDICT_ZH[props.verdict])
 }
 
@@ -135,9 +136,9 @@ export function NotableChanges(props: { journey: Journey; onOpenIndicators: () =
     : ''
   return h('section', { className: 'lp-card lp-notable', id: 'lp-changes', 'aria-labelledby': 'lp-changes-title' },
     h('div', { className: 'lp-card-head' },
-      h('div', { className: 'lp-label', id: 'lp-changes-title' }, '值得注意的变化', rows.length > 0 ? h('span', { className: 'lp-optional' }, `${rows.length} 项超出正常波动`) : null),
-      h('button', { type: 'button', className: 'lp-row-link', onClick: props.onOpenIndicators }, '在「化验」里看全部 →')),
-    pointer ? h('p', { className: 'lp-caption lp-notable-pointer' }, pointer) : null,
+      h('h3', { className: 'lp-card-title', id: 'lp-changes-title' }, '值得注意的变化', rows.length > 0 ? h('span', { className: 'lp-caption' }, `${rows.length} 项超出正常波动`) : null),
+      h('button', { type: 'button', className: 'lp-textbtn', onClick: props.onOpenIndicators }, '在「化验」里看全部', h(Icon, { name: 'chevron', size: 14 }))),
+    pointer ? h('p', { className: 'lp-caption' }, pointer) : null,
     ...advice.map((group) => h('p', { key: group.advice, className: 'lp-change-advice lp-change-warn' },
       h(Icon, { name: 'warn', size: 14 }), h('span', null, group.advice))),
     shown.length > 0

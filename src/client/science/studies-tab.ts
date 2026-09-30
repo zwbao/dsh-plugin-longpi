@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { errorText, getJson } from '../api.ts'
+import { Icon } from '../icons.ts'
 import { CommunityPanel } from './community.ts'
 import { ConsentPanel, type StudyRow } from './consent.ts'
 import { TranslogPanel, type LogRow } from './translog.ts'
@@ -24,13 +25,6 @@ interface Payload {
   release_stays_zh?: string
 }
 
-const CSS = `
-.lp-sci-bar { height: 10px; background: var(--lp-line-2, #e6eaf0); border-radius: 99px; overflow: hidden; }
-.lp-sci-bar > span { display: block; height: 100%; background: var(--lp-accent, #1f6feb); }
-.lp-sci-topic, .lp-sci-q label, .lp-sci-confirm { display: block; margin: 6px 0; }
-.lp-sci-log { padding-left: 18px; }
-`
-
 export function StudiesTab(): React.ReactElement {
   const [data, setData] = React.useState<Payload | null>(null)
   const [error, setError] = React.useState('')
@@ -38,12 +32,23 @@ export function StudiesTab(): React.ReactElement {
     void getJson<Payload>('/api/longpi/science/community').then(setData).catch((reason: unknown) => setError(errorText(reason, '没有读到研究')))
   }, [])
   React.useEffect(() => { load() }, [load])
-  if (!data) return h('p', { className: 'lp-muted' }, error || '正在读取研究…')
-  if (data.mode === 'off') return h('section', { className: 'lp-section' }, h('h2', { className: 'lp-h2' }, '研究没有打开'), h('p', null, data.reason_zh || '可以在设置里再打开。不满 18 岁不参加研究。'))
-  return h('div', { className: 'lp-science' },
-    h('style', null, CSS),
-    error ? h('p', { role: 'alert' }, error) : null,
-    h('p', { className: 'lp-banner' }, data.reason_zh),
+  if (!data) {
+    return h('div', { className: 'lp-tab-body' },
+      error
+        ? h('div', { className: 'lp-callout lp-callout-warn', role: 'alert' }, h(Icon, { name: 'warn', size: 14 }), h('p', { className: 'lp-callout-body' }, error),
+          h('button', { type: 'button', className: 'lp-textbtn', onClick: () => { setError(''); load() } }, '重试'))
+        : h('p', { className: 'lp-small lp-muted' }, '正在读取研究…'))
+  }
+  if (data.mode === 'off') {
+    return h('div', { className: 'lp-tab-body' },
+      h('section', { className: 'lp-card', 'aria-label': '研究没有打开' },
+        h('div', { className: 'lp-empty' },
+          h('div', { className: 'lp-empty-title' }, '研究没有打开'),
+          h('p', { className: 'lp-empty-text' }, data.reason_zh || '可以在设置里再打开。不满 18 岁不参加研究。'))))
+  }
+  return h('div', { className: 'lp-tab-body' },
+    error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
+    data.reason_zh ? h('div', { className: 'lp-callout lp-callout-info' }, h(Icon, { name: 'info', size: 14 }), h('p', { className: 'lp-callout-body' }, data.reason_zh)) : null,
     data.progress && data.voting ? h(CommunityPanel, {
       progress: data.progress,
       pulse: data.pulse ?? null,

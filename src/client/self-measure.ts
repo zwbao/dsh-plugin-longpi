@@ -64,7 +64,7 @@ function UnitSelect(props: { id: string; spec: SelfKeySpec; value: string; onCha
   const choices = unitChoices(props.spec)
   if (choices.length < 2) return h('span', { className: 'lp-unit' }, props.spec.unit)
   return h('select', {
-    id: props.id, className: 'lp-select lp-unit-select', value: props.value, 'aria-label': props.label,
+    id: props.id, className: 'lp-select lp-self-unit', value: props.value, 'aria-label': props.label,
     onChange: (event: React.ChangeEvent<HTMLSelectElement>) => props.onChange(event.target.value),
   }, ...choices.map((unit) => h('option', { key: unit, value: unit }, unit)))
 }
@@ -116,7 +116,7 @@ export function SelfMeasureForm(props: { journey: Journey | null; idPrefix: stri
     }
   }
 
-  const field = (key: SelfKey, placeholder: string) => h('div', { className: 'lp-self-field' },
+  const field = (key: SelfKey, placeholder: string) => h('div', { className: 'lp-field' },
     h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-${key}` }, spec(key).label_zh),
     h('div', { className: 'lp-input-unit' },
       h('input', {
@@ -129,10 +129,10 @@ export function SelfMeasureForm(props: { journey: Journey | null; idPrefix: stri
       })))
 
   return h('form', { className: 'lp-self-form', onSubmit: (event: React.FormEvent) => { void submit(event) }, noValidate: true },
-    h('div', { className: 'lp-self-grid' },
+    h('div', { className: 'lp-form-grid' },
       field('waist', '例如 86'),
       field('weight', '例如 70.5'),
-      h('div', { className: 'lp-self-field lp-self-bp' },
+      h('div', { className: 'lp-field lp-field-full' },
         h('span', { className: 'lp-field-label', id: `${props.idPrefix}-bp` }, '家庭血压'),
         h('div', { className: 'lp-bp', role: 'group', 'aria-labelledby': `${props.idPrefix}-bp` },
           h('input', {
@@ -145,7 +145,7 @@ export function SelfMeasureForm(props: { journey: Journey | null; idPrefix: stri
             onChange: (event: React.ChangeEvent<HTMLInputElement>) => set('dbp', event.target.value),
           }),
           h('span', { className: 'lp-unit' }, 'mmHg'))),
-      h('div', { className: 'lp-self-field' },
+      h('div', { className: 'lp-field' },
         h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-date` }, '测量日期'),
         h('input', {
           id: `${props.idPrefix}-date`, className: 'lp-input', type: 'date', value: date, max: today, min: '1990-01-01',
@@ -164,7 +164,7 @@ export function SelfRecent(props: { onNotice: Notify }): React.ReactElement | nu
   if (loading && !data) return null
   // A first read that failed is not an empty log.
   if (!data && error) return h(LoadError, { what: '自测记录', error, compact: true, onRetry: () => reload('self') })
-  if (rows.length === 0) return h('p', { className: 'lp-caption lp-self-empty' }, '还没有自测记录。')
+  if (rows.length === 0) return h('p', { className: 'lp-caption' }, '还没有自测记录。')
   async function remove(row: SelfRow): Promise<void> {
     setBusy(row.id)
     try {
@@ -177,7 +177,7 @@ export function SelfRecent(props: { onNotice: Notify }): React.ReactElement | nu
       setBusy(null)
     }
   }
-  return h('div', { className: 'lp-self-recent' },
+  return h('div', null,
     h('div', { className: 'lp-subhead' }, '最近记录'),
     h('ul', { className: 'lp-rows' },
       ...rows.map((row) => h('li', { key: row.id, className: 'lp-row' },
@@ -185,12 +185,12 @@ export function SelfRecent(props: { onNotice: Notify }): React.ReactElement | nu
           h('span', null, labelOf(row.key)),
           h('span', { className: 'lp-num' }, ` ${fmt(row.value)} ${row.unit}`),
           row.given ? h('span', { className: 'lp-caption' }, `（记为 ${fmt(row.given.value)} ${row.given.unit}）`) : null),
-        h('span', { className: 'lp-caption' }, chineseDate(row.date)),
-        h('button', {
-          type: 'button', className: 'lp-iconbtn', disabled: busy === row.id,
-          'aria-label': `删除 ${chineseDate(row.date)} 的${labelOf(row.key)} ${fmt(row.value)} ${row.unit}`,
-          onClick: () => { void remove(row) },
-        }, h(Icon, { name: 'trash', size: 14 }))))))
+        h('span', { className: 'lp-row-end' }, h('span', { className: 'lp-caption' }, chineseDate(row.date)),
+          h('button', {
+            type: 'button', className: 'lp-iconbtn', disabled: busy === row.id,
+            'aria-label': `删除 ${chineseDate(row.date)} 的${labelOf(row.key)} ${fmt(row.value)} ${row.unit}`,
+            onClick: () => { void remove(row) },
+          }, h(Icon, { name: 'trash', size: 14 })))))))
 }
 
 function labelOf(key: SelfKey): string {

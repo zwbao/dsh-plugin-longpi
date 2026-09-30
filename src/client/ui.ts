@@ -64,9 +64,9 @@ export function ToggleChip(props: { pressed: boolean; onClick: () => void; child
 }
 
 /** An on/off switch: a real button with role=switch, labelled by its visible text. */
-export function Switch(props: { checked: boolean; onChange: (next: boolean) => void; label: string; disabled?: boolean; busy?: boolean; id?: string }): React.ReactElement {
+export function Switch(props: { checked: boolean; onChange: (next: boolean) => void; label: string; disabled?: boolean; busy?: boolean; id?: string; describedBy?: string }): React.ReactElement {
   return h('button', {
-    type: 'button', role: 'switch', id: props.id, 'aria-checked': props.checked, 'aria-busy': props.busy || undefined, disabled: props.disabled,
+    type: 'button', role: 'switch', id: props.id, 'aria-describedby': props.describedBy, 'aria-checked': props.checked, 'aria-busy': props.busy || undefined, disabled: props.disabled,
     className: `lp-switch ${props.checked ? 'lp-switch-on' : ''}`, onClick: () => props.onChange(!props.checked),
   },
   h('span', { className: 'lp-switch-track', 'aria-hidden': true }, h('span', { className: 'lp-switch-thumb' })),

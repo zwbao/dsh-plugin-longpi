@@ -97,3 +97,25 @@ export function behaviorOf(item: Pick<DraftItem, 'detail' | 'title' | 'category_
   if (head && text.startsWith(head)) text = text.slice(head.length).replace(/^[，,。；;\s]+/, '')
   return text.replace(/\s*(证据|依据)[:：]\s*$/, '').replace(/[\s，,；;]+$/, '').trim()
 }
+
+/** Machine field names that can reach a sentence through a source quote, in the words the page uses. */
+const FIELD_ZH: Record<string, string> = {
+  sleepDuration: '睡眠时长', sleepHours: '睡眠时长', deepSleep: '深睡', remSleep: '快速眼动睡眠', sleepScore: '睡眠评分',
+  steps: '步数', stepCount: '步数', restingHeartRate: '静息心率', heartRate: '心率', hrv: '心率变异性', heartRateVariability: '心率变异性',
+  vo2max: '最大摄氧量', vo2Max: '最大摄氧量', activeCalories: '活动消耗', exerciseMinutes: '运动时长', weight: '体重', bmi: 'BMI',
+  waist: '腰围', systolic: '收缩压', diastolic: '舒张压', spo2: '血氧',
+}
+
+/**
+ * Units and field names as a lab report prints them (#19): umol/L → μmol/L, kg/m2 → kg/m², 1.73m2 → 1.73m²,
+ * a bare "5.6 h" → 5.6 小时, and camelCase field names in plain Chinese. Anything unknown is left as it is.
+ */
+export function plainUnits(text: string): string {
+  return text
+    .replace(/\b[a-z]+(?:[A-Z][a-z0-9]*)+\b|\b(?:steps|hrv|spo2|waist|weight|systolic|diastolic|vo2max)\b/g, (word) => FIELD_ZH[word] ?? word)
+    .replace(/\bu(mol|g|L)\b/g, 'μ$1')
+    .replace(/(\d|\/)m2\b/g, '$1m²')
+    .replace(/\bm2\b/g, 'm²')
+    .replace(/(\d)\s*h\b(?![\w/])/g, '$1 小时')
+    .replace(/(\d)\s*min\b/g, '$1 分钟')
+}

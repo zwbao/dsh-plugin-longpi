@@ -1,6 +1,6 @@
 // Inline SVG charts for the board. No chart library: thin marks (2px lines,
 // 8px dots with a 2px surface ring, bars at most 24px with 4px rounded ends),
-// hairline solid grids, one accent for the person's own data, a neutral wash
+// hairline solid grids, --lp-data for the person's own data, a neutral wash
 // for the noise band, and a hover layer that never gates a value (every chart
 // has a table twin). Text never wears the data color.
 
@@ -250,7 +250,7 @@ export function Timeline(props: { items: TimelineItem[]; checkups: string[]; tod
         },
         h('text', { x: 0, y: y0 + 4, className: 'lp-row-label' }, item.title.length > 12 ? `${item.title.slice(0, 11)}…` : item.title),
         h('rect', { x: labelWidth, y: y0 - 12, width: width - labelWidth, height: 24, className: 'lp-hit' }),
-        h('rect', { x: x0, y: y0 - 5, width: Math.max(6, x1 - x0), height: 10, rx: 5, className: done ? 'lp-bar-muted' : 'lp-bar' }))
+        h('rect', { x: x0, y: y0 - 5, width: Math.max(6, x1 - x0), height: 10, rx: 5, className: done ? 'lp-cbar-muted' : 'lp-cbar' }))
       })),
     h(Tooltip, { tip, width })),
   // Outside the fixed-height chart box, so the legend never spills over the card's edge.
@@ -275,7 +275,7 @@ export function AdherenceStrip(props: { calendar: Array<{ date: string; status: 
         x: Math.floor(index / 7) * (cell + gap),
         y: (index % 7) * (cell + gap),
         width: cell, height: cell, rx: 2,
-        className: `lp-cell lp-cell-${day.status}`,
+        className: `lp-cell-${day.status}`,
         onPointerEnter: () => setTip({ x: Math.floor(index / 7) * (cell + gap), y: (index % 7) * (cell + gap), title: day.date, rows: [{ label: props.label, value: statusZh[day.status] ?? day.status }] }),
         onPointerLeave: () => setTip(null),
       }))),
@@ -299,7 +299,7 @@ export function LeverBars(props: { rows: Array<{ label: string; detail: string; 
         return h('g', { key: item.label },
           h('text', { x: 0, y: y0 + 14, className: 'lp-row-label' }, item.label,
             item.detail ? h('tspan', { dx: 8, className: 'lp-axis' }, item.detail) : null),
-          h('path', { d: roundedBar(0, y0 + 22, length, 10), className: item.value <= 0 ? 'lp-bar' : 'lp-bar-muted' }),
+          h('path', { d: roundedBar(0, y0 + 22, length, 10), className: item.value <= 0 ? 'lp-cbar' : 'lp-cbar-muted' }),
           h('text', { x: length + 8, y: y0 + 31, className: 'lp-end' }, `${item.value > 0 ? '+' : ''}${fmt(item.value)} ${item.unit}`))
       })))
 }

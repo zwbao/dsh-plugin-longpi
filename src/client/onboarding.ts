@@ -50,13 +50,13 @@ export function stepsLeft(journey: Journey): number {
 }
 
 function Progress(props: { step: number }): React.ReactElement {
-  return h('div', { className: 'lp-steps', 'aria-label': `第 ${props.step + 1} 步，共 ${ONBOARDING_TITLES.length} 步` },
+  return h('div', { className: 'lp-stepper', 'aria-label': `第 ${props.step + 1} 步，共 ${ONBOARDING_TITLES.length} 步` },
     ...ONBOARDING_TITLES.map((title, index) => h('div', {
       key: index,
-      className: `lp-steps-item${index === props.step ? ' is-now' : index < props.step ? ' is-done' : ''}`,
+      className: `lp-stepper-item${index === props.step ? ' is-now' : index < props.step ? ' is-done' : ''}`,
     },
-    h('span', { className: 'lp-steps-dot' }, index < props.step ? h(Icon, { name: 'check', size: 12 }) : String(index + 1)),
-    h('span', { className: 'lp-steps-label' }, title))))
+    h('span', { className: 'lp-stepper-dot' }, index < props.step ? h(Icon, { name: 'check', size: 12 }) : String(index + 1)),
+    h('span', { className: 'lp-stepper-label' }, title))))
 }
 
 /** Chat needs a model key: said only when LongPi could tell none is configured. */
@@ -160,8 +160,9 @@ function FirstData(props: { onFinish: () => void; openChat: () => void }): React
   return h('div', { className: 'lp-onb-body' },
     h('p', { className: 'lp-onb-text' }, '上传一份体检或化验报告，LongPi 会读取其中的指标，算出你的第一个结果。'),
     h(ReportUpload, { simple: true, onDone: (text: string) => { setRead(text || '已读取这份报告。'); notifyChanged() } }),
-    !read && !none ? h('button', { type: 'button', className: 'lp-textbtn', onClick: () => setNone(true) }, '我现在没有报告') : null,
-    none && !read ? h('div', { className: 'lp-callout' },
+    !read && !none ? h('div', { className: 'lp-onb-center' }, h('button', { type: 'button', className: 'lp-textbtn', onClick: () => setNone(true) }, '我现在没有报告')) : null,
+    none && !read ? h('div', { className: 'lp-callout lp-callout-info' },
+      h(Icon, { name: 'info', size: 16 }),
       h('div', { className: 'lp-callout-body' },
         h('p', { className: 'lp-callout-title' }, '没有报告也可以先开始：'),
         h('ul', { className: 'lp-bullets' },

@@ -19,16 +19,17 @@ export function ShareCard(props: { card: ShareCardModel; onNotice?: Notify; comp
     }
     void clip.writeText(text).then(() => props.onNotice?.('已复制', 'good')).catch(() => props.onNotice?.('请手动选择这句话', 'info'))
   }
+  const action = h('div', { className: 'lp-actions' }, h(Btn, { size: 'sm', variant: 'outline', onClick: copy }, '复制这句话'))
   if (props.compact) {
     return h('section', { className: 'lp-card', id: 'lp-share', 'aria-label': props.card.title_zh },
-      h('div', { className: 'lp-label' }, props.card.title_zh),
-      h('p', { className: 'lp-caption' }, '上面身体年龄卡里的那句话，可以复制下来发给家人或朋友。'),
-      h('div', { className: 'lp-result-action' }, h(Btn, { size: 'sm', variant: 'outline', onClick: copy }, '复制这句话')))
+      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, props.card.title_zh)),
+      h('p', { className: 'lp-small lp-muted' }, '上面身体年龄卡里的那句话，可以复制下来发给家人或朋友。'),
+      action)
   }
   return h('section', { className: 'lp-card', id: 'lp-share', 'aria-label': props.card.title_zh },
-    h('div', { className: 'lp-label' }, props.card.title_zh),
-    h('p', { className: 'lp-strong' }, props.card.headline_zh),
-    ...props.card.lines_zh.map((line) => h('p', { key: line, className: 'lp-caption' }, line)),
-    h('p', { className: 'lp-fine' }, props.card.footnote_zh),
-    h('div', { className: 'lp-result-action' }, h(Btn, { size: 'sm', variant: 'outline', onClick: copy }, '复制这句话')))
+    h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, props.card.title_zh)),
+    h('p', { className: 'lp-text lp-strong' }, props.card.headline_zh),
+    ...props.card.lines_zh.map((line) => h('p', { key: line, className: 'lp-small lp-muted' }, line)),
+    props.card.footnote_zh ? h('p', { className: 'lp-caption' }, props.card.footnote_zh) : null,
+    action)
 }

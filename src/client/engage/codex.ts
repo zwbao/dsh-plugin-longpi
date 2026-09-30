@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { CODEX_INTRO } from '../../ux/plain.ts'
+import { Btn, Switch } from '../ui.ts'
 
 const h = React.createElement
 
@@ -20,17 +21,21 @@ export function CodexPanel(props: { codex: CodexView | null; onDraw: () => void;
   const codex = props.codex
   if (!codex) return null
   if (codex.hidden) {
-    return h('section', null,
-      h('h3', { style: { margin: '8px 0 4px', fontSize: 14 } }, '长寿图鉴'),
-      h('p', { style: { margin: 0 } }, codex.reason_zh || '图鉴没有打开。'),
-      codex.reason_zh.includes('已关闭') ? h('button', { type: 'button', onClick: () => props.onOpt(true), style: buttonStyle }, '重新打开') : null)
+    const closed = codex.reason_zh.includes('已关闭')
+    return h('section', { className: 'lp-card', 'aria-label': '长寿图鉴' },
+      h('div', { className: 'lp-card-head' },
+        h('h3', { className: 'lp-card-title' }, '长寿图鉴'),
+        closed ? h(Switch, { checked: false, label: '显示图鉴', disabled: props.busy, onChange: () => props.onOpt(true) }) : null),
+      h('p', { className: 'lp-small lp-muted' }, codex.reason_zh || '图鉴没有打开。'))
   }
-  return h('section', null,
-    h('h3', { style: { margin: '8px 0 4px', fontSize: 14 } }, '长寿图鉴'),
-    h('p', { style: { margin: '0 0 8px', lineHeight: 1.5 } }, CODEX_INTRO),
+  return h('section', { className: 'lp-card', 'aria-label': '长寿图鉴' },
+    h('div', { className: 'lp-card-head' },
+      h('h3', { className: 'lp-card-title' }, '长寿图鉴'),
+      h(Switch, { checked: true, label: '显示图鉴', disabled: props.busy, onChange: () => props.onOpt(false) })),
+    h('p', { className: 'lp-text lp-muted' }, CODEX_INTRO),
     h('details', null,
       h('summary', null, '概率说明'),
-      h('ul', { style: { margin: '8px 0', paddingLeft: 18, lineHeight: 1.5 } },
+      h('ul', { className: 'lp-bullets' },
         h('li', null, '铜：细胞实验。'),
         h('li', null, '银：动物实验。'),
         h('li', null, '紫：观察人群。'),
@@ -38,27 +43,19 @@ export function CodexPanel(props: { codex: CodexView | null; onDraw: () => void;
         h('li', null, '颜色不代表身体好坏。'),
         h('li', null, '连续 10 次里，至少有一次是银或更好。这不是指标变好了。'),
         codex.odds_zh ? h('li', null, codex.odds_zh) : null)),
-    h('p', { style: { margin: '0 0 8px' } }, `可抽 ${codex.draws_available} 次 · 今天已抽 ${codex.draws_today} / ${codex.daily_cap}`),
-    h('div', { style: { display: 'flex', gap: 8, flexWrap: 'wrap' } },
-      h('button', { type: 'button', onClick: props.onDraw, disabled: props.busy || codex.draws_available < 1, style: buttonStyle }, '抽一张'),
-      h('button', { type: 'button', onClick: () => props.onOpt(false), style: buttonStyle }, '关闭图鉴')),
-    props.note ? h('p', { style: { margin: '8px 0 0' } }, props.note) : null,
+    h('div', { className: 'lp-actions' },
+      h(Btn, { size: 'sm', onClick: props.onDraw, disabled: props.busy || codex.draws_available < 1 }, '抽一张'),
+      h('span', { className: 'lp-caption' }, `可抽 ${codex.draws_available} 次 · 今天已抽 ${codex.draws_today} / ${codex.daily_cap}`)),
+    props.note ? h('p', { className: 'lp-small', role: 'status' }, props.note) : null,
     codex.owned.length === 0
-      ? h('p', { style: { opacity: 0.7 } }, '还没有抽到卡。次数只从测量、记录、就诊或复测来。')
-      : h('ul', { style: { paddingLeft: 18, margin: '8px 0' } }, codex.owned.slice(0, 12).map((card) =>
-        h('li', { key: card.id },
-          h('div', null, `${card.rarity_zh} · ${card.title_zh}`),
-          card.family === 'insight' ? h('div', null, card.body_zh) : null,
-          card.offer ? h('div', null, card.offer.text_zh) : null,
-          card.offer?.kind === 'run' && props.onRun ? h('button', { type: 'button', style: buttonStyle, disabled: props.busy, onClick: () => props.onRun?.(card.id) }, '用我的记录算') : null))))
-}
-
-const buttonStyle: React.CSSProperties = {
-  border: '1px solid var(--lp-line-2, rgba(0,0,0,.12))',
-  background: 'transparent',
-  borderRadius: 999,
-  padding: '4px 10px',
-  cursor: 'pointer',
-  color: 'var(--lp-ink)',
-  font: 'inherit',
+      ? h('p', { className: 'lp-caption' }, '还没有抽到卡。次数只从测量、记录、就诊或复测来。')
+      : h('ul', { className: 'lp-rows' }, codex.owned.slice(0, 12).map((card) =>
+        h('li', { key: card.id, className: 'lp-row' },
+          h('div', { className: 'lp-row-main lp-season-card' },
+            h('div', { className: 'lp-tags' }, h('span', { className: 'lp-tag' }, card.rarity_zh), h('span', { className: 'lp-strong' }, card.title_zh)),
+            card.family === 'insight' ? h('p', { className: 'lp-muted' }, card.body_zh) : null,
+            card.offer ? h('p', { className: 'lp-muted' }, card.offer.text_zh) : null),
+          card.offer?.kind === 'run' && props.onRun
+            ? h(Btn, { size: 'sm', variant: 'outline', disabled: props.busy, onClick: () => props.onRun?.(card.id) }, '用我的记录算')
+            : null))))
 }

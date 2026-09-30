@@ -15,7 +15,7 @@ import {
 import { isCovered, notableRows, NOTHING_COVERED, type Covered } from './overview-facts.ts'
 import { fmt, LineChart } from './charts.ts'
 import { FeedbackBlock, messagesFor } from './feedback/index.ts'
-import { chineseDate, riskText } from './format.ts'
+import { chineseDate, plainUnits, riskText } from './format.ts'
 import { Icon } from './icons.ts'
 import { recordConnected } from './normalize.ts'
 import { InlineSelf } from './self-measure.ts'
@@ -27,8 +27,8 @@ import { Btn, Info, Skeleton } from './ui.ts'
 const h = React.createElement
 
 export type ResultTarget = 'profile' | 'records' | 'addons' | 'self'
-/** More than this and the chips crowd the card; the action below lists the rest. */
-const NEEDS_SHOWN = 4
+/** More than this and the tags crowd the card; the action below lists the rest. */
+const NEEDS_SHOWN = 3
 type Notify = (text: string, tone?: 'info' | 'good' | 'bad') => void
 
 function EstimateTag(): React.ReactElement {
@@ -45,12 +45,28 @@ function LabelTag(props: { label: ResultLabel }): React.ReactElement {
   return h('span', { className: 'lp-tag', 'data-result-label': props.label }, labelText(props.label))
 }
 
+/** The title row holds the title and ⓘ only; the tags always sit on the next line (#16). */
 function CardHead(props: { label: string; info: React.ReactNode; mark?: ResultLabel | null; estimate?: boolean }): React.ReactElement {
-  return h('div', { className: 'lp-result-head' },
-    h('div', { className: 'lp-label' }, props.label, h(Info, { label: props.label }, props.info)),
-    h('span', { className: 'lp-result-tags' },
-      props.estimate === false ? null : h(EstimateTag),
-      props.mark ? h(LabelTag, { label: props.mark }) : null))
+  const tags = [
+    props.estimate === false ? null : h(EstimateTag, { key: 'estimate' }),
+    props.mark ? h(LabelTag, { key: 'mark', label: props.mark }) : null,
+  ].filter(Boolean)
+  return h(React.Fragment, null,
+    h('div', { className: 'lp-card-head' },
+      h('h3', { className: 'lp-card-title' }, props.label, h(Info, { label: props.label }, props.info))),
+    tags.length > 0 ? h('div', { className: 'lp-tags' }, ...tags) : null)
+}
+
+/** A method sentence without what the card already shows: its title, and the value when the figure is on the card. */
+function restOfSentence(sentence: string, title: string, shown: string): string {
+  let text = plainUnits(sentence)
+  if (text.startsWith(`${title}是 `)) text = text.slice(title.length + 2)
+  const value = plainUnits(shown)
+  if (value && text.startsWith(value)) text = text.slice(value.length).trim()
+  // What is left of "（还没对上，来源：…）。" reads as a sentence of its own.
+  const wrapped = /^[（(]([^（）()]*(?:[（(][^（）()]*[）)][^（）()]*)*)[）)]。?(.*)$/.exec(text)
+  if (wrapped) text = `${wrapped[1] ?? ''}。${wrapped[2] ?? ''}`
+  return text.replace(/^[，,。\s]+/, '').trim()
 }
 
 
@@ -90,23 +106,28 @@ function Blocked(props: {
   onAction: (target: ResultTarget) => void
   onNotice: Notify
   idPrefix: string
+  /** A caption under the reason (the risk model's age range). */
+  note?: React.ReactNode
 }): React.ReactElement {
   const action = props.action
-  return h('div', { className: 'lp-card lp-result lp-result-blocked' },
+  const self = props.selfAddon && props.selfAddon.self_key && action?.target !== 'profile' && action?.target !== 'records' ? props.selfAddon : null
+  // The missing items and what to do about them sit together on the card's floor (#39).
+  const foot = props.needs.length > 0 || self || action
+  return h('div', { className: 'lp-card lp-result' },
     h(CardHead, { label: props.label, info: props.info }),
     h('div', { className: 'lp-result-wait' }, '暂时无法计算'),
     h('p', { className: 'lp-blocker' }, props.blocker ? `还缺：${props.blocker.replace(/^记录里还缺|^档案里还缺|^还缺/, '').replace(/^[：:]/, '')}` : '还缺计算需要的数据。'),
-    props.needs.length > 0 ? h('div', { className: 'lp-needs' },
-      h('span', { className: 'lp-caption' }, '还需要'),
-      ...props.needs.slice(0, NEEDS_SHOWN).map((need) => h('span', { className: 'lp-need', key: need }, need)),
-      props.needs.length > NEEDS_SHOWN ? h('span', { className: 'lp-caption' }, `等 ${props.needs.length} 项`) : null) : null,
-    props.selfAddon && props.selfAddon.self_key && action?.target !== 'profile' && action?.target !== 'records'
-      ? h('div', { className: 'lp-result-self' },
-        h('div', { className: 'lp-caption' }, `${props.selfAddon.item_zh}可以自己在家量，记下就能算：`),
-        h(InlineSelf, { journey: props.journey, selfKey: props.selfAddon.self_key, idPrefix: `${props.idPrefix}-self`, onNotice: props.onNotice }))
-      : action ? h('div', { className: 'lp-result-action' },
-        h(Btn, { size: 'sm', variant: 'outline', onClick: () => props.onAction(action.target) }, action.label, h(Icon, { name: 'arrow', size: 14 })))
-        : null)
+    props.note ?? null,
+    foot ? h('div', { className: 'lp-result-foot' },
+      props.needs.length > 0 ? h('div', { className: 'lp-tags' },
+        h('span', { className: 'lp-caption' }, `还差 ${props.needs.length} 项`),
+        ...props.needs.slice(0, NEEDS_SHOWN).map((need) => h('span', { className: 'lp-tag', key: need }, need)),
+        props.needs.length > NEEDS_SHOWN ? h('span', { className: 'lp-caption' }, '…') : null) : null,
+      self?.self_key
+        ? h('div', { className: 'lp-result-self' },
+          h('div', { className: 'lp-caption' }, `${self.item_zh}可以自己在家量，记下就能算：`),
+          h(InlineSelf, { journey: props.journey, selfKey: self.self_key, idPrefix: `${props.idPrefix}-self`, onNotice: props.onNotice }))
+        : action ? h(Btn, { size: 'sm', variant: 'outline', onClick: () => props.onAction(action.target) }, action.label) : null) : null)
 }
 
 export function BodyAgeCard(props: {
@@ -158,23 +179,23 @@ export function BodyAgeCard(props: {
   return h('div', { className: 'lp-card lp-result', ...(props.method ? { 'data-result-label': props.method.label } : {}) },
     h(CardHead, { label: '身体年龄', info, mark: props.method?.label ?? null }),
     h('div', { className: 'lp-result-figure' },
-      h('span', { className: 'lp-bignum' }, fmt(phenoage)),
+      h('span', { className: 'lp-num-lg' }, fmt(phenoage)),
       h('span', { className: 'lp-bignum-unit' }, '岁'),
-      younger ? h('span', { className: 'lp-pill lp-pill-good' }, '真实的变化') : null),
+      younger ? h('span', { className: 'lp-badge lp-badge-good' }, '真实的变化') : null),
     // The method results that measure body age are folded in here as one line in glossary words (INT062 fix 7):
     // the page's own gap, never a second big number. One draw has no gap (advance is null).
     !older && versusCalendarAge(result.advance) ? h('p', { className: 'lp-caption lp-bioage-gap' }, versusCalendarAge(result.advance)) : null,
     // Set by the server when an input of this model changed beyond normal fluctuation.
-    result.caveat_zh && !concernLine ? h('p', { className: 'lp-caveat', role: 'note' }, h(Icon, { name: 'warn', size: 14 }), h('span', null, result.caveat_zh)) : null,
+    result.caveat_zh && !concernLine ? h('p', { className: 'lp-caveat', role: 'note' }, h(Icon, { name: 'warn', size: 14 }), h('span', null, plainUnits(result.caveat_zh))) : null,
     points.length > 1 ? h(LineChart, {
       points: points.filter((row) => row.advance != null).map((row) => ({ date: row.date, value: row.advance as number })),
       unit: '岁', label: '身体年龄减周岁', height: 96, compact: true,
       band: band != null && first?.advance != null ? { low: first.advance - band, high: first.advance + band, from: first.date } : null,
       reference: { value: 0, label: '持平' },
     }) : props.tracking == null ? h(Skeleton, { height: 40 }) : null,
-    caption ? h('p', { className: 'lp-caption lp-method-sentence', id: 'lp-bioage-feedback' }, caption) : null,
+    caption ? h('p', { className: 'lp-caption lp-method-sentence', id: 'lp-bioage-feedback' }, plainUnits(caption)) : null,
     h(KeyTrends, { journey: props.journey, older: (latest?.advance ?? result.advance ?? 0) > 0, covered: props.covered }),
-    h('p', { className: 'lp-fine' }, [count > 0 ? `${count} 次体检` : '', points.length > 1 && band != null ? '浅色带为正常波动（这点变化不算数）' : ''].filter(Boolean).join(' · ')))
+    h('p', { className: 'lp-fine lp-result-note' }, [count > 0 ? `${count} 次体检` : '', points.length > 1 && band != null ? '浅色带为正常波动（这点变化不算数）' : ''].filter(Boolean).join(' · ')))
 }
 
 function KeyTrends(props: { journey: Journey; older: boolean; covered?: Covered }): React.ReactElement | null {
@@ -185,12 +206,12 @@ function KeyTrends(props: { journey: Journey; older: boolean; covered?: Covered 
   const below = new Set(notableRows(changes, covered).map((row) => row.key))
   const trends = pickKeyTrends(changes.filter((row) => !isCovered(covered, row) && !below.has(row.key)), props.older)
   if (trends.length === 0) return null
-  return h('div', { className: 'lp-trends' },
+  return h('div', { className: 'lp-key-trends' },
     h('div', { className: 'lp-caption' }, '旁边的变化'),
     h('ul', { 'aria-label': '旁边的变化' },
     ...trends.map((row) => h('li', { key: row.label_zh },
       h('span', { className: 'lp-strong' }, row.label_zh),
-      h('span', { className: 'lp-caption' }, ` ${row.text_zh.startsWith(row.label_zh) ? row.text_zh.slice(row.label_zh.length).trim() : row.text_zh}`)))))
+      h('span', { className: 'lp-caption' }, ` ${plainUnits(row.text_zh.startsWith(row.label_zh) ? row.text_zh.slice(row.label_zh.length).trim() : row.text_zh)}`)))))
 }
 
 function rangeCaption(age: number | null): React.ReactElement | null {
@@ -209,12 +230,10 @@ export function RiskCard(props: {
   const range = rangeCaption(props.journey.profile.age)
   if (result.status !== 'ok') {
     const needs = [...result.missing_facts, ...result.missing_labs]
-    return h(React.Fragment, null,
-      h(Blocked, {
-        journey: props.journey, label: '10 年心血管风险', info: RISK_INFO, blocker: result.blocker_zh, needs,
-        action: riskAction(props.journey), selfAddon: riskSelfAddon(props.journey), onAction: props.onAction, onNotice: props.onNotice, idPrefix: 'lp-risk',
-      }),
-      range)
+    return h(Blocked, {
+      journey: props.journey, label: '10 年心血管风险', info: RISK_INFO, blocker: result.blocker_zh, needs, note: range,
+      action: riskAction(props.journey), selfAddon: riskSelfAddon(props.journey), onAction: props.onAction, onNotice: props.onNotice, idPrefix: 'lp-risk',
+    })
   }
   const card: ModelCard | undefined = props.tracking?.models?.find((row) => row.model === 'china-par')
   const goal = card?.goal?.risk_pct
@@ -227,32 +246,37 @@ export function RiskCard(props: {
   return h('div', { className: 'lp-card lp-result', ...(method ? { 'data-result-label': method.label } : {}) },
     h(CardHead, { label: '10 年心血管风险', info: h(React.Fragment, null, h('span', { className: 'lp-info-line' }, RISK_INFO), card?.note_zh ? h('span', { className: 'lp-info-line' }, card.note_zh) : null), mark: method?.label ?? null }),
     h('div', { className: 'lp-result-figure' },
-      h('span', { className: 'lp-bignum' }, riskText(result.risk_pct)),
+      h('span', { className: 'lp-num-lg' }, riskText(result.risk_pct)),
       h('span', { className: 'lp-bignum-unit' }, '%'),
-      result.category_zh ? h('span', { className: 'lp-pill' }, result.category_zh) : null,
-      range),
+      result.category_zh ? h('span', { className: 'lp-badge lp-badge-neutral' }, result.category_zh) : null),
+    range,
     goal != null && Number.isFinite(goal)
       ? h('div', { className: 'lp-result-goal' },
         h('span', { className: 'lp-caption' }, '达到方案目标约'),
         h('span', { className: 'lp-strong' }, `${riskText(goal)}%`),
-        card?.category_zh?.goal ? h('span', { className: 'lp-pill lp-pill-good' }, card.category_zh.goal) : null)
+        card?.category_zh?.goal ? h('span', { className: 'lp-badge lp-badge-good' }, card.category_zh.goal) : null)
       : null,
-    binding ? h('p', { className: 'lp-method-sentence' }, binding) : null,
-    h('p', { className: 'lp-caption' }, [result.date ? `按 ${chineseDate(result.date)}的记录和你的档案计算` : '', '未来 10 年发生心梗、脑卒中等的估计概率'].filter(Boolean).join(' · ')))
+    binding ? h('p', { className: 'lp-method-sentence' }, plainUnits(binding)) : null,
+    h('p', { className: 'lp-caption lp-result-note' }, [result.date ? `按 ${chineseDate(result.date)}的记录和你的档案计算` : '', '未来 10 年发生心梗、脑卒中等的估计概率'].filter(Boolean).join(' · ')))
 }
 
 function MethodCard(props: { result: MethodResult }): React.ReactElement {
   const out = primaryOutput(props.result)
   const numeric = out != null && typeof out.value === 'number'
-  const sentence = resultSentence(props.result, { youngerAllowed: false })
+  const title = titleOf(props.result.skill, props.result.title_zh, out?.key ?? '')
+  // The figure keeps the sentence's precision (0.56, not 0.6: the same rounding as formatMeasure); the sentence then drops the title and value the card shows.
+  const figure = numeric ? String(Number((out.value as number).toFixed(2))) : out && typeof out.value === 'string' ? out.value.trim() : ''
+  const unit = out?.unit ? plainUnits(facingUnit(out.unit, out.key)) : ''
+  const shown = figure ? `${figure}${unit ? (unit === '%' ? '%' : ` ${unit}`) : ''}` : ''
+  const sentence = figure ? restOfSentence(resultSentence(props.result, { youngerAllowed: false }), title, shown) : plainUnits(resultSentence(props.result, { youngerAllowed: false }))
   return h('div', { className: 'lp-card lp-result', 'data-result-label': props.result.label },
-    h(CardHead, { label: titleOf(props.result.skill, props.result.title_zh, out?.key ?? ''), info: h('span', { className: 'lp-info-line' }, props.result.limits_zh || '模型估计，不是诊断。'), mark: props.result.label }),
+    h(CardHead, { label: title, info: h('span', { className: 'lp-info-line' }, props.result.limits_zh || '模型估计，不是诊断。'), mark: props.result.label }),
     numeric
       ? h('div', { className: 'lp-result-figure' },
-        h('span', { className: 'lp-bignum' }, fmt(out.value as number)),
-        out.unit ? h('span', { className: 'lp-bignum-unit' }, facingUnit(out.unit, out.key)) : null)
-      : null,
-    h('p', { className: 'lp-method-sentence' }, sentence))
+        h('span', { className: 'lp-num-lg' }, figure),
+        unit ? h('span', { className: 'lp-bignum-unit' }, unit) : null)
+      : figure ? h('div', { className: 'lp-result-value' }, plainUnits(figure)) : null,
+    sentence ? h('p', { className: 'lp-muted lp-method-sentence' }, sentence) : null)
 }
 
 function EvidenceCard(props: { result: MethodResult }): React.ReactElement {
@@ -260,18 +284,9 @@ function EvidenceCard(props: { result: MethodResult }): React.ReactElement {
   return h('section', { className: 'lp-card lp-result lp-method-evidence', 'data-result-label': 'evidence-only' },
     h(CardHead, { label: '文献证据', info: h('span', { className: 'lp-info-line' }, props.result.limits_zh), mark: 'evidence-only', estimate: false }),
     h('p', { className: 'lp-strong' }, `物种：${species}`),
-    h('p', { className: 'lp-method-sentence' }, resultSentence(props.result, { youngerAllowed: false })))
+    h('p', { className: 'lp-method-sentence' }, plainUnits(resultSentence(props.result, { youngerAllowed: false }))))
 }
 
-const METHOD_CSS = `
-.lp-result-head { flex-wrap: wrap; align-items: flex-start; }
-.lp-result-tags { display: inline-flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; max-width: 100%; }
-.lp-method-sentence { margin: 8px 0 0; overflow-wrap: anywhere; }
-.lp-method-block { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; min-width: 0; }
-.lp-method-evidence { grid-column: 1 / -1; }
-.lp-results .lp-card { min-width: 0; }
-@container lp-root (max-width: 720px) { .lp-method-block { grid-template-columns: 1fr; } }
-`
 
 export function ResultsRow(props: {
   journey: Journey
@@ -295,18 +310,19 @@ export function ResultsRow(props: {
   if (props.journey.results.risk.status === 'ok') hide.add(RISK_SKILL)
   const slice = overviewSlice(methods)
   const extras = slice.value.filter((row) => !hide.has(row.skill) && !(props.journey.results.bioage.status === 'ok' && measuresBodyAge(row)))
-  const block = extras.length > 0 || slice.evidence.length > 0
-    ? h('div', { key: 'methods', id: 'lp-methods', className: 'lp-method-block' },
-      ...extras.map((row, index) => h(MethodCard, { key: `value-${index}`, result: row })),
-      ...slice.evidence.map((row, index) => h(EvidenceCard, { key: `evidence-${index}`, result: row })))
-    : null
+  const values = extras.map((row, index) => h(MethodCard, { key: `value-${index}`, result: row }))
+  const evidence = slice.evidence.map((row, index) => h(EvidenceCard, { key: `evidence-${index}`, result: row }))
   const bio = h(BodyAgeCard, { key: 'bio', ...props, method: pheno })
   const risk = h(RiskCard, { key: 'risk', ...props, method: riskMethod })
   // Record changes are on 值得注意的变化 (or 最重要的一步); 这次的变化 keeps the plan's own results, check-ins and targets.
   const feedback = h(FeedbackBlock, { key: 'feedback', journey: props.journey, tracking: props.tracking, onNotice: props.onNotice, recordChanges: false })
-  const style = h('style', { key: 'method-style' }, METHOD_CSS)
   const cards = riskFirst ? [risk, bio] : [bio, risk]
-  return h('div', { className: 'lp-results', id: 'lp-results' }, style, ...cards, block, feedback)
+  // One grid of result cards (a lone last card spans the row), the evidence cards full width, then the plan's own
+  // results in a grid of their own, so 这次的变化 is never a half-width card on its own (#17).
+  return h('div', { className: 'lp-stack', id: 'lp-results' },
+    h('div', { className: 'lp-grid-2 lp-results' }, ...cards, ...values),
+    evidence.length > 0 ? h('div', { className: 'lp-stack', id: 'lp-methods' }, ...evidence) : null,
+    h('div', { className: 'lp-grid-2 lp-results lp-results-plan' }, feedback))
 }
 
 /** The next-checkup add-on list; items the person can measure at home get a field right here. */

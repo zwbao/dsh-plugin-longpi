@@ -27,7 +27,7 @@ const CONSENT_ICONS = ['health', 'lock', 'spark'] as const
 
 export function ConsentText(): React.ReactElement {
   return h('div', { className: 'lp-consent' }, ...CONSENT_SENTENCES.map((text, index) => h('div', { key: index, className: 'lp-consent-row' },
-    h('span', { className: 'lp-consent-icon', 'aria-hidden': true }, h(Icon, { name: CONSENT_ICONS[index] ?? 'info', size: 15 })),
+    h('span', { className: 'lp-consent-icon', 'aria-hidden': true }, h(Icon, { name: CONSENT_ICONS[index] ?? 'info', size: 16 })),
     h('p', null, text))))
 }
 
@@ -36,18 +36,20 @@ function checkupsText(count: number): string {
   return count > 0 ? ` · ${count} 次完整体检` : ''
 }
 
-export function RecordsStatusLine(props: { journey: Journey }): React.ReactElement {
+/** The records' state in one line; `inline` renders it as a span for the page header's meta line. */
+export function RecordsStatusLine(props: { journey: Journey; inline?: boolean }): React.ReactElement {
   const records = props.journey.records
+  const tag = props.inline ? 'span' : 'div'
   if (recordConnected(records.status) && records.indicator_count > 0) {
     const partial = records.status === 'partial'
-    return h('div', { className: 'lp-status' },
+    return h(tag, { className: 'lp-status' },
       h('span', { className: `lp-statusdot ${partial ? 'lp-statusdot-warn' : 'lp-statusdot-on'}`, 'aria-hidden': true }),
       `已有 ${records.indicator_count} 项指标${records.latest_checkup ? ` · 最近一次体检 ${chineseDate(records.latest_checkup)}` : ''}${partial ? ' · 有一部分这次没有读到' : ''}`)
   }
   if (records.status === 'error') {
-    return h('div', { className: 'lp-status' }, h('span', { className: 'lp-statusdot lp-statusdot-bad', 'aria-hidden': true }), `记录读取失败：${records.error || '原因不明'}`)
+    return h(tag, { className: 'lp-status' }, h('span', { className: 'lp-statusdot lp-statusdot-bad', 'aria-hidden': true }), `记录读取失败：${records.error || '原因不明'}`)
   }
-  return h('div', { className: 'lp-status' },
+  return h(tag, { className: 'lp-status' },
     h('span', { className: 'lp-statusdot', 'aria-hidden': true }),
     recordConnected(records.status) ? '还没有体检记录' : '正在连接健康数据服务…')
 }
@@ -93,7 +95,7 @@ function ChangesLine(props: { journey: Journey; onOpenChanges?: () => void }): R
     h('span', null,
       h('span', { className: 'lp-strong' }, `值得注意：${rows.length} 项指标的变化超出正常波动`),
       ` · ${names}${rows.length > 3 ? ' 等' : ''}`,
-      props.onOpenChanges ? h(React.Fragment, null, ' · ', h('button', { type: 'button', className: 'lp-row-link', onClick: props.onOpenChanges }, '在健康页查看')) : null))
+      props.onOpenChanges ? h(React.Fragment, null, ' · ', h('button', { type: 'button', className: 'lp-textbtn', onClick: props.onOpenChanges }, '在健康页查看', h(Icon, { name: 'chevron', size: 14 }))) : null))
 }
 
 /** Step 3: what LongPi found, or the connection form (no installer needed). */

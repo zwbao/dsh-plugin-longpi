@@ -20,7 +20,7 @@ const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]'])
 /** The same rule the server applies: https, or http only on this computer. */
 export function addressProblem(text: string): string | null {
   const trimmed = text.trim()
-  if (!trimmed) return '请先展开给安装的人的那一栏，再粘贴连接地址。'
+  if (!trimmed) return '请先展开「改用连接地址」，再粘贴连接地址。'
   let url: URL
   try {
     url = new URL(trimmed)
@@ -59,7 +59,6 @@ export function ConnectionStatus(props: { connection: Connection; brief?: boolea
     h('div', { className: 'lp-status' },
       h('span', { className: `lp-statusdot ${ok ? 'lp-statusdot-on' : bad ? 'lp-statusdot-bad' : ''}`, 'aria-hidden': true }),
       ok ? '已连上' : bad ? `连接失败：${connection.error || '没有返回原因'}` : '还没有连上'),
-    null,
     ok && connection.summary && !props.brief ? h('div', { className: 'lp-caption' }, `找到：${summaryParts(connection.summary).join(' · ')}`) : null)
 }
 
@@ -107,8 +106,8 @@ function MirobodyLogin(props: { idPrefix: string; onSaved?: () => void }): React
   }
   return h('div', { className: 'lp-conn-login', id: `${props.idPrefix}-login` },
     h('p', { className: 'lp-muted' }, '用邮箱和密码登录并连接。'),
-    h('details', { className: 'lp-more' },
-      h('summary', null, '高级（给安装的人）'),
+    h('details', null,
+      h('summary', null, '更改服务地址'),
       h('div', { className: 'lp-field' },
         h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-base` }, '服务地址'),
         h('input', { id: `${props.idPrefix}-base`, className: 'lp-input', value: base, autoComplete: 'off', spellCheck: false, onChange: (event: React.ChangeEvent<HTMLInputElement>) => setBase(event.target.value) }))),
@@ -182,8 +181,8 @@ export function ConnectionForm(props: { connection: Connection | null; idPrefix:
 
   return h('form', { className: 'lp-conn-form', noValidate: true, onSubmit: (event: React.FormEvent) => { event.preventDefault(); void run('save') } },
     h(MirobodyLogin, { idPrefix: props.idPrefix }),
-    h('details', { className: 'lp-more' },
-      h('summary', null, '高级（给安装的人）'),
+    h('details', { className: 'lp-conn-advanced' },
+      h('summary', null, '改用连接地址（给安装的人）'),
       props.connection?.url_masked ? h('p', { className: 'lp-caption' }, `当前地址 ${props.connection.url_masked}`) : null,
       h('p', { className: 'lp-caption' }, '安装的人如果已经拿到连接地址，再展开填写。平时不用看。'),
       h('div', { className: 'lp-field' },
@@ -213,7 +212,8 @@ export function ConnectionForm(props: { connection: Connection | null; idPrefix:
 }
 
 /** Status plus form. collapsed: when connected, the form waits behind 换一个地址 (onboarding step 3). */
-export function ConnectionPanel(props: { idPrefix: string; collapsed?: boolean; onSaved?: (connection: Connection) => void }): React.ReactElement {
+/** hideStatus: the caller already shows the status line (the settings page, above its 高级 fold). */
+export function ConnectionPanel(props: { idPrefix: string; collapsed?: boolean; hideStatus?: boolean; onSaved?: (connection: Connection) => void }): React.ReactElement {
   const { data, loading, error } = useConnection()
   const [open, setOpen] = React.useState(false)
   if (!data && loading) return h(Skeleton, { height: 96 })
@@ -221,10 +221,10 @@ export function ConnectionPanel(props: { idPrefix: string; collapsed?: boolean; 
   const connected = data.status === 'ok'
   const showForm = !props.collapsed || !connected || open
   return h('div', { className: 'lp-conn' },
-    h(ConnectionStatus, { connection: data, brief: props.collapsed }),
+    props.hideStatus ? null : h(ConnectionStatus, { connection: data, brief: props.collapsed }),
     showForm
       ? h(ConnectionForm, { connection: data, idPrefix: props.idPrefix, onSaved: (connection) => { setOpen(false); props.onSaved?.(connection) } })
-      : h('button', { type: 'button', className: 'lp-row-link lp-conn-change', onClick: () => setOpen(true) }, '换一个连接 →'))
+      : h('button', { type: 'button', className: 'lp-textbtn', onClick: () => setOpen(true) }, '换一个连接 →'))
 }
 
 /** One line for places that only point at the connection (档案, the page header). */

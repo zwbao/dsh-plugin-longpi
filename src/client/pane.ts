@@ -21,6 +21,12 @@ export const PANE_ID = 'dsh-plugin-longpi.health'
 export const PANE_KIND = 'longpi-health'
 export const PANE_TITLE = '健康'
 
+/** Anchors on the 档案 tab that a result card's action scrolls to (element ids, not classes). */
+const RECORDS_ID = 'lp-connection-card'
+const ADDONS_ID = 'lp-addons-card'
+const SELF_ID = 'lp-self-card'
+const PROFILE_ID = 'lp-profile-card'
+
 let opener: (() => void) | null = null
 const listeners = new Set<() => void>()
 
@@ -58,7 +64,7 @@ export function HealthPane(props: Partial<Face>): React.ReactElement {
     props.openPage?.()
   }
   const onAction = (target: ResultTarget) => toPage('profile', {
-    id: target === 'records' ? 'lp-connection-card' : target === 'addons' ? 'lp-addons-card' : target === 'self' ? 'lp-self-card' : 'lp-profile-card',
+    id: target === 'records' ? RECORDS_ID : target === 'addons' ? ADDONS_ID : target === 'self' ? SELF_ID : PROFILE_ID,
   })
   let body: React.ReactNode
   if (!journey && loading) {
@@ -73,9 +79,9 @@ export function HealthPane(props: Partial<Face>): React.ReactElement {
   }
   return h('div', { className: 'lp lp-pane' },
     h('div', { className: 'lp-pane-head' },
-      h('span', { className: 'lp-label' }, h(Icon, { name: 'health', size: 14 }), PANE_TITLE),
-      props.openPage ? h('button', { type: 'button', className: 'lp-row-link', onClick: props.openPage }, '打开健康页 →') : null),
+      h('h2', { className: 'lp-h3 lp-pane-title' }, h(Icon, { name: 'health', size: 14 }), PANE_TITLE),
+      props.openPage ? h('button', { type: 'button', className: 'lp-textbtn', onClick: props.openPage }, '打开健康页 →') : null),
     notice ? h('div', { className: 'lp-notice-slot' }, notice) : null,
     body,
-    h('p', { className: 'lp-fine lp-pane-foot' }, journey?.boundary_zh || BOUNDARY_FALLBACK))
+    h('p', { className: 'lp-caption lp-pane-foot' }, journey?.boundary_zh || BOUNDARY_FALLBACK))
 }

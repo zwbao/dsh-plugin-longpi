@@ -3,7 +3,7 @@
 
 import assert from 'node:assert/strict'
 import { createPrivateKey } from 'node:crypto'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { readdirSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -100,12 +100,13 @@ try {
   assert.equal(finished.quests.find((item) => item.id === 'qs-n-of-1')?.status, 'done')
 
   const page = readFileSync(join(root, 'src/client/page.ts'), 'utf8')
-  const styles = readFileSync(join(root, 'src/client/styles.ts'), 'utf8')
+  const styles = readdirSync(join(root, 'src/client/styles')).map((f) => readFileSync(join(root, 'src/client/styles', f), 'utf8')).join('\n')
   const results = readFileSync(join(root, 'src/client/results.ts'), 'utf8')
   const html = readFileSync(join(root, 'src/science/page-html.ts'), 'utf8')
   assert.match(page, /SeasonBar/)
   assert.doesNotMatch(page, /shell\.overlay/)
-  assert.match(styles, /\.lp-season-bar \{ position: static/)
+  assert.match(styles, /\.lp-season-bar \{/)
+  assert.equal(/\.lp-season-bar \{[^}]*position:\s*fixed/.test(styles), false)
   assert.equal(/lp-season-dock[\s\S]{0,200}position:\s*fixed/.test(results), false)
   assert.equal(html.includes('position:fixed'), false)
   assert.equal(html.includes('position: fixed'), false)

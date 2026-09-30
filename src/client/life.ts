@@ -3,7 +3,8 @@
 import React from 'react'
 import { errorText, getJson, postJson } from './api.ts'
 import { IndicatorsTab } from './indicators.ts'
-import { setPendingPrompt, type PageTab } from './store.ts'
+import { Icon } from './icons.ts'
+import { setPendingPrompt, type IndicatorFilter, type PageTab } from './store.ts'
 import type { Journey } from './types.ts'
 import { isCovered, type Covered } from './overview-facts.ts'
 import { Btn } from './ui.ts'
@@ -11,12 +12,18 @@ import { insightSentence, SCIENCE_INTRO, SEASON_INTRO, suggestedQuestions, build
 
 const h = React.createElement
 
-export function SleepTab(): React.ReactElement {
-  return h(IndicatorsTab, { filter: 'all', onFilter: () => {}, onConnect: () => {}, area: 'sleep' })
+/** Sleep and training reuse the labs table; the filter lives here because the page keeps only the labs filter. */
+function AreaTab(props: { area: 'sleep' | 'training'; onConnect?: () => void }): React.ReactElement {
+  const [filter, setFilter] = React.useState<IndicatorFilter>('all')
+  return h(IndicatorsTab, { filter, onFilter: setFilter, onConnect: props.onConnect, area: props.area })
 }
 
-export function TrainingTab(): React.ReactElement {
-  return h(IndicatorsTab, { filter: 'all', onFilter: () => {}, onConnect: () => {}, area: 'training' })
+export function SleepTab(props: { onConnect?: () => void } = {}): React.ReactElement {
+  return h(AreaTab, { area: 'sleep', onConnect: props.onConnect })
+}
+
+export function TrainingTab(props: { onConnect?: () => void } = {}): React.ReactElement {
+  return h(AreaTab, { area: 'training', onConnect: props.onConnect })
 }
 
 export function AskTab(props: { journey: Journey; openChat?: () => void }): React.ReactElement {
@@ -27,13 +34,15 @@ export function AskTab(props: { journey: Journey; openChat?: () => void }): Reac
     setPendingPrompt(text)
     props.openChat?.()
   }
-  return h('div', { className: 'lp-tab-body lp-ask' },
-    h('section', { className: 'lp-card' },
-      h('div', { className: 'lp-label' }, '问 LongPi'),
-      h('p', { className: 'lp-muted' }, '想问就问，不用攒着。问吃药、补剂、饮食、检查或身体不舒服，会先直接回答，再把该知道的说全；问记录的变化和进度，回答分三小段：我看到的、数据说明不了的、下一步。'),
+  return h('div', { className: 'lp-tab-body' },
+    h('section', { className: 'lp-card', 'aria-labelledby': 'lp-ask-title' },
+      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title', id: 'lp-ask-title' }, '可以这样问')),
+      h('p', { className: 'lp-muted lp-text' }, '想问就问，不用攒着。问吃药、补剂、饮食、检查或身体不舒服，会先直接回答，再把该知道的说全；问记录的变化和进度，回答分三小段：我看到的、数据说明不了的、下一步。'),
       h('ul', { className: 'lp-ask-list' },
         ...questions.map((text) => h('li', { key: text },
-          h('button', { type: 'button', className: 'lp-ask-q', onClick: () => ask(text) }, text))))))
+          h('button', { type: 'button', className: 'lp-row-btn', onClick: () => ask(text) },
+            h('span', { className: 'lp-row-main' }, text),
+            h(Icon, { name: 'chevron', size: 14 })))))))
 }
 
 interface ScheduleRow {
@@ -44,6 +53,13 @@ interface ScheduleRow {
   questions_zh: string[]
   confirmed: boolean
   kind: string
+}
+
+function EmptyLine(props: { icon: string; title: string; text: string }): React.ReactElement {
+  return h('div', { className: 'lp-empty' },
+    h(Icon, { name: props.icon, size: 20 }),
+    h('div', { className: 'lp-empty-title' }, props.title),
+    h('p', { className: 'lp-empty-text' }, props.text))
 }
 
 export function CalendarTab(props: { journey: Journey }): React.ReactElement {
@@ -61,31 +77,44 @@ export function CalendarTab(props: { journey: Journey }): React.ReactElement {
   const confirm = (row: { date: string; title_zh: string; brief_zh: string; questions_zh: string[]; kind: string }) => {
     void postJson('/api/longpi/schedule', { ...row, confirm: true }).then(() => { setNote('已放进日程。'); load() }).catch((error: unknown) => setNote(errorText(error, '没有放进去')))
   }
-  return h('div', { className: 'lp-tab-body lp-calendar' },
-    h('section', { className: 'lp-card' },
-      h('div', { className: 'lp-label' }, '日程'),
-      h('p', { className: 'lp-muted' }, '复查、看医生、稍后要做的事。LongPi 的建议要你点一下才写上日期。'),
+  const fallback = suggestions.length === 0 ? retests[0] : undefined
+  const suggestionRows = suggestions.length > 0
+    ? suggestions.map((row) => h('li', { key: row.id, className: 'lp-row lp-cal-row' },
+      h('span', { className: 'lp-cal-date' }, row.date),
+      h('div', { className: 'lp-row-main' }, row.title_zh),
+      h('div', { className: 'lp-cal-actions' }, h(Btn, { size: 'sm', onClick: () => confirm(row) }, '放进日程'))))
+    : fallback
+      ? [h('li', { key: 'retest', className: 'lp-row lp-cal-row' },
+        h('span', { className: 'lp-cal-date' }, fallback.date),
+        h('div', { className: 'lp-row-main' },
+          h('div', null, fallback.text_zh),
+          h('div', { className: 'lp-caption' }, '带着上次的简报和你想问的问题。')),
+        h('div', { className: 'lp-cal-actions' },
+          h(Btn, { size: 'sm', onClick: () => confirm({ date: fallback.date ?? '', title_zh: fallback.text_zh, brief_zh: '带着简报和问题。', questions_zh: suggestedQuestions({ visit: fallback.date }).slice(0, 2), kind: 'retest' }) }, '放进日程'),
+          h(Btn, { size: 'sm', variant: 'outline', onClick: () => setNote('先不写上。') }, '先不用')))]
+      : []
+  return h('div', { className: 'lp-tab-body' },
+    h('section', { className: 'lp-card', 'aria-labelledby': 'lp-cal-title' },
+      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title', id: 'lp-cal-title' }, '已写上的日期')),
       events.length === 0 && retests.length === 0
-        ? h('p', null, '还没有写上的日期。')
-        : h('ul', { className: 'lp-cal-list' },
-          ...events.map((row) => h('li', { key: row.id },
-            h('div', { className: 'lp-strong' }, `${row.date} · ${row.title_zh}`),
-            row.brief_zh ? h('p', { className: 'lp-muted' }, row.brief_zh) : null,
-            row.questions_zh.length > 0 ? h('p', { className: 'lp-caption' }, `可以问：${row.questions_zh.join('；')}`) : null)),
-          ...retests.map((row) => h('li', { key: row.text_zh },
-            h('div', { className: 'lp-strong' }, `${row.date} · ${row.text_zh}`))))),
-    h('section', { className: 'lp-card', id: 'lp-cal-suggest' },
-      h('div', { className: 'lp-label' }, '建议，还没写上'),
-      suggestions.length === 0 && retests[0]
-        ? h('div', { className: 'lp-cal-suggest' },
-          h('p', null, `${retests[0].date} ${retests[0].text_zh}`),
-          h('p', { className: 'lp-caption' }, '带着上次的简报和你想问的问题。'),
-          h(Btn, { size: 'sm', onClick: () => confirm({ date: retests[0].date ?? '', title_zh: retests[0].text_zh, brief_zh: '带着简报和问题。', questions_zh: suggestedQuestions({ visit: retests[0].date }).slice(0, 2), kind: 'retest' }) }, '放进日程'),
-          h(Btn, { size: 'sm', variant: 'outline', onClick: () => setNote('先不写上。') }, '先不用'))
-        : suggestions.map((row) => h('div', { key: row.id, className: 'lp-cal-suggest' },
-          h('p', null, `${row.date} ${row.title_zh}`),
-          h(Btn, { size: 'sm', onClick: () => confirm(row) }, '放进日程'))),
-      note ? h('p', { className: 'lp-caption' }, note) : null),
+        ? h(EmptyLine, { icon: 'calendar', title: '还没有写上的日期', text: '复查、看医生、稍后要做的事。LongPi 的建议要你点一下才写上日期。' })
+        : h('ul', { className: 'lp-rows' },
+          ...events.map((row) => h('li', { key: row.id, className: 'lp-row' },
+            h('span', { className: 'lp-cal-date' }, row.date),
+            h('div', { className: 'lp-row-main' },
+              h('div', { className: 'lp-strong' }, row.title_zh),
+              row.brief_zh ? h('div', { className: 'lp-muted' }, row.brief_zh) : null,
+              row.questions_zh.length > 0 ? h('div', { className: 'lp-caption' }, `可以问：${row.questions_zh.join('；')}`) : null))),
+          ...retests.map((row) => h('li', { key: row.text_zh, className: 'lp-row' },
+            h('span', { className: 'lp-cal-date' }, row.date),
+            h('div', { className: 'lp-row-main lp-strong' }, row.text_zh)))),
+      suggestionRows.length === 0 && note ? h('p', { className: 'lp-caption', role: 'status' }, note) : null),
+    suggestionRows.length > 0
+      ? h('section', { className: 'lp-card', id: 'lp-cal-suggest', 'aria-labelledby': 'lp-cal-suggest-title' },
+        h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title', id: 'lp-cal-suggest-title' }, '建议，还没写上')),
+        h('ul', { className: 'lp-rows' }, ...suggestionRows),
+        note ? h('p', { className: 'lp-caption', role: 'status' }, note) : null)
+      : null,
     h(Timeline, { journey: props.journey }))
 }
 
@@ -112,15 +141,16 @@ export function Timeline(props: { journey: Journey }): React.ReactElement {
     wearables,
     life: props.journey.reminders.filter((row) => row.kind === 'retest' && row.date).map((row) => ({ date: row.date as string, kind: 'visit' as const, note: row.text_zh })),
   })
-  return h('section', { className: 'lp-card', id: 'lp-timeline' },
-    h('div', { className: 'lp-label' }, '同一条时间'),
-    h('p', { className: 'lp-muted' }, '化验、手环和生活上的事放在一起，才看得出比如复查前生过病。'),
+  return h('section', { className: 'lp-card', id: 'lp-timeline', 'aria-labelledby': 'lp-timeline-title' },
+    h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title', id: 'lp-timeline-title' }, '同一条时间')),
     items.length === 0
-      ? h('p', { className: 'lp-caption' }, '还没有可以排在一起的日期。')
-      : h('ol', { className: 'lp-timeline' },
-        ...items.slice(-8).map((item) => h('li', { key: `${item.kind}-${item.date}-${item.title_zh}` },
-          h('span', { className: 'lp-timeline-date' }, item.date),
-          h('span', null, `${item.title_zh} · ${item.detail_zh}`)))))
+      ? h(EmptyLine, { icon: 'calendar', title: '还没有可以排在一起的日期', text: '化验、手环和生活上的事放在一起，才看得出比如复查前生过病。' })
+      : h(React.Fragment, null,
+        h('p', { className: 'lp-muted' }, '化验、手环和生活上的事放在一起，才看得出比如复查前生过病。'),
+        h('ol', { className: 'lp-rows' },
+          ...items.slice(-8).map((item) => h('li', { key: `${item.kind}-${item.date}-${item.title_zh}`, className: 'lp-row' },
+            h('span', { className: 'lp-cal-date' }, item.date),
+            h('span', { className: 'lp-row-main' }, `${item.title_zh} · ${item.detail_zh}`))))))
 }
 
 export function InsightCard(props: { journey: Journey; covered?: Covered }): React.ReactElement | null {
@@ -175,18 +205,5 @@ export function ScienceIntro(props: { goTab: (tab: PageTab) => void }): React.Re
 }
 
 export function SeasonLink(props: { onOpen: () => void }): React.ReactElement {
-  return h('button', { type: 'button', className: 'lp-row-link', onClick: props.onOpen }, `赛季 · ${SEASON_INTRO}`)
-}
-
-export function Subnav(props: { onTab: (tab: PageTab) => void; science: boolean; current: PageTab }): React.ReactElement {
-  const items: Array<[PageTab, string]> = [
-    ['plan', '方案'],
-    ['profile', '档案'],
-    ['season', '赛季'],
-    ...(props.science ? [['science', '研究'] as [PageTab, string]] : []),
-  ]
-  return h('div', { className: 'lp-subnav', role: 'navigation', 'aria-label': '更多' },
-    ...items.map(([key, label]) => h('button', {
-      key, type: 'button', className: `lp-subnav-btn ${props.current === key ? 'lp-subnav-on' : ''}`, onClick: () => props.onTab(key),
-    }, label)))
+  return h('button', { type: 'button', className: 'lp-textbtn', onClick: props.onOpen }, `赛季 · ${SEASON_INTRO}`)
 }

@@ -2,6 +2,7 @@
 
 import React from 'react'
 import { postJson } from '../api.ts'
+import { Btn } from '../ui.ts'
 import { PLAIN_QUESTIONS } from '../../science/plain-copy.ts'
 
 const h = React.createElement
@@ -38,25 +39,28 @@ export function ConsentPanel(props: { study: StudyRow; onChange: () => void; onE
   }
   const state = props.study.consented === 'granted' ? '已参加' : props.study.consented === 'withdrawn' ? '已退出' : '未参加'
   return h('article', { className: 'lp-card', id: `lp-study-${props.study.id}` },
-    h('p', { className: 'lp-kicker' }, `${state} · ${props.study.kind === 'community_season' ? '社区赛季' : '研究'}`),
-    h('h2', { className: 'lp-h2' }, props.study.title_zh),
-    h('p', null, props.study.summary_zh),
-    h('p', { className: 'lp-muted' }, '加入之后，研究正式开始才会把合计发出去。现在只保存在你的设备上。基因和姓名不参加。'),
-    h('details', null, h('summary', null, '完整同意书'), h('p', null, props.study.text_zh)),
+    h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, props.study.title_zh)),
+    h('div', { className: 'lp-tags' },
+      h('span', { className: `lp-badge ${props.study.consented === 'granted' ? 'lp-badge-good' : 'lp-badge-neutral'}` }, state),
+      h('span', { className: 'lp-tag' }, props.study.kind === 'community_season' ? '社区赛季' : '研究')),
+    h('p', { className: 'lp-text' }, props.study.summary_zh),
+    h('p', { className: 'lp-small lp-muted' }, '加入之后，研究正式开始才会把合计发出去。现在只保存在你的设备上。基因和姓名不参加。'),
+    h('details', null, h('summary', null, '完整同意书'), h('p', { className: 'lp-small lp-muted' }, props.study.text_zh)),
     ...questions.map((question) => {
       const plain = PLAIN[question.id]
       const title = plain?.question_zh ?? question.question_zh
       const options = plain?.options_zh ?? question.options_zh
       return h('fieldset', { key: question.id, className: 'lp-sci-q' },
-        h('legend', null, title),
-        ...options.map((option, index) => h('label', { key: option },
-          h('input', { type: 'radio', name: `${props.study.id}-${question.id}`, checked: picked[question.id] === index, onChange: () => setPicked({ ...picked, [question.id]: index }) }),
-          ` ${option}`)))
+        h('legend', { className: 'lp-field-label' }, title),
+        h('div', { className: 'lp-sci-options' },
+          ...options.map((option, index) => h('label', { key: option, className: 'lp-check' },
+            h('input', { type: 'radio', name: `${props.study.id}-${question.id}`, checked: picked[question.id] === index, onChange: () => setPicked({ ...picked, [question.id]: index }) }),
+            h('span', null, option)))))
     }),
     h('div', { className: 'lp-actions' },
-      h('button', { type: 'button', className: 'lp-btn', disabled: !ready, onClick: submit }, '加入'),
-      h('button', { type: 'button', onClick: () => { void postJson('/api/longpi/science/invite', { decision: 'later' }).then(() => setNote('以后再说。本机上的功能还在。')).catch(() => setNote('以后再说。')) } }, '以后再说'),
-      props.study.consented === 'granted' ? h('button', { type: 'button', onClick: withdraw }, '退出这项研究') : null,
-      h('span', { className: 'lp-muted' }, '已经发出的合计不会收回。')),
-    note ? h('p', { className: 'lp-muted' }, note) : null)
+      h(Btn, { size: 'sm', disabled: !ready, onClick: submit }, '加入'),
+      h(Btn, { size: 'sm', variant: 'outline', onClick: () => { void postJson('/api/longpi/science/invite', { decision: 'later' }).then(() => setNote('以后再说。本机上的功能还在。')).catch(() => setNote('以后再说。')) } }, '以后再说'),
+      props.study.consented === 'granted' ? h(Btn, { size: 'sm', variant: 'outline', onClick: withdraw }, '退出这项研究') : null),
+    h('p', { className: 'lp-caption' }, '已经发出的合计不会收回。'),
+    note ? h('p', { className: 'lp-small', role: 'status' }, note) : null)
 }

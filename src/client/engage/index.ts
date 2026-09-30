@@ -3,6 +3,7 @@
 import React from 'react'
 import { errorText, getJson, postJson } from '../api.ts'
 import { registerPageTab, registerSettingsSection } from '../registry.ts'
+import { Icon } from '../icons.ts'
 import { NudgeOffer } from './nudge-pill.ts'
 import { SeasonPanel, type SeasonView } from './season-tab.ts'
 
@@ -68,9 +69,14 @@ export function EngageDock(props: { variant?: 'dock' | 'page' } = {}): React.Rea
     onOpt: (on) => { void run('/api/longpi/nudges', { codex_enabled: on }) },
   }) : null
   if (page) {
-    return h('div', { className: 'lp lp-season-page', style: { display: 'flex', flexDirection: 'column', gap: 8 } },
-      failed ? h('p', null, failed) : null,
-      panel ?? h('p', { className: 'lp-muted' }, '赛季正在读取。'),
+    return h('div', { className: 'lp-tab-body' },
+      failed
+        ? h('div', { className: 'lp-callout lp-callout-warn', role: 'alert' },
+          h(Icon, { name: 'warn', size: 14 }),
+          h('p', { className: 'lp-callout-body' }, failed),
+          h('button', { type: 'button', className: 'lp-textbtn', onClick: () => { void load() } }, '重试'))
+        : null,
+      panel ?? (failed ? null : h('p', { className: 'lp-small lp-muted' }, '赛季正在读取。')),
       view?.nudge?.offer ? h(NudgeOffer, {
         offer: true,
         onAccept: () => { void run('/api/longpi/nudges', { nudge_in_workflow: true, offer_seen: true }) },
@@ -108,7 +114,7 @@ export function EngageSettingsNote(_props?: Record<string, unknown>): React.Reac
       else if (view.needs_consent) setLine('还没有同意使用说明，所以赛季和提醒都还没开始。')
     }).catch(() => { /* the static line stays */ })
   }, [])
-  return h('p', { className: 'lp-caption', style: { marginTop: 8 } }, line)
+  return h('p', { className: 'lp-caption' }, line)
 }
 
 function SeasonPage(_props: Record<string, unknown>): React.ReactElement | null {

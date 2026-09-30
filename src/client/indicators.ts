@@ -7,7 +7,7 @@
 import React from 'react'
 import { getJson, errorText } from './api.ts'
 import { fmt, fmtAuto, LineChart, TableTwin } from './charts.ts'
-import { ChangeChip, prettyUnits } from './changes.ts'
+import { prettyUnits } from './changes.ts'
 import { chineseDate } from './format.ts'
 import { Icon } from './icons.ts'
 import { normalizeIndicatorDetail } from './normalize.ts'
@@ -44,10 +44,10 @@ const FILTERS: Array<{ key: IndicatorFilter; label: string; test: (row: Indicato
   { key: 'device', label: '手环', test: (row) => row.source === 'device' },
 ]
 
-/** A trend in 88 × 24: the line and the latest point, no axes (the panel has the full chart). */
+/** A trend in 88 × 24: the line and the latest point, no axes (the panel has the full chart). Fewer than two values: 「—」. */
 function Sparkline(props: { points: Array<{ date: string; value: number }>; label: string }): React.ReactElement | null {
   const points = props.points
-  if (points.length < 2) return h('span', { className: 'lp-spark-none', 'aria-hidden': true }, points.length === 1 ? '仅 1 次' : '')
+  if (points.length < 2) return h('span', { className: 'lp-caption', title: points.length === 1 ? '只有 1 次结果' : '没有数值' }, '—')
   const width = 88
   const height = 24
   const values = points.map((point) => point.value)
@@ -63,23 +63,25 @@ function Sparkline(props: { points: Array<{ date: string; value: number }>; labe
     h('circle', { cx: x(points.length - 1), cy: y(last.value), r: 2.5, className: 'lp-spark-dot' }))
 }
 
+/** The 「和正常波动比」 cell: a short badge; the full sentence is its tooltip (the toolbar ⓘ explains every word). */
 export function JudgedChip(props: { row: IndicatorRow; gate?: string; reason?: string }): React.ReactElement {
   const { row } = props
   const reason = props.reason ?? ''
   if (row.range_flag === 'low' || row.range_flag === 'high') {
     const low = row.range_flag === 'low'
-    return h('span', { className: `lp-chip-c lp-chip-c-${low ? 'warn' : 'warn'}`, title: row.range_zh || (low ? '低于参考范围' : '高于参考范围') }, low ? '偏低' : '偏高')
+    return h('span', { className: 'lp-badge lp-badge-warn', title: row.range_zh || (low ? '低于参考范围' : '高于参考范围') }, low ? '偏低' : '偏高')
   }
-  if (props.gate === 'too_early' || reason.startsWith('太早')) {
-    return h('span', { className: 'lp-chip-c lp-chip-c-unjudged', title: reason || '离上次太近' }, judgementText('too_early', true))
+  const kind: JudgementKey = judgementKind({ gate: props.gate, judged: row.judged, reason })
+  const full = judgementText(kind, true)
+  if (kind === 'beyond') {
+    const tone = row.change?.verdict === 'better' && !row.change.ask_doctor ? 'good' : row.change && row.change.verdict === 'unclear' && !row.change.ask_doctor ? 'neutral' : 'warn'
+    return h('span', { className: `lp-badge lp-badge-${tone}`, title: full }, judgementText(kind, false))
   }
-  if (props.gate === 'not_comparable' || reason.startsWith('不可比')) {
-    return h('span', { className: 'lp-chip-c lp-chip-c-unjudged', title: reason || '两次不是同一家机构' }, judgementText('not_comparable', true))
-  }
-  if (row.judged === 'changed' && row.change) return h(ChangeChip, { verdict: row.change.verdict, askDoctor: row.change.ask_doctor })
-  if (row.judged === 'within') return h('span', { className: 'lp-chip-c lp-chip-c-within' }, h(Icon, { name: 'within', size: 12 }), judgementText('within', true))
-  const why = row.read_error ? '这项没有读到' : row.points.length < 2 ? '只有一次结果' : '还缺比较要用的信息'
-  return h('span', { className: 'lp-chip-c lp-chip-c-unjudged', title: why }, judgementText('unjudged', true))
+  if (kind === 'within') return h('span', { className: 'lp-badge lp-badge-good', title: full }, judgementText(kind, false))
+  const why = kind === 'unjudged'
+    ? (row.read_error ? '这项没有读到' : row.points.length < 2 ? '只有一次结果' : '还缺比较要用的信息')
+    : reason || full
+  return h('span', { className: 'lp-caption', title: why }, judgementText(kind, false))
 }
 
 function latestText(row: IndicatorRow): string {
@@ -88,31 +90,35 @@ function latestText(row: IndicatorRow): string {
   return row.latest.value == null ? '—' : fmtAuto(row.latest.value)
 }
 
-function IndicatorLine(props: { row: IndicatorRow; open: boolean; onToggle: () => void; gate?: string; reason?: string; explain: boolean }): React.ReactElement {
-  const { row } = props
-  const panelId = `lp-ind-panel-${row.id.replace(/[^A-Za-z0-9_-]/g, '_')}`
-  const move = movementOf(row.points, prettyUnits(row.unit))
-  const kind: JudgementKey = judgementKind({ gate: props.gate, judged: row.judged, reason: props.reason })
-  const missed = row.read_error ? scrubVisible(row.read_error).replace(/没有在 \d+ 秒内返回这一项/, '这次没有读到，稍后刷新再看') : ''
-  const lead = missed
-    ? `没有读到：${missed}`
-    : move?.lead ?? (row.latest ? `${latestText(row)} ${prettyUnits(row.unit)}` : '还没有数值')
-  return h('li', { className: `lp-ind-row ${props.open ? 'lp-ind-open' : ''} ${row.read_error ? 'lp-ind-failed' : ''}` },
-    h('button', { type: 'button', className: 'lp-ind-btn lp-move-btn', 'aria-expanded': props.open, 'aria-controls': panelId, onClick: props.onToggle },
-      h('span', { className: 'lp-move' },
-        h('span', { className: 'lp-ind-name' },
-          h('span', { className: 'lp-strong' }, row.label_zh),
-          row.plan_marker ? h('span', { className: 'lp-tag lp-tag-plan' }, '方案') : null,
-          h('span', { className: 'lp-caption' }, SOURCE_ZH[row.source])),
-        h('span', { className: 'lp-move-lead' }, lead),
-        h('span', { className: 'lp-move-second' }, judgementText(kind, props.explain)),
-        row.range_zh ? h('span', { className: 'lp-caption' }, `化验单上的范围：${row.range_zh}`) : null),
-      row.read_error ? null : h('span', { className: 'lp-ind-spark' }, h(Sparkline, { points: row.points, label: row.label_zh })),
-      h(Icon, { name: 'chevron', size: 14, className: 'lp-ind-chevron' })),
-    props.open ? h(DetailPanel, { row, id: panelId }) : null)
+function panelSlug(id: string): string {
+  return id.replace(/[^A-Za-z0-9_-]/g, '_')
 }
 
-function DetailPanel(props: { row: IndicatorRow; id: string }): React.ReactElement {
+/** One table row: name | latest value + date | trend | vs normal fluctuation | source | chevron. Every cell always has content. */
+function IndicatorLine(props: { row: IndicatorRow; open: boolean; onToggle: () => void; gate?: string; reason?: string }): React.ReactElement {
+  const { row } = props
+  const slug = panelSlug(row.id)
+  const missed = row.read_error ? scrubVisible(row.read_error).replace(/没有在 \d+ 秒内返回这一项/, '这次没有读到，稍后刷新再看') : ''
+  const unit = prettyUnits(row.unit)
+  const when = row.latest ? chineseDate(row.latest.date) || row.latest.date : ''
+  return h('li', { className: `lp-ind-row ${props.open ? 'lp-ind-open' : ''}` },
+    h('button', { type: 'button', className: 'lp-ind-btn', 'aria-expanded': props.open, 'aria-controls': `lp-ind-panel-${slug}`, onClick: props.onToggle },
+      h('span', { className: 'lp-ind-name' },
+        h('span', { className: 'lp-ind-label', title: row.label_zh }, row.label_zh),
+        row.plan_marker ? h('span', { className: 'lp-tag' }, '方案') : null),
+      missed
+        ? h('span', { className: 'lp-ind-value' }, h('span', { className: 'lp-ind-error', title: missed }, h(Icon, { name: 'warn', size: 12 }), '没有读到'))
+        : h('span', { className: 'lp-ind-value' },
+          h('span', null, h('span', { className: 'lp-num' }, latestText(row)), unit ? h('span', { className: 'lp-ind-unit' }, ` ${unit}`) : null),
+          when ? h('span', { className: 'lp-caption' }, when) : null),
+      h('span', { className: 'lp-ind-spark' }, missed ? h('span', { className: 'lp-caption' }, '—') : h(Sparkline, { points: row.points, label: row.label_zh })),
+      h('span', { className: 'lp-ind-judged' }, missed ? h('span', { className: 'lp-caption' }, '—') : h(JudgedChip, { row, gate: props.gate, reason: props.reason })),
+      h('span', { className: 'lp-ind-source' }, SOURCE_ZH[row.source] ?? '—'),
+      h(Icon, { name: 'chevron', size: 14, className: 'lp-ind-chevron' })),
+    props.open ? h(DetailPanel, { row, slug }) : null)
+}
+
+function DetailPanel(props: { row: IndicatorRow; slug: string }): React.ReactElement {
   const [state, setState] = React.useState<{ detail: IndicatorDetail | null; error: string | null; loading: boolean }>({ detail: null, error: null, loading: true })
   const [attempt, setAttempt] = React.useState(0)
   React.useEffect(() => {
@@ -128,7 +134,7 @@ function DetailPanel(props: { row: IndicatorRow; id: string }): React.ReactEleme
     : !state.detail
       ? h(LoadError, { what: `${props.row.label_zh}的历次数值`, error: state.error, compact: true, onRetry: () => setAttempt((count) => count + 1) })
       : h(DetailBody, { detail: state.detail })
-  return h('div', { className: 'lp-ind-panel', id: props.id, role: 'region', 'aria-label': `${props.row.label_zh}详情` }, body)
+  return h('div', { className: 'lp-ind-panel', id: `lp-ind-panel-${props.slug}`, role: 'region', 'aria-label': `${props.row.label_zh}详情` }, body)
 }
 
 function DetailBody(props: { detail: IndicatorDetail }): React.ReactElement {
@@ -136,7 +142,9 @@ function DetailBody(props: { detail: IndicatorDetail }): React.ReactElement {
   const numeric = points.filter((point): point is typeof point & { value: number } => point.value != null)
   const digits = Math.max(...numeric.map((point) => (String(point.value).split('.')[1] ?? '').length), 0) > 1 ? 2 : 1
   const units = [...new Set(points.map((point) => point.unit).filter(Boolean))]
+  const move = movementOf(numeric.map((point) => ({ date: point.date, value: point.value })), prettyUnits(units[0] ?? row.unit))
   return h('div', { className: 'lp-ind-detail' },
+    move ? h('p', { className: 'lp-small lp-num' }, move.lead) : null,
     row.read_error ? h('p', { className: 'lp-blocker lp-blocker-bad' }, `这项这次没有读到：${row.read_error}。下面是能读到的部分。`) : null,
     row.change?.text_zh ? h('p', { className: 'lp-muted' }, prettyUnits(row.change.text_zh)) : null,
     numeric.length > 1 && units.length <= 1
@@ -158,14 +166,14 @@ function DetailBody(props: { detail: IndicatorDetail }): React.ReactElement {
     biovar ? h('p', { className: 'lp-caption' }, `研究里用来判断变化的范围：+${fmt(biovar.band_pct.up, 1)}% / ${fmt(biovar.band_pct.down, 1)}%（来源：${sourceLabel(biovar.source.title)}）`) : null,
     biovar?.caveat_zh && !row.gate ? h('p', { className: 'lp-caption' }, biovar.caveat_zh) : null,
     points.length > 0
-      ? h('table', { className: 'lp-ind-table' },
+      ? h('div', { className: 'lp-table-wrap' }, h('table', { className: 'lp-table' },
         h('caption', { className: 'lp-sr' }, `${row.label_zh}历次数值`),
-        h('thead', null, h('tr', null, ...['日期', '数值', '单位', '来自'].map((cell) => h('th', { key: cell, scope: 'col' }, cell)))),
+        h('thead', null, h('tr', null, ...['日期', '数值', '单位', '来自'].map((cell) => h('th', { key: cell, scope: 'col', className: cell === '数值' ? 'lp-td-num' : undefined }, cell)))),
         h('tbody', null, ...[...points].reverse().map((point, index) => h('tr', { key: `${point.date}-${index}` },
           h('td', null, point.date),
-          h('td', { className: 'lp-num' }, point.text ?? (point.value == null ? '—' : fmt(point.value, digits))),
-          h('td', null, prettyUnits(point.unit)),
-          h('td', { className: 'lp-caption' }, point.file ?? SOURCE_ZH[row.source])))))
+          h('td', { className: 'lp-td-num' }, point.text ?? (point.value == null ? '—' : fmt(point.value, digits))),
+          h('td', null, prettyUnits(point.unit) || '—'),
+          h('td', { className: 'lp-caption' }, point.file ?? SOURCE_ZH[row.source]))))))
       : h('p', { className: 'lp-muted' }, '没有可显示的数值。'),
     numeric.length > 1 && units.length > 1 ? h(TableTwin, { caption: row.label_zh, head: ['日期', '数值'], rows: numeric.map((point) => [point.date, `${fmt(point.value, digits)} ${point.unit}`]) }) : null)
 }
@@ -173,27 +181,42 @@ function DetailBody(props: { detail: IndicatorDetail }): React.ReactElement {
 function Loading(): React.ReactElement {
   return h('div', { className: 'lp-tab-body', 'aria-busy': true, 'aria-label': '正在读取指标' },
     h(Skeleton, { height: 32, width: 320 }),
-    h('div', { className: 'lp-card' }, ...[0, 1, 2, 3, 4].map((index) => h(Skeleton, { key: index, height: 28, className: 'lp-ind-skeleton' }))))
+    h('div', { className: 'lp-card' }, ...[0, 1, 2, 3, 4].map((index) => h(Skeleton, { key: index, height: 32, className: 'lp-ind-skeleton' }))))
 }
 
-function Empty(props: { data: IndicatorsResponse; onConnect: () => void }): React.ReactElement {
+/** An empty state in a card: icon, title, one sentence, and a button only when there is somewhere to go. */
+function EmptyCard(props: { icon: string; title: string; text: string; action?: { label: string; onClick: () => void } }): React.ReactElement {
+  return h('div', { className: 'lp-card' },
+    h('div', { className: 'lp-empty' },
+      h(Icon, { name: props.icon, size: 20 }),
+      h('div', { className: 'lp-empty-title' }, props.title),
+      h('p', { className: 'lp-empty-text' }, props.text),
+      props.action ? h(Btn, { variant: 'outline', size: 'md', onClick: props.action.onClick }, props.action.label) : null))
+}
+
+const AREA_EMPTY: Record<Exclude<LifeArea, 'labs'>, { icon: string; title: string; text: string }> = {
+  sleep: { icon: 'pulse', title: '还没有睡眠数据', text: '连上手环或导入睡眠记录后，这里会列出睡眠时长和变化趋势。' },
+  training: { icon: 'pulse', title: '还没有运动数据', text: '连上手环或导入运动记录后，这里会列出步数、活动量和变化趋势。' },
+}
+
+function Empty(props: { data: IndicatorsResponse; area: LifeArea; onConnect?: () => void }): React.ReactElement {
   const none = props.data.record.status === 'none'
-  return h('div', { className: 'lp-card lp-empty' },
-    h(Icon, { name: 'flask', size: 18 }),
-    h('div', null,
-      h('div', { className: 'lp-strong' }, none ? '还没有连接体检记录' : '记录里还没有指标'),
-      h('p', { className: 'lp-muted' }, none
-        ? '把体检报告放进来之后，这里会列出每一次化验和手环数据，先看变化，再看这点变化算不算数。'
-        : '已经连上了，但还没有读到体检或手环数据。放进报告后，点右上角的刷新。'),
-      none ? h(Btn, { size: 'sm', onClick: props.onConnect }, '连接记录') : null))
+  const action = props.onConnect ? { label: '连接记录', onClick: props.onConnect } : undefined
+  if (props.area !== 'labs') return h(EmptyCard, { ...AREA_EMPTY[props.area], action: action && !none ? { ...action, label: '查看数据连接' } : action })
+  return h(EmptyCard, {
+    icon: 'flask',
+    title: none ? '还没有连接体检记录' : '记录里还没有指标',
+    text: none
+      ? '把体检报告放进来之后，这里会列出每一次化验和手环数据，先看变化，再看这点变化算不算数。'
+      : '已经连上了，但还没有读到体检或手环数据。放进报告后，点右上角的刷新。',
+    action: none ? action : undefined,
+  })
 }
 
-function lastCheckup(data: IndicatorsResponse): string | null {
+function lastCheckup(rows: IndicatorRow[]): string | null {
   let last: string | null = null
-  for (const group of data.groups) {
-    for (const row of group.indicators) {
-      if (row.source === 'checkup' && row.latest && (!last || row.latest.date > last)) last = row.latest.date
-    }
+  for (const row of rows) {
+    if (row.source === 'checkup' && row.latest && (!last || row.latest.date > last)) last = row.latest.date
   }
   return last
 }
@@ -230,61 +253,58 @@ function useGates(stamp: string | undefined): Record<string, { gate?: string; re
   return gates
 }
 
-export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filter: IndicatorFilter) => void; onConnect: () => void; area?: LifeArea }): React.ReactElement {
+const JUDGEMENT_HELP = '超出正常波动：比你平常的起伏更大，值得问医生，不是急症。在正常波动范围内：这点变化不算数。太早：离上次太近。不可比：两次不是同一家机构。还不能下结论：看缺的是哪一步。'
+
+export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filter: IndicatorFilter) => void; onConnect?: () => void; area?: LifeArea }): React.ReactElement {
   const { data, loading, error } = useIndicators()
   const gates = useGates(data?.updated_at)
   const [open, setOpen] = React.useState<string | null>(null)
+  const area = props.area ?? 'labs'
   if (!data && loading) return h(Loading)
   if (!data) return h('div', { className: 'lp-tab-body' }, h(LoadError, { what: '指标', error, onRetry: () => reload('indicators') }))
-  if (data.groups.length === 0) {
-    if (data.record.status === 'error') {
-      return h('div', { className: 'lp-tab-body' }, h(LoadError, { what: '体检记录', error: data.record.error || null, onRetry: () => reload('indicators') }))
-    }
-    return h('div', { className: 'lp-tab-body' }, h(Empty, { data, onConnect: props.onConnect }))
+  if (data.groups.length === 0 && data.record.status === 'error') {
+    return h('div', { className: 'lp-tab-body' }, h(LoadError, { what: '体检记录', error: data.record.error || null, onRetry: () => reload('indicators') }))
   }
-  const area = props.area ?? 'labs'
   const all = data.groups.flatMap((group) => group.indicators).filter((row) => lifeAreaOf(row.label_zh) === area || (area === 'labs' && row.source !== 'device'))
-  const explained = new Set<string>()
-  const filter = FILTERS.find((row) => row.key === props.filter) ?? FILTERS[0]
+  // No rows in this area: no filters, no checkup date, just what is missing and where to add it.
+  if (all.length === 0) return h('div', { className: 'lp-tab-body' }, h(Empty, { data, area, onConnect: props.onConnect }))
+  // 「手环」 is the whole list on the sleep and training tabs, so it is only offered on 化验.
+  const filters = area === 'labs' ? FILTERS : FILTERS.filter((row) => row.key !== 'device')
+  const filter = filters.find((row) => row.key === props.filter) ?? filters[0] as (typeof FILTERS)[number]
   const groups = data.groups
     .map((group) => ({ ...group, indicators: group.indicators.filter((row) => all.includes(row)).filter(filter.test) }))
     .filter((group) => group.indicators.length > 0)
   const failed = all.filter((row) => row.read_error).length
-  const checkup = lastCheckup(data)
-  return h('div', { className: 'lp-tab-body lp-indicators' },
+  const checkup = area === 'labs' ? chineseDate(lastCheckup(all)) : ''
+  return h('div', { className: 'lp-tab-body' },
     data.record.status === 'partial' || data.record.status === 'error'
-      ? h('p', { className: 'lp-blocker lp-blocker-bad lp-partial', role: 'note' }, h(Icon, { name: 'warn', size: 14 }),
-        h('span', null, `有一部分记录这次没有读到${data.record.error ? `：${data.record.error}` : failed > 0 ? `（${failed} 项）` : ''}。标着“没有读到”的指标不是没测，稍后刷新再读。`))
+      ? h('div', { className: 'lp-callout lp-callout-warn', role: 'note' }, h(Icon, { name: 'warn', size: 14 }),
+        h('div', { className: 'lp-callout-body' },
+          `有一部分记录这次没有读到${data.record.error ? `：${data.record.error}` : failed > 0 ? `（${failed} 项）` : ''}。标着“没有读到”的指标不是没测，稍后刷新再读。`))
       : null,
     h('div', { className: 'lp-ind-toolbar' },
-      h('div', { className: 'lp-ind-filters', role: 'group', 'aria-label': '筛选指标' },
-        ...FILTERS.map((row) => {
+      h('div', { className: 'lp-seg', role: 'group', 'aria-label': '筛选指标' },
+        ...filters.map((row) => {
           const count = all.filter(row.test).length
+          const on = filter.key === row.key
           return h('button', {
-            key: row.key, type: 'button', className: `lp-toggle ${props.filter === row.key ? 'lp-toggle-on' : ''}`, 'aria-pressed': props.filter === row.key,
-            onClick: () => props.onFilter(row.key),
-          }, row.label, h('span', { className: 'lp-toggle-count' }, String(count)))
+            key: row.key, type: 'button', className: `lp-seg-item ${on ? 'is-on' : ''}`, 'aria-pressed': on,
+            disabled: count === 0 && !on, onClick: () => props.onFilter(row.key),
+          }, row.label, h('span', { className: 'lp-seg-count' }, String(count)))
         })),
-      h('span', { className: 'lp-caption' }, (() => { const when = checkup ? chineseDate(checkup) : ''; return when ? `最近一次体检 ${when}` : '' })(),
-        h(Info, { label: '和正常波动比', align: 'end' },
-          '超出正常波动：比你平常的起伏更大，值得问医生，不是急症。在正常波动范围内：这点变化不算数。太早：离上次太近。不可比：两次不是同一家机构。还不能下结论：看缺的是哪一步。'))),
+      h('span', { className: 'lp-caption lp-ind-meta' }, checkup ? `最近一次体检 ${checkup}` : '和正常波动比',
+        h(Info, { label: '和正常波动比', align: 'end' }, JUDGEMENT_HELP))),
     groups.length === 0
-      ? h('div', { className: 'lp-card lp-empty' }, h('p', { className: 'lp-muted' }, `没有“${filter.label}”的指标。`), h('button', { type: 'button', className: 'lp-row-link', onClick: () => props.onFilter('all') }, '看全部 →'))
+      ? h(EmptyCard, { icon: 'check', title: `没有“${filter.label}”的指标`, text: '换一个筛选看看。', action: { label: '看全部', onClick: () => props.onFilter('all') } })
       : h('div', { className: 'lp-card lp-ind-card' },
         h('div', { className: 'lp-ind-head', 'aria-hidden': true },
-          h('span', null, '指标'), h('span', null, '最近一次'), h('span', null, '趋势'), h('span', null, '和正常波动比'), h('span', null, '来源')),
+          h('span', null, '指标'), h('span', null, '最近一次'), h('span', null, '趋势'), h('span', null, '和正常波动比'), h('span', null, '来源'), h('span', null)),
         ...groups.map((group) => h('section', { key: group.key, className: 'lp-ind-group', 'aria-label': group.label_zh },
           h('h3', { className: 'lp-ind-group-title' }, group.label_zh, h('span', { className: 'lp-optional' }, `${group.indicators.length} 项`)),
           h('ul', { className: 'lp-ind-list' },
-            ...group.indicators.map((row) => {
-              const kind = judgementKind({ gate: row.gate ?? gates[row.id]?.gate, judged: row.judged, reason: row.reason_zh ?? gates[row.id]?.reason })
-              const explain = !explained.has(kind)
-              explained.add(kind)
-              return h(IndicatorLine, {
-                key: row.id, row, open: open === row.id, gate: row.gate ?? gates[row.id]?.gate, reason: row.reason_zh ?? gates[row.id]?.reason,
-                explain,
-                onToggle: () => setOpen((current) => (current === row.id ? null : row.id)),
-              })
-            }))))),
+            ...group.indicators.map((row) => h(IndicatorLine, {
+              key: row.id, row, open: open === row.id, gate: row.gate ?? gates[row.id]?.gate, reason: row.reason_zh ?? gates[row.id]?.reason,
+              onToggle: () => setOpen((current) => (current === row.id ? null : row.id)),
+            })))))),
     h('p', { className: 'lp-fine' }, '点任一行看历次数值、单位、来自哪份报告，以及正常波动的依据。这里只列出记录里的数值，不做诊断。'))
 }
