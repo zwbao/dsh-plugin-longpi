@@ -581,7 +581,8 @@ try {
       assert.equal(read.series.systolicPressures.points.length, readings, 'every reading of the dense series')
       assert.equal(new Set(read.series.systolicPressures.points.map((point) => point.time)).size, readings, 'none twice')
       assert.deepEqual(read.cut, ['heartRates'])
-      assert.ok(dense.calls.length <= 6, `a few reads (${dense.calls.length})`)
+      // Mirobody 1.5.3 returns at most 50 raw rows per indicator: the dense series is read in pages of 50.
+      assert.ok(dense.calls.length <= Math.ceil(readings / 50) + 4, `pages of 50, not more (${dense.calls.length} for ${readings} readings)`)
       const recs = await mod.loadRecords(denseConfig, denseDir, '/nonexistent/plugin')
       const drafted = mod.normalizePlan({ title: '减盐', items: [{ category: 'diet', title: '减盐', start: '2026-03-01', markers: ['收缩压'] }] }, { today: TODAY, medications: [], previous: null })
       mod.savePlan(denseDir, drafted.plan)
