@@ -12,7 +12,7 @@ const mod = await import('../lib/index.js')
 const pkg = JSON.parse(readFileSync(join(repo, 'package.json'), 'utf8'))
 const install = readFileSync(join(repo, 'install.sh'), 'utf8')
 
-assert.equal(pkg.version, '0.6.3')
+assert.equal(pkg.version, '0.7.0')
 assert.equal(pkg.dependencies?.['longevity-skills'], undefined)
 assert.equal(pkg.bin.longpi, 'bin/longpi.mjs')
 assert.equal(pkg.scripts.postinstall, undefined)

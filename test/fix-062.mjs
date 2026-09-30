@@ -16,7 +16,7 @@ import { feedbackFor } from '../src/feedback/index.ts'
 const root = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(readFileSync(join(root, '../package.json'), 'utf8'))
 assert.equal(PRODUCT_VERSION, pkg.version)
-assert.equal(PRODUCT_VERSION, '0.6.3')
+assert.equal(PRODUCT_VERSION, '0.7.0')
 
 const echoed = scrubVisible('已接入 Mirobody。Systolic blood pressure 148 mmHg。ChiCTR live 签署密钥 参考变化值 E78.5 http://127.0.0.1:18060/mcp/abc NaN undefined null')
 assert.equal(echoed.includes('Mirobody'), false)

@@ -13,7 +13,7 @@ function versionFromPackage(): string {
       // The bundled file and the source file sit at different depths.
     }
   }
-  return '0.6.3'
+  return '0.7.0'
 }
 
 export const PRODUCT_VERSION = versionFromPackage()

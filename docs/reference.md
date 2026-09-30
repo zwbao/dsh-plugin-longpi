@@ -29,7 +29,7 @@ Configuration keys, the tools the model can call, commands and HTTP routes, and 
 
 ## What the model can call
 
-Fourteen LongPi tools. Mounting Mirobody adds its eight tools in the same process (LOINC, units, indicators, medications, genotypes, status).
+The LongPi tools below. Mounting Mirobody adds its eight tools in the same process (LOINC, units, indicators, medications, genotypes, status).
 
 | Tool | What it returns |
 | --- | --- |
@@ -47,13 +47,16 @@ Fourteen LongPi tools. Mounting Mirobody adds its eight tools in the same proces
 | `read_intervention_plan` | The saved plan, earlier versions and recent check-ins. |
 | `review_interventions` | For every item and marker: baseline, retest, change against the reference change value, adherence, what else changed, the trial average; phenotypic age at every checkup; model cards; next steps. |
 | `model_intervention_goals` | What-if goal values run through the phenotypic-age skill (and China-PAR once verified). Model estimates. |
+| `run_deep_analysis` | Prepares a run of the longevity-analyst skill (needs the skill in `DSH_HOME/skills`, an adult, the `pipl_sensitive` and `data_flow_deepseek` consents, age and sex): creates `~/longpi/analyses/<id>/{data,ws}` and returns the request, in the person's voice, for the agent to carry out with the skill. The Mirobody address goes to a 0600 file in the run folder, never into the request. |
+| `import_analysis` | Checks the run's `deliver/la-export.json` (schema `la-export/1`, size, the report inside the run workspace and its hash), copies it and the report into `dataDir/analysis/current/`, and returns the plan read back. The plan is saved (source `analysis`) only through `save_intervention_plan` after the person confirms, or 接受方案 on the page. |
+| `read_deep_analysis` | The imported result (readouts, organ table, question board, plan, retests) and the stage progress of runs still going. Read-only. |
 
 Commands: `/longpi`, `/longpi-skills 我的生物年龄`, `/longpi-stats`, `/longpi-version`.
 
 HTTP, used by the LongPi page, onboarding and the settings page:
 
-- read: `GET /api/longpi/journey`, `/indicators`, `/indicators/detail?id=`, `/connection`, `/board`, `/tracking`, `/plan-draft`, `/followup`, `/self`, `/calendar.ics`, `/report`, `/match?q=`, `/intents`, `/stats`, `/version`;
-- write: `POST /api/longpi/connection`, `/connection/test`, `/profile`, `/consent`, `/self`, `/checkin`, `/plan-draft/accept`, `/followup`, `/followup/test`, `/run-ready`; `DELETE /api/longpi/connection`, `/self?id=`.
+- read: `GET /api/longpi/analysis`, `/analysis/report` (the imported report, served with a CSP that allows no script or network), `/journey`, `/indicators`, `/indicators/detail?id=`, `/connection`, `/board`, `/tracking`, `/plan-draft`, `/followup`, `/self`, `/calendar.ics`, `/report`, `/match?q=`, `/intents`, `/stats`, `/version`;
+- write: `POST /api/longpi/analysis/start`, `/analysis/import`, `/analysis/plan-accept`, `/connection`, `/connection/test`, `/profile`, `/consent`, `/self`, `/checkin`, `/plan-draft/accept`, `/followup`, `/followup/test`, `/run-ready`; `DELETE /api/longpi/connection`, `/self?id=`.
 
 Every route first passes DeepSeek Harness's own check: the request goes to this machine's address (or a host DSH is told to trust), not from another site, and carries DSH's login cookie, which the browser receives when it opens the address DSH printed (`…/?token=…`). A `token` on an API route is not accepted. Without the cookie the answer is 401; from another site or through another host name, 403; on a DSH without its connection service, 503 for every route. Writes must be sent as `Content-Type: application/json` (charset allowed), 415 otherwise. From a terminal, exchange the token for the cookie first, as in step 8.1 of the install guide.
 

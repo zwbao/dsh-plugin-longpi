@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.7.0
+
+给使用者
+
+健康页多了「深度分析」：用你的全基因组、甲基化、肠道菌、蛋白组和体检数据，算生物学年龄、各器官状况和以后的疾病风险，针对你提出问题并逐一查证，最后给一份能照着做的方案。点「发起深度分析」会把请求放进对话输入框，发送后在对话里进行，需要你确认的步骤会在对话里问你；页面显示做到了哪一步。做完点「导入结果」，报告、器官体检表和问题看板就出现在这一页；方案先读给你看，你点「接受方案」才保存，方案里要复测的指标会进复测提醒。发起前需要你已同意处理敏感个人信息和数据交给模型服务，并在档案里填好年龄和性别。
+
+English
+
+- M12 deep analysis: run_deep_analysis / import_analysis / read_deep_analysis, /api/longpi/analysis routes and the
+  深度分析 tab, over the longevity-analyst skill's la-export/1. Starting needs the skill installed, an adult, the
+  pipl_sensitive and data_flow_deepseek consents and age/sex; the member's MCP URL goes to a 0600 file, never into the
+  request text. The export is checked like an outside file (schema, size, the report inside the run workspace, its
+  hash). The plan is saved with source "analysis" only after the person accepts the read-back. The report is served
+  with a CSP that allows no script or network, in a sandboxed iframe.
+- Mirobody 1.5.3 schema: query_health_indicators takes keywords/indicators/start/end/view and refuses anything else, so
+  every latest and series read was refused. Reads now speak `view`, fall back once for an older server, and a
+  care-circle `member` is refused by the server instead of being answered with the account holder's record.
+- Installer: LOINC bundle under mirobody/res/loinc/ (Mirobody >= 1.5.1); `--mirobody-native`; `--with-analyst`
+  [`--analyst-repo`]; the home cordis patch keeps session-log-deepseek off unless the person wrote a row for it.
+
 ## 0.6.3
 
 给使用者

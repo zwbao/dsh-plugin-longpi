@@ -12,12 +12,12 @@ const pkg = require('../package.json')
 const mod = await import('../lib/index.js')
 
 assert.equal(pkg.name, 'dsh-plugin-longpi')
-assert.equal(pkg.version, '0.6.3')
+assert.equal(pkg.version, '0.7.0')
 assert.equal(pkg.license, 'MIT')
 assert.equal(pkg.dsh.bundle.patch, './cordis.patch.yml')
 assert.ok(pkg.dsh.client.inject.includes('slots'))
 assert.equal(mod.name, 'dsh-plugin-longpi')
-assert.equal(mod.PRODUCT_VERSION, '0.6.3')
+assert.equal(mod.PRODUCT_VERSION, '0.7.0')
 assert.equal(mod.TOOL_NAMES.length, 28)
 for (const name of ['save_self_measurement', 'draft_intervention_plan', 'set_followup', 'send_followup_message']) assert.ok(mod.TOOL_NAMES.includes(name), name)
 assert.equal(new Set(mod.TOOL_NAMES).size, mod.TOOL_NAMES.length)
@@ -27,7 +27,7 @@ assert.match(pkg.scripts.test, /node test\/run-all\.mjs/, 'npm test runs every t
   const { testFiles } = await import('./run-all.mjs')
   for (const name of ['planner.mjs', 'plan-safety.mjs', 'followup.mjs', 'changes.mjs', 'readiness.mjs', 'workspace.mjs', 'auth.mjs', 'connection.mjs', 'indicators.mjs']) assert.ok(testFiles().includes(name), `npm test runs ${name}`)
 }
-assert.equal(require('../package-lock.json').version, '0.6.3')
+assert.equal(require('../package-lock.json').version, '0.7.0')
 assert.deepEqual(mod.HARNESS_SKILLS, ['longpi-dispatch', 'longpi-board', 'longpi-boundary', 'longpi-interventions'])
 
 assert.equal(mod.preGuard('我胸痛喘不上气').code, 'emergency')
