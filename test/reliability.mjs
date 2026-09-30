@@ -163,7 +163,7 @@ const emptyMeds = table('(no rows)\n\n(rows=0)')
 // 5. Database down, while /api/health still answers, is said in one sentence. Later batches are not asked.
 {
   const server = await listen((name, args) => {
-    if (name === 'query_health_indicators' && args.aggregate === 'none') return 'db'
+    if (name === 'query_health_indicators' && (args.aggregate === 'none' || ['raw', 'minute', 'hour', 'day', 'week', 'month'].includes(args.view))) return 'db'
     return emptyMeds
   })
   try {
@@ -232,7 +232,7 @@ const emptyMeds = table('(no rows)\n\n(rows=0)')
   ].join('\n')
   const server = await listen((name, args) => {
     if (name === 'query_medications') return emptyMeds
-    if (args.aggregate === 'latest') return table(latest)
+    if ((args.aggregate === 'latest' || args.view === 'latest')) return table(latest)
     return table(catalogue)
   })
   const dataDir = mkdtempSync(join(tmpdir(), 'longpi-reliability-'))

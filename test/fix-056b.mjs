@@ -57,7 +57,7 @@ try {
   })))
   const batchCut = await startFlakyMirobody({
     record: { observations, medications: { plans: [] } },
-    fail: (_name, args) => (args.aggregate === 'none' && (args.indicators ?? []).length > 1 ? { cut: true } : null),
+    fail: (_name, args) => ((args.aggregate === 'none' || ['raw', 'minute', 'hour', 'day', 'week', 'month'].includes(args.view)) && (args.indicators ?? []).length > 1 ? { cut: true } : null),
   })
   servers.push(batchCut)
   const config = {
@@ -71,7 +71,7 @@ try {
   assert.equal(whole.series['超敏C反应蛋白'].points.length, 2)
   const oneCut = await startFlakyMirobody({
     record: { observations, medications: { plans: [] } },
-    fail: (_name, args) => (args.aggregate === 'none' && (args.indicators ?? []).includes('超敏C反应蛋白') ? { cut: true } : null),
+    fail: (_name, args) => ((args.aggregate === 'none' || ['raw', 'minute', 'hour', 'day', 'week', 'month'].includes(args.view)) && (args.indicators ?? []).includes('超敏C反应蛋白') ? { cut: true } : null),
   })
   servers.push(oneCut)
   invalidateRecords()

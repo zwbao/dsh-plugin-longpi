@@ -494,7 +494,7 @@ try {
   }
 
   // 3a: latest values that failed to read are "not read", never "missing"; the series may still be read
-  const flaky = await startFlakyMirobody({ fail: (name, args) => name === 'query_health_indicators' && args.aggregate === 'latest' ? 'http500' : null })
+  const flaky = await startFlakyMirobody({ fail: (name, args) => name === 'query_health_indicators' && (args.aggregate === 'latest' || args.view === 'latest') ? 'http500' : null })
   const flakyDir = mkdtempSync(join(tmpdir(), 'longpi-interventions-flaky-'))
   try {
     mod.writeProfile(flakyDir, { age: 53, sex: 'male', risk: facts })
@@ -524,7 +524,7 @@ try {
     rmSync(flakyDir, { recursive: true, force: true })
   }
   // 3d: any series of the nine failing is a read failure, not "not measured together"
-  const flakySeries = await startFlakyMirobody({ fail: (_name, args) => args.aggregate === 'none' && (args.indicators ?? []).includes('Albumin-ALB') ? 'isError' : null })
+  const flakySeries = await startFlakyMirobody({ fail: (_name, args) => (args.aggregate === 'none' || ['raw', 'minute', 'hour', 'day', 'week', 'month'].includes(args.view)) && (args.indicators ?? []).includes('Albumin-ALB') ? 'isError' : null })
   const seriesDir = mkdtempSync(join(tmpdir(), 'longpi-interventions-series-'))
   try {
     mod.writeProfile(seriesDir, { age: 53, sex: 'male', risk: facts })
@@ -540,7 +540,7 @@ try {
     rmSync(seriesDir, { recursive: true, force: true })
   }
   // ...and one that came back cut is not read whole either
-  const cutSeries = await startFlakyMirobody({ fail: (_name, args) => args.aggregate === 'none' && (args.indicators ?? []).includes('Albumin-ALB') ? { cut: true } : null })
+  const cutSeries = await startFlakyMirobody({ fail: (_name, args) => (args.aggregate === 'none' || ['raw', 'minute', 'hour', 'day', 'week', 'month'].includes(args.view)) && (args.indicators ?? []).includes('Albumin-ALB') ? { cut: true } : null })
   const cutDir = mkdtempSync(join(tmpdir(), 'longpi-interventions-cut-'))
   try {
     mod.writeProfile(cutDir, { age: 53, sex: 'male', risk: facts })

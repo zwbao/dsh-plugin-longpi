@@ -200,10 +200,44 @@ interface ToolRead {
 }
 
 /** One tool call, retried when the answer is a transient failure rather than a table. */
-async function readTool(config: Config, name: string, args: Record<string, unknown>, secrets: readonly string[]): Promise<ToolRead> {
+/**
+ * Mirobody 1.5.3 publishes one query schema: keywords, indicators, start, end and `view`
+ * (raw | minute | hour | day | week | month | stats | latest), and refuses any other argument.
+ * Older servers took `resolution` × `aggregate` (+ `limit`, `member`). Calls are written in the
+ * old words; this translates them, and falls back to the old words once for a server whose
+ * refusal says it does not accept `view`.
+ */
+let legacyQuerySchema = false
+
+export function queryArgsForView(args: Record<string, unknown>): Record<string, unknown> {
+  // `member` is kept: a server that cannot read a care-circle member must refuse, never answer
+  // with the account holder's record instead.
+  const { aggregate, resolution, limit: _limit, ...rest } = args
+  if (rest.view !== undefined) return rest
+  let view = 'raw'
+  if (aggregate === 'latest') view = 'latest'
+  else if (aggregate === 'stats') view = 'stats'
+  else if (typeof resolution === 'string' && ['minute', 'hour', 'day', 'week', 'month'].includes(resolution)) view = resolution
+  if (!rest.indicators && !rest.keywords) return rest
+  return { ...rest, view }
+}
+
+function refusesView(error: string): boolean {
+  const accepted = /Accepted:\s*([^."]*)/i.exec(error)
+  return /unknown argument/i.test(error) && !!accepted && !/\bview\b/.test(accepted[1] ?? '')
+}
+
+/** Test hook: forget what the last server accepted. */
+export function resetQuerySchema(): void {
+  legacyQuerySchema = false
+}
+
+async function readTool(config: Config, name: string, rawArgs: Record<string, unknown>, secrets: readonly string[]): Promise<ToolRead> {
   let lastError = 'read failed'
   let lastKind: ToolRead['kind'] = 'internal'
+  const translate = name === 'query_health_indicators'
   for (let attempt = 1; attempt <= READ_ATTEMPTS; attempt += 1) {
+    const args = translate && !legacyQuerySchema ? queryArgsForView(rawArgs) : rawArgs
     const call = await withReadSlot(() => callMcpTool({
       url: config.mcpUrl,
       token: config.mcpToken,
@@ -211,6 +245,11 @@ async function readTool(config: Config, name: string, args: Record<string, unkno
       args,
       timeoutMs: config.timeoutMs,
     }))
+    if (call.success === false && translate && !legacyQuerySchema && refusesView(call.error || '')) {
+      legacyQuerySchema = true                      // an older Mirobody: ask again in its words
+      attempt -= 1
+      continue
+    }
     if (call.success === false) {
       lastError = redact(call.error || 'read failed', secrets)
       lastKind = call.error_kind === 'denied' ? 'denied' : call.error_kind === 'unavailable' ? 'unavailable' : 'internal'

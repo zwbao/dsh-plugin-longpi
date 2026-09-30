@@ -267,7 +267,7 @@ try {
 
   // 3c: a marker whose readings fail to read, or come back cut, is not judged, and says so (never "no change")
   const syntheticRecord = { tz: 'Asia/Shanghai', today: TODAY, observations, medications: { plans: [], log: [], history: [] } }
-  const withMcv = (args) => args.aggregate === 'none' && (args.indicators ?? []).includes(MCV)
+  const withMcv = (args) => (args.aggregate === 'none' || ['raw', 'minute', 'hour', 'day', 'week', 'month'].includes(args.view)) && (args.indicators ?? []).includes(MCV)
   for (const [how, reason] of [['http500', /历次结果读取失败/], ['isError', /历次结果读取失败：query failed: database timeout/], [{ cut: true }, /读取时被截断/]]) {
     const flaky = await startFlakyMirobody({ record: syntheticRecord, fail: (_name, args) => withMcv(args) ? how : null })
     servers.push(flaky)

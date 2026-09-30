@@ -52,7 +52,7 @@ async function contextFor(config) {
 
 const rowsOf = (response) => response.groups.flatMap((group) => group.indicators)
 const rowOf = (response, id) => rowsOf(response).find((row) => row.id === id)
-const seriesCalls = (server) => server.calls.filter((call) => call.name === 'query_health_indicators' && Array.isArray(call.args.indicators) && call.args.aggregate === 'none').length
+const seriesCalls = (server) => server.calls.filter((call) => call.name === 'query_health_indicators' && Array.isArray(call.args.indicators) && (call.args.aggregate === 'none' || ['raw', 'minute', 'hour', 'day', 'week', 'month'].includes(call.args.view))).length
 
 function fakeHost() {
   const routes = new Map()

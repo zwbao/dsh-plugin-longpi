@@ -97,7 +97,7 @@ try {
   assert.deepEqual(byDate(read.series.dailyTotalSleepTime), recorded.persona.dailyTotalSleepTime)
   assert.equal(read.series.dailySteps.points[0].date, '2026-07-26', 'oldest first, the Shanghai civil day')
   assert.ok(!read.series.dailySteps.points.some((point) => point.date === '2026-07-29'), 'a day with no row stays absent')
-  const dayCalls = recordedServer.calls.filter((call) => call.args.resolution === 'day')
+  const dayCalls = recordedServer.calls.filter((call) => (call.args.resolution === 'day' || call.args.view === 'day'))
   assert.equal(dayCalls.length, 2)
   assert.ok(dayCalls.every((call) => call.args.indicators.length === 1), 'each day read is one indicator, so a nameless bucket has an owner')
 
@@ -146,7 +146,7 @@ try {
   const read = await mod.loadSeries(configOf(named.url), ['dailySteps', 'dailyTotalSleepTime'], { start: '2026-06-01', end: '2026-06-30', resolution: 'day' })
   assert.equal(read.series.dailySteps.points.length, 30)
   assert.equal(read.series.dailyTotalSleepTime.points.length, 30)
-  const dayCalls = named.calls.filter((call) => call.args.resolution === 'day')
+  const dayCalls = named.calls.filter((call) => (call.args.resolution === 'day' || call.args.view === 'day'))
   assert.equal(dayCalls.length, 2)
   assert.deepEqual(dayCalls.map((call) => call.args.indicators), [['dailySteps'], ['dailyTotalSleepTime']])
 } finally {

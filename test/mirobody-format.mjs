@@ -134,7 +134,7 @@ try {
 // 4. a read that fails is named, never taken for "not measured" (5.1: 3a, 3b, 3d, 3e)
 const configOf = (url, token = '') => ({ mcpUrl: url, mcpToken: token, member: '', timeoutMs: 5000, pythonBin: '/nonexistent/python', mirobodyHome: '', dataDir: '' })
 const scratch = join(new URL('.', import.meta.url).pathname, '..', 'node_modules', '.cache', 'longpi-reads-test')
-const latestCall = (name, args) => name === 'query_health_indicators' && args.aggregate === 'latest'
+const latestCall = (name, args) => name === 'query_health_indicators' && (args.aggregate === 'latest' || args.view === 'latest')
 for (const how of ['http500', 'rpc', 'isError', 'refuse', 'text']) {
   const flaky = await startFlakyMirobody({ fail: (name, args) => latestCall(name, args) ? how : null })
   try {
@@ -199,7 +199,7 @@ for (const how of ['http500', 'rpc', 'isError', 'refuse', 'text']) {
   assert.ok(names.length > 12, 'more than one batch')
   const withCrp = (args) => (args.indicators ?? []).includes('hs-CRP')
   for (const how of ['http500', 'isError', 'refuse', 'text']) {
-    const flaky = await startFlakyMirobody({ fail: (name, args) => args.aggregate === 'none' && withCrp(args) ? how : null })
+    const flaky = await startFlakyMirobody({ fail: (name, args) => (args.aggregate === 'none' || ['raw', 'minute', 'hour', 'day', 'week', 'month'].includes(args.view)) && withCrp(args) ? how : null })
     try {
       mod.invalidateRecords()
       const read = await mod.loadSeries(configOf(flaky.url), names, { start: '2025-01-01', end: '2026-09-24', resolution: 'raw' })
@@ -212,8 +212,8 @@ for (const how of ['http500', 'rpc', 'isError', 'refuse', 'text']) {
       await flaky.close()
     }
   }
-  const down = await startFlakyMirobody({ fail: (_name, args) => args.aggregate === 'none' ? 'http500' : null })
-  const cutSeries = await startFlakyMirobody({ fail: (_name, args) => args.aggregate === 'none' && withCrp(args) ? { cut: true } : null })
+  const down = await startFlakyMirobody({ fail: (_name, args) => (args.aggregate === 'none' || ['raw', 'minute', 'hour', 'day', 'week', 'month'].includes(args.view)) ? 'http500' : null })
+  const cutSeries = await startFlakyMirobody({ fail: (_name, args) => (args.aggregate === 'none' || ['raw', 'minute', 'hour', 'day', 'week', 'month'].includes(args.view)) && withCrp(args) ? { cut: true } : null })
   try {
     mod.invalidateRecords()
     const failedAll = await mod.loadSeries(configOf(down.url), names, { start: '2025-01-01', end: '2026-09-24', resolution: 'raw' })

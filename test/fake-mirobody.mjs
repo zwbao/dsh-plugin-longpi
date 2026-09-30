@@ -325,8 +325,28 @@ export async function startFakeMirobody(options = {}) {
       }
       if (body.method === 'tools/call') {
         const name = body.params?.name
-        const args = body.params?.arguments ?? {}
-        calls.push({ name, args })
+        const sent = body.params?.arguments ?? {}
+        calls.push({ name, args: sent })
+        // Mirobody 1.5.3 publishes one schema (view) and refuses anything else; options.schema 'legacy'
+        // is an older server that only knows resolution × aggregate and refuses view.
+        if (name === 'query_health_indicators') {
+          const accepted = options.schema === 'legacy'
+            ? ['keywords', 'indicators', 'start', 'end', 'resolution', 'aggregate', 'limit', 'member']
+            : ['keywords', 'indicators', 'start', 'end', 'view']
+          const unknownArgs = Object.keys(sent).filter((key) => !accepted.includes(key))
+          if (unknownArgs.length) {
+            const refusal = { jsonrpc: '2.0', id: body.id, result: { isError: true, content: [{ type: 'text', text: `"Unknown argument(s) for query_health_indicators: ${unknownArgs.join(', ')}. Accepted: ${accepted.join(', ')}."` }] } }
+            res.setHeader('content-type', 'application/json')
+            res.end(JSON.stringify(refusal))
+            return
+          }
+        }
+        const view = typeof sent.view === 'string' ? sent.view : ''
+        const args = view ? {
+          ...sent,
+          aggregate: view === 'latest' || view === 'stats' ? view : 'none',
+          resolution: ['minute', 'hour', 'day', 'week', 'month'].includes(view) ? view : 'raw',
+        } : sent
         let result
         // options.failSeries: a series read (not the catalogue, latest or stats) that names one of these fails.
         const failing = Array.isArray(options.failSeries) && name === 'query_health_indicators' && !['latest', 'stats'].includes(args.aggregate)

@@ -71,7 +71,7 @@ export { normalizeProfile, mergeProfile, readProfile, writeProfile, setConsent, 
 export type { Profile, Focus, Consent, RiskFact } from './profile.ts'
 export { summarizeIndicators, summarizeMedications, indicatorsFromTable } from './situation.ts'
 export { parseCompact, tableOf, cellNumber } from './compact.ts'
-export { loadRecords, loadSeries, loadDoseLog, loadCourses, invalidateRecords, mergeSelf, sameMeasure } from './records.ts'
+export { loadRecords, loadSeries, loadDoseLog, loadCourses, invalidateRecords, mergeSelf, sameMeasure, queryArgsForView, resetQuerySchema } from './records.ts'
 export type { RecordStatus, RecordSnapshot } from './records.ts'
 export { readSelf, addSelf, deleteSelf, latestSelf, selfIndicators, selfSeries, SELF_KEYS, SELF_SPEC, SELF_ALIASES } from './selfmeasure.ts'
 export type { SelfKey, SelfRow } from './selfmeasure.ts'
