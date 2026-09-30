@@ -94,8 +94,8 @@ function Blocked(props: {
   const action = props.action
   return h('div', { className: 'lp-card lp-result lp-result-blocked' },
     h(CardHead, { label: props.label, info: props.info }),
-    h('div', { className: 'lp-result-wait' }, '还不能计算'),
-    h('p', { className: 'lp-blocker' }, props.blocker || '还缺少计算需要的信息。'),
+    h('div', { className: 'lp-result-wait' }, '暂时无法计算'),
+    h('p', { className: 'lp-blocker' }, props.blocker ? `还缺：${props.blocker.replace(/^记录里还缺|^档案里还缺|^还缺/, '').replace(/^[：:]/, '')}` : '还缺计算需要的数据。'),
     props.needs.length > 0 ? h('div', { className: 'lp-needs' },
       h('span', { className: 'lp-caption' }, '还需要'),
       ...props.needs.slice(0, NEEDS_SHOWN).map((need) => h('span', { className: 'lp-need', key: need }, need)),

@@ -21,7 +21,7 @@ export function HealthChatButton(): React.ReactElement | null {
   if (!id || !opener) return null
   return h('span', null,
     h('button', {
-      type: 'button', className: 'lp-linkbtn',
+      type: 'button', className: 'lp-linkbtn lp-healthchat-btn',
       onClick: () => { setError(''); void opener?.(id).catch(() => setError('没有打开，请在左侧「健康对话」里新建会话')) },
     }, h(Icon, { name: 'send', size: 14 }), '去健康对话'),
     error ? h('span', { className: 'lp-muted', role: 'alert' }, error) : null)

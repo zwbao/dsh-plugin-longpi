@@ -13,7 +13,7 @@ import { chineseDate, goTo, greeting, localToday, weekday } from './format.ts'
 import { Icon } from './icons.ts'
 import { IndicatorsTab } from './indicators.ts'
 import { RecordsStatusLine } from './journey-steps.ts'
-import { Onboarding, ONBOARDING_TITLES, stepOfStage } from './onboarding.ts'
+import { Onboarding, ONBOARDING_TITLES, stepsLeft } from './onboarding.ts'
 import { HealthChatButton } from './health-chat.ts'
 import { Overview } from './overview.ts'
 import { PlanTab } from './plan.ts'
@@ -56,13 +56,11 @@ function storedTab(extra: readonly string[]): PageTab {
   return 'overview'
 }
 
-/** Onboarding steps still open, for the banner: none once the record is connected. */
-const OPEN_STAGES: Stage[] = ['consent', 'profile', 'records']
-
+/** Setup steps still open, for the banner: none once there is a first record. */
 function bannerOf(journey: Journey): { left: number; title: string } | null {
-  if (!OPEN_STAGES.includes(journey.stage)) return null
-  const index = stepOfStage(journey.stage)
-  return { left: OPEN_STAGES.length - index, title: ONBOARDING_TITLES[index] ?? '' }
+  const left = stepsLeft(journey)
+  if (!left) return null
+  return { left, title: ONBOARDING_TITLES[ONBOARDING_TITLES.length - left] ?? '' }
 }
 
 function Header(props: { journey: Journey | null; failed: boolean; refreshing: boolean; onRefresh: () => void }): React.ReactElement {
@@ -88,7 +86,7 @@ function Banner(props: { journey: Journey; onOpen: () => void }): React.ReactEle
   if (!banner) return null
   return h('button', { type: 'button', className: 'lp-banner', onClick: props.onOpen },
     h(Icon, { name: 'spark', size: 14 }),
-    h('span', null, `还差 ${banner.left} 步：${banner.title}`),
+    h('span', null, `还差 ${banner.left} 步完成设置：${banner.title}`),
     h('span', { className: 'lp-banner-go' }, '继续 →'))
 }
 
@@ -239,6 +237,6 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
       body,
       h('footer', { className: 'lp-footer' },
         h('p', null, journey?.boundary_zh || BOUNDARY_FALLBACK),
-        h('p', { className: 'lp-caption' }, '档案、方案和记录只保存在这台电脑上。体检原件留在你原来放报告的地方。对话在你同意之后，才会发给用来回答的人工智能。'))),
+        h('p', { className: 'lp-caption' }, '档案和记录只保存在这台电脑上。你同意后，提问时相关健康数值才会发送给 DeepSeek 模型。'))),
     onboarding ? h(Onboarding, { explicit: true, complete: () => setOnboarding(false), openPage: () => {} }) : null)
 }

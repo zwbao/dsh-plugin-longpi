@@ -1,39 +1,33 @@
-// LongPi's onboarding, the one flow: four short screens in DSH's own modal.
-// 欢迎 records informed consent (or is postponed) and says when chat needs a
-// model key first, 建档 asks only what unlocks a result, 连接记录 shows what
-// the record holds (or takes the Mirobody address right there), 第一个结果
-// shows what the server computed, or what can be done now when it cannot.
-// DSH mounts it at first run; the page mounts the same component (explicit)
-// from its "还差 N 步" banner. Nothing to do (consent given, profile complete)
-// → complete() at once. A journey that fails, or has not arrived in 45 s,
-// shows a retry with 稍后再说: the step never completes silently.
+// LongPi's onboarding (copy v2, docs/onboarding-copy-v2.md): three short screens, written for someone who has
+// nothing yet. 欢迎使用 LongPi says what LongPi is and records one consent (the product notice, the health-data
+// consent and the data flow to DeepSeek, with one checkbox that is never pre-ticked); 填写基本信息 asks age and
+// sex; 添加第一份资料 uploads a checkup report, or says what can be done without one.
+//
+// Opened from the 健康 page only (never from DSH's own first run) and never locks DSH: Escape or a click
+// outside puts it off, and nothing is agreed to that way. The connection to the health-data service is made by
+// the plugin itself, so no address, email or password appears here.
 
 import React from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import { errorText, getJson } from './api.ts'
-import { deepseekConsentPending } from '../privacy/pending.ts'
-import { acceptConsent, ConsentText, FirstResult, RecordsStep } from './journey-steps.ts'
+import { errorText, postJson } from './api.ts'
+import { ReportUpload } from './datain/upload.ts'
+import { acceptConsent } from './journey-steps.ts'
 import { useModelStatus } from './model-status.ts'
 import { recordConnected } from './normalize.ts'
-import { DRAFT_PROMPT } from './plan-draft.ts'
-import { ProfileEditor } from './profile-editor.ts'
-import { DataPage } from './privacy/data-page.ts'
-import { SensitiveConsentScreen } from './privacy/consent-screen.ts'
-import { requestView, setPendingPrompt, setSettingsOpener, useJourney, useSettingsOpener } from './store.ts'
-import type { Face, Stage } from './types.ts'
-import { Btn, Skeleton, useNotice } from './ui.ts'
+import { notifyChanged, setSettingsOpener, useJourney, useSettingsOpener } from './store.ts'
+import type { Face, Journey, Stage } from './types.ts'
+import { Btn } from './ui.ts'
 import { Icon } from './icons.ts'
 
 const h = React.createElement
 
-export const ONBOARDING_TITLES = ['先放进一份报告', '看看这份报告', '第一个结果', '一起研究'] as const
-const NOOP = () => {}
+export const ONBOARDING_TITLES = ['欢迎使用 LongPi', '填写基本信息', '添加第一份资料'] as const
 /** A journey that has not arrived by then is shown as not read, with a retry. */
 const GIVE_UP_MS = 45_000
 
 export interface OnboardingProps extends Partial<Face> {
   stepId?: string
-  /** Opened on purpose (from the page's banner), not at first run: start where the person stands. */
+  /** Opened from the page's banner: start where the person stands. */
   explicit?: boolean
   complete: () => void
   openSection?: (id: string) => void
@@ -41,120 +35,165 @@ export interface OnboardingProps extends Partial<Face> {
   initialStep?: number
 }
 
-/** The step a stage starts at when onboarding is opened on purpose. */
+/** The step a stage starts at. */
 export function stepOfStage(stage: Stage): number {
   if (stage === 'consent') return 0
-  if (stage === 'records' || stage === 'profile') return 1
+  if (stage === 'profile') return 1
   return 2
 }
 
-function Dots(props: { step: number }): React.ReactElement {
-  return h('div', { className: 'lp-onb-progress' },
-    h('ol', { className: 'lp-dots', 'aria-hidden': true },
-      ...ONBOARDING_TITLES.map((_, index) => h('li', { key: index, className: `lp-dot-step ${index === props.step ? 'lp-dot-now' : index < props.step ? 'lp-dot-past' : ''}` }))),
-    h('span', { className: 'lp-caption' }, `第 ${props.step + 1} 步，共 ${ONBOARDING_TITLES.length} 步`))
+/** Steps still open, for the page banner (none once a record exists). */
+export function stepsLeft(journey: Journey): number {
+  if (!journey.consent.accepted) return 3
+  if (!journey.profile.complete) return 2
+  return recordConnected(journey.records.status) && journey.records.indicator_count > 0 ? 0 : 1
 }
 
-/** DSH's own onboarding dialogs keep the app root inert while they are up. */
-function useAutofocus(ref: React.RefObject<HTMLDivElement>, step: number, ready: boolean): void {
-  React.useEffect(() => {
-    if (!ready) return
-    const node = ref.current?.querySelector<HTMLElement>('[data-modal-autofocus]') ?? ref.current?.querySelector<HTMLElement>('h2')
-    node?.focus({ preventScroll: true })
-  }, [step, ready])
+function Progress(props: { step: number }): React.ReactElement {
+  return h('div', { className: 'lp-steps', 'aria-label': `第 ${props.step + 1} 步，共 ${ONBOARDING_TITLES.length} 步` },
+    ...ONBOARDING_TITLES.map((title, index) => h('div', {
+      key: index,
+      className: `lp-steps-item${index === props.step ? ' is-now' : index < props.step ? ' is-done' : ''}`,
+    },
+    h('span', { className: 'lp-steps-dot' }, index < props.step ? h(Icon, { name: 'check', size: 12 }) : String(index + 1)),
+    h('span', { className: 'lp-steps-label' }, title))))
 }
 
-/** DSH's complete(), guarded so it runs once however many buttons and effects reach it. */
-function useCompleteOnce(complete: () => void): { done: boolean; finish: () => void } {
-  const latest = React.useRef(complete)
-  latest.current = complete
-  const [done, setDone] = React.useState(false)
-  const called = React.useRef(false)
-  const finish = React.useCallback(() => {
-    if (called.current) return
-    called.current = true
-    setDone(true)
-    latest.current()
-  }, [])
-  return { done, finish }
-}
-
-/** Step 1: chat needs a model. Shown only when LongPi could tell no key is configured. */
+/** Chat needs a model key: said only when LongPi could tell none is configured. */
 function ModelHint(props: { onOpen: (() => void) | null }): React.ReactElement | null {
   const status = useModelStatus()
   if (status !== 'missing') return null
-  return h('div', { className: 'lp-onb-hint', role: 'note' },
-    h(Icon, { name: 'info', size: 15 }),
-    h('span', null, '对话需要先在设置里填 DeepSeek API Key。'),
-    props.onOpen ? h(Btn, { size: 'sm', variant: 'outline', onClick: props.onOpen }, '去设置') : h('span', { className: 'lp-caption' }, '在左下角“设置 → 模型”中填写。'))
+  return h('div', { className: 'lp-callout lp-callout-info', role: 'note' },
+    h(Icon, { name: 'info', size: 16 }),
+    h('div', { className: 'lp-callout-body' },
+      h('p', null, '对话功能需要先在 DSH 设置里填写模型的 API Key。'),
+      props.onOpen ? h(Btn, { size: 'sm', variant: 'outline', onClick: props.onOpen }, '去设置') : h('p', { className: 'lp-caption' }, '在左下角「设置 → 模型」中填写。')))
 }
 
-/** The journey did not arrive: say so, offer a retry, and let the person move on. */
-function NotRead(props: { error: string | null; onRetry: () => void; onLater: () => void; busy: boolean }): React.ReactElement {
-  return h(OnboardingModal, { title: '没有读到 LongPi 的数据', onClose: props.onLater },
+function NotRead(props: { onRetry: () => void; onLater: () => void; busy: boolean }): React.ReactElement {
+  return h(OnboardingModal, { title: '数据暂时没有加载出来', onClose: props.onLater },
     h('div', { className: 'lp lp-onb' },
-      h('h2', { className: 'lp-onb-title', tabIndex: -1 }, '暂时没有读到 LongPi 的数据'),
-      h('p', { className: 'lp-muted' }, props.error
-        ? `服务返回：${props.error}。通常是 DSH 刚启动、插件还在加载，稍等几秒再试。`
-        : '读取比平时慢。可以再试一次，或者先去对话，稍后在健康页继续。'),
-      h('div', { className: 'lp-modal-actions' },
+      h('h2', { className: 'lp-onb-title', tabIndex: -1 }, '数据暂时没有加载出来'),
+      h('p', { className: 'lp-onb-text' }, '可能是刚启动，稍等几秒后点「重试」。'),
+      h('div', { className: 'lp-onb-actions' },
         h(Btn, { variant: 'outline', onClick: props.onLater }, '稍后再说'),
-        h(Btn, { 'data-modal-autofocus': true, onClick: props.onRetry, disabled: props.busy }, props.busy ? '读取中…' : '重试'))))
+        h(Btn, { 'data-modal-autofocus': true, onClick: props.onRetry, disabled: props.busy }, props.busy ? '加载中…' : '重试'))))
+}
+
+/** One consent covers the notice, the health-data act and the flow to DeepSeek (owner decision, copy v2). */
+async function agreeAll(): Promise<void> {
+  await acceptConsent()
+  await postJson('/api/longpi/privacy/consent', { scope: 'pipl_sensitive', decision: 'granted' })
+  await postJson('/api/longpi/privacy/consent', { scope: 'data_flow_deepseek', decision: 'granted' })
+  notifyChanged()
+}
+
+function Welcome(props: { onDone: () => void; onLater: () => void; openSettings: (() => void) | null }): React.ReactElement {
+  const [agreed, setAgreed] = React.useState(false)
+  const [busy, setBusy] = React.useState(false)
+  const [error, setError] = React.useState('')
+  return h('div', { className: 'lp-onb-body' },
+    h(ModelHint, { onOpen: props.openSettings }),
+    h('p', { className: 'lp-onb-text' }, 'LongPi 帮你管理自己的健康数据：根据体检结果估算身体年龄和 10 年心血管风险，并跟踪你的改善计划执行得怎么样。'),
+    h('p', { className: 'lp-onb-text' }, '它只提供健康管理参考，不做诊断，不开处方，也不给出用药剂量。'),
+    h('p', { className: 'lp-onb-text' }, '你的档案和记录只保存在这台电脑上。你提问时，回答所需的健康数值会发送给 DeepSeek 模型处理，不包含你的姓名。'),
+    h('label', { className: 'lp-checkrow', htmlFor: 'lp-onb-agree' },
+      h('input', { id: 'lp-onb-agree', type: 'checkbox', checked: agreed, disabled: busy, onChange: (e: React.ChangeEvent<HTMLInputElement>) => setAgreed(e.target.checked) }),
+      h('span', null, '我同意 LongPi 按上述方式使用我的体检、化验、血压、血糖、体重和用药等健康信息。')),
+    h('p', { className: 'lp-caption' }, '可以随时在「设置 → LongPi → 数据与隐私」中撤回。'),
+    error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
+    h('div', { className: 'lp-onb-actions' },
+      h(Btn, { variant: 'outline', onClick: props.onLater, disabled: busy }, '以后再说'),
+      h(Btn, {
+        'data-modal-autofocus': true, disabled: !agreed || busy,
+        onClick: () => {
+          setBusy(true)
+          setError('')
+          agreeAll().then(props.onDone).catch((err: unknown) => setError(`没有保存成功：${errorText(err, '请稍后再试')}`)).finally(() => setBusy(false))
+        },
+      }, busy ? '正在保存…' : '同意并开始')))
+}
+
+function BasicInfo(props: { journey: Journey; onDone: () => void; onSkip: () => void }): React.ReactElement {
+  const [age, setAge] = React.useState(props.journey.profile.age != null ? String(props.journey.profile.age) : '')
+  const [sex, setSex] = React.useState<'male' | 'female' | ''>(props.journey.profile.sex === 'male' || props.journey.profile.sex === 'female' ? props.journey.profile.sex : '')
+  const [busy, setBusy] = React.useState(false)
+  const [error, setError] = React.useState('')
+  const ageNum = Number(age)
+  const ageOk = /^\d{1,3}$/.test(age.trim()) && ageNum >= 1 && ageNum <= 120
+  return h('div', { className: 'lp-onb-body' },
+    h('p', { className: 'lp-onb-text' }, '计算身体年龄需要你的年龄和性别。'),
+    h('div', { className: 'lp-form-grid' },
+      h('label', { className: 'lp-field' },
+        h('span', { className: 'lp-field-label' }, '年龄（周岁）'),
+        h('input', {
+          className: 'lp-input', inputMode: 'numeric', placeholder: '例如 45', value: age, disabled: busy, 'data-modal-autofocus': true,
+          onChange: (e: React.ChangeEvent<HTMLInputElement>) => setAge(e.target.value.replace(/[^\d]/g, '').slice(0, 3)),
+        })),
+      h('div', { className: 'lp-field' },
+        h('span', { className: 'lp-field-label', id: 'lp-onb-sex' }, '性别'),
+        h('div', { className: 'lp-seg', role: 'radiogroup', 'aria-labelledby': 'lp-onb-sex' },
+          ...(['male', 'female'] as const).map((value) => h('button', {
+            key: value, type: 'button', role: 'radio', 'aria-checked': sex === value, disabled: busy,
+            className: `lp-seg-item${sex === value ? ' is-on' : ''}`, onClick: () => setSex(value),
+          }, value === 'male' ? '男' : '女'))))),
+    h('p', { className: 'lp-caption' }, '其他问题（如是否吸烟、有无糖尿病）会在计算心血管风险需要时再问。'),
+    error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
+    h('div', { className: 'lp-onb-actions' },
+      h(Btn, { variant: 'outline', onClick: props.onSkip, disabled: busy }, '跳过'),
+      h(Btn, {
+        disabled: !ageOk || !sex || busy,
+        onClick: () => {
+          setBusy(true)
+          setError('')
+          postJson('/api/longpi/profile', { age: ageNum, sex })
+            .then(() => { notifyChanged(); props.onDone() })
+            .catch((err: unknown) => setError(`没有保存成功：${errorText(err, '请稍后再试')}`))
+            .finally(() => setBusy(false))
+        },
+      }, busy ? '正在保存…' : '下一步')))
+}
+
+function FirstData(props: { onFinish: () => void; openChat: () => void }): React.ReactElement {
+  const [none, setNone] = React.useState(false)
+  const [read, setRead] = React.useState('')
+  return h('div', { className: 'lp-onb-body' },
+    h('p', { className: 'lp-onb-text' }, '上传一份体检或化验报告，LongPi 会读取其中的指标，算出你的第一个结果。'),
+    h(ReportUpload, { simple: true, onDone: (text: string) => { setRead(text || '已读取这份报告。'); notifyChanged() } }),
+    !read && !none ? h('button', { type: 'button', className: 'lp-textbtn', onClick: () => setNone(true) }, '我现在没有报告') : null,
+    none && !read ? h('div', { className: 'lp-callout' },
+      h('div', { className: 'lp-callout-body' },
+        h('p', { className: 'lp-callout-title' }, '没有报告也可以先开始：'),
+        h('ul', { className: 'lp-bullets' },
+          h('li', null, '记录一次血压或腰围'),
+          h('li', null, '在健康对话里说说你想改善什么（睡眠、体重、血糖……）')),
+        h('p', { className: 'lp-caption' }, '以后拿到体检报告，随时在「健康」页上传。'))) : null,
+    h('div', { className: 'lp-onb-actions' },
+      none && !read ? h(Btn, { variant: 'outline', onClick: props.openChat }, '去健康对话') : null,
+      h(Btn, { onClick: props.onFinish }, '完成')))
 }
 
 export function Onboarding(props: OnboardingProps): React.ReactElement | null {
   const { journey, error: loadError, loading, refresh } = useJourney()
   const [step, setStep] = React.useState<number | null>(null)
-  const [busy, setBusy] = React.useState(false)
-  const [error, setError] = React.useState<string | null>(null)
-  const [privacyOpen, setPrivacyOpen] = React.useState(false)
-  /** undefined while the consent file is still loading. null means no DeepSeek decision yet. */
-  const [flowDecision, setFlowDecision] = React.useState<string | null | undefined>(undefined)
-  const [computing, setComputing] = React.useState(false)
   const [timedOut, setTimedOut] = React.useState(false)
   const [retrying, setRetrying] = React.useState(false)
-  const [notice, notify] = useNotice()
-  const decided = React.useRef(false)
+  const [done, setDone] = React.useState(false)
   const content = React.useRef<HTMLDivElement>(null)
-  const { done, finish } = useCompleteOnce(props.complete)
   const storedOpener = useSettingsOpener()
   const openSection = props.openSection ?? storedOpener
+  React.useEffect(() => { if (props.openSection) setSettingsOpener(props.openSection) }, [props.openSection])
 
-  // DSH hands openSection to onboarding only; keep it for the page and the chat.
-  React.useEffect(() => { setSettingsOpener(props.openSection) }, [props.openSection])
-
-  React.useEffect(() => {
-    let live = true
-    void getJson<{ consents?: { data_flow_deepseek?: { decision?: string | null } } }>('/api/longpi/privacy').then((row) => {
-      if (live) setFlowDecision(row?.consents?.data_flow_deepseek?.decision ?? null)
-    }).catch(() => { if (live) setFlowDecision(null) })
-    return () => { live = false }
-  }, [])
+  const finish = React.useCallback(() => {
+    setDone(true)
+    props.complete()
+  }, [props])
 
   React.useEffect(() => {
-    if (decided.current || !journey || flowDecision === undefined) return
-    decided.current = true
-    if (props.initialStep != null) {
-      setStep(Math.max(0, Math.min(3, props.initialStep)))
-      return
-    }
-    // 开始 records only the product notice. A refresh must still show the DeepSeek sheet
-    // until that decision exists. Health numbers do not leave before a grant.
-    if (journey.consent.accepted && deepseekConsentPending(flowDecision)) {
-      setPrivacyOpen(true)
-      setStep(0)
-      return
-    }
-    if (props.explicit) {
-      setStep(stepOfStage(journey.stage))
-      return
-    }
-    if (journey.consent.accepted && journey.profile.complete) {
-      finish()
-      return
-    }
-    setStep(journey.consent.accepted ? 1 : 0)
-  }, [journey, finish, flowDecision, props.initialStep, props.explicit])
+    if (step != null || !journey) return
+    if (props.initialStep != null) setStep(Math.max(0, Math.min(2, props.initialStep)))
+    else setStep(ONBOARDING_TITLES.length - Math.max(1, stepsLeft(journey)))
+  }, [journey, step, props.initialStep])
 
   React.useEffect(() => {
     if (journey || timedOut) return undefined
@@ -162,111 +201,36 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
     return () => window.clearTimeout(timer)
   }, [journey, timedOut])
 
-  const go = React.useCallback((next: number) => {
-    setError(null)
-    setStep(next)
-    if (next === 3) {
-      setComputing(true)
-      void refresh(true).finally(() => setComputing(false))
-    }
-  }, [refresh])
+  React.useEffect(() => {
+    const node = content.current?.querySelector<HTMLElement>('[data-modal-autofocus]') ?? content.current?.querySelector<HTMLElement>('h2')
+    node?.focus({ preventScroll: true })
+  }, [step])
 
-  const retry = React.useCallback(() => {
-    setRetrying(true)
-    setTimedOut(false)
-    void refresh(true).finally(() => setRetrying(false))
-  }, [refresh])
-
-  useAutofocus(content, step ?? -1, step != null && !!journey && !done)
   if (done) return null
   if (!journey) {
-    // Still loading within the grace period: show and block nothing. A retry keeps the screen, busy.
     if (!timedOut && !retrying && !(loadError && !loading)) return null
-    return h(NotRead, { error: loadError, onRetry: retry, onLater: finish, busy: retrying || loading })
+    return h(NotRead, {
+      onRetry: () => { setRetrying(true); setTimedOut(false); void refresh(true).finally(() => setRetrying(false)) },
+      onLater: finish,
+      busy: retrying || loading,
+    })
   }
   if (step == null) return null
-
-  const toPage = (view: Parameters<typeof requestView>[0]) => {
-    requestView(view)
-    props.openPage?.()
+  const openSettings = openSection ? () => { finish(); openSection('models') } : null
+  const openChat = () => {
     finish()
-  }
-  const toSettings = openSection ? () => { finish(); openSection('models') } : null
-  const actions = {
-    onDraft: () => {
-      if (props.openPage || props.explicit) toPage({ tab: 'plan', id: 'lp-plan' })
-      else {
-        setPendingPrompt(DRAFT_PROMPT, 'hero')
-        finish()
-      }
-    },
-    onAddons: () => toPage({ tab: 'profile', id: 'lp-addons-card' }),
+    document.querySelector<HTMLButtonElement>('.lp-healthchat-btn')?.click()
   }
 
   return h(OnboardingModal, { title: ONBOARDING_TITLES[step] ?? ONBOARDING_TITLES[0], onClose: finish },
     h('div', { className: 'lp lp-onb', ref: content },
-      h(Dots, { step }),
+      h(Progress, { step }),
       h('h2', { className: 'lp-onb-title', tabIndex: -1 }, ONBOARDING_TITLES[step]),
-      privacyOpen ? h('div', { className: 'lp-onb-body' },
-        h('p', { className: 'lp-onb-lead' }, '下面两件事分开记，都没有预先勾选，也不是刚才的产品说明。'),
-        h(SensitiveConsentScreen, {}),
-        h(DataPage, { onDecided: (decision: 'granted' | 'declined') => { if (decision) setFlowDecision(decision) } }),
-        h('div', { className: 'lp-modal-actions' },
-          h(Btn, {
-            disabled: deepseekConsentPending(flowDecision),
-            onClick: () => {
-              if (deepseekConsentPending(flowDecision)) return
-              setPrivacyOpen(false)
-              go(1)
-            },
-          }, deepseekConsentPending(flowDecision) ? '请先选择是否发给 DeepSeek' : '继续填写档案'))) : null,
-      !privacyOpen && step === 0 ? h('div', { className: 'lp-onb-body' },
-        h(ModelHint, { onOpen: toSettings }),
-        h(ConsentText),
-        error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
-        h('div', { className: 'lp-modal-actions' },
-          h(Btn, { variant: 'outline', onClick: finish, disabled: busy }, '以后再说'),
-          h(Btn, {
-            'data-modal-autofocus': true, disabled: busy,
-            onClick: () => {
-              setBusy(true)
-              acceptConsent()
-                .then(() => go(1))
-                .catch((err: unknown) => setError(`没有记下：${errorText(err, '请稍后再试')}`))
-                .finally(() => setBusy(false))
-            },
-          }, busy ? '记录中…' : '先看报告'))) : null,
-      step === 1 ? h('div', { className: 'lp-onb-body' },
-        h('p', { className: 'lp-onb-lead' }, '先看已经放进来的体检。缺的问题可以等结果需要时再答，不知道就跳过。'),
-        h(RecordsStep, { journey, onOpenChanges: props.openPage || props.explicit ? () => toPage({ tab: 'overview', id: 'lp-changes' }) : undefined }),
-        h('div', { className: 'lp-modal-actions' },
-          h(Btn, { variant: 'outline', onClick: () => go(0) }, '上一步'),
-          h(Btn, { 'data-modal-autofocus': true, onClick: () => go(2) }, recordConnected(journey.records.status) ? '看第一个结果' : '先跳过'))) : null,
-      step === 2 ? h('div', { className: 'lp-onb-body' },
-        journey.profile.age == null || (journey.profile.sex !== 'male' && journey.profile.sex !== 'female')
-          ? h(React.Fragment, null,
-            h('p', { className: 'lp-onb-lead' }, '算这个结果还缺一项。不知道可以跳过，不会当成“否”。'),
-            h(ProfileEditor, { journey, variant: 'onboarding', idPrefix: 'lp-onb-profile', onSaved: () => go(2), onSkip: () => go(3) }))
-          : null,
-        computing
-          ? h('div', { className: 'lp-onb-computing', 'aria-busy': true },
-            h(Skeleton, { height: 88 }), h('p', { className: 'lp-caption' }, '正在用你的记录计算…'))
-          : h(FirstResult, { journey, onNotice: notify, actions }),
-        notice,
-        h('p', { className: 'lp-fine' }, journey.boundary_zh),
-        h('div', { className: 'lp-modal-actions' },
-          h(Btn, { variant: 'outline', onClick: () => go(1) }, '上一步'),
-          h(Btn, { onClick: () => go(3) }, '继续'))) : null,
-      step === 3 ? h('div', { className: 'lp-onb-body' },
-        h('p', { className: 'lp-onb-lead' }, 'LongPi 的用户在一起研究怎样延缓衰老。你可以用自己的数据做个人小试验，也可以加入大家的研究。加入要你自己再点一次，没有预先勾上。'),
-        h('p', { className: 'lp-caption' }, '研究正式开始后才会发出，现在只保存在你的设备上。'),
-        h('div', { className: 'lp-modal-actions' },
-          h(Btn, { onClick: () => { props.openPage?.(); finish() } }, '加入'),
-          h(Btn, { variant: 'outline', onClick: finish }, '以后再说'))) : null))
+      step === 0 ? h(Welcome, { onDone: () => setStep(1), onLater: finish, openSettings }) : null,
+      step === 1 ? h(BasicInfo, { journey, onDone: () => setStep(2), onSkip: () => setStep(2) }) : null,
+      step === 2 ? h(FirstData, { onFinish: finish, openChat }) : null))
 }
 
 function OnboardingModal(props: { title: string; onClose: () => void; children?: React.ReactNode }): React.ReactElement {
-  // Opened from the 健康 page only, and never locks DSH: Escape or a click outside puts it off (以后再说), and
-  // nothing is agreed to that way.
   return h(Modal, { open: true, title: props.title, onClose: props.onClose, headless: true, className: 'lp-onb-dialog' }, props.children)
 }

@@ -38,15 +38,18 @@ function checkupsText(count: number): string {
 
 export function RecordsStatusLine(props: { journey: Journey }): React.ReactElement {
   const records = props.journey.records
-  if (recordConnected(records.status)) {
+  if (recordConnected(records.status) && records.indicator_count > 0) {
     const partial = records.status === 'partial'
     return h('div', { className: 'lp-status' },
       h('span', { className: `lp-statusdot ${partial ? 'lp-statusdot-warn' : 'lp-statusdot-on'}`, 'aria-hidden': true }),
-      `已连上 · ${records.indicator_count} 项检查${checkupsText(records.full_checkups)}${partial ? ' · 有的这次没读到，不是没测' : ''}`)
+      `已有 ${records.indicator_count} 项指标${records.latest_checkup ? ` · 最近一次体检 ${chineseDate(records.latest_checkup)}` : ''}${partial ? ' · 有一部分这次没有读到' : ''}`)
+  }
+  if (records.status === 'error') {
+    return h('div', { className: 'lp-status' }, h('span', { className: 'lp-statusdot lp-statusdot-bad', 'aria-hidden': true }), `记录读取失败：${records.error || '原因不明'}`)
   }
   return h('div', { className: 'lp-status' },
-    h('span', { className: `lp-statusdot ${records.status === 'error' ? 'lp-statusdot-bad' : ''}`, 'aria-hidden': true }),
-    records.status === 'error' ? `记录读取失败：${records.error || '没有返回原因'}` : '还没有读到体检')
+    h('span', { className: 'lp-statusdot', 'aria-hidden': true }),
+    recordConnected(records.status) ? '还没有体检记录' : '正在连接健康数据服务…')
 }
 
 function month(iso: string | null): string {

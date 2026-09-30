@@ -378,7 +378,8 @@ function stageOf(journey: Pick<Journey, 'consent' | 'profile' | 'records' | 'res
   // A saved plan is lived day by day even while the record is unreachable or no first result can be computed yet.
   if (journey.plan.exists) return 'routine'
   // A record read in part is connected: the rows that failed say so where they are shown.
-  if (journey.records.status !== 'ok' && journey.records.status !== 'partial') return 'records'
+  // Connected but empty (the local service is paired before any report exists) is still the 上传报告 step.
+  if ((journey.records.status !== 'ok' && journey.records.status !== 'partial') || journey.records.indicator_count === 0) return 'records'
   if (journey.results.bioage.status !== 'ok' && journey.results.risk.status !== 'ok') return 'first_result'
   return 'plan'
 }
@@ -389,13 +390,13 @@ function nextOf(stage: Stage, journey: Body): Next {
   // fact-ranked floor (surfaces/fallback.ts) puts it ahead of this stage step, at any stage after consent.
   switch (stage) {
     case 'consent':
-      return step('开始使用 LongPi', '先了解 LongPi 做什么、数据放在哪里。', 'consent')
+      return step('完成设置', '了解 LongPi 能做什么，并确认数据怎么使用。', 'consent')
     case 'profile':
-      return step('补一个问题', '填写周岁和性别就能算身体年龄。不知道可以跳过，不会当成“否”。', 'profile')
+      return step('填写年龄和性别', '填写后就能计算身体年龄。', 'profile')
     case 'records':
       return journey.records.status === 'error'
         ? step('连接体检记录', clip(`记录读取失败：${journey.records.error}`), 'records')
-        : step('把体检报告放进来', '放进来之后，就能看身体年龄。平时不用管连接地址。', 'records')
+        : step('上传一份体检报告', '上传后就能计算身体年龄和心血管风险。', 'records')
     case 'first_result': {
       const n = journey.addons.length
       if (n > 0) {
@@ -448,7 +449,7 @@ function suggestionsOf(stage: Stage, journey: Body, followupOn: boolean): Journe
 /** The stage's one-line status (the home hero's wording), for the chat snapshot when no fact must surface. */
 function stageStatus(stage: Stage, journey: Body, next: Next): string {
   if (stage === 'consent' || stage === 'profile') return '花 2 分钟建档，算出你的身体年龄和心血管风险'
-  if (stage === 'records') return journey.records.status === 'error' ? '体检记录读取失败，暂时算不出结果' : '连接体检记录后，就能算出你的身体年龄'
+  if (stage === 'records') return journey.records.status === 'error' ? '体检记录读取失败，暂时算不出结果' : '上传一份体检报告后，就能算出你的身体年龄'
   if (stage === 'first_result' && journey.addons.length > 0) return concreteNext(journey.addons).title_zh
   const { bioage, risk } = journey.results
   const parts: string[] = []
