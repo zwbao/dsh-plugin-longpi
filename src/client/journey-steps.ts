@@ -5,7 +5,6 @@
 import React from 'react'
 import { postJson } from './api.ts'
 import { fmt } from './charts.ts'
-import { ConnectionPanel } from './connection.ts'
 import { CONSENT_SENTENCES } from './constants.ts'
 import { chineseDate, riskText, versusAge } from './format.ts'
 import { Icon } from './icons.ts'
@@ -108,8 +107,8 @@ export function RecordsStep(props: { journey: Journey; onOpenChanges?: () => voi
       : h(React.Fragment, null,
         records.status === 'error'
           ? h('p', { className: 'lp-blocker lp-blocker-bad' }, `记录读取失败：${records.error || '没有返回原因'}`)
-          : h('p', { className: 'lp-muted' }, '用邮箱和密码登录并连接。平时不用看地址。')),
-    h(ConnectionPanel, { idPrefix: 'lp-onb-conn', collapsed: connected }))
+          // LongPi pairs with the local health-data service by itself: nothing to fill in here.
+          : h('p', { className: 'lp-muted' }, '正在连接这台电脑上的健康数据服务，稍等片刻。')))
 }
 
 /** The two results, compact: a figure, or 还不能计算 with the server's reason. */

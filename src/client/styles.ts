@@ -499,7 +499,6 @@ p.lp-muted { margin: 0; }
    purpose: DSH's class names are hashed. The slot renders in a span beside the title span, wrapped in
    DSH's display:contents slot anchor, hence a descendant (not child) match. If DSH's markup changes and
    this stops matching, the greeting simply sits above DSH's title. */
-div:has(> span .lp-hero) > span:not(:has(.lp-hero)) { display: none !important; }
 .lp-hero {
   width: min(620px, calc(100vw - 48px)); max-width: 100%; margin: 0 auto;
   display: flex; flex-direction: column; align-items: center; gap: 8px; padding-bottom: 6px;

@@ -1,18 +1,15 @@
-// A fresh DeepSeek Harness has no workspace, so it opens no session and the
-// composer stays inert: nothing LongPi puts next to it can show. When the
-// host's workspace registry is there and empty, register one folder under the
-// data directory as 「健康对话」, once: named apart from the sidebar's 健康 page.
-// A workspace an earlier version created as 「健康」 keeps its name. A marker
-// file records that it was done, so a workspace the person later deletes is
-// never created again, and a registry that already has workspaces is never
-// touched.
+// Health conversations happen in their own workspace, 「健康对话」, so LongPi's persona and rules never reach the
+// person's other (coding, writing) workspaces. It is added once, next to whatever workspaces DSH already has
+// (they are never touched): a folder under the LongPi home, named apart from the sidebar's 健康 page. One an
+// earlier version created as 「健康」 counts. A marker file records that it was done, so a workspace the person
+// later deletes is never created again.
 
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 /** The part of DSH's workspaceRegistry service (@deepseek-ai/dsh-workspace) this uses. */
 export interface WorkspaceRegistryLike {
-  list(): ReadonlyArray<{ id: string; path: string }>
+  list(): ReadonlyArray<{ id: string; path: string; title?: string }>
   create(path: string, title?: string): Promise<{ id: string; path: string }>
 }
 
@@ -25,7 +22,7 @@ export type BootstrapResult =
   | { status: 'disabled' | 'done_before' | 'not_empty' | 'no_registry' }
   | { status: 'error'; error: string }
 
-/** Create the 健康对话 workspace when the registry is empty and it was never created before. Never throws. */
+/** Create the 健康对话 workspace once, unless one already exists. Never throws. */
 export async function bootstrapWorkspace(
   registry: WorkspaceRegistryLike | null | undefined,
   options: { dataDir: string; enabled: boolean; now?: Date },
@@ -35,7 +32,7 @@ export async function bootstrapWorkspace(
     if (!registry || typeof registry.list !== 'function' || typeof registry.create !== 'function') return { status: 'no_registry' }
     const marker = join(options.dataDir, WORKSPACE_MARKER)
     if (existsSync(marker)) return { status: 'done_before' }
-    if (registry.list().length > 0) return { status: 'not_empty' }
+    if (registry.list().some((w) => ['健康对话', '健康'].includes(String(w.title ?? '').trim()))) return { status: 'not_empty' }
     const dir = join(options.dataDir, WORKSPACE_DIR)
     mkdirSync(dir, { recursive: true, mode: 0o700 })
     // The registry keys workspaces by canonical path; give it one (a symlinked home resolves here).

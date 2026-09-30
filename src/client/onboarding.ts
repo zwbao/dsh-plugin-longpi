@@ -56,16 +56,6 @@ function Dots(props: { step: number }): React.ReactElement {
 }
 
 /** DSH's own onboarding dialogs keep the app root inert while they are up. */
-function useInertRoot(): void {
-  React.useEffect(() => {
-    const root = document.getElementById('root')
-    if (!root) return undefined
-    const previous = root.inert
-    root.inert = true
-    return () => { root.inert = previous }
-  }, [])
-}
-
 function useAutofocus(ref: React.RefObject<HTMLDivElement>, step: number, ready: boolean): void {
   React.useEffect(() => {
     if (!ready) return
@@ -101,7 +91,7 @@ function ModelHint(props: { onOpen: (() => void) | null }): React.ReactElement |
 
 /** The journey did not arrive: say so, offer a retry, and let the person move on. */
 function NotRead(props: { error: string | null; onRetry: () => void; onLater: () => void; busy: boolean }): React.ReactElement {
-  return h(OnboardingModal, { title: '没有读到 LongPi 的数据' },
+  return h(OnboardingModal, { title: '没有读到 LongPi 的数据', onClose: props.onLater },
     h('div', { className: 'lp lp-onb' },
       h('h2', { className: 'lp-onb-title', tabIndex: -1 }, '暂时没有读到 LongPi 的数据'),
       h('p', { className: 'lp-muted' }, props.error
@@ -213,7 +203,7 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
     onAddons: () => toPage({ tab: 'profile', id: 'lp-addons-card' }),
   }
 
-  return h(OnboardingModal, { title: ONBOARDING_TITLES[step] ?? ONBOARDING_TITLES[0] },
+  return h(OnboardingModal, { title: ONBOARDING_TITLES[step] ?? ONBOARDING_TITLES[0], onClose: finish },
     h('div', { className: 'lp lp-onb', ref: content },
       h(Dots, { step }),
       h('h2', { className: 'lp-onb-title', tabIndex: -1 }, ONBOARDING_TITLES[step]),
@@ -275,8 +265,8 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
           h(Btn, { variant: 'outline', onClick: finish }, '以后再说'))) : null))
 }
 
-function OnboardingModal(props: { title: string; children?: React.ReactNode }): React.ReactElement {
-  useInertRoot()
-  // Escape and the mask do nothing: consent is given or postponed with a button, never by accident.
-  return h(Modal, { open: true, title: props.title, onClose: NOOP, headless: true, className: 'lp-onb-dialog' }, props.children)
+function OnboardingModal(props: { title: string; onClose: () => void; children?: React.ReactNode }): React.ReactElement {
+  // Opened from the 健康 page only, and never locks DSH: Escape or a click outside puts it off (以后再说), and
+  // nothing is agreed to that way.
+  return h(Modal, { open: true, title: props.title, onClose: props.onClose, headless: true, className: 'lp-onb-dialog' }, props.children)
 }

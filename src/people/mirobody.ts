@@ -14,7 +14,7 @@ export interface HolderAuth { base: string; token: string }
 export function holderAuth(root: string): HolderAuth | { error_zh: string } {
   const saved = readConnection(root)
   if (!saved?.mcp_token || !saved.mcp_url) {
-    return { error_zh: '要为家人在 Mirobody 建档，先在设置页的 LongPi 里用你自己的 Mirobody 账号登录（邮箱和密码），不要只粘贴链接。' }
+    return { error_zh: 'LongPi 还没有连上这台电脑上的健康数据服务，暂时不能为家人建档。请确认它正在运行，稍后再试。' }
   }
   try {
     const url = new URL(saved.mcp_url)

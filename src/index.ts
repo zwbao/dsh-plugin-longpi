@@ -1,5 +1,8 @@
 import type { Context } from '@deepseek-ai/cordis'
 import './host-shims.ts'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { WORKSPACE_MARKER } from './workspace.ts'
 import { Config } from './config.ts'
 import { registerCommands } from './commands.ts'
 import { createGuard } from './guard-llm.ts'
@@ -37,6 +40,7 @@ import { registerFollowupTools } from './tools-followup.ts'
 import { markAsked, readiness, readinessLine } from './analysis/service.ts'
 import { activePerson, readRegistry } from './people/store.ts'
 import { renewActiveMember } from './people/mirobody.ts'
+import { ensureLocalPairing } from './mirobody-account.ts'
 import { resolveRootDir } from './paths.ts'
 import { startFollowup, type FollowupState } from './followup.ts'
 import { buildJourneyFull, followupStateOf, within } from './journey.ts'
@@ -188,7 +192,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const guard = createGuard(ctx, {
     dataDir: () => resolveDataDir(config.dataDir),
     scope: () => (config.guardScope === 'all' ? 'all' : 'health'),
-    healthWorkspaces: () => healthWorkspacePaths(resolveDataDir(config.dataDir), workspaces()),
+    healthWorkspaces: () => healthWorkspacePaths(resolveRootDir(config.dataDir), workspaces()),
   })
   registerApprovals(ctx, guard)
   // Reminders follow the person selected on the page (their store holds their plan and settings); a family member's say whose.
@@ -206,7 +210,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   ctx.inject(['workspaceRegistry'], (scoped) => {
     const registry = (scoped as unknown as { workspaceRegistry?: WorkspaceRegistryLike }).workspaceRegistry
     registryLookup = () => (scoped as unknown as { workspaceRegistry?: unknown }).workspaceRegistry
-    void bootstrapWorkspace(registry, { dataDir: resolveDataDir(config.dataDir), enabled: config.bootstrapWorkspace !== false }).then((result) => {
+    void bootstrapWorkspace(registry, { dataDir: resolveRootDir(config.dataDir), enabled: config.bootstrapWorkspace !== false }).then((result) => {
       if (result.status === 'created') logTo(scoped, 'info', `created the 健康对话 workspace at ${result.path}`)
       else if (result.status === 'error') logTo(scoped, 'warn', `workspace bootstrap failed: ${result.error}`)
     })
@@ -220,6 +224,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const journeyContext = async () => {
     // A family member's link is renewed before it is read (at most every ten minutes); one that cannot be renewed
     // stays expired and reads fail, never falling back to the holder's own record.
+    // Paired with the Mirobody on this computer without the person doing anything (first use, and token renewal).
+    await ensureLocalPairing(resolveRootDir(config.dataDir), { base: config.mirobodyUrl ?? '', configuredUrl: config.mcpUrl }).catch(() => undefined)
     await renewActiveMember(resolveRootDir(source().dataDir)).catch(() => '')
     const current = source()
     const dataDir = resolveDataDir(current.dataDir)
@@ -290,8 +296,29 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     }, 2_000)
     rebuildTimer.unref?.()
   }, 'rebuild')
+  // The 健康对话 workspace, for the page's 去健康对话 button: the one LongPi created, else one titled 健康对话/健康.
+  http.route('GET', '/api/longpi/workspace', async () => {
+    let id: string | null = null
+    try {
+      id = String((JSON.parse(readFileSync(join(resolveRootDir(config.dataDir), WORKSPACE_MARKER), 'utf8')) as { workspace_id?: unknown }).workspace_id ?? '') || null
+    } catch { id = null }
+    const registry = registryLookup?.() as { list?: () => ReadonlyArray<{ id?: unknown; path?: unknown; title?: unknown }> } | undefined
+    const rows = (() => { try { return registry?.list?.() ?? [] } catch { return [] } })()
+    if (id && !rows.some((w) => String(w.id) === id)) id = null           // deleted since
+    if (!id) id = rows.map((w) => ({ id: String(w.id ?? ''), title: String(w.title ?? '').trim() })).find((w) => w.id && (w.title === '健康对话' || w.title === '健康'))?.id ?? null
+    return { ok: true, workspace_id: id }
+  })
   http.route('GET', '/api/longpi/usage', async () => ({ ok: true, today: budget.today(), remaining: budget.remaining(), caps: source().budget }))
   setActivePersonResolver(() => activePerson(resolveRootDir(source().dataDir)).id)
+  // Pair with the local Mirobody as soon as the plugin starts, so the first page already reads as connected.
+  {
+    const timer = setTimeout(() => {
+      void ensureLocalPairing(resolveRootDir(config.dataDir), { base: config.mirobodyUrl ?? '', configuredUrl: config.mcpUrl, force: true })
+        .then((r) => { if (r.status === 'paired' || r.status === 'renewed') { invalidateRecords(); invalidateTracking() } else if (r.status === 'error') logTo(ctx, 'warn', r.error_zh) })
+        .catch(() => undefined)
+    }, 2_000)
+    timer.unref?.()
+  }
   registerModules(ctx, deps, (message) => logTo(ctx, 'warn', message))
   registerEmitHooks(ctx, bus)
   startTick(ctx, bus, dataDirNow)
@@ -333,7 +360,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }
   const orchestrator = registerOrchestrator(ctx, {
     mount,
-    healthWorkspaces: () => healthWorkspacePaths(resolveDataDir(config.dataDir), workspaces()),
+    healthWorkspaces: () => healthWorkspacePaths(resolveRootDir(config.dataDir), workspaces()),
     snapshot: snapshotNow,
     log: (message) => logTo(ctx, 'warn', message),
   })

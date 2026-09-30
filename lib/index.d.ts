@@ -140,6 +140,8 @@ interface Config {
   mirobodyPluginHome: string;
   pythonBin: string;
   mirobodyHome: string;
+  /** The Mirobody on this computer that LongPi pairs itself with (no address shown to the person). */
+  mirobodyUrl: string;
   mcpUrl: string;
   mcpToken: string;
   member: string;
@@ -4224,6 +4226,7 @@ interface WorkspaceRegistryLike {
   list(): ReadonlyArray<{
     id: string;
     path: string;
+    title?: string;
   }>;
   create(path: string, title?: string): Promise<{
     id: string;
@@ -4243,7 +4246,7 @@ type BootstrapResult = {
   status: 'error';
   error: string;
 };
-/** Create the 健康对话 workspace when the registry is empty and it was never created before. Never throws. */
+/** Create the 健康对话 workspace once, unless one already exists. Never throws. */
 declare function bootstrapWorkspace(registry: WorkspaceRegistryLike | null | undefined, options: {
   dataDir: string;
   enabled: boolean;

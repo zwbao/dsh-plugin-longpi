@@ -19,6 +19,7 @@ import { ReminderPill } from './pill.ts'
 import { LongPiSettings } from './settings-page.ts'
 import { injectStyles } from './styles.ts'
 import { registerClientModules } from './modules.ts'
+import { setWorkspaceOpener } from './health-chat.ts'
 import { toolViewList } from './registry.ts'
 import { TOOL_VIEWS } from './toolviews.ts'
 import { longPiTurnDefinition, selectLongPiTail } from './turn-data.ts'
@@ -42,6 +43,8 @@ interface Optional {
   sidebarRight?: { openTab: (kind: string) => void }
   /** The conversation engine's Definition registry (dsh-client-ui-conversation). */
   uiConversation?: { events?: { register: (definition: unknown) => () => void } }
+  /** DSH's workspace navigation (dsh-client-ui-workspace): opens a workspace's blank session. */
+  uiWorkspace?: { openWorkspace: (workspaceId: string) => Promise<void> }
   effect?: (run: () => () => void, label?: string) => unknown
 }
 
@@ -76,11 +79,10 @@ export function apply(ctx: ClientContext): void {
 
   ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID, inject: face }, LongPiPage))
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: PANEL_ID, order: 5, label: () => '健康' }, PanelIcon))
-  ctx.slots.inject('sidebar.brand.name', () => ctx.slots.register({ name: 'sidebar.brand.name' }, () => h('span', null, 'LongPi')))
-  ctx.slots.inject('conversation.hero.brand.mark', () => ctx.slots.register({ name: 'conversation.hero.brand.mark', inject: face }, HomeHero))
   // Rendered whenever a session exists, on the home and in a chat; draws nothing, inserts queued prompts.
   ctx.slots.inject('conversation.input.dock', () => ctx.slots.register({ name: 'conversation.input.dock', id: 'dsh-plugin-longpi', order: 90 }, PromptBridge))
-  ctx.slots.inject('settings.onboarding', () => ctx.slots.register({ name: 'settings.onboarding', id: 'longpi', order: 100, inject: face }, Onboarding))
+  // No step in DSH's own first-run onboarding and no takeover of DSH's brand or blank-session home: LongPi adds
+  // its 健康 page and settings section, and leaves the rest of DSH as it was.
   // After DSH's own pages (Models is order 10).
   ctx.slots.inject('settings.section', () => ctx.slots.register({ name: 'settings.section', id: SETTINGS_ID, order: 60, label: () => 'LongPi', inject: face }, LongPiSettings))
   for (const [key, view] of Object.entries(TOOL_VIEWS)) {
@@ -102,6 +104,12 @@ export function apply(ctx: ClientContext): void {
     ctx.inject(['uiConversation'], (sub) => {
       const events = sub.uiConversation?.events
       if (events) sub.effect?.(() => events.register(longPiTurnDefinition), 'longpi: turn data')
+    })
+    ctx.inject(['uiWorkspace'], (sub) => {
+      const nav = sub.uiWorkspace
+      if (!nav) return
+      setWorkspaceOpener((id) => nav.openWorkspace(id))
+      sub.effect?.(() => () => setWorkspaceOpener(null), 'longpi: 健康对话 opener')
     })
     ctx.inject(['sidebarRightTabs'], (sub) => {
       const tabs = sub.sidebarRightTabs

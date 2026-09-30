@@ -14,6 +14,7 @@ import { Icon } from './icons.ts'
 import { IndicatorsTab } from './indicators.ts'
 import { RecordsStatusLine } from './journey-steps.ts'
 import { Onboarding, ONBOARDING_TITLES, stepOfStage } from './onboarding.ts'
+import { HealthChatButton } from './health-chat.ts'
 import { Overview } from './overview.ts'
 import { PlanTab } from './plan.ts'
 import { registerClientModules } from './modules.ts'
@@ -77,6 +78,7 @@ function Header(props: { journey: Journey | null; failed: boolean; refreshing: b
       journey ? h(RecordsStatusLine, { journey }) : props.failed ? null : h(Skeleton, { height: 18, width: 240 })),
     h('div', { className: 'lp-actions' },
       h(PeoplePicker),
+      h(HealthChatButton),
       h('button', { type: 'button', className: 'lp-linkbtn', onClick: props.onRefresh, disabled: props.refreshing, 'aria-busy': props.refreshing },
         h(Icon, { name: 'refresh', size: 14, className: props.refreshing ? 'lp-spin' : '' }), props.refreshing ? '刷新中' : '刷新')))
 }

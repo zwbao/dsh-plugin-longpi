@@ -8,6 +8,9 @@ import { resolveRootDir } from '../paths.ts'
 import { EMPTY_PROFILE, mergeProfile, normalizeProfile, writeProfile } from '../profile.ts'
 import { createManagedMember, ensureMemberLink, holderAuth, mintMemberLink, saveMemberLink } from './mirobody.ts'
 import { deleteLocalStore } from '../privacy/delete.ts'
+import { ensureLocalPairing } from '../mirobody-account.ts'
+
+const holderAuthOk = (root: string) => !('error_zh' in holderAuth(root))
 import { invalidateRecords } from '../records.ts'
 import { invalidateTracking } from '../tracking.ts'
 import { invalidateIndicators } from '../indicators.ts'
@@ -59,6 +62,7 @@ export function registerPeopleRoutes(deps: CoreDeps): void {
     if (!sex) return { ok: false, status: 400, error: '选择生理性别（很多计算按性别分别进行）。' }
     if (pasted && connectionUrlProblem(pasted)) return { ok: false, status: 400, error: connectionUrlProblem(pasted) }
     const root = resolveRootDir(deps.config().dataDir)
+    await ensureLocalPairing(root, { base: deps.config().mirobodyUrl ?? '', configuredUrl: deps.config().mcpUrl, force: !holderAuthOk(root) }).catch(() => undefined)
     const holder = holderAuth(root)
     // Mirobody first: a member that cannot be created there is not half-created here.
     let memberId = ''

@@ -65,6 +65,16 @@ Fixed after an independent review (2 P0, 10 P1, 12 P2):
   carry a port; git never prompts; a quoted session-log row counts as the person's own.
 - The skill's pulls land in the run folder, never in the person's own folder (its files are linked read-only).
 
+### LongPi no longer changes how DSH itself works
+- Onboarding is no longer a step in DSH's own first-run flow and never locks DSH (it set the whole app inert); it
+  opens from the 健康 page and closes with Escape or a click outside.
+- DSH's sidebar brand and its blank-session home are DSH's again (no LongPi greeting or pills on every workspace).
+- The 「健康对话」 workspace is added once next to existing workspaces (before, only on an empty DSH, so an existing
+  DSH never got one); the 健康 page has 去健康对话.
+- Mirobody on this computer is paired automatically (a local account registered and renewed in the background,
+  credentials 0600 in the LongPi home); no email, password or address in onboarding. The manual form stays in
+  settings under 高级. Remote addresses and hand-made links are never paired over.
+
 ## 0.6.3
 
 给使用者

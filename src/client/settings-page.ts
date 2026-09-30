@@ -73,7 +73,9 @@ export function LongPiSettings(props: SettingsPageProps): React.ReactElement {
       props.openPage ? h('button', { type: 'button', className: 'lp-row-link', onClick: () => { props.close?.(); props.openPage?.() } }, '打开健康页 →') : null),
     notice ? h('div', { className: 'lp-notice-slot' }, notice) : null,
     h(Block, { id: 'lp-set-followup', title: '提醒', hint: '默认关。这个窗口关了，就不会响。' }, h(FollowupPanel, { onNotice: notify })),
-    h(Block, { id: 'lp-set-connection', title: '数据连接' }, h(ConnectionPanel, { idPrefix: 'lp-set-conn' })),
+    // Paired automatically; the manual form is for whoever installs LongPi against another Mirobody.
+    h(Block, { id: 'lp-set-connection', title: '数据连接' },
+      h('details', null, h('summary', null, '高级：手动连接（一般不需要）'), h(ConnectionPanel, { idPrefix: 'lp-set-conn' }))),
     h(Block, { id: 'lp-set-science', title: '一起研究' }, h(ScienceSwitch)),
     h(Block, { id: 'lp-set-privacy', title: '隐私与数据' }, h(Privacy), ...settingsSections().map((section) => h(section.Component, { key: section.id }))),
     h('section', { className: 'lp-set-block', id: 'lp-set-methods' },

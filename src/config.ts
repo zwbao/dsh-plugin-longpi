@@ -6,6 +6,8 @@ export interface Config {
   mirobodyPluginHome: string
   pythonBin: string
   mirobodyHome: string
+  /** The Mirobody on this computer that LongPi pairs itself with (no address shown to the person). */
+  mirobodyUrl: string
   mcpUrl: string
   mcpToken: string
   member: string
@@ -77,6 +79,7 @@ export const Config: Schema<Config> = Schema.object({
   mirobodyPluginHome: Schema.string().default(''),
   pythonBin: Schema.string().default(''),
   mirobodyHome: Schema.string().default(''),
+  mirobodyUrl: Schema.string().default('http://127.0.0.1:18060'),
   mcpUrl: Schema.string().default(''),
   mcpToken: Schema.string().default(''),
   member: Schema.string().default(''),

@@ -97,13 +97,18 @@ try {
   assert.deepEqual(await mod.bootstrapWorkspace(emptied, { dataDir, enabled: true }), { status: 'done_before' })
   assert.deepEqual(emptied.created, [])
 
-  // a registry that already has a workspace is never touched
+  // the person's own workspaces stay as they are; 健康对话 is added next to them
   const busyDir = tempDir('busy')
-  const busy = fakeRegistry([{ id: 'mine', path: '/somewhere' }])
-  assert.deepEqual(await mod.bootstrapWorkspace(busy, { dataDir: busyDir, enabled: true }), { status: 'not_empty' })
-  assert.deepEqual(busy.created, [])
-  assert.equal(existsSync(join(busyDir, mod.WORKSPACE_MARKER)), false)
-  assert.equal(existsSync(join(busyDir, mod.WORKSPACE_DIR)), false)
+  const busy = fakeRegistry([{ id: 'mine', path: '/somewhere', title: 'lujinhe' }])
+  assert.equal((await mod.bootstrapWorkspace(busy, { dataDir: busyDir, enabled: true })).status, 'created')
+  assert.equal(busy.created.length, 1)
+  assert.equal(busy.created[0].title, mod.WORKSPACE_TITLE)
+
+  // one already titled 健康对话 (or 健康): not added again
+  const hasDir = tempDir('has')
+  const has = fakeRegistry([{ id: 'h', path: '/h', title: '健康对话' }])
+  assert.deepEqual(await mod.bootstrapWorkspace(has, { dataDir: hasDir, enabled: true }), { status: 'not_empty' })
+  assert.deepEqual(has.created, [])
 
   // off in the config, or no registry: nothing
   const offDir = tempDir('off')
@@ -161,7 +166,7 @@ try {
   assert.ok(await until(() => logs.some(([level, , message]) => level === 'warn' && message.includes('disk full'))), 'the failure is logged')
   warnHost.dispose()
 
-  console.log('workspace ok (created once as 健康对话, marker kept, busy registry untouched, failures logged)')
+  console.log('workspace ok (created once as 健康对话, marker kept, added next to existing workspaces, not twice, failures logged)')
 } finally {
   for (const dir of temp) rmSync(dir, { recursive: true, force: true })
 }
