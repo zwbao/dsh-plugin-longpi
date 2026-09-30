@@ -1,0 +1,57 @@
+// Installer pieces added for the analyst bridge, run from install.sh itself (sourced without main):
+// the LOINC bundle location for Mirobody >= 1.5.1, the home-layer session-log row, installing the skill.
+
+import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, readFileSync, readlinkSync, writeFileSync, statSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+
+const repo = new URL('..', import.meta.url).pathname
+const tmp = (p) => mkdtempSync(join(tmpdir(), `longpi-inst-${p}-`))
+const fns = join(tmp('fns'), 'fns.sh')
+writeFileSync(fns, readFileSync(join(repo, 'install.sh'), 'utf8').replace(/\nmain "\$@"\s*$/, '\n'))
+const sh = (script, env = {}) => spawnSync('bash', ['-c', `set -eu; LOG=/dev/null; ZH=0; B= G= Y= R= N=; . "${fns}"; ${script}`], { encoding: 'utf8', env: { ...process.env, ...env } })
+
+// LOINC: res/loinc/ when the checkout says so, res/ for an older one
+{
+  const newer = tmp('mb-new'); mkdirSync(join(newer, 'mirobody', 'res', 'loinc'), { recursive: true })
+  const older = tmp('mb-old'); mkdirSync(join(older, 'mirobody', 'res'), { recursive: true })
+  assert.equal(sh(`loinc_bundle_path "${newer}"`).stdout, `${newer}/mirobody/res/loinc/fhir_loinc_bundle.tar.gz`)
+  assert.equal(sh(`loinc_bundle_path "${older}"`).stdout, `${older}/mirobody/res/fhir_loinc_bundle.tar.gz`)
+  const attrs = tmp('mb-attr'); writeFileSync(join(attrs, '.gitattributes'), 'mirobody/res/loinc/*.tar.gz filter=lfs\n')
+  assert.match(sh(`loinc_bundle_path "${attrs}"`).stdout, /res\/loinc\//)
+}
+
+// session log: written once, idempotent, a row the person wrote is kept
+{
+  const home = tmp('dsh')
+  const r = sh(`ensure_session_log_off "${home}" python3`)
+  assert.equal(r.status, 0, r.stderr)
+  const text = readFileSync(join(home, 'cordis.patch.yml'), 'utf8')
+  assert.match(text, /- id: session-log-deepseek\n {2}config:\n {4}enabled: false/)
+  assert.equal(statSync(join(home, 'cordis.patch.yml')).mode & 0o777, 0o600)
+  sh(`ensure_session_log_off "${home}" python3`)
+  assert.equal(readFileSync(join(home, 'cordis.patch.yml'), 'utf8'), text, 'idempotent')
+  const own = tmp('dsh-own')
+  const mine = '- id: other\n  config: {}\n- id: session-log-deepseek\n  config:\n    enabled: true\n'
+  writeFileSync(join(own, 'cordis.patch.yml'), mine)
+  sh(`ensure_session_log_off "${own}" python3`)
+  assert.equal(readFileSync(join(own, 'cordis.patch.yml'), 'utf8'), mine, 'the person\'s own row is kept')
+}
+
+// the skill: cloned into the LongPi home and linked into DSH_HOME/skills
+{
+  const src = tmp('analyst-src')
+  mkdirSync(join(src, 'skills', 'longevity-analyst'), { recursive: true })
+  writeFileSync(join(src, 'skills', 'longevity-analyst', 'SKILL.md'), '---\nname: longevity-analyst\n---\n')
+  const git = (args) => spawnSync('git', args, { cwd: src, encoding: 'utf8' })
+  git(['init', '-q']); git(['add', '.']); git(['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'x'])
+  const home = tmp('dsh2'); const lp = tmp('lp')
+  const r = sh(`longpi_home="${lp}"; install_analyst "${src}" "${home}"`)
+  assert.equal(r.status, 0, r.stderr + r.stdout)
+  assert.equal(readlinkSync(join(home, 'skills', 'longevity-analyst')), join(lp, 'longevity-analyst-skill', 'skills', 'longevity-analyst'))
+  const bad = sh(`longpi_home="${tmp('lp2')}"; install_analyst "${tmp('empty')}" "${home}"`)
+  assert.notEqual(bad.status, 0, 'a source without the skill fails')
+}
+console.log('installer-bridge ok')

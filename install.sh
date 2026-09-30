@@ -46,6 +46,7 @@ main() {
   local profile="web"
   local plugin_spec="github:zwbao/dsh-plugin-longpi"
   local mcp_url="" mcp_token="" set_mcp=0 with_mirobody=0
+  local mirobody_native=0 with_analyst=0 analyst_repo="${LONGPI_ANALYST_REPO:-https://github.com/zwbao/longevity-analyst-skill}"
   local mirror_mode="${LONGPI_MIRROR:-}"
 
   case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in zh*) ZH=1 ;; *) ZH=0 ;; esac
@@ -62,6 +63,10 @@ main() {
       --mcp-token) mcp_token="$(arg "$@")"; shift 2 ;;
       --mcp-token=*) mcp_token="${1#*=}"; shift ;;
       --with-mirobody) with_mirobody=1; shift ;;
+      --mirobody-native) with_mirobody=1; mirobody_native=1; shift ;;
+      --with-analyst) with_analyst=1; shift ;;
+      --analyst-repo) analyst_repo="$(arg "$@")"; with_analyst=1; shift 2 ;;
+      --analyst-repo=*) analyst_repo="${1#*=}"; with_analyst=1; shift ;;
       --mirror) mirror_mode="$(arg "$@")"; shift 2 ;;
       --mirror=*) mirror_mode="${1#*=}"; shift ;;
       --plugin) plugin_spec="$(arg "$@")"; shift 2 ;;
@@ -261,11 +266,15 @@ main() {
         fail_log "The LOINC bundle is still a Git LFS pointer. Install git-lfs, or set LONGPI_LOINC_URL to a real fhir_loinc_bundle.tar.gz." \
                  "LOINC 词表仍是 Git LFS 指针。请安装 git-lfs，或把 LONGPI_LOINC_URL 设成真正的 fhir_loinc_bundle.tar.gz。"
       fi
+      if [ "$mirobody_native" = 1 ]; then
+        mirobody_native_start "$mirobody_dir" "$mirobody_base" "$set_mcp"
+      else
       docker_mirror_hint
       info "Starting Mirobody with Docker; the first run takes a few minutes." "正在用 Docker 启动 Mirobody，首次运行需要几分钟。"
       (cd "$mirobody_dir" && ./deploy.sh) </dev/null >>"$LOG" 2>&1 \
         || fail_log "Mirobody's deploy.sh failed." "Mirobody 的 deploy.sh 执行失败。"
       wait_for "$mirobody_base/" 300 || fail_log "Mirobody did not answer at $mirobody_base within 5 minutes." "Mirobody 在 5 分钟内没有在 $mirobody_base 响应。"
+      fi
       ok "Mirobody is running at $mirobody_base" "Mirobody 已在 $mirobody_base 运行"
     fi
     if [ "$set_mcp" = 0 ]; then
@@ -276,6 +285,17 @@ main() {
       ok "Connected the demo account (you@mirobody.ai)" "已连接演示账号（you@mirobody.ai）"
     fi
   fi
+
+  # 5b. Deep analysis skill (optional) ------------------------------------
+  if [ "$with_analyst" = 1 ]; then
+    step "Installing the deep analysis skill (longevity-analyst)" "安装深度分析技能（longevity-analyst）"
+    install_analyst "$analyst_repo" "$dsh_home" \
+      || fail_log "Could not install longevity-analyst from $analyst_repo (a private repository needs git access)." \
+                  "无法从 $analyst_repo 安装 longevity-analyst（私有仓库需要 git 访问权限）。"
+  fi
+
+  # Health data never goes into DeepSeek's session logs: the home layer turns the upload off for every profile.
+  ensure_session_log_off "$dsh_home" "$py"
 
   # 6. Configuration -------------------------------------------------------
   step "Writing the configuration" "写入配置"
@@ -364,6 +384,11 @@ Options
   --mcp-url URL      Connect a Mirobody record server (its personal MCP address)
   --mcp-token TOKEN  Access token, when the MCP address carries no secret
   --with-mirobody    Deploy Mirobody locally with Docker (demo data) and connect it
+  --mirobody-native  Like --with-mirobody, but only Postgres runs in Docker; Mirobody
+                     itself runs from a local venv (for networks where the app image
+                     does not build). Logs and pids in the LongPi home.
+  --with-analyst     Also install the deep analysis skill (longevity-analyst) into
+                     DSH_HOME/skills; --analyst-repo URL for another source
   --mirror MODE      cn: mainland mirrors. auto: probe GitHub, npm, PyPI and
                      Docker Hub (short timeout) and mirror only what failed.
                      Omit the flag to keep the public defaults.
@@ -380,7 +405,7 @@ Commands
   status             Pinned skillsVersion against the running catalog. Exit 2
                      when a result cannot be labelled verified.
 
-Environment: DSH_HOME (default ~/.dsh), LONGPI_HOME, LONGPI_MIROBODY_URL, LONGPI_MIRROR.
+Environment: DSH_HOME (default ~/.dsh), LONGPI_HOME, LONGPI_MIROBODY_URL, LONGPI_MIRROR, LONGPI_ANALYST_REPO.
 Mainland mirrors (only when --mirror cn, or auto decides a host is down):
   LONGPI_NPM_REGISTRY       default https://registry.npmmirror.com
   LONGPI_PIP_INDEX          default https://mirrors.cloud.tencent.com/pypi/simple
@@ -391,9 +416,11 @@ Mainland mirrors (only when --mirror cn, or auto decides a host is down):
   LONGPI_SKILLS_SHA256      sha256 of a downloaded skills tarball (required before install)
   LONGPI_MIROBODY_SOURCE    git URL, tarball or local directory of thetahealth/mirobody
   LONGPI_LOINC_URL          fhir_loinc_bundle.tar.gz when git-lfs cannot pull it
+                            (goes to mirobody/res/loinc/ for Mirobody >= 1.5.1)
   LONGPI_GITHUB_MIRROR      prefix tried before the built-in archive proxies,
                             e.g. https://ghfast.top/https://github.com
 Running the installer again updates every part and keeps existing settings.
+DeepSeek session-log upload is turned off in DSH_HOME/cordis.patch.yml unless a row for it already exists.
 EOF
 }
 
@@ -999,8 +1026,11 @@ try:
     import mirobody
 except Exception:
     sys.exit(0)
-p = os.path.join(os.path.dirname(os.path.abspath(mirobody.__file__)), "res", "fhir_loinc_bundle.tar.gz")
-if not os.path.isfile(p):
+root = os.path.dirname(os.path.abspath(mirobody.__file__))
+# Mirobody 1.5.1 moved the bundle to res/loinc/; older wheels keep it in res/.
+p = next((c for c in (os.path.join(root, "res", "loinc", "fhir_loinc_bundle.tar.gz"),
+                      os.path.join(root, "res", "fhir_loinc_bundle.tar.gz")) if os.path.isfile(c)), "")
+if not p:
     sys.exit(0)
 raw = open(p, "rb").read(24)
 if raw.startswith(b"version https://git-lfs"):
@@ -1009,9 +1039,20 @@ print(p)
 ' </dev/null 2>>"$LOG" || true
 }
 
+loinc_bundle_path() {
+  # Mirobody 1.5.1 moved the bundle to mirobody/res/loinc/ (its .gitattributes and _bundle.py say so);
+  # an older checkout keeps it in mirobody/res/.
+  if [ -d "$1/mirobody/res/loinc" ] || grep -q "res/loinc/" "$1/.gitattributes" 2>/dev/null; then
+    printf '%s' "$1/mirobody/res/loinc/fhir_loinc_bundle.tar.gz"
+  else
+    printf '%s' "$1/mirobody/res/fhir_loinc_bundle.tar.gz"
+  fi
+}
+
 ensure_loinc() {
   local dir="$1" py="$2"
-  local bundle="$dir/mirobody/res/fhir_loinc_bundle.tar.gz" wheel
+  local bundle wheel
+  bundle="$(loinc_bundle_path "$dir")"
   if bundle_ready "$bundle"; then
     return 0
   fi
@@ -1044,6 +1085,88 @@ ensure_loinc() {
     fi
   fi
   return 1
+}
+
+mirobody_native_start() {
+  # Postgres in its container, Mirobody itself from a local venv: the app image does not build behind
+  # some networks, and `thetahealth/mirobody` is not always published for the checkout's version.
+  local dir="$1" base="$2" has_mcp="$3"
+  local venv="$longpi_home/.mirobody-app" envfile="$longpi_home/mirobody-native.env" port name
+  port="${base##*:}"; port="${port%%/*}"
+  (
+    cd "$dir" && umask 077 && touch .env && chmod 600 .env
+    grep -q '^ENV=' .env || printf 'ENV=localdb\n' >> .env
+    grep -q '^MIROBODY_ENV_FILE=' .env || printf 'MIROBODY_ENV_FILE=./.env\n' >> .env
+    for name in PG_PASSWORD PG_ENCRYPTION_KEY CONFIG_ENCRYPTION_KEY LOG_ENCRYPTION_KEY JWT_KEY; do
+      grep -q "^${name}=" .env || printf '%s=%s\n' "$name" "$(openssl rand -hex 32)" >> .env
+    done
+    docker compose up -d pg
+  ) </dev/null >>"$LOG" 2>&1 || fail_log "Could not start Mirobody's Postgres container." "无法启动 Mirobody 的 Postgres 容器。"
+  if [ ! -x "$venv/bin/mirobody" ]; then
+    ensure_uv || die "--mirobody-native needs uv to build $venv." "--mirobody-native 需要 uv 来创建 ${venv}。"
+    uv venv --python 3.12 "$venv" </dev/null >>"$LOG" 2>&1 || fail_log "Could not create $venv." "无法创建 ${venv}。"
+    run_uv_pip "$venv/bin/python" -e "$dir" || fail_log "Could not install Mirobody into $venv." "无法把 Mirobody 装进 ${venv}。"
+  fi
+  (
+    umask 077
+    {
+      printf 'ENV=localdb\nPYTHONUNBUFFERED=1\nHTTP_HOST=127.0.0.1\nHTTP_PORT=%s\n' "$port"
+      # The demo account is seeded only when no --mcp-url was given (the installer connects it then).
+      if [ "$has_mcp" = 1 ]; then printf 'SEED_DEMO_DATA=false\n'; else printf 'SEED_DEMO_DATA=true\n'; fi
+      printf 'PG_HOST=127.0.0.1\nPG_PORT=%s\nPG_USER=holistic_user\nPG_DBNAME=holistic_db\n' "${PG_HOST_PORT:-18062}"
+      printf 'PG_PASSWORD=%s\n' "$(sed -n 's/^PG_PASSWORD=//p' "$dir/.env" | head -n 1)"
+    } > "$envfile"
+  )
+  chmod 600 "$envfile"
+  for name in serve worker; do
+    if [ -f "$longpi_home/mirobody-$name.pid" ] && kill -0 "$(cat "$longpi_home/mirobody-$name.pid")" 2>/dev/null; then
+      continue
+    fi
+    (cd "$dir" && set -a && . "$envfile" && set +a && nohup "$venv/bin/mirobody" "$name" >"$longpi_home/mirobody-$name.log" 2>&1 & echo $! > "$longpi_home/mirobody-$name.pid") </dev/null
+  done
+  wait_for "$base/" 300 || fail_log "Mirobody (native) did not answer at $base within 5 minutes; see $longpi_home/mirobody-serve.log." \
+                                     "Mirobody（原生）在 5 分钟内没有在 $base 响应，见 $longpi_home/mirobody-serve.log。"
+}
+
+install_analyst() {
+  # The skill goes where dsh discovers skills; a checkout is kept in the LongPi home and linked.
+  local repo="$1" home="$2" src="$longpi_home/longevity-analyst-skill" target
+  if [ -d "$src/.git" ]; then
+    (cd "$src" && git pull --ff-only) </dev/null >>"$LOG" 2>&1 || warn "Could not update $src; keeping the copy there." "无法更新 ${src}，保留现有版本。"
+  else
+    git clone --depth 1 "$repo" "$src" </dev/null >>"$LOG" 2>&1 || return 1
+  fi
+  [ -f "$src/skills/longevity-analyst/SKILL.md" ] || return 1
+  mkdir -p "$home/skills"
+  target="$home/skills/longevity-analyst"
+  if [ -L "$target" ] || [ ! -e "$target" ]; then
+    ln -sfn "$src/skills/longevity-analyst" "$target"
+  else
+    warn "$target exists and is not a link; left as it is." "$target 已存在且不是链接，未改动。"
+  fi
+  ok "$(pretty "$target") → $(pretty "$src")" "$(pretty "$target") → $(pretty "$src")"
+}
+
+ensure_session_log_off() {
+  # dsh's session-log-deepseek would attach the conversation (health and genetic data) to model requests.
+  # Its own default is off; this row keeps it off whatever a profile says. A row the person wrote is kept.
+  "$2" - "$1/cordis.patch.yml" <<'PY' >>"$LOG" 2>&1 || warn "Could not check the session-log setting in $1/cordis.patch.yml." "无法检查 $1/cordis.patch.yml 里的会话日志设置。"
+import os, re, sys
+path = sys.argv[1]
+text = open(path, encoding="utf-8").read() if os.path.exists(path) else ""
+if re.search(r"(?m)^\s*-\s*id:\s*session-log-deepseek\s*$", text):
+    sys.exit(0)
+block = ("# >>> dsh-plugin-longpi session log >>>\n"
+         "# Health data must not be uploaded with DeepSeek session logs.\n"
+         "- id: session-log-deepseek\n  config:\n    enabled: false\n"
+         "# <<< dsh-plugin-longpi session log <<<\n")
+os.makedirs(os.path.dirname(path), exist_ok=True)
+tmp = path + ".tmp"
+with open(tmp, "w", encoding="utf-8") as fh:
+    fh.write((text.rstrip("\n") + "\n" if text.strip() else "") + block)
+os.chmod(tmp, 0o600)
+os.replace(tmp, path)
+PY
 }
 
 docker_mirror_hint() {
