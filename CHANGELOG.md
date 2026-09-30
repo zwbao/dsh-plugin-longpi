@@ -22,7 +22,7 @@ English
 
 Fixed after an independent review (2 P0, 10 P1, 12 P2):
 - Start needs longevity-analyst >= 0.7.0 with `la.py export` and `mirobody pull`; the installer clones the release
-  tag (`LONGPI_ANALYST_REF`, default v0.7.0). A run that stopped (no progress for 6 h) no longer locks the tab; it can
+  tag (`LONGPI_ANALYST_REF`, default v0.7.1). A run that stopped (no progress for 6 h) no longer locks the tab; it can
   be abandoned. A care-circle member is never analysed from the account holder's data.
 - 接受方案 carries the run id and the plan's key the person read; a plan that changed since is refused (409).
 - Import: the run's own real workspace only (no link out of the analyses root), regular files only (a FIFO would

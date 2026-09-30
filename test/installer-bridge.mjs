@@ -48,7 +48,7 @@ const sh = (script, env = {}) => spawnSync('bash', ['-c', `set -eu; LOG=/dev/nul
   mkdirSync(join(src, 'skills', 'longevity-analyst'), { recursive: true })
   writeFileSync(join(src, 'skills', 'longevity-analyst', 'SKILL.md'), '---\nname: longevity-analyst\n---\n')
   const git = (args) => spawnSync('git', args, { cwd: src, encoding: 'utf8' })
-  git(['init', '-q']); git(['add', '.']); git(['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'x']); git(['tag', 'v0.7.0'])
+  git(['init', '-q']); git(['add', '.']); git(['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'x']); git(['tag', 'v0.7.1'])
   const home = tmp('dsh2'); const lp = tmp('lp')
   const r = sh(`longpi_home="${lp}"; install_analyst "${src}" "${home}"`)
   assert.equal(r.status, 0, r.stderr + r.stdout)

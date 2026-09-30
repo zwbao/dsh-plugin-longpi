@@ -1144,7 +1144,7 @@ mirobody_native_start() {
 install_analyst() {
   # The skill goes where dsh discovers skills; a checkout is kept in the LongPi home and linked.
   # Pinned to a release tag: the plugin needs the skill's la-export/1 and `la.py mirobody pull`.
-  local repo="$1" home="$2" src="$longpi_home/longevity-analyst-skill" target ref="${LONGPI_ANALYST_REF:-v0.7.0}"
+  local repo="$1" home="$2" src="$longpi_home/longevity-analyst-skill" target ref="${LONGPI_ANALYST_REF:-v0.7.1}"
   if [ -d "$src/.git" ]; then
     (cd "$src" && GIT_TERMINAL_PROMPT=0 git fetch --depth 1 origin "refs/tags/$ref:refs/tags/$ref" && git checkout -q "$ref") </dev/null >>"$LOG" 2>&1 \
       || warn "Could not update $src to $ref; keeping the copy there." "无法把 $src 更新到 ${ref}，保留现有版本。"
