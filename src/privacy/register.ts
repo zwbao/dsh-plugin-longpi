@@ -19,6 +19,7 @@ const GATE_TOOLS = new Set([
   'read_person_memory', 'remember_for_me', 'read_care_navigation', 'prepare_doctor_brief', 'log_care_visit',
   'save_self_measurement', 'record_medication_statement', 'save_personal_profile',
   'query_health_indicators', 'query_medications', 'query_genetic_data', 'resolve_reading',
+  'run_deep_analysis', 'import_analysis', 'read_deep_analysis',
 ])
 
 const DRAFT_TOOLS = new Set(['draft_intervention_plan', 'read_intervention_plan', 'review_interventions'])

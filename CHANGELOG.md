@@ -20,6 +20,25 @@ English
 - Installer: LOINC bundle under mirobody/res/loinc/ (Mirobody >= 1.5.1); `--mirobody-native`; `--with-analyst`
   [`--analyst-repo`]; the home cordis patch keeps session-log-deepseek off unless the person wrote a row for it.
 
+Fixed after an independent review (2 P0, 10 P1, 12 P2):
+- Start needs longevity-analyst >= 0.7.0 with `la.py export` and `mirobody pull`; the installer clones the release
+  tag (`LONGPI_ANALYST_REF`, default v0.7.0). A run that stopped (no progress for 6 h) no longer locks the tab; it can
+  be abandoned. A care-circle member is never analysed from the account holder's data.
+- 接受方案 carries the run id and the plan's key the person read; a plan that changed since is refused (409).
+- Import: the run's own real workspace only (no link out of the analyses root), regular files only (a FIFO would
+  block the server), the report read once and hashed from the same bytes, every element's shape checked and unknown
+  fields dropped, the result swapped in whole; the stored report has every link, script, form and external load
+  removed; items get LongPi ids (check-ins never cross analyses); re-importing keeps an accepted plan accepted.
+- Consent: the three tools are held by the consent gate; nothing of the analysis is shown, read or imported while
+  pipl_sensitive or data_flow_deepseek is not granted. Deleting the local store removes the run folders.
+- The tab shows every error and why starting is blocked; the report frame reloads on a new import.
+- Mirobody schema: the old/new choice is kept per server address and switches both ways; raw series page at
+  Mirobody 1.5.3's 50-row cap; windows longer than 1800 days are read in pieces (1.5.3 clamps at 43920 h), and a
+  clamped window is reported as cut.
+- Installer: openssl required and empty secrets replaced; the pid file holds Mirobody's own pid; the address must
+  carry a port; git never prompts; a quoted session-log row counts as the person's own.
+- The skill's pulls land in the run folder, never in the person's own folder (its files are linked read-only).
+
 ## 0.6.3
 
 给使用者

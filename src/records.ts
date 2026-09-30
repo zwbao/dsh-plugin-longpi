@@ -207,7 +207,26 @@ interface ToolRead {
  * old words; this translates them, and falls back to the old words once for a server whose
  * refusal says it does not accept `view`.
  */
-let legacyQuerySchema = false
+/** Per server (keyed by the MCP address): true when it only knows the old words. Switching servers never carries it over. */
+const legacyQuerySchema = new Map<string, boolean>()
+/** Mirobody 1.5.3 returns at most 50 raw rows per indicator (ROW_CAP); older servers took `limit`. */
+const VIEW_ROW_CAP = 50
+/** Mirobody 1.5.3's longest window per call is 43920 h (1830 days); pieces stay under it. */
+const VIEW_MAX_DAYS = 1800
+
+function spanDays(start: string, end: string): number {
+  const a = Date.parse(`${start.slice(0, 10)}T00:00:00Z`)
+  const b = Date.parse(`${end.slice(0, 10)}T00:00:00Z`)
+  return Number.isFinite(a) && Number.isFinite(b) ? Math.round((b - a) / 86_400_000) + 1 : 0
+}
+
+function isLegacy(config: Pick<Config, 'mcpUrl'>): boolean {
+  return legacyQuerySchema.get(config.mcpUrl.trim()) === true
+}
+
+function rawPageLimit(config: Pick<Config, 'mcpUrl'>): number {
+  return isLegacy(config) ? RAW_LIMIT : VIEW_ROW_CAP
+}
 
 export function queryArgsForView(args: Record<string, unknown>): Record<string, unknown> {
   // `member` is kept: a server that cannot read a care-circle member must refuse, never answer
@@ -222,22 +241,24 @@ export function queryArgsForView(args: Record<string, unknown>): Record<string, 
   return { ...rest, view }
 }
 
-function refusesView(error: string): boolean {
+function acceptedWords(error: string): string | null {
   const accepted = /Accepted:\s*([^."]*)/i.exec(error)
-  return /unknown argument/i.test(error) && !!accepted && !/\bview\b/.test(accepted[1] ?? '')
+  return /unknown argument/i.test(error) && accepted ? accepted[1] ?? '' : null
 }
 
 /** Test hook: forget what the last server accepted. */
 export function resetQuerySchema(): void {
-  legacyQuerySchema = false
+  legacyQuerySchema.clear()
 }
 
 async function readTool(config: Config, name: string, rawArgs: Record<string, unknown>, secrets: readonly string[]): Promise<ToolRead> {
   let lastError = 'read failed'
   let lastKind: ToolRead['kind'] = 'internal'
   const translate = name === 'query_health_indicators'
+  let switched = false
   for (let attempt = 1; attempt <= READ_ATTEMPTS; attempt += 1) {
-    const args = translate && !legacyQuerySchema ? queryArgsForView(rawArgs) : rawArgs
+    const legacy = isLegacy(config)
+    const args = translate && !legacy ? queryArgsForView(rawArgs) : rawArgs
     const call = await withReadSlot(() => callMcpTool({
       url: config.mcpUrl,
       token: config.mcpToken,
@@ -245,10 +266,15 @@ async function readTool(config: Config, name: string, rawArgs: Record<string, un
       args,
       timeoutMs: config.timeoutMs,
     }))
-    if (call.success === false && translate && !legacyQuerySchema && refusesView(call.error || '')) {
-      legacyQuerySchema = true                      // an older Mirobody: ask again in its words
-      attempt -= 1
-      continue
+    const accepted = call.success === false && translate ? acceptedWords(call.error || '') : null
+    if (accepted !== null && !switched) {
+      const knowsView = /\bview\b/.test(accepted)
+      if (legacy === knowsView) {                   // the server speaks the other schema: ask again once in its words
+        legacyQuerySchema.set(config.mcpUrl.trim(), !knowsView)
+        switched = true
+        attempt -= 1
+        continue
+      }
     }
     if (call.success === false) {
       lastError = redact(call.error || 'read failed', secrets)
@@ -945,6 +971,32 @@ export async function loadSeries(
   const wanted = [...new Set(names.map((name) => name.trim()).filter((name) => name && !name.endsWith(SELF_SUFFIX)))]
   if (wanted.length === 0) return { series: {}, truncated: false, failed: [], cut: [] }
   if (!config.mcpUrl.trim()) return { series: {}, truncated: false, error: 'mcpUrl is not set', failed: wanted, cut: [] }
+  // Mirobody 1.5.3 clamps one call to five years (43920 h): a longer window is read in pieces, newest first.
+  if (!isLegacy(config) && spanDays(options.start, options.end) > VIEW_MAX_DAYS) {
+    const merged: SeriesResult = { series: {}, truncated: false, failed: [], cut: [] }
+    let end = options.end
+    while (end >= options.start) {
+      const start = [addDays(end, -(VIEW_MAX_DAYS - 1)), options.start].sort().at(-1) ?? options.start
+      const part = await loadSeries(config, wanted, { ...options, start, end })
+      if (part.error) merged.error ??= part.error
+      merged.failed.push(...part.failed)
+      merged.cut.push(...part.cut)
+      // A failed piece means the older pieces would fail the same way, each after a timeout: stop here.
+      if (part.failed.length > 0) break
+      for (const [name, series] of Object.entries(part.series)) {
+        const into = merged.series[name]
+        if (!into) { merged.series[name] = { ...series, points: [...series.points], ...(series.other ? { other: [...series.other] } : {}) }; continue }
+        for (const point of series.points) addPoint(into, point)
+        if (series.other) into.other = [...(into.other ?? []), ...series.other]
+      }
+      end = addDays(start, -1)
+    }
+    merged.failed = [...new Set(merged.failed)]
+    merged.cut = [...new Set(merged.cut)].filter((name) => !merged.failed.includes(name))
+    merged.truncated = merged.cut.length > 0
+    for (const series of Object.values(merged.series)) series.points.sort((a, b) => a.time.localeCompare(b.time))
+    return merged
+  }
   const key = cacheKey(config, 'series', JSON.stringify([wanted, options]))
   return cached(key, async () => {
     const out: SeriesResult = { series: {}, truncated: false, failed: [], cut: [] }
@@ -993,7 +1045,8 @@ export async function loadSeries(
         rows.set(filed.indicator, [...(rows.get(filed.indicator) ?? []), filed])
       }
       // A series that filled the limit lost its oldest readings: read those again, a window ending earlier each time.
-      const full = options.resolution === 'raw' ? chunk.filter((name) => (rows.get(name)?.length ?? 0) >= RAW_LIMIT) : []
+      const pageLimit = rawPageLimit(config)
+      const full = options.resolution === 'raw' ? chunk.filter((name) => (rows.get(name)?.length ?? 0) >= pageLimit) : []
       const stillCut: string[] = []
       for (const name of full) {
         const older = await readOlder(config, name, options, rows.get(name) ?? [])
@@ -1055,6 +1108,8 @@ export async function loadSeries(
       // cut on its own stays cut. PhenoAge's history uses this path.
       const marked = table.meta.truncated || (payload && typeof payload === 'object' && (payload as { truncated?: unknown }).truncated === true)
         || textOf(payload).includes('\n… cut at ')
+        // Mirobody 1.5.3 clamps a window longer than its maximum and says so in a note: older readings are missing.
+        || table.notes.some((note) => /window clamped/i.test(note)) || /window clamped/i.test(textOf(payload))
       if (marked && full.length === 0 && chunk.length > 1) {
         for (const name of chunk) delete out.series[name]
         for (const name of chunk) {
@@ -1134,7 +1189,7 @@ async function readOlder(
     const table = tableOf(call.payload)
     if (!table || table.error) return null
     const next = table.rows.filter((row) => (row.indicator ?? '').trim() === name && rowDate(row) <= oldest)
-    if (next.length < RAW_LIMIT) {
+    if (next.length < rawPageLimit(config)) {
       const all = [...kept, ...next]
       return Number.isInteger(total) && total > 0 && all.length !== total ? null : all
     }

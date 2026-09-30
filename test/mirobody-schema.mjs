@@ -42,6 +42,24 @@ for (const schema of ['view', 'legacy']) {
   }
 }
 
+// two servers in one process: each is asked in its own words, whichever was seen first
+mod.resetQuerySchema()
+{
+  const legacy = await startFakeMirobody({ schema: 'legacy' })
+  const current = await startFakeMirobody({ schema: 'view' })
+  try {
+    for (const server of [legacy, current, legacy]) {
+      const config = configOf(server.url)
+      mod.invalidateRecords()
+      const snap = await mod.loadRecords(config, config.dataDir, '/nonexistent/plugin')
+      assert.equal(snap.record_status, 'ok', snap.record_error)
+      assert.ok(snap.indicators.some((row) => row.value !== '' && row.value != null))
+    }
+  } finally {
+    await legacy.close(); await current.close()
+  }
+}
+
 // a care-circle member on a server that cannot read one: a refusal, never the holder's record
 mod.resetQuerySchema()
 {

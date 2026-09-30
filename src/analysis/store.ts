@@ -1,20 +1,26 @@
 // M12 deep analysis: runs of the longevity-analyst skill and the one imported result.
 //
-// A run is a folder under ~/longpi/analyses (data/ + ws/). The skill runs in a dsh session (it asks for
-// approvals and dispatches its own subagents there); LongPi only prepares the run, shows its stage
-// progress read from the workspace, and imports deliver/la-export.json when the report is done.
-// The export is written by an LLM-driven pipeline, so it is checked like any outside file: schema,
-// size, the report path inside the run's workspace and its hash.
+// A run is a folder under ~/longpi/analyses/<id> (data/ + ws/). The skill runs in a dsh session (it asks for
+// approvals and dispatches its own subagents there); LongPi only prepares the run, shows its stage progress read
+// from the workspace, and imports deliver/la-export.json when the report is done.
+// The export is written by an LLM-driven pipeline, so it is checked like any outside file: the workspace is the
+// run's own real folder, every file is a regular file read once, every element has the expected shape, and the
+// report is stripped of every link before it is stored.
 
-import { createHash } from 'node:crypto'
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync, chmodSync } from 'node:fs'
+import { createHash, randomBytes } from 'node:crypto'
+import {
+  existsSync, lstatSync, mkdirSync, readFileSync, readdirSync, realpathSync, renameSync, rmSync, statSync, symlinkSync,
+  writeFileSync, chmodSync,
+} from 'node:fs'
 import { homedir } from 'node:os'
-import { join, resolve, sep } from 'node:path'
+import { join } from 'node:path'
 import { appendJsonl, readJsonl, writeJsonAtomic } from '../core/store.ts'
 
 export const EXPORT_SCHEMA = 'la-export/1'
 const EXPORT_CAP = 8 * 1024 * 1024
 const REPORT_CAP = 24 * 1024 * 1024
+/** A run with no progress for this long is shown as stopped, not as running, so it never locks the page. */
+export const STALE_MS = 6 * 60 * 60 * 1000
 export const STAGES = ['intake', 'preflight', 'pipelines', 'methods', 'integrate', 'organs', 'insights', 'intervene', 'twin', 'review', 'report'] as const
 export const STAGE_ZH: Record<string, string> = {
   intake: '整理数据', preflight: '检查电脑', pipelines: '测序流程', methods: '计算读数', integrate: '分系统解读',
@@ -28,7 +34,7 @@ export interface AnalysisRun {
   data_dir: string
   workspace: string
   mirobody: boolean
-  member_id: string
+  member_folder?: string | null
 }
 
 export interface ImportedMeta {
@@ -49,20 +55,58 @@ function dirOf(dataDir: string): string {
   return d
 }
 
-export function listRuns(dataDir: string): AnalysisRun[] {
-  return readJsonl<AnalysisRun>(join(dirOf(dataDir), 'runs.jsonl'), (raw) => {
-    const r = raw as Partial<AnalysisRun>
-    return r && typeof r.id === 'string' && typeof r.workspace === 'string' ? r as AnalysisRun : null
-  })
+function abandonedIds(dataDir: string): Set<string> {
+  return new Set(readJsonl<{ id: string }>(join(dirOf(dataDir), 'abandoned.jsonl'), (raw) => {
+    const r = raw as { id?: unknown }
+    return r && typeof r.id === 'string' ? { id: r.id } : null
+  }).map((r) => r.id))
 }
 
-export function createRun(dataDir: string, opts: { memberId: string; mcpUrl: string; dataFolder: string | null; now?: Date }): AnalysisRun & { mcp_url_file: string | null } {
+export function listRuns(dataDir: string): AnalysisRun[] {
+  const gone = abandonedIds(dataDir)
+  return readJsonl<AnalysisRun>(join(dirOf(dataDir), 'runs.jsonl'), (raw) => {
+    const r = raw as Partial<AnalysisRun>
+    return r && typeof r.id === 'string' && typeof r.workspace === 'string' && typeof r.root === 'string' ? r as AnalysisRun : null
+  }).filter((r) => !gone.has(r.id))
+}
+
+/** Every run folder this store knows, abandoned ones too (for deletion). */
+export function allRunRoots(dataDir: string): string[] {
+  return readJsonl<{ root?: unknown }>(join(dataDir, 'analysis', 'runs.jsonl')).map((r) => r && typeof r.root === 'string' ? r.root : '').filter(Boolean)
+}
+
+export function abandonRun(dataDir: string, runId: string): boolean {
+  if (!listRuns(dataDir).some((r) => r.id === runId)) return false
+  appendJsonl(join(dirOf(dataDir), 'abandoned.jsonl'), { id: runId, at: new Date().toISOString() })
+  return true
+}
+
+export function createRun(dataDir: string, opts: { mcpUrl: string; memberFolder: string | null; now?: Date }): AnalysisRun & { mcp_url_file: string | null } {
   const at = opts.now ?? new Date()
-  const id = `a${at.toISOString().replace(/[-:TZ.]/g, '').slice(0, 14)}`
-  const root = join(analysesRoot(), id)
-  mkdirSync(root, { recursive: true, mode: 0o700 })
-  const data = opts.dataFolder ? resolve(opts.dataFolder) : join(root, 'data')
-  mkdirSync(data, { recursive: true })
+  const base = analysesRoot()
+  mkdirSync(base, { recursive: true, mode: 0o700 })
+  let id = ''
+  let root = ''
+  for (let tries = 0; ; tries += 1) {
+    id = `a${at.toISOString().replace(/[-:TZ.]/g, '').slice(0, 17)}${randomBytes(3).toString('hex')}`
+    root = join(base, id)
+    try {
+      mkdirSync(root, { mode: 0o700 })              // not recursive: a folder that exists is another run's
+      break
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST' || tries > 5) throw error
+    }
+  }
+  const data = join(root, 'data')
+  mkdirSync(data, { mode: 0o700 })
+  if (opts.memberFolder) {
+    // The member's own folder is only read: its files are linked into the run's data folder, and anything the
+    // skill writes (the Mirobody pull) lands in the run folder, never in theirs.
+    for (const name of readdirSync(opts.memberFolder)) {
+      if (name.startsWith('.')) continue
+      symlinkSync(join(opts.memberFolder, name), join(data, name))
+    }
+  }
   let urlFile: string | null = null
   if (opts.mcpUrl.trim()) {
     // The member's MCP URL is their secret: a 0600 file the skill reads, never a command-line argument.
@@ -70,7 +114,7 @@ export function createRun(dataDir: string, opts: { memberId: string; mcpUrl: str
     writeFileSync(urlFile, opts.mcpUrl.trim() + '\n', { mode: 0o600 })
     chmodSync(urlFile, 0o600)
   }
-  const run: AnalysisRun = { id, started_at: at.toISOString(), root, data_dir: data, workspace: join(root, 'ws'), mirobody: Boolean(urlFile), member_id: opts.memberId }
+  const run: AnalysisRun = { id, started_at: at.toISOString(), root, data_dir: data, workspace: join(root, 'ws'), mirobody: Boolean(urlFile), member_folder: opts.memberFolder }
   appendJsonl(join(dirOf(dataDir), 'runs.jsonl'), run)
   return { ...run, mcp_url_file: urlFile }
 }
@@ -82,107 +126,207 @@ export interface RunStatus {
   stages: Array<{ key: string; label_zh: string; done: boolean }>
   done: number
   report_ready: boolean
+  /** Still going: not finished and progress within STALE_MS. */
+  active: boolean
   state_error: string | null
 }
 
-export function runStatus(run: AnalysisRun): RunStatus {
-  let stages: Record<string, string> = {}
+function regularFile(path: string): boolean {
+  try {
+    return lstatSync(path).isFile()
+  } catch {
+    return false
+  }
+}
+
+export function runStatus(run: AnalysisRun, now: number = Date.now()): RunStatus {
+  let stages: Record<string, unknown> = {}
   let error: string | null = null
   const statePath = join(run.workspace, 'state.json')
-  if (existsSync(statePath)) {
+  let last = Date.parse(run.started_at) || 0
+  if (regularFile(statePath) && statSync(statePath).size < EXPORT_CAP) {
     try {
-      stages = (JSON.parse(readFileSync(statePath, 'utf8')) as { stages?: Record<string, string> }).stages ?? {}
+      const parsed = JSON.parse(readFileSync(statePath, 'utf8')) as { stages?: unknown }
+      stages = parsed && typeof parsed.stages === 'object' && parsed.stages ? parsed.stages as Record<string, unknown> : {}
+      last = Math.max(last, statSync(statePath).mtimeMs)
     } catch {
       error = '工作区状态文件读不了'
     }
   }
   const rows = STAGES.map((key) => ({ key, label_zh: STAGE_ZH[key] ?? key, done: stages[key] === 'done' }))
+  const ready = stages.report === 'done' && regularFile(join(run.workspace, 'deliver', 'la-export.json'))
   return {
     id: run.id, started_at: run.started_at, workspace: run.workspace, stages: rows,
     done: rows.filter((row) => row.done).length,
-    report_ready: stages.report === 'done' && existsSync(join(run.workspace, 'deliver', 'la-export.json')),
+    report_ready: ready,
+    active: !ready && now - last < STALE_MS,
     state_error: error,
   }
 }
 
-function sha256(path: string): string {
-  return createHash('sha256').update(readFileSync(path)).digest('hex')
+function sha256(bytes: Buffer): string {
+  return createHash('sha256').update(bytes).digest('hex')
 }
 
-function inside(parent: string, child: string): boolean {
-  const p = realpathSync(parent)
-  const c = realpathSync(child)
-  return c === p || c.startsWith(p + sep)
+/** The run's workspace, only when it is the real folder the run owns (no link out of the analyses root). */
+function ownWorkspace(run: AnalysisRun): string | null {
+  try {
+    const expected = join(realpathSync(analysesRoot()), run.id, 'ws')
+    if (lstatSync(run.workspace).isSymbolicLink()) return null
+    return realpathSync(run.workspace) === expected ? expected : null
+  } catch {
+    return null
+  }
+}
+
+/** Remove every link and every external load from the report: it is shown in LongPi and written by a pipeline. */
+export function sanitizeReport(html: string): string {
+  return html
+    .replace(/<\s*(script|iframe|object|embed|form|noscript|template|svg|math)\b[\s\S]*?<\/\s*\1\s*>/gi, '')
+    .replace(/<\s*\/?\s*(script|iframe|object|embed|form|noscript|template|svg|math|base|meta|link)\b[^>]*>/gi, '')
+    .replace(/\s(?:href|xlink:href|src|srcset|action|formaction|poster|background|ping)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi,
+      (all, value: string) => /^["']?#/.test(value) ? all : '')
+    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
 }
 
 // ---------------------------------------------------------------- the export
 
+export interface ExportReadout { id: string; label_zh: string; value: unknown; unit?: string; kind?: string; group?: string; low?: number; high?: number; horizon_years?: number }
+export interface ExportOrgan { organ: string; label_zh: string; measured: string[]; indices: string[]; ai_age: string | null; ai_risks: string[]; overrides: Array<{ disease: string; message_zh: string }> }
+export interface ExportBoard { id: string; title_zh: string; hypothesis_zh: string; verdict: string | null; verdict_zh: string; confidence: string | null; summary_zh: string | null; next_step_zh: string | null; limitations_zh: string | null; skipped_reason_zh: string | null }
+export interface ExportItem { category: string; title: string; detail: string; markers: string[] }
 export interface LaExport {
   schema: string
   generated_at: string
   generation: string
-  member: { id?: string; age?: number; sex?: string; sample_date?: string }
-  workspace: string
+  member: { age?: number; sex?: string; sample_date?: string }
   report: { html: string; sha256: string }
-  readouts: Array<{ id: string; label_zh: string; value: unknown; unit?: string; kind?: string; group?: string; low?: number; high?: number; horizon_years?: number }>
-  organs: Array<{ organ: string; label_zh: string; measured: string[]; indices: string[]; ai_age: string | null; ai_risks: string[] }>
-  board: Array<{ id: string; title_zh: string; hypothesis_zh?: string; verdict: string | null; verdict_zh: string; confidence: string | null; summary_zh: string | null; next_step_zh: string | null; skipped_reason_zh?: string | null }>
-  plan: { title: string; source: string; note: string; items: Array<Record<string, unknown>> }
-  retests: Array<{ item: string; what: string; after_weeks: number; due: string }>
+  readouts: ExportReadout[]
+  organs: ExportOrgan[]
+  board: ExportBoard[]
+  plan: { title: string; note: string; items: ExportItem[] }
+  retests: Array<{ what: string; after_weeks: number; due: string }>
   boundary_zh: string
 }
 
-function str(v: unknown, max: number): string {
-  return typeof v === 'string' ? v.slice(0, max) : ''
-}
+const isObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v)
+const s = (v: unknown, max: number): string => typeof v === 'string' ? v.slice(0, max) : ''
+const sOrNull = (v: unknown, max: number): string | null => typeof v === 'string' ? v.slice(0, max) : null
+const strList = (v: unknown, max: number, each = 200): string[] | null =>
+  Array.isArray(v) && v.length <= max && v.every((x) => typeof x === 'string') ? v.map((x) => (x as string).slice(0, each)) : null
+const num = (v: unknown): number | undefined => typeof v === 'number' && Number.isFinite(v) ? v : undefined
 
-/** Check an export like any outside file. Returns the problems; empty means usable. */
-export function checkExport(raw: unknown, run: AnalysisRun): { value: LaExport | null; problems: string[] } {
+/**
+ * Check an export like any outside file and rebuild it from known fields only (anything else is dropped).
+ * Returns the rebuilt value and the report bytes read once, or the problems.
+ */
+export function checkExport(raw: unknown, run: AnalysisRun): { value: LaExport | null; html: Buffer | null; problems: string[] } {
   const problems: string[] = []
-  const x = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>
+  const x = isObj(raw) ? raw : {}
   if (x.schema !== EXPORT_SCHEMA) problems.push(`schema must be ${EXPORT_SCHEMA}`)
-  for (const key of ['readouts', 'organs', 'board', 'retests'] as const) {
-    if (!Array.isArray(x[key])) problems.push(`${key} must be a list`)
+  const readouts: ExportReadout[] = []
+  if (!Array.isArray(x.readouts) || x.readouts.length > 2000) problems.push('readouts must be a list of at most 2000')
+  else x.readouts.forEach((r, i) => {
+    if (!isObj(r) || typeof r.id !== 'string' || typeof r.label_zh !== 'string') { problems.push(`readouts[${i}] needs string id and label_zh`); return }
+    const v = typeof r.value === 'number' || typeof r.value === 'string' ? r.value : null
+    readouts.push({ id: r.id.slice(0, 120), label_zh: r.label_zh.slice(0, 120), value: typeof v === 'string' ? v.slice(0, 60) : v, unit: s(r.unit, 30), kind: s(r.kind, 40), group: s(r.group, 30),
+      ...(num(r.low) !== undefined ? { low: num(r.low) } : {}), ...(num(r.high) !== undefined ? { high: num(r.high) } : {}),
+      ...(num(r.horizon_years) !== undefined ? { horizon_years: num(r.horizon_years) } : {}) })
+  })
+  const organs: ExportOrgan[] = []
+  if (!Array.isArray(x.organs) || x.organs.length > 40) problems.push('organs must be a list of at most 40')
+  else x.organs.forEach((o, i) => {
+    const measured = isObj(o) ? strList(o.measured, 50) : null
+    const indices = isObj(o) ? strList(o.indices, 50) : null
+    const risks = isObj(o) ? strList(o.ai_risks, 50) : null
+    const overrides = isObj(o) && Array.isArray(o.overrides) ? o.overrides : []
+    if (!isObj(o) || typeof o.organ !== 'string' || typeof o.label_zh !== 'string' || !measured || !indices || !risks
+        || !(o.ai_age === null || o.ai_age === undefined || typeof o.ai_age === 'string')
+        || !overrides.every((v) => isObj(v) && typeof v.disease === 'string' && typeof v.message_zh === 'string')) {
+      problems.push(`organs[${i}] has the wrong shape`); return
+    }
+    organs.push({ organ: o.organ.slice(0, 40), label_zh: o.label_zh.slice(0, 40), measured, indices, ai_age: typeof o.ai_age === 'string' ? o.ai_age : null, ai_risks: risks,
+      overrides: (overrides as Array<Record<string, string>>).slice(0, 10).map((v) => ({ disease: String(v.disease).slice(0, 60), message_zh: String(v.message_zh).slice(0, 300) })) })
+  })
+  const board: ExportBoard[] = []
+  if (!Array.isArray(x.board) || x.board.length > 10) problems.push('the board must be a list of at most 10 questions')
+  else x.board.forEach((b, i) => {
+    if (!isObj(b) || typeof b.id !== 'string' || typeof b.title_zh !== 'string' || typeof b.verdict_zh !== 'string') { problems.push(`board[${i}] has the wrong shape`); return }
+    board.push({ id: b.id.slice(0, 8), title_zh: b.title_zh.slice(0, 200), hypothesis_zh: s(b.hypothesis_zh, 400), verdict: sOrNull(b.verdict, 20), verdict_zh: b.verdict_zh.slice(0, 20),
+      confidence: sOrNull(b.confidence, 20), summary_zh: sOrNull(b.summary_zh, 1200), next_step_zh: sOrNull(b.next_step_zh, 400),
+      limitations_zh: sOrNull(b.limitations_zh, 600), skipped_reason_zh: sOrNull(b.skipped_reason_zh, 300) })
+  })
+  const items: ExportItem[] = []
+  const plan = isObj(x.plan) ? x.plan : null
+  if (!plan || !Array.isArray(plan.items) || plan.items.length > 30) problems.push('plan.items must be a list of at most 30')
+  else plan.items.forEach((it, i) => {
+    const markers = isObj(it) ? strList(it.markers, 12, 60) : null
+    if (!isObj(it) || typeof it.title !== 'string' || !it.title.trim() || !markers) { problems.push(`plan.items[${i}] has the wrong shape`); return }
+    items.push({ category: s(it.category, 20), title: it.title.slice(0, 60), detail: s(it.detail, 300), markers })
+  })
+  const retests = Array.isArray(x.retests) ? x.retests.filter(isObj).slice(0, 30).map((r) => ({ what: s(r.what, 120), after_weeks: num(r.after_weeks) ?? 0, due: s(r.due, 10) })) : []
+  const report = isObj(x.report) ? x.report : null
+  let html: Buffer | null = null
+  const ws = ownWorkspace(run)
+  const path = report ? s(report.html, 4096) : ''
+  if (!ws) problems.push('the run workspace is not the run\'s own folder')
+  else if (path !== join(ws, 'deliver', 'report.html') && path !== join(run.workspace, 'deliver', 'report.html')) problems.push('report.html must be the run workspace\'s deliver/report.html')
+  else {
+    const real = join(ws, 'deliver', 'report.html')
+    if (!regularFile(real)) problems.push('report.html is not a regular file')
+    else if (statSync(real).size > REPORT_CAP) problems.push('report.html is too large')
+    else {
+      html = readFileSync(real)                                   // read once: the hash and the stored copy are the same bytes
+      if (!report || sha256(html) !== report.sha256) problems.push('report.html changed after the report was written')
+    }
   }
-  const plan = x.plan as Record<string, unknown> | undefined
-  if (!plan || !Array.isArray(plan.items)) problems.push('plan.items must be a list')
-  else if (plan.items.length > 30) problems.push('plan has more than 30 items')
-  if (Array.isArray(x.readouts) && x.readouts.length > 2000) problems.push('too many readouts')
-  if (Array.isArray(x.board) && x.board.length > 10) problems.push('the board has more than 10 questions')
-  const report = x.report as Record<string, unknown> | undefined
-  const html = report ? str(report.html, 4096) : ''
-  if (!html) problems.push('report.html path missing')
-  else if (!existsSync(html)) problems.push('report.html not found')
-  else if (!inside(run.workspace, html)) problems.push('report.html is outside the run workspace')
-  else if (statSync(html).size > REPORT_CAP) problems.push('report.html is too large')
-  else if (report && sha256(html) !== report.sha256) problems.push('report.html changed after the report was written')
-  return { value: problems.length ? null : x as unknown as LaExport, problems }
+  if (problems.length) return { value: null, html: null, problems }
+  const member = isObj(x.member) ? x.member : {}
+  return {
+    value: {
+      schema: EXPORT_SCHEMA, generated_at: s(x.generated_at, 40), generation: s(x.generation, 80),
+      member: { ...(num(member.age) !== undefined ? { age: num(member.age) } : {}), sex: s(member.sex, 10), sample_date: s(member.sample_date, 10) },
+      report: { html: path, sha256: s(report?.sha256, 64) }, readouts, organs, board,
+      plan: { title: s(plan?.title, 60) || '深度分析干预方案', note: s(plan?.note, 500), items }, retests, boundary_zh: s(x.boundary_zh, 300),
+    },
+    html, problems: [],
+  }
 }
 
-export function readExport(run: AnalysisRun): { value: LaExport | null; problems: string[] } {
-  const path = join(run.workspace, 'deliver', 'la-export.json')
-  if (!existsSync(path)) return { value: null, problems: ['the report is not done yet (deliver/la-export.json is missing)'] }
-  if (statSync(path).size > EXPORT_CAP) return { value: null, problems: ['la-export.json is too large'] }
+export function readExport(run: AnalysisRun): { value: LaExport | null; html: Buffer | null; problems: string[] } {
+  const ws = ownWorkspace(run)
+  if (!ws) return { value: null, html: null, problems: ['the run workspace is not the run\'s own folder'] }
+  const path = join(ws, 'deliver', 'la-export.json')
+  if (!regularFile(path)) return { value: null, html: null, problems: ['the report is not done yet (deliver/la-export.json is missing)'] }
+  if (statSync(path).size > EXPORT_CAP) return { value: null, html: null, problems: ['la-export.json is too large'] }
   let raw: unknown
   try {
     raw = JSON.parse(readFileSync(path, 'utf8'))
   } catch {
-    return { value: null, problems: ['la-export.json is not JSON'] }
+    return { value: null, html: null, problems: ['la-export.json is not JSON'] }
   }
   return checkExport(raw, run)
 }
 
-/** Copy the checked export and its report into LongPi's store; the run folder can go away afterwards. */
-export function importRun(dataDir: string, run: AnalysisRun, value: LaExport, now: Date = new Date()): ImportedMeta {
-  const dir = join(dirOf(dataDir), 'current')
-  mkdirSync(dir, { recursive: true, mode: 0o700 })
-  copyFileSync(value.report.html, join(dir, 'report.html'))
-  writeJsonAtomic(join(dir, 'la-export.json'), value)
-  const meta: ImportedMeta = { run_id: run.id, imported_at: now.toISOString(), generation: String(value.generation ?? ''), report_sha256: value.report.sha256, plan_accepted_version: null }
-  writeJsonAtomic(join(dir, 'meta.json'), meta)
-  appendJsonl(join(dirOf(dataDir), 'imports.jsonl'), meta)
-  // The MCP URL copy is not needed once the result is in.
-  const urlFile = join(run.root, 'mirobody_mcp_url')
+/** Replace the imported result in one step: a new folder is written whole, then swapped in. */
+export function importRun(dataDir: string, run: AnalysisRun, value: LaExport, html: Buffer, now: Date = new Date()): ImportedMeta {
+  const dir = dirOf(dataDir)
+  const previous = currentImport(dataDir)
+  const same = previous && previous.meta.run_id === run.id && previous.meta.report_sha256 === value.report.sha256
+  const meta: ImportedMeta = { run_id: run.id, imported_at: now.toISOString(), generation: value.generation, report_sha256: value.report.sha256,
+    plan_accepted_version: same ? previous.meta.plan_accepted_version : null }
+  const next = join(dir, `current.next-${process.pid}-${Date.now()}`)
+  mkdirSync(next, { mode: 0o700 })
+  writeFileSync(join(next, 'report.html'), sanitizeReport(html.toString('utf8')), { mode: 0o600 })
+  writeJsonAtomic(join(next, 'la-export.json'), value)
+  writeJsonAtomic(join(next, 'meta.json'), meta)
+  const cur = join(dir, 'current')
+  const old = join(dir, `current.old-${process.pid}-${Date.now()}`)
+  if (existsSync(cur)) renameSync(cur, old)
+  renameSync(next, cur)
+  rmSync(old, { recursive: true, force: true })
+  appendJsonl(join(dir, 'imports.jsonl'), meta)
+  const urlFile = join(run.root, 'mirobody_mcp_url')              // not needed once the result is in
   if (existsSync(urlFile)) writeFileSync(urlFile, '', { mode: 0o600 })
   return meta
 }
@@ -206,28 +350,20 @@ export function markPlanAccepted(dataDir: string, version: number): void {
 
 export function currentReportHtml(dataDir: string): string | null {
   const path = join(dataDir, 'analysis', 'current', 'report.html')
-  return existsSync(path) ? readFileSync(path, 'utf8') : null
+  return regularFile(path) ? readFileSync(path, 'utf8') : null
 }
 
-/** The plan in the shape save_intervention_plan / normalizePlan take, marked as coming from the analysis. */
+/**
+ * The plan in the shape save_intervention_plan / normalizePlan take, marked as coming from the analysis. Items carry
+ * no id: normalizePlan continues an item by its title or gives it a new id, so one analysis's check-ins never land on
+ * another analysis's item.
+ */
 export function planInput(value: LaExport, today: string): Record<string, unknown> {
   return {
-    title: str(value.plan.title, 60) || '深度分析干预方案',
+    title: value.plan.title || '深度分析干预方案',
     source: 'analysis',
-    note: str(value.plan.note, 500),
-    items: value.plan.items.map((item) => ({
-      id: str(item.id, 40),
-      category: str(item.category, 20),
-      title: str(item.title, 60),
-      detail: str(item.detail, 300),
-      start: today,
-      markers: Array.isArray(item.markers) ? item.markers.filter((m) => typeof m === 'string').slice(0, 12) : [],
-    })),
+    note: value.plan.note,
+    items: value.plan.items.map((item) => ({ category: item.category, title: item.title, detail: item.detail, start: today, markers: item.markers })),
     goals: [],
   }
-}
-
-export function listRunFolders(): string[] {
-  const root = analysesRoot()
-  return existsSync(root) ? readdirSync(root) : []
 }

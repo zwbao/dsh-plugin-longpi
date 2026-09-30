@@ -1,7 +1,8 @@
 // Delete the local LongPi store. Mirobody is the person's own service; this does not call it.
 
-import { existsSync, readdirSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, readdirSync, realpathSync, rmSync } from 'node:fs'
+import { join, sep } from 'node:path'
+import { allRunRoots, analysesRoot } from '../analysis/store.ts'
 import { writeJsonAtomic } from '../core/store.ts'
 import { deletePhrase } from './disclosure.ts'
 import { mirobodyExportLink } from './export.ts'
@@ -24,6 +25,20 @@ export function confirmedDelete(body: unknown): boolean {
 export function deleteLocalStore(dataDir: string, fallbackMcpUrl = '', now = new Date()): DeleteResult {
   const link = mirobodyExportLink(dataDir, fallbackMcpUrl)
   let deleted = 0
+  // Deep-analysis run folders hold labs, watch days, genome intermediates and reports: they go too. Only folders
+  // under the analyses root are removed, found through this store's own run list before it is deleted.
+  const base = existsSync(analysesRoot()) ? realpathSync(analysesRoot()) : ''
+  for (const root of existsSync(dataDir) ? allRunRoots(dataDir) : []) {
+    try {
+      const real = realpathSync(root)
+      if (base && real.startsWith(base + sep)) {
+        rmSync(real, { recursive: true, force: true })
+        deleted += 1
+      }
+    } catch {
+      /* already gone */
+    }
+  }
   if (existsSync(dataDir)) {
     for (const entry of readdirSync(dataDir)) {
       rmSync(join(dataDir, entry), { recursive: true, force: true })

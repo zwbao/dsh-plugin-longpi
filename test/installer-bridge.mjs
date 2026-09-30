@@ -34,10 +34,12 @@ const sh = (script, env = {}) => spawnSync('bash', ['-c', `set -eu; LOG=/dev/nul
   sh(`ensure_session_log_off "${home}" python3`)
   assert.equal(readFileSync(join(home, 'cordis.patch.yml'), 'utf8'), text, 'idempotent')
   const own = tmp('dsh-own')
-  const mine = '- id: other\n  config: {}\n- id: session-log-deepseek\n  config:\n    enabled: true\n'
-  writeFileSync(join(own, 'cordis.patch.yml'), mine)
-  sh(`ensure_session_log_off "${own}" python3`)
-  assert.equal(readFileSync(join(own, 'cordis.patch.yml'), 'utf8'), mine, 'the person\'s own row is kept')
+  for (const id of ['session-log-deepseek', "'session-log-deepseek'", '"session-log-deepseek"']) {
+    const mine = `- id: other\n  config: {}\n- id: ${id}\n  config:\n    enabled: true\n`
+    writeFileSync(join(own, 'cordis.patch.yml'), mine)
+    sh(`ensure_session_log_off "${own}" python3`)
+    assert.equal(readFileSync(join(own, 'cordis.patch.yml'), 'utf8'), mine, `the person's own row is kept (${id})`)
+  }
 }
 
 // the skill: cloned into the LongPi home and linked into DSH_HOME/skills
@@ -46,11 +48,17 @@ const sh = (script, env = {}) => spawnSync('bash', ['-c', `set -eu; LOG=/dev/nul
   mkdirSync(join(src, 'skills', 'longevity-analyst'), { recursive: true })
   writeFileSync(join(src, 'skills', 'longevity-analyst', 'SKILL.md'), '---\nname: longevity-analyst\n---\n')
   const git = (args) => spawnSync('git', args, { cwd: src, encoding: 'utf8' })
-  git(['init', '-q']); git(['add', '.']); git(['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'x'])
+  git(['init', '-q']); git(['add', '.']); git(['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'x']); git(['tag', 'v0.7.0'])
   const home = tmp('dsh2'); const lp = tmp('lp')
   const r = sh(`longpi_home="${lp}"; install_analyst "${src}" "${home}"`)
   assert.equal(r.status, 0, r.stderr + r.stdout)
   assert.equal(readlinkSync(join(home, 'skills', 'longevity-analyst')), join(lp, 'longevity-analyst-skill', 'skills', 'longevity-analyst'))
+  const untagged = tmp('analyst-old')
+  mkdirSync(join(untagged, 'skills', 'longevity-analyst'), { recursive: true })
+  writeFileSync(join(untagged, 'skills', 'longevity-analyst', 'SKILL.md'), 'x')
+  spawnSync('git', ['init', '-q'], { cwd: untagged }); spawnSync('git', ['add', '.'], { cwd: untagged })
+  spawnSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'x'], { cwd: untagged })
+  assert.notEqual(sh(`longpi_home="${tmp('lp3')}"; install_analyst "${untagged}" "${tmp('dsh3')}"`).status, 0, 'a source without the release tag is not installed')
   const bad = sh(`longpi_home="${tmp('lp2')}"; install_analyst "${tmp('empty')}" "${home}"`)
   assert.notEqual(bad.status, 0, 'a source without the skill fails')
 }

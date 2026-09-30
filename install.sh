@@ -1091,17 +1091,28 @@ mirobody_native_start() {
   # Postgres in its container, Mirobody itself from a local venv: the app image does not build behind
   # some networks, and `thetahealth/mirobody` is not always published for the checkout's version.
   local dir="$1" base="$2" has_mcp="$3"
-  local venv="$longpi_home/.mirobody-app" envfile="$longpi_home/mirobody-native.env" port name
-  port="${base##*:}"; port="${port%%/*}"
+  local venv="$longpi_home/.mirobody-app" envfile="$longpi_home/mirobody-native.env" hostport host port name pgport
+  hostport="${base#*://}"; hostport="${hostport%%/*}"
+  host="${hostport%:*}"; port="${hostport##*:}"
+  case "$port" in ''|*[!0-9]*) die "--mirobody-native needs a Mirobody address with a port, like http://127.0.0.1:18060 (got $base)." \
+                                   "--mirobody-native 需要带端口的 Mirobody 地址，比如 http://127.0.0.1:18060（现在是 $base）。" ;; esac
+  have openssl || die "--mirobody-native needs openssl to generate Mirobody's secrets." "--mirobody-native 需要 openssl 来生成 Mirobody 的密钥。"
   (
     cd "$dir" && umask 077 && touch .env && chmod 600 .env
-    grep -q '^ENV=' .env || printf 'ENV=localdb\n' >> .env
-    grep -q '^MIROBODY_ENV_FILE=' .env || printf 'MIROBODY_ENV_FILE=./.env\n' >> .env
+    grep -q '^ENV=.' .env || printf 'ENV=localdb\n' >> .env
+    grep -q '^MIROBODY_ENV_FILE=.' .env || printf 'MIROBODY_ENV_FILE=./.env\n' >> .env
     for name in PG_PASSWORD PG_ENCRYPTION_KEY CONFIG_ENCRYPTION_KEY LOG_ENCRYPTION_KEY JWT_KEY; do
-      grep -q "^${name}=" .env || printf '%s=%s\n' "$name" "$(openssl rand -hex 32)" >> .env
+      if ! grep -q "^${name}=." .env; then
+        value="$(openssl rand -hex 32)"
+        [ -n "$value" ] || exit 1
+        grep -v "^${name}=" .env > .env.tmp || true
+        printf '%s=%s\n' "$name" "$value" >> .env.tmp && mv .env.tmp .env && chmod 600 .env
+      fi
     done
     docker compose up -d pg
-  ) </dev/null >>"$LOG" 2>&1 || fail_log "Could not start Mirobody's Postgres container." "无法启动 Mirobody 的 Postgres 容器。"
+  ) </dev/null >>"$LOG" 2>&1 || fail_log "Could not set Mirobody's secrets or start its Postgres container." "无法设置 Mirobody 的密钥或启动其 Postgres 容器。"
+  pgport="$(sed -n 's/^PG_HOST_PORT=//p' "$dir/.env" | head -n 1)"
+  pgport="${pgport:-${PG_HOST_PORT:-18062}}"
   if [ ! -x "$venv/bin/mirobody" ]; then
     ensure_uv || die "--mirobody-native needs uv to build $venv." "--mirobody-native 需要 uv 来创建 ${venv}。"
     uv venv --python 3.12 "$venv" </dev/null >>"$LOG" 2>&1 || fail_log "Could not create $venv." "无法创建 ${venv}。"
@@ -1110,10 +1121,10 @@ mirobody_native_start() {
   (
     umask 077
     {
-      printf 'ENV=localdb\nPYTHONUNBUFFERED=1\nHTTP_HOST=127.0.0.1\nHTTP_PORT=%s\n' "$port"
+      printf 'ENV=localdb\nPYTHONUNBUFFERED=1\nHTTP_HOST=%s\nHTTP_PORT=%s\n' "$host" "$port"
       # The demo account is seeded only when no --mcp-url was given (the installer connects it then).
       if [ "$has_mcp" = 1 ]; then printf 'SEED_DEMO_DATA=false\n'; else printf 'SEED_DEMO_DATA=true\n'; fi
-      printf 'PG_HOST=127.0.0.1\nPG_PORT=%s\nPG_USER=holistic_user\nPG_DBNAME=holistic_db\n' "${PG_HOST_PORT:-18062}"
+      printf 'PG_HOST=127.0.0.1\nPG_PORT=%s\nPG_USER=holistic_user\nPG_DBNAME=holistic_db\n' "$pgport"
       printf 'PG_PASSWORD=%s\n' "$(sed -n 's/^PG_PASSWORD=//p' "$dir/.env" | head -n 1)"
     } > "$envfile"
   )
@@ -1122,7 +1133,9 @@ mirobody_native_start() {
     if [ -f "$longpi_home/mirobody-$name.pid" ] && kill -0 "$(cat "$longpi_home/mirobody-$name.pid")" 2>/dev/null; then
       continue
     fi
-    (cd "$dir" && set -a && . "$envfile" && set +a && nohup "$venv/bin/mirobody" "$name" >"$longpi_home/mirobody-$name.log" 2>&1 & echo $! > "$longpi_home/mirobody-$name.pid") </dev/null
+    # exec: the pid written is Mirobody's own, not a wrapper shell's
+    (cd "$dir"; set -a; . "$envfile"; set +a; exec nohup "$venv/bin/mirobody" "$name" >"$longpi_home/mirobody-$name.log" 2>&1) </dev/null &
+    echo $! > "$longpi_home/mirobody-$name.pid"
   done
   wait_for "$base/" 300 || fail_log "Mirobody (native) did not answer at $base within 5 minutes; see $longpi_home/mirobody-serve.log." \
                                      "Mirobody（原生）在 5 分钟内没有在 $base 响应，见 $longpi_home/mirobody-serve.log。"
@@ -1130,11 +1143,13 @@ mirobody_native_start() {
 
 install_analyst() {
   # The skill goes where dsh discovers skills; a checkout is kept in the LongPi home and linked.
-  local repo="$1" home="$2" src="$longpi_home/longevity-analyst-skill" target
+  # Pinned to a release tag: the plugin needs the skill's la-export/1 and `la.py mirobody pull`.
+  local repo="$1" home="$2" src="$longpi_home/longevity-analyst-skill" target ref="${LONGPI_ANALYST_REF:-v0.7.0}"
   if [ -d "$src/.git" ]; then
-    (cd "$src" && git pull --ff-only) </dev/null >>"$LOG" 2>&1 || warn "Could not update $src; keeping the copy there." "无法更新 ${src}，保留现有版本。"
+    (cd "$src" && GIT_TERMINAL_PROMPT=0 git fetch --depth 1 origin "refs/tags/$ref:refs/tags/$ref" && git checkout -q "$ref") </dev/null >>"$LOG" 2>&1 \
+      || warn "Could not update $src to $ref; keeping the copy there." "无法把 $src 更新到 ${ref}，保留现有版本。"
   else
-    git clone --depth 1 "$repo" "$src" </dev/null >>"$LOG" 2>&1 || return 1
+    GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "$ref" "$repo" "$src" </dev/null >>"$LOG" 2>&1 || return 1
   fi
   [ -f "$src/skills/longevity-analyst/SKILL.md" ] || return 1
   mkdir -p "$home/skills"
@@ -1154,7 +1169,7 @@ ensure_session_log_off() {
 import os, re, sys
 path = sys.argv[1]
 text = open(path, encoding="utf-8").read() if os.path.exists(path) else ""
-if re.search(r"(?m)^\s*-\s*id:\s*session-log-deepseek\s*$", text):
+if re.search(r"(?m)^\s*-\s*id:\s*['\"]?session-log-deepseek['\"]?\s*$", text):
     sys.exit(0)
 block = ("# >>> dsh-plugin-longpi session log >>>\n"
          "# Health data must not be uploaded with DeepSeek session logs.\n"

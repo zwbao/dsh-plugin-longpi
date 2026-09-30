@@ -2,7 +2,7 @@
 
 import type { CoreDeps } from '../contracts/index.ts'
 import { currentReportHtml } from './store.ts'
-import { acceptPlan, importLatest, planReadBack, startRun, statusNow } from './service.ts'
+import { abandon, acceptPlan, importLatest, planReadBack, startRun, statusNow } from './service.ts'
 
 /** The report is written by an LLM-driven pipeline: shown in a sandboxed frame with no script and no network. */
 export const REPORT_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; sandbox; frame-ancestors 'self'"
@@ -31,8 +31,15 @@ export function registerAnalysisRoutes(deps: CoreDeps): void {
     return res.ok ? res : { ok: false, status: 400, error: res.error_zh, problems: res.problems }
   })
 
-  deps.http.route('POST', '/api/longpi/analysis/plan-accept', async () => {
-    const res = await acceptPlan(deps)
-    return res.ok ? res : { ok: false, status: 400, error: res.error_zh, problems: res.problems }
+  deps.http.route('POST', '/api/longpi/analysis/plan-accept', async (_req, body) => {
+    const value = body && typeof body === 'object' ? body as Record<string, unknown> : {}
+    const res = await acceptPlan(deps, { run_id: value.run_id, plan_key: value.plan_key })
+    return res.ok ? res : { ok: false, status: res.stale ? 409 : 400, error: res.error_zh, problems: res.problems }
+  })
+
+  deps.http.route('POST', '/api/longpi/analysis/abandon', async (_req, body) => {
+    const value = body && typeof body === 'object' ? body as Record<string, unknown> : {}
+    const ok = typeof value.run_id === 'string' && abandon(deps, value.run_id)
+    return ok ? { ok: true } : { ok: false, status: 404, error: '没有这次分析。' }
   })
 }
