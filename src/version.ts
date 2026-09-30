@@ -46,6 +46,10 @@ export const TOOL_NAMES = [
   'read_care_navigation',
   'prepare_doctor_brief',
   'log_care_visit',
+  // 0.7.0 (M12 deep analysis)
+  'run_deep_analysis',
+  'import_analysis',
+  'read_deep_analysis',
 ] as const
 
 export type ToolName = (typeof TOOL_NAMES)[number]

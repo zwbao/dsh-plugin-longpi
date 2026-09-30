@@ -12,10 +12,11 @@ import { register as datain } from './datain/register.ts'
 import { register as honesty } from './honesty/register.ts'
 import { register as science } from './science/register.ts'
 import { register as privacy } from './privacy/register.ts'
+import { register as analysis } from './analysis/register.ts'
 
 export const MODULES = [
   ['M9', honesty], ['M2', advice], ['M1', triage], ['M3', plan], ['M7', datain], ['M4', feedback],
-  ['M5', surfaces], ['M6', engage], ['M11', privacy], ['M8', science],
+  ['M5', surfaces], ['M6', engage], ['M11', privacy], ['M8', science], ['M12', analysis],
 ] as const
 
 export function registerModules(ctx: Context, deps: CoreDeps, log: (message: string) => void = () => {}): void {

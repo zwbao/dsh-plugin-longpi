@@ -397,3 +397,9 @@ export { setCoach, chooseSurfaces, regenerate, resetCoachCache, hardKeyOf, coach
 export { createSse } from './core/sse.ts'
 export { rememberFromWords } from './core/remember-rules.ts'
 export { screeningTopics } from './triage/screening.ts'
+// 0.7.0 M12 deep analysis (exported for tests and the preview)
+export { startBlockers, startRun, statusNow, importLatest, planReadBack, acceptPlan, analystSkillPath } from './analysis/service.ts'
+export { createRun, listRuns, runStatus, checkExport, readExport, importRun, currentImport, planInput, EXPORT_SCHEMA } from './analysis/store.ts'
+export { REPORT_CSP } from './analysis/routes.ts'
+export { bindPrivacy } from './privacy/index.ts'
+export { recordConsent } from './privacy/consents.ts'

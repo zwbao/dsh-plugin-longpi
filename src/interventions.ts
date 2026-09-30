@@ -50,7 +50,7 @@ export interface PlanVersion {
   version: number
   saved_at: string
   title: string
-  source: 'chat' | 'file' | 'board'
+  source: 'chat' | 'file' | 'board' | 'analysis'
   note: string
   items: PlanItem[]
   goals: PlanGoal[]
@@ -277,7 +277,7 @@ export function normalizePlan(raw: unknown, context: NormalizeContext): Normaliz
     goals.push({ marker, value: number, unit: text(row.unit, 20) })
   }
 
-  const source = input.source === 'file' || input.source === 'board' ? input.source : 'chat'
+  const source = input.source === 'file' || input.source === 'board' || input.source === 'analysis' ? input.source : 'chat'
   const planTitle = stripDoses(text(input.title, 60))
   const note = stripDoses(text(input.note, 500))
   if (planTitle.stripped || note.stripped) warnings.push(`方案${planTitle.stripped ? '标题' : '备注'}里的剂量没有保存：${DOSE_NOT_SAVED}`)

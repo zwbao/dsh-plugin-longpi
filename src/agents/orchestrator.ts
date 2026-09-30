@@ -16,7 +16,7 @@ export const PLUGIN_SOURCE = 'dsh-plugin-longpi'
 export const WRITE_TOOLS = [
   'save_personal_profile', 'save_intervention_plan', 'log_intervention_checkin', 'save_self_measurement', 'record_medication_statement',
   'set_followup', 'send_followup_message', 'remember_for_me', 'log_care_visit', 'note_page_issue',
-  'forward_report', 'record_condition', 'log_life_event',
+  'forward_report', 'record_condition', 'log_life_event', 'run_deep_analysis', 'import_analysis',
 ] as const
 
 export const ORCHESTRATOR_RULES = [

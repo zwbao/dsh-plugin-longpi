@@ -20,6 +20,7 @@ import { registerClientModules } from './modules.ts'
 import { ProfileTab } from './profile-tab.ts'
 import { SeasonBar } from './engage/index.ts'
 import { AskTab, CalendarTab, SleepTab, Subnav, TrainingTab } from './life.ts'
+import { AnalysisTab } from './analysis.ts'
 import { pageTabs } from './registry.ts'
 import type { ResultTarget } from './results.ts'
 import {
@@ -38,6 +39,7 @@ const TABS: Array<TabSpec<PageTab>> = [
   { key: 'sleep', label: '睡眠' },
   { key: 'training', label: '运动' },
   { key: 'calendar', label: '日程' },
+  { key: 'analysis', label: '深度分析' },
   { key: 'ask', label: '问 LongPi' },
 ]
 
@@ -208,6 +210,8 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
       panel = h(CalendarTab, { journey })
     } else if (tab === 'ask') {
       panel = h(AskTab, { journey, openChat: props.openChat })
+    } else if (tab === 'analysis') {
+      panel = h(AnalysisTab, { openChat: props.openChat, onNotice: notify })
     } else if (tab === 'plan') {
       panel = h(PlanTab, { journey, tracking: tracking.data, loading: tracking.loading, error: tracking.error, onNotice: notify, onPrompt })
     } else if (tab === 'profile') {

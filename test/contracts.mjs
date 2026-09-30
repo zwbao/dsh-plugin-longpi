@@ -78,7 +78,7 @@ assert.equal(mod.AGENT_PROFILE_IDS.length, 8)
 for (const id of mod.AGENT_PROFILE_IDS) assert.ok(mod.AGENT_DEFAULTS[id], id)
 
 // Modules register in the §3.7 order and a failing one is logged, not fatal.
-assert.deepEqual(mod.MODULES.map(([id]) => id), ['M9', 'M2', 'M1', 'M3', 'M7', 'M4', 'M5', 'M6', 'M11', 'M8'])
+assert.deepEqual(mod.MODULES.map(([id]) => id), ['M9', 'M2', 'M1', 'M3', 'M7', 'M4', 'M5', 'M6', 'M11', 'M8', 'M12'])
 
 // R7: no custom durable session events.
 function walk(dir) {

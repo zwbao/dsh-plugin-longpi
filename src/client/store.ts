@@ -65,7 +65,7 @@ let promptNote: { text: string; id: number } | null = null
 let viewRequest: ViewRequest | null = null
 let settingsOpener: ((id: string) => void) | null = null
 
-export type PageTab = 'overview' | 'indicators' | 'labs' | 'sleep' | 'training' | 'calendar' | 'ask' | 'plan' | 'profile' | 'season' | 'science'
+export type PageTab = 'overview' | 'indicators' | 'labs' | 'sleep' | 'training' | 'calendar' | 'ask' | 'plan' | 'profile' | 'season' | 'science' | 'analysis'
 
 export function canonTab(tab: string): PageTab {
   if (tab === 'indicators') return 'labs'
