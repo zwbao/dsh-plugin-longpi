@@ -9,8 +9,8 @@ import { consentGranted, personMinor } from '../privacy/index.ts'
 import { readProfile } from '../profile.ts'
 import { planKey } from '../tools-approval.ts'
 import {
-  abandonRun, createRun, currentImport, importRun, listRuns, markPlanAccepted, planInput, readExport, runStatus,
-  type AnalysisRun, type RunStatus,
+  abandonRun, createRun, currentImport, importRun, listRuns, markPlanAccepted, newestFileDate, planInput, readExport,
+  registerFolder, registeredFolder, runStatus, type AnalysisRun, type RunStatus,
 } from './store.ts'
 
 export const SKILL_NAME = 'longevity-analyst'
@@ -80,6 +80,68 @@ export function startBlockers(dataDir: string, config: { member?: string } = {})
   return null
 }
 
+/** Days between two automatic starts. A member's own request is not held by it. */
+export const AUTO_MIN_DAYS = 30
+
+export interface Readiness {
+  blockers: { reply_zh: string; missing: string } | null
+  running: string | null
+  last_analysis: string | null
+  last_auto_start: string | null
+  newest_record: string | null
+  newest_file: string | null
+  folder: string | null
+  new_data: boolean
+  /** The harness's gate for an AI-started run: new data since the last analysis, no run going, 30 days since the last automatic start. */
+  auto_allowed: boolean
+  why_zh: string
+}
+
+function day(iso: string | null | undefined): string | null {
+  return iso && /^\d{4}-\d{2}-\d{2}/.test(iso) ? iso.slice(0, 10) : null
+}
+
+function daysFrom(a: string, b: string): number {
+  return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / 86_400_000)
+}
+
+/**
+ * The facts the AI decides on; no judgment here. `records` is the member's Mirobody record as LongPi read it.
+ */
+export function readiness(dataDir: string, config: { member?: string }, records: { indicators?: Array<{ date?: string; last_date?: string }> } | null, today: string): Readiness {
+  const blockers = startBlockers(dataDir, config)
+  const runs = listRuns(dataDir).map((run) => ({ run, status: runStatus(run) }))
+  const running = runs.find((r) => r.status.active)?.run.id ?? null
+  const cur = currentImport(dataDir)
+  const done = runs.filter((r) => r.status.report_ready).map((r) => day(r.run.started_at)).filter((d): d is string => Boolean(d))
+  const lastAnalysis = [...done, ...(cur ? [day(cur.meta.imported_at)] : [])].filter((d): d is string => Boolean(d)).sort().at(-1) ?? null
+  const lastAuto = runs.filter((r) => r.run.trigger === 'ai').map((r) => day(r.run.started_at)).filter((d): d is string => Boolean(d)).sort().at(-1) ?? null
+  const newestRecord = (records?.indicators ?? []).map((row) => day(row.last_date) ?? day(row.date)).filter((d): d is string => Boolean(d)).sort().at(-1) ?? null
+  const folder = registeredFolder(dataDir)
+  const newestFile = newestFileDate(folder)
+  const newest = [newestRecord, newestFile].filter((d): d is string => Boolean(d)).sort().at(-1) ?? null
+  const newData = Boolean(newest) && (!lastAnalysis || (newest as string) > lastAnalysis)
+  const spaced = !lastAuto || daysFrom(lastAuto, today) >= AUTO_MIN_DAYS
+  const autoAllowed = !blockers && !running && newData && spaced
+  const why = blockers ? `不能开始：${blockers.reply_zh}`
+    : running ? '有一次深度分析正在进行。'
+      : !newest ? '还没有可分析的数据。'
+        : !newData ? `上次分析（${lastAnalysis}）之后没有新数据。`
+          : !spaced ? `上次自动分析在 ${lastAuto}，距今不足 ${AUTO_MIN_DAYS} 天；会员主动要求时可以做。`
+            : lastAnalysis ? `上次分析（${lastAnalysis}）之后有新数据（最新 ${newest}）。` : `有数据（最新 ${newest}），还没有做过深度分析。`
+  return { blockers, running, last_analysis: lastAnalysis, last_auto_start: lastAuto, newest_record: newestRecord, newest_file: newestFile,
+    folder, new_data: newData, auto_allowed: autoAllowed, why_zh: why }
+}
+
+/** One line for the health snapshot: the facts and what the AI may do with them. */
+export function readinessLine(r: Readiness): string {
+  if (r.blockers?.missing === 'skill' || r.blockers?.missing === 'skill_version') return ''
+  const act = r.auto_allowed ? '可以由你决定现在开始（run_deep_analysis，写明理由），开始后告诉用户为什么做、大约要多久'
+    : r.running ? '做完后用 import_analysis 导入'
+      : '现在不自动开始；用户要求时可以做'
+  return `深度分析：${r.why_zh}${act ? `——${act}` : ''}`
+}
+
 export type StartResult =
   | { ok: true; run_id: string; workspace: string; data_folder: string; prompt_zh: string; mirobody: boolean }
   | { ok: false; reply_zh: string; missing: string }
@@ -98,15 +160,24 @@ function memberFolder(input: string | null | undefined): { path: string | null; 
   return { path }
 }
 
-export async function startRun(deps: CoreDeps, opts: { dataFolder?: string | null }): Promise<StartResult> {
+export async function startRun(deps: CoreDeps, opts: { dataFolder?: string | null; trigger: 'ai' | 'member'; reasonZh: string }): Promise<StartResult> {
   const dataDir = deps.dataDir()
   const config = deps.config()
   const blocked = startBlockers(dataDir, config)
   if (blocked) return { ok: false, ...blocked }
-  const folder = memberFolder(opts.dataFolder)
+  if (!opts.reasonZh.trim()) return { ok: false, missing: 'reason', reply_zh: '说明为什么现在做这次深度分析（reason_zh）。' }
+  const folder = memberFolder(opts.dataFolder ?? registeredFolder(dataDir))
   if (folder.error) return { ok: false, missing: 'folder', reply_zh: folder.error }
+  if (opts.trigger === 'ai') {
+    const context = await deps.context()
+    const ready = readiness(dataDir, config, context.records, context.today)
+    if (!ready.auto_allowed) return { ok: false, missing: 'not_now', reply_zh: ready.why_zh }
+  } else if (listRuns(dataDir).some((run) => runStatus(run).active)) {
+    return { ok: false, missing: 'running', reply_zh: '有一次深度分析正在进行；等它做完，或者先放弃它。' }
+  }
+  if (folder.path) registerFolder(dataDir, folder.path)
   const profile = readProfile(dataDir)
-  const run = createRun(dataDir, { mcpUrl: config.mcpUrl, memberFolder: folder.path })
+  const run = createRun(dataDir, { mcpUrl: config.mcpUrl, memberFolder: folder.path, trigger: opts.trigger, reasonZh: opts.reasonZh })
   const sex = profile.sex === 'male' ? '男' : '女'
   const lines = [
     `请用 ${SKILL_NAME} 为我做一次深度分析：生物学年龄、各器官状况、以后的疾病风险，再给一份能照着做的干预方案。`,
@@ -126,10 +197,13 @@ export function abandon(deps: CoreDeps, runId: string): boolean {
   return abandonRun(deps.dataDir(), runId)
 }
 
-export function statusNow(deps: CoreDeps): { runs: RunStatus[]; current: ReturnType<typeof currentSummary>; blockers: { reply_zh: string; missing: string } | null } {
+export async function statusNow(deps: CoreDeps) {
   const dataDir = deps.dataDir()
-  const runs = listRuns(dataDir).slice(-5).reverse().map((run) => runStatus(run))
-  return { runs, current: currentSummary(dataDir), blockers: startBlockers(dataDir, deps.config()) }
+  const listed = listRuns(dataDir).slice(-5).reverse()
+  const runs = listed.map((run) => ({ ...runStatus(run), trigger: run.trigger ?? 'member', reason_zh: run.reason_zh ?? '' }))
+  const context = await deps.context().catch(() => null)
+  const ready = readiness(dataDir, deps.config(), context?.records ?? null, context?.today ?? new Date().toISOString().slice(0, 10))
+  return { runs, current: currentSummary(dataDir), blockers: ready.blockers, readiness: ready }
 }
 
 export function currentSummary(dataDir: string) {

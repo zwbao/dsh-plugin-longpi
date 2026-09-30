@@ -6,24 +6,26 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { CoreDeps } from '../contracts/index.ts'
 import { asJson } from '../json.ts'
 import { jsonOut } from '../core/tool-kit.ts'
-import { SKILL_NAME, currentSummary, importLatest, planReadBack, startRun, statusNow } from './service.ts'
+import { AUTO_MIN_DAYS, SKILL_NAME, currentSummary, importLatest, planReadBack, startRun, statusNow } from './service.ts'
 
 export function registerAnalysisTools(ctx: Context, deps: CoreDeps): void {
   ctx.tools.register(defineTool({
     name: 'run_deep_analysis',
-    description: `Prepare a deep multi-omics analysis for this person (biological age, organ checkup table, disease risks, gene-vs-lab insights, a question board and an intervention plan) with the ${SKILL_NAME} skill. Checks consent, age/sex and that the skill is installed, creates the run folder, and returns the exact request to carry out. Use when the person asks for 深度分析 / 全面分析 / 多组学报告. It does not run the analysis: after it returns ok, load the ${SKILL_NAME} skill yourself and do what prompt_zh says.`,
+    description: `Start a deep multi-omics analysis for this person with the ${SKILL_NAME} skill (biological age, organ checkup table, disease risks, gene-vs-lab insights, a question board, an intervention plan). You decide when: the health snapshot line 深度分析 gives the facts (new data since the last analysis, a run going, consent). Start it yourself when those facts show new data worth analysing (trigger "ai"; the plugin refuses when there is no new data or the last automatic run was under ${AUTO_MIN_DAYS} days ago), or when the person asks for one (trigger "member"). Returns the exact request to carry out: then load the ${SKILL_NAME} skill yourself and do what prompt_zh says, telling the person why you started it and that it takes a while.`,
     parameters: {
-      data_folder: { type: 'string', description: 'Folder with the person\'s omics/checkup files if they gave one; omit to use only what Mirobody holds.' },
+      trigger: { type: 'string', enum: ['ai', 'member'], required: true, description: '"ai" when you decided from the facts; "member" only when the person asked for a deep analysis in this conversation.' },
+      reason_zh: { type: 'string', required: true, description: 'Why now, in one or two Chinese sentences naming the facts (e.g. 9 月体检后有了新的化验和手表数据). Shown on the health page.' },
+      data_folder: { type: 'string', description: 'Folder with the person\'s omics files if they named one; omit to use the folder remembered from before (or only Mirobody).' },
     },
     output: jsonOut,
-    timeoutMs: 30_000,
+    timeoutMs: 60_000,
     isConcurrencySafe: () => false,
-    async execute(args: { data_folder?: string }) {
-      const res = await startRun(deps, { dataFolder: args.data_folder ?? null })
-      if (!res.ok) return asJson({ ok: false, reply_zh: res.reply_zh, missing: res.missing, how_to_use: 'Say reply_zh to the person and stop; do not start the skill.' })
+    async execute(args: { trigger?: string; reason_zh?: string; data_folder?: string }) {
+      const res = await startRun(deps, { dataFolder: args.data_folder ?? null, trigger: args.trigger === 'member' ? 'member' : 'ai', reasonZh: String(args.reason_zh ?? '') })
+      if (!res.ok) return asJson({ ok: false, reply_zh: res.reply_zh, missing: res.missing, how_to_use: 'Do not start the skill. If the person asked, say reply_zh; otherwise say nothing about it unless it helps them (e.g. a missing consent).' })
       return asJson({
         ...res,
-        how_to_use: `Load the ${SKILL_NAME} skill and carry out prompt_zh as the person's request (it is written in their voice). Never print the MCP URL file's contents. When la.py report is done, call import_analysis.`,
+        how_to_use: `Load the ${SKILL_NAME} skill and carry out prompt_zh as the person's request (it is written in their voice). Never print the MCP URL file's contents. When la.py report is done, call import_analysis yourself. Before the conversation ends, if the analysis is still running or was not due, you may schedule yourself to check again (the schedule tool).`,
       })
     },
   }))
@@ -56,10 +58,11 @@ export function registerAnalysisTools(ctx: Context, deps: CoreDeps): void {
     timeoutMs: 30_000,
     isConcurrencySafe: () => true,
     async execute() {
-      const status = statusNow(deps)
+      const status = await statusNow(deps)
       const current = currentSummary(deps.dataDir())
       return asJson({
-        runs: status.runs.map((r) => ({ id: r.id, started_at: r.started_at, done: `${r.done}/${r.stages.length}`, report_ready: r.report_ready })),
+        readiness: status.readiness,
+        runs: status.runs.map((r) => ({ id: r.id, started_at: r.started_at, trigger: r.trigger, reason_zh: r.reason_zh, done: `${r.done}/${r.stages.length}`, report_ready: r.report_ready, active: r.active })),
         current,
         plan_read_back: current ? await planReadBack(deps) : null,
         how_to_read: 'AI 估计 readouts are estimates with ranges, not measurements; a genetic percentile is a tendency, not a diagnosis; a ClinVar finding needs clinical confirmation and genetic counselling. Quote numbers as they are here.',

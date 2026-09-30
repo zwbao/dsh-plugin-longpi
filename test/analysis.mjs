@@ -90,12 +90,12 @@ function exportFor(run, over = {}) {
   assert.match(mod.startBlockers(dataDir)?.reply_zh ?? '', /生理性别/)
   mod.writeProfile(dataDir, { ...mod.EMPTY_PROFILE, age: 58, birthYear: 1968, sex: 'male' })
   assert.equal(mod.startBlockers(dataDir), null)
-  assert.equal((await mod.startRun(deps, { dataFolder: 'relative/folder' })).missing, 'folder')
-  const res = await mod.startRun(deps, {})
+  assert.equal((await mod.startRun(deps, { dataFolder: 'relative/folder', trigger: 'member', reasonZh: '用户要求' })).missing, 'folder')
+  const res = await mod.startRun(deps, { trigger: 'member', reasonZh: '用户要求做一次深度分析' })
   assert.equal(res.ok, true)
   assert.match(res.prompt_zh, /58 岁，男/)
   assert.ok(!/mirobody pull/.test(res.prompt_zh), 'no Mirobody, no pull step')
-  assert.ok(mod.statusNow(deps).blockers === null)
+  assert.ok((await mod.statusNow(deps)).blockers === null)
 }
 
 // ---- run ids never collide; the member's folder is linked, never written to
@@ -105,8 +105,9 @@ function exportFor(run, over = {}) {
   const a = mod.createRun(dataDir, { mcpUrl: '', memberFolder: null, now: at })
   const b = mod.createRun(dataDir, { mcpUrl: '', memberFolder: null, now: at })
   assert.notEqual(a.id, b.id)
+  mod.abandonAnalysis(deps, a.id); mod.abandonAnalysis(deps, b.id)
   const folder = tmp('member-folder'); writeFileSync(join(folder, 'labs.pdf'), 'x')
-  const res = await mod.startRun(deps, { dataFolder: folder })
+  const res = await mod.startRun(deps, { dataFolder: folder, trigger: 'member', reasonZh: '用户要求' })
   const run = mod.listRuns(dataDir).at(-1)
   assert.ok(res.prompt_zh.includes(run.data_dir) && !res.prompt_zh.includes(folder), 'the skill works in the run\'s data folder')
   assert.equal(readFileSync(join(run.data_dir, 'labs.pdf'), 'utf8'), 'x')
@@ -117,7 +118,7 @@ function exportFor(run, over = {}) {
 // ---- a run with Mirobody: the URL goes to a 0600 file, never into the request text
 {
   const { dataDir, deps } = readyMember('run', { mcpUrl: 'http://127.0.0.1:18060/mcp/SECRET-XYZ' })
-  const res = await mod.startRun(deps, {})
+  const res = await mod.startRun(deps, { trigger: 'member', reasonZh: '用户要求做一次深度分析' })
   assert.ok(!res.prompt_zh.includes('SECRET-XYZ'))
   assert.match(res.prompt_zh, /mirobody pull .* --mcp-url-file /)
   const run = mod.listRuns(dataDir).at(-1)
@@ -161,7 +162,7 @@ function exportFor(run, over = {}) {
   assert.equal(back.ok, true, back.errors.join())
   assert.deepEqual(back.items.map((i) => i.category), ['diet', 'other'])
   assert.ok(back.items.every((i) => !i.id.startsWith('la-')), 'items get LongPi ids, never the analysis\'s')
-  const status = mod.statusNow(deps)
+  const status = await mod.statusNow(deps)
   assert.equal(status.current.organs[1].overrides[0].disease, '2 型糖尿病')
   assert.equal((await mod.acceptPlan(deps, {})).stale, true, 'an accept without what was read is refused')
   // another import lands between the read-back and the click
@@ -208,6 +209,41 @@ function exportFor(run, over = {}) {
   rmSync(x.report.html)
   execFileSync('mkfifo', [x.report.html])
   assert.match(mod.checkExport(x, run2).problems.join(), /regular file/, 'a FIFO is never read (it would block the server)')
+}
+
+// ---- who decides: the AI starts only on new data and at most every 30 days; the member may always ask
+{
+  const { dataDir, deps: base } = readyMember('auto')
+  let records = { indicators: [{ name: 'LDL', value: '3.8', unit: 'mmol/L', date: '2026-09-10' }] }
+  const deps = { ...base, context: async () => ({ today: '2026-09-30', records: { ...records, medications: [] } }) }
+  assert.equal((await mod.startRun(deps, { trigger: 'ai', reasonZh: '' })).missing, 'reason', 'a start without a reason is refused')
+  let ready = mod.analysisReadiness(dataDir, {}, records, '2026-09-30')
+  assert.equal(ready.auto_allowed, true, ready.why_zh)
+  assert.match(mod.analysisReadinessLine(ready), /可以由你决定现在开始/)
+  const first = await mod.startRun(deps, { trigger: 'ai', reasonZh: '有 9 月体检的新化验，还没做过深度分析' })
+  assert.equal(first.ok, true, JSON.stringify(first))
+  assert.equal(mod.listRuns(dataDir).at(-1).trigger, 'ai')
+  // a run is going: the AI may not start another; neither may the member
+  assert.equal((await mod.startRun(deps, { trigger: 'ai', reasonZh: 'x' })).missing, 'not_now')
+  assert.equal((await mod.startRun(deps, { trigger: 'member', reasonZh: 'x' })).missing, 'running')
+  // it finished: nothing new since, so no automatic run
+  const run = mod.listRuns(dataDir).at(-1)
+  exportFor(run)
+  ready = mod.analysisReadiness(dataDir, {}, records, '2026-09-30')
+  assert.equal(ready.new_data, false); assert.equal(ready.auto_allowed, false)
+  assert.equal((await mod.startRun(deps, { trigger: 'ai', reasonZh: 'x' })).missing, 'not_now')
+  // new data, but within 30 days of the last automatic start: still no; the member asking is allowed
+  records = { indicators: [{ name: 'LDL', value: '3.4', unit: 'mmol/L', date: '2026-10-05' }] }
+  ready = mod.analysisReadiness(dataDir, {}, records, '2026-10-06')
+  assert.equal(ready.new_data, true); assert.equal(ready.auto_allowed, false)
+  assert.match(ready.why_zh, /不足 30 天/)
+  const asked = await mod.startRun({ ...deps, context: async () => ({ today: '2026-10-06', records: { ...records, medications: [] } }) }, { trigger: 'member', reasonZh: '用户要求复查后再分析' })
+  assert.equal(asked.ok, true, JSON.stringify(asked))
+  // after 30 days and with new data, the AI may start again
+  mod.abandonAnalysis(deps, mod.listRuns(dataDir).at(-1).id)
+  records = { indicators: [{ name: 'LDL', value: '3.1', unit: 'mmol/L', date: '2026-11-20' }] }
+  ready = mod.analysisReadiness(dataDir, {}, records, '2026-11-21')
+  assert.equal(ready.auto_allowed, true, ready.why_zh)
 }
 
 // ---- the report is served with a CSP that forbids scripts and network

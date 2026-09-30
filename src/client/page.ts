@@ -211,7 +211,7 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
     } else if (tab === 'ask') {
       panel = h(AskTab, { journey, openChat: props.openChat })
     } else if (tab === 'analysis') {
-      panel = h(AnalysisTab, { openChat: props.openChat, onNotice: notify })
+      panel = h(AnalysisTab, { onNotice: notify })
     } else if (tab === 'plan') {
       panel = h(PlanTab, { journey, tracking: tracking.data, loading: tracking.loading, error: tracking.error, onNotice: notify, onPrompt })
     } else if (tab === 'profile') {

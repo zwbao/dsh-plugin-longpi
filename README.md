@@ -51,7 +51,7 @@ After onboarding:
 - **Settings**: the LongPi page in DeepSeek Harness settings holds follow-up reminders, the Mirobody connection (paste an address, test, save), privacy notes and the method library.
 - **Plans**: say 帮我制定一份改善方案 in the chat, or edit the draft card on the health page or in the chat item by item and adopt it; a plan from a doctor or longevity coach can be saved too. LongPi reads the plan back first, and the person approves the save in DeepSeek Harness.
 - **Tracking and review**: wearable data counts toward adherence automatically; other items are checked in from the home, the health page or the chat. Once a retest reaches Mirobody, the health page gives a verdict (working, within noise, the wrong way, or cannot tell) with its reasons.
-- **Deep analysis** (with `--with-analyst`): the 深度分析 tab, or 帮我做一次深度分析 in the chat, prepares a run of the longevity-analyst skill on the person's whole-genome, methylation, gut, proteomics and checkup data (checkup and watch data are read from Mirobody). It needs both privacy consents and age and sex in the profile. The analysis runs in the chat, which asks for approvals as it goes; the tab shows its stages. When it finishes, 导入结果 brings in the report, the organ table and the question board; the plan it proposes is read back and saved only when the person accepts it, and its retests become follow-up reminders.
+- **Deep analysis** (with `--with-analyst`): LongPi decides when to run the longevity-analyst skill on the person's whole-genome, methylation, gut, proteomics and checkup data (checkup and watch data are read from Mirobody). Each health chat carries the facts (new data since the last analysis, a run going, consent); when there is new data worth analysing, the AI starts a run in that chat and says why, at most once every 30 days on its own; the person can also ask for one. It needs both privacy consents and age and sex in the profile. The 深度分析 tab shows LongPi's judgment, the run's stages, the report, the organ table and the question board; the plan is read back and saved only when the person accepts it, and its retests become follow-up reminders.
 - **Follow-up**: turn it on in the LongPi page of the settings and set the check-in, retest and weekly-summary times, quiet hours and channels. Reminders are sent only while DeepSeek Harness is running; the brief mode carries no health values.
 
 <p align="center"><img src="docs/images/health-overview.png" alt="LongPi health page, 概览 tab: today's check-in, phenotypic age, cardiovascular risk, the next step and notable changes" width="760"></p>
@@ -71,7 +71,7 @@ Example questions:
 | Review the plan | Is my plan working? Which parts cannot be judged yet? |
 | Model a goal | If fasting glucose drops to 5.0, how would my phenotypic age change? |
 | Look up evidence | What do the collected papers say about NMN and metformin? |
-| Deep analysis | 帮我做一次深度分析（全基因组、甲基化、肠道菌、蛋白组） |
+| Deep analysis (on request) | 帮我做一次深度分析，检测文件在 ~/Documents/多组学 |
 
 The health page, the settings page and the API all need the DeepSeek Harness login: the API accepts only the cookie a logged-in browser holds, so other programs and web pages cannot read or write it. Type `/longpi` in the chat to see the status: skill library version, Mirobody connection, onboarding stage and follow-up settings.
 

@@ -27,6 +27,7 @@ export const ORCHESTRATOR_RULES = [
   '4. When the person states a goal, something they do not want (不要…), a condition, a medicine they take or stopped, a sick or travel day, or whether they drink, call remember_for_me with their exact words as quote. read_person_memory shows what is already kept; do not ask again.',
   '5. Use the job skills for the job at hand. Never send the person\'s name anywhere; call them 你.',
   '6. Write only Chinese to the person. Do not narrate what you are about to do (no "I\'ll …", "Let me …" before a tool call): call the tool, then answer.',
+  '7. Deep analysis is your decision, not a button: when the snapshot line 深度分析 says it can start now, start it yourself with run_deep_analysis (trigger "ai", reason_zh naming the new data), say in one sentence why and that it runs in the background of this chat, then follow the longevity-analyst skill; import the result with import_analysis when it is done and read the plan back for the person to adopt. Start one for trigger "member" only when they ask. Never start one they declined, and never around a missing consent: ask for the consent instead.',
 ]
 
 export function orchestratorPrompt(mount: MountState): string {
@@ -61,6 +62,8 @@ export interface SnapshotInput {
   care_due_zh: string
   /** Items the distiller noted from the chat, not yet confirmed. */
   noted_zh?: string
+  /** The deep-analysis facts (M12): new data since the last analysis, a run going, what the AI may do. */
+  analysis_zh?: string
 }
 
 /** The snapshot text (Chinese), at most about 1.5k tokens. */
@@ -79,6 +82,7 @@ export function snapshotText(input: SnapshotInput): string {
   const others = page.top_facts.slice(1, 4).filter((row) => row.priority !== 'context' && !safety.includes(row) && row !== top).slice(0, 2)
   if (others.length > 0) lines.push(`也要留意：${others.map((row) => row.text_zh).join('；')}`)
   if (input.care_due_zh) lines.push(`就医跟进：${input.care_due_zh}`)
+  if (input.analysis_zh) lines.push(input.analysis_zh)
   if (input.memory_zh) lines.push(`你之前记下：${clip(input.memory_zh.replace(/\n/g, '；'), 500)}`)
   if (input.noted_zh) lines.push(`刚从对话里记下（未确认）：${clip(input.noted_zh, 200)}。回答时顺带说一句「我记下了：…（不对可以说"撤销"）」。`)
   if (page.suggestions_zh.length > 0) lines.push(`页面建议的问题：${page.suggestions_zh.slice(0, 3).join(' / ')}`)

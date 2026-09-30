@@ -4,12 +4,17 @@
 
 给使用者
 
+深度分析什么时候做由 LongPi 判断，不再需要你去点按钮：有了新的体检、化验或检测文件，它会在对话里自己开始，并告诉你为什么现在做、大概要多久；没有新数据时不会重复做，自动发起最多每 30 天一次。你也可以在对话里直接要求做一次。「深度分析」页显示它的判断和进度。
+
 健康页多了「深度分析」：用你的全基因组、甲基化、肠道菌、蛋白组和体检数据，算生物学年龄、各器官状况和以后的疾病风险，针对你提出问题并逐一查证，最后给一份能照着做的方案。点「发起深度分析」会把请求放进对话输入框，发送后在对话里进行，需要你确认的步骤会在对话里问你；页面显示做到了哪一步。做完点「导入结果」，报告、器官体检表和问题看板就出现在这一页；方案先读给你看，你点「接受方案」才保存，方案里要复测的指标会进复测提醒。发起前需要你已同意处理敏感个人信息和数据交给模型服务，并在档案里填好年龄和性别。
 
 English
 
-- M12 deep analysis: run_deep_analysis / import_analysis / read_deep_analysis, /api/longpi/analysis routes and the
-  深度分析 tab, over the longevity-analyst skill's la-export/1. Starting needs the skill installed, an adult, the
+- M12 deep analysis, started by the AI: the health snapshot carries a 深度分析 line (new Mirobody data or new files in
+  the remembered folder since the last analysis, a run going, consent); run_deep_analysis takes trigger ai|member and
+  reason_zh, and the harness refuses an "ai" start with no new data, with a run going, or within 30 days of the last
+  automatic start. No page start route or button. import_analysis / read_deep_analysis, /api/longpi/analysis routes and the
+  深度分析 tab (the AI's judgment, stages, results), over the longevity-analyst skill's la-export/1. Starting needs the skill installed, an adult, the
   pipl_sensitive and data_flow_deepseek consents and age/sex; the member's MCP URL goes to a 0600 file, never into the
   request text. The export is checked like an outside file (schema, size, the report inside the run workspace, its
   hash). The plan is saved with source "analysis" only after the person accepts the read-back. The report is served

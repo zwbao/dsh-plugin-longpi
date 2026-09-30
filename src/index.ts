@@ -34,6 +34,7 @@ import { registerRoutes } from './routes.ts'
 import { registerTools } from './tools.ts'
 import { registerTrackingTools } from './tools-tracking.ts'
 import { registerFollowupTools } from './tools-followup.ts'
+import { readiness, readinessLine } from './analysis/service.ts'
 import { startFollowup, type FollowupState } from './followup.ts'
 import { buildJourneyFull, followupStateOf, within } from './journey.ts'
 import { loadCatalog } from './catalog.ts'
@@ -300,7 +301,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     else if (open && (!care || ((care.care_status === 'advised' || care.care_status === 'declined') && addDays(care.updated.slice(0, 10), 14) <= today))) careDue = '建议看医生，还没有就医记录：说完最重要的事后，问一句「约了吗？」；看过的话问「医生怎么说？」'
     const since = Date.now() - 24 * 3_600_000
     const noted = memoryFor(dataDir).read().items.filter((item) => item.status === 'active' && !item.confirmed && item.provenance.kind === 'model_extracted' && Date.parse(item.updated) >= since).map((item) => item.text_zh)
-    return { page: pageStateOf(row.set, row.pack), memory_zh: memoryFor(dataDir).digest({ purpose: 'chat', maxChars: 500 }), care_due_zh: careDue, noted_zh: noted.slice(0, 4).join('；') }
+    let analysisZh = ''
+    try {
+      const context = await within(journeyContext(), 1_000)
+      if (context && 'value' in context) analysisZh = readinessLine(readiness(dataDir, source(), context.value.records, today))
+    } catch {
+      analysisZh = ''
+    }
+    return { page: pageStateOf(row.set, row.pack), memory_zh: memoryFor(dataDir).digest({ purpose: 'chat', maxChars: 500 }), care_due_zh: careDue, noted_zh: noted.slice(0, 4).join('；'), analysis_zh: analysisZh }
   }
   const orchestrator = registerOrchestrator(ctx, {
     mount,
@@ -398,7 +406,7 @@ export { createSse } from './core/sse.ts'
 export { rememberFromWords } from './core/remember-rules.ts'
 export { screeningTopics } from './triage/screening.ts'
 // 0.7.0 M12 deep analysis (exported for tests and the preview)
-export { startBlockers, startRun, statusNow, importLatest, planReadBack, acceptPlan, analystSkillPath, analystSkillVersion, abandon as abandonAnalysis, currentSummary } from './analysis/service.ts'
+export { startBlockers, startRun, statusNow, importLatest, planReadBack, acceptPlan, analystSkillPath, analystSkillVersion, abandon as abandonAnalysis, currentSummary, readiness as analysisReadiness, readinessLine as analysisReadinessLine, AUTO_MIN_DAYS } from './analysis/service.ts'
 export { createRun, listRuns, runStatus, checkExport, readExport, importRun, currentImport, planInput, sanitizeReport, EXPORT_SCHEMA, STALE_MS } from './analysis/store.ts'
 export { deleteLocalStore } from './privacy/delete.ts'
 export { REPORT_CSP } from './analysis/routes.ts'

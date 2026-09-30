@@ -4,14 +4,14 @@
 
 import React from 'react'
 import { getJson, postJson } from './api.ts'
-import { setPendingPrompt } from './store.ts'
 import { Btn, Section, type NoticeTone } from './ui.ts'
 
 const h = React.createElement
 
 interface Readout { id: string; label_zh: string; value: unknown; unit?: string; kind?: string; low?: number; high?: number; horizon_years?: number }
 interface Stage { key: string; label_zh: string; done: boolean }
-interface Run { id: string; started_at: string; stages: Stage[]; done: number; report_ready: boolean; active: boolean; state_error: string | null }
+interface Run { id: string; started_at: string; stages: Stage[]; done: number; report_ready: boolean; active: boolean; state_error: string | null; trigger: 'ai' | 'member'; reason_zh: string }
+interface Readiness { why_zh: string; auto_allowed: boolean; last_analysis: string | null; newest_record: string | null; newest_file: string | null; folder: string | null }
 interface BoardRow { id: string; title_zh: string; verdict_zh: string; confidence: string | null; summary_zh: string | null; next_step_zh: string | null; limitations_zh?: string | null }
 interface OrganRow { organ: string; label_zh: string; measured: Readout[]; indices: Readout[]; ai_age: Readout | null; ai_risks: Readout[]; overrides: Array<{ disease: string; message_zh: string }> }
 interface Current {
@@ -20,7 +20,7 @@ interface Current {
   retests: Array<{ what: string; after_weeks: number; due: string }>; boundary_zh: string
 }
 interface ReadBack { ok: boolean; run_id: string | null; plan_key: string | null; title: string; items: Array<{ id: string; category: string; title: string; detail: string; markers: string[] }>; warnings: string[]; errors: string[] }
-interface Status { ok: boolean; runs: Run[]; current: Current | null; plan_read_back: ReadBack | null; blockers: { reply_zh: string; missing: string } | null }
+interface Status { ok: boolean; runs: Run[]; current: Current | null; plan_read_back: ReadBack | null; blockers: { reply_zh: string; missing: string } | null; readiness: Readiness | null }
 
 const CONF_ZH: Record<string, string> = { low: '低', moderate: '中' }
 
@@ -43,11 +43,10 @@ function fmt(r: Readout | null | undefined): string {
   return `${v}${unit}`
 }
 
-export function AnalysisTab(props: { openChat?: () => void; onNotice?: (text: string, tone?: NoticeTone) => void }): React.ReactElement {
+export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone) => void }): React.ReactElement {
   const [status, setStatus] = React.useState<Status | null>(null)
   const [busy, setBusy] = React.useState('')
   const [error, setError] = React.useState('')
-  const [folder, setFolder] = React.useState('')
   const load = React.useCallback(() => {
     void getJson<Status>('/api/longpi/analysis').then((s) => { setStatus(s); setError('') })
       .catch((e: unknown) => setError(errText(e, '读取深度分析状态失败')))
@@ -72,13 +71,6 @@ export function AnalysisTab(props: { openChat?: () => void; onNotice?: (text: st
       load()
     }
   }
-  const start = () => act('start', async () => {
-    const res = await postJson<{ ok: boolean; prompt_zh?: string }>('/api/longpi/analysis/start', folder.trim() ? { data_folder: folder.trim() } : {})
-    if (!res.prompt_zh) throw new Error('现在不能发起。')
-    setPendingPrompt(res.prompt_zh)
-    props.openChat?.()
-    notice('已把请求放进对话输入框，发送后开始分析。', 'info')
-  }, '现在不能发起。')
   const doImport = (runId: string) => act('import', async () => {
     await postJson('/api/longpi/analysis/import', { run_id: runId })
     notice('结果已导入。', 'good')
@@ -101,21 +93,16 @@ export function AnalysisTab(props: { openChat?: () => void; onNotice?: (text: st
 
   return h('div', { className: 'lp-tab-body lp-analysis' },
     error ? h('p', { className: 'lp-muted', role: 'alert' }, error) : null,
-    h(Section, {
-      title: '深度分析', kicker: '多组学 · 器官 · 问题看板',
-      aside: h(Btn, { onClick: () => { void start() }, disabled: Boolean(busy) || Boolean(running) || Boolean(blocked) }, running ? '分析进行中' : '发起深度分析'),
-    },
-    h('p', { className: 'lp-muted' }, '用你的全基因组、甲基化、肠道菌、蛋白组和体检数据，算生物学年龄、各器官状况和以后的疾病风险，提出针对你的问题并逐一查证，最后给一份能照着做的方案。分析在对话里进行，需要你确认的步骤会在对话里问你。'),
-    !running && !blocked ? h('label', { className: 'lp-field' },
-      h('span', { className: 'lp-label' }, '检测文件所在的文件夹（可选）'),
-      h('input', {
-        className: 'lp-input', type: 'text', value: folder, placeholder: '例如 ~/Documents/我的多组学报告',
-        onChange: (e: React.ChangeEvent<HTMLInputElement>) => setFolder(e.target.value), 'aria-label': '检测文件所在的文件夹',
-      }),
-      h('span', { className: 'lp-muted' }, '全基因组、甲基化、肠道菌、蛋白组的原始文件不在 Mirobody 里，放在这台电脑的一个文件夹中；只会读取，不会改动。体检和手表数据从 Mirobody 读。')) : null,
-    blocked ? h('div', { className: 'lp-card', role: 'status' }, h('div', { className: 'lp-label' }, '发起前还需要'), h('p', null, blocked.reply_zh)) : null,
+    h(Section, { title: '深度分析', kicker: '多组学 · 器官 · 问题看板' },
+    h('p', { className: 'lp-muted' }, '用你的全基因组、甲基化、肠道菌、蛋白组和体检数据，算生物学年龄、各器官状况和以后的疾病风险，提出针对你的问题并逐一查证，最后给一份能照着做的方案。什么时候做由 LongPi 判断：有了新数据才会做，在对话里进行，需要你确认的步骤会在对话里问你；你也可以在对话里直接要求做一次。'),
+    blocked ? h('div', { className: 'lp-card', role: 'status' }, h('div', { className: 'lp-label' }, '现在还不能做'), h('p', null, blocked.reply_zh)) : null,
+    !blocked && status.readiness ? h('div', { className: 'lp-card', role: 'status' },
+      h('div', { className: 'lp-label' }, 'LongPi 的判断'),
+      h('p', null, t(status.readiness.why_zh)),
+      status.readiness.folder ? h('p', { className: 'lp-muted' }, `检测文件夹：${t(status.readiness.folder)}（只读）`) : null) : null,
     running ? h('div', { className: 'lp-card' },
       h('div', { className: 'lp-label' }, `进行中：${running.done}/${running.stages.length} 步`),
+      running.reason_zh ? h('p', { className: 'lp-muted' }, `${running.trigger === 'ai' ? 'LongPi 发起' : '你要求的'}：${t(running.reason_zh)}`) : null,
       h('ol', { className: 'lp-steps' }, ...running.stages.map((s) => h('li', { key: s.key, className: s.done ? 'lp-step-done' : '' }, `${s.done ? '✓ ' : ''}${s.label_zh}`))),
       running.state_error ? h('p', { className: 'lp-muted' }, running.state_error) : null,
       h(Btn, { variant: 'outline', onClick: () => { void abandon(running.id) }, disabled: Boolean(busy) }, '放弃这次分析')) : null,

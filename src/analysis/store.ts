@@ -35,6 +35,9 @@ export interface AnalysisRun {
   workspace: string
   mirobody: boolean
   member_folder?: string | null
+  /** Who decided to run: the AI on its own reading of the facts, or the member asking. */
+  trigger?: 'ai' | 'member'
+  reason_zh?: string
 }
 
 export interface ImportedMeta {
@@ -81,7 +84,7 @@ export function abandonRun(dataDir: string, runId: string): boolean {
   return true
 }
 
-export function createRun(dataDir: string, opts: { mcpUrl: string; memberFolder: string | null; now?: Date }): AnalysisRun & { mcp_url_file: string | null } {
+export function createRun(dataDir: string, opts: { mcpUrl: string; memberFolder: string | null; now?: Date; trigger?: 'ai' | 'member'; reasonZh?: string }): AnalysisRun & { mcp_url_file: string | null } {
   const at = opts.now ?? new Date()
   const base = analysesRoot()
   mkdirSync(base, { recursive: true, mode: 0o700 })
@@ -114,7 +117,8 @@ export function createRun(dataDir: string, opts: { mcpUrl: string; memberFolder:
     writeFileSync(urlFile, opts.mcpUrl.trim() + '\n', { mode: 0o600 })
     chmodSync(urlFile, 0o600)
   }
-  const run: AnalysisRun = { id, started_at: at.toISOString(), root, data_dir: data, workspace: join(root, 'ws'), mirobody: Boolean(urlFile), member_folder: opts.memberFolder }
+  const run: AnalysisRun = { id, started_at: at.toISOString(), root, data_dir: data, workspace: join(root, 'ws'), mirobody: Boolean(urlFile),
+    member_folder: opts.memberFolder, trigger: opts.trigger ?? 'member', reason_zh: (opts.reasonZh ?? '').slice(0, 300) }
   appendJsonl(join(dirOf(dataDir), 'runs.jsonl'), run)
   return { ...run, mcp_url_file: urlFile }
 }
@@ -365,5 +369,39 @@ export function planInput(value: LaExport, today: string): Record<string, unknow
     note: value.plan.note,
     items: value.plan.items.map((item) => ({ category: item.category, title: item.title, detail: item.detail, start: today, markers: item.markers })),
     goals: [],
+  }
+}
+
+
+/** The member's omics folder, remembered from the first run that named it, so later runs and the readiness check use it. */
+export function registeredFolder(dataDir: string): string | null {
+  try {
+    const v = JSON.parse(readFileSync(join(dataDir, 'analysis', 'folder.json'), 'utf8')) as { path?: unknown }
+    return typeof v.path === 'string' && v.path ? v.path : null
+  } catch {
+    return null
+  }
+}
+
+export function registerFolder(dataDir: string, path: string): void {
+  writeJsonAtomic(join(dirOf(dataDir), 'folder.json'), { path, at: new Date().toISOString() })
+}
+
+/** Newest modification date (YYYY-MM-DD) of the files directly in a folder, or null. */
+export function newestFileDate(folder: string | null): string | null {
+  if (!folder) return null
+  try {
+    let newest = 0
+    for (const name of readdirSync(folder)) {
+      if (name.startsWith('.')) continue
+      try {
+        newest = Math.max(newest, statSync(join(folder, name)).mtimeMs)
+      } catch {
+        /* a broken link */
+      }
+    }
+    return newest ? new Date(newest).toISOString().slice(0, 10) : null
+  } catch {
+    return null
   }
 }
