@@ -10,6 +10,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import { CATEGORY_ZH, isoDay, normalizePlan, type Category } from './interventions.ts'
 import type { Guard } from './guard-llm.ts'
 import { TOOL_NAMES } from './version.ts'
+import { COST_ZH } from './analysis/service.ts'
 
 export const READ_BACK_MS = 30 * 60_000
 export const NO_READ_BACK = '请先复述方案给用户确认'
@@ -79,6 +80,12 @@ export function registerApprovals(ctx: Context, guard: Pick<Guard, 'inEmergency'
     if ((exec.name === 'query_longevity_evidence' || exec.name === 'draft_intervention_plan') && guard.inAdvice?.(exec.agent)) {
       guard.count({ skill_blocked: 1 })
       return { kind: 'deny', reason: '这一轮不要查证据库，也不要起草方案。按安全提示里的人体常用范围、上限、试验方案或风险说明直接回答。动物、细胞、蟋蟀或小鼠的结果不是这个人的证据。不要只说不能回答。' }
+    }
+    // A deep analysis the person asks for costs about half a million tokens: DSH asks them, so "member" is their yes,
+    // never only the model's word. An automatic start ("ai") is allowed only with the page switch on (checked in M12).
+    if (exec.name === 'run_deep_analysis' && record(exec.arguments).trigger !== 'ai') {
+      guard.count({ approval_asked: 1 })
+      return { kind: 'ask', reason: `开始一次深度分析？${COST_ZH}。` }
     }
     if (exec.name !== SAVE_TOOL || record(exec.arguments).confirm !== true) return decision
     if (!hasReadBack(planKey(exec.arguments))) {

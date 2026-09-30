@@ -9,6 +9,12 @@ import { appendJsonl, readJson, writeJsonAtomic } from '../core/store.ts'
 const last = new Map<string, { set: SurfaceSet; page: PageState; pack: FactPack }>()
 let lastDataDir = ''
 
+/** A switch to another person (M13): no fallback to the previous person's page. */
+export function forgetLastPage(): void {
+  lastDataDir = ''
+  last.clear()
+}
+
 export function pageStateOf(set: SurfaceSet, pack: FactPack): PageState {
   return {
     inputs_fp: set.inputs_fp,

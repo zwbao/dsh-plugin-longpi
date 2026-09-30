@@ -22,6 +22,8 @@ interface Bound {
   codexEnabled: () => boolean
 }
 
+import { resolveRootDir } from '../paths.ts'
+
 const bound: Bound = {
   dataDir: () => '',
   scienceMode: () => 'off',
@@ -35,7 +37,8 @@ export function bindPrivacy(next: Bound): void {
 }
 
 export function consentGranted(scope: ConsentRecord['scope']): boolean {
-  const dir = bound.dataDir()
+  // Consent is the holder's, for the whole install (family members included), kept in the LongPi home.
+  const dir = resolveRootDir(bound.dataDir())
   if (!dir) return false
   return isGranted(dir, scope)
 }

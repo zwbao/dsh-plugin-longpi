@@ -87,6 +87,8 @@ function skip(name: string): boolean {
   const base = name.split('/').pop() ?? name
   if (SKIP_DIR.has(base) && !name.includes('/')) return true
   if (name === 'privacy/exports' || name.startsWith('privacy/exports/')) return true
+  // Family members' stores (and their links) are theirs: a holder's export never carries them.
+  if (name === 'people' || name.startsWith('people/') || name === 'people.json' || name === 'analysis-settings.json') return true
   return false
 }
 

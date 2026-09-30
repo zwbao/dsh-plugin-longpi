@@ -1,7 +1,8 @@
 // M12 deep analysis: the checks and actions the tools and the page share.
 
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { rootDir } from '../people/store.ts'
+import { activePerson, personDir, readRegistry, rootDir, type Person } from '../people/store.ts'
+import { holderAuth, mintMemberLink, saveMemberLink } from '../people/mirobody.ts'
 import { homedir } from 'node:os'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { CoreDeps } from '../contracts/index.ts'
@@ -97,6 +98,9 @@ export interface Readiness {
   newest_file: string | null
   folder: string | null
   new_data: boolean
+  /** The newest data date, and whether the AI was already told to ask about it (ask once per batch of new data). */
+  newest: string | null
+  asked: boolean
   /** The switch on the page: when off the AI may only offer a run and start it when the person says yes. */
   auto_on: boolean
   /** The harness's gate for an AI-started run: switch on, new data since the last analysis, no run going, 30 days since the last automatic start. */
@@ -137,8 +141,9 @@ export function readiness(dataDir: string, config: { member?: string; dataDir?: 
         : !newData ? `上次分析（${lastAnalysis}）之后没有新数据。`
           : !spaced ? `上次自动分析在 ${lastAuto}，距今不足 ${AUTO_MIN_DAYS} 天；会员主动要求时可以做。`
             : lastAnalysis ? `上次分析（${lastAnalysis}）之后有新数据（最新 ${newest}）。` : `有数据（最新 ${newest}），还没有做过深度分析。`
+  const asked = Boolean(newest) && readAsked(dataDir) === newest
   return { blockers, running, last_analysis: lastAnalysis, last_auto_start: lastAuto, newest_record: newestRecord, newest_file: newestFile,
-    folder, new_data: newData, auto_on: autoOn, auto_allowed: autoAllowed, why_zh: why }
+    folder, new_data: newData, newest, asked, auto_on: autoOn, auto_allowed: autoAllowed, why_zh: why }
 }
 
 /** One line for the health snapshot: the facts and what the AI may do with them. */
@@ -147,9 +152,25 @@ export function readinessLine(r: Readiness): string {
   let act = ''
   if (r.running) act = '做完后用 import_analysis 导入'
   else if (r.auto_allowed) act = '自动深度分析已打开，可以由你决定现在开始（run_deep_analysis，trigger ai，写明理由），开始后告诉用户为什么做、大约要多久'
-  else if (!r.auto_on && r.new_data && !r.blockers) act = `自动深度分析没有打开。这是一个关键节点：在回答完用户的问题后，用一句话问他要不要做一次深度分析，并说明${COST_ZH}；他说要，才用 trigger member 开始。每批新数据只问一次，他说不用就记下（remember_for_me），不要再问`
+  else if (!r.auto_on && r.new_data && !r.blockers && !r.asked) act = `自动深度分析没有打开。这是一个关键节点：在回答完用户的问题后，用一句话问他要不要做一次深度分析，并说明${COST_ZH}；他说要，才用 trigger member 开始（会弹出确认）。这批新数据只问这一次`
+  else if (!r.auto_on && r.new_data && r.asked) act = '这批新数据已经问过用户，不要再问；他主动要求时再做（trigger member）'
   else act = '现在不开始；用户要求时可以做（trigger member）'
   return `深度分析：${r.why_zh}——${act}`
+}
+
+function readAsked(dataDir: string): string | null {
+  try {
+    const v = JSON.parse(readFileSync(join(dataDir, 'analysis', 'asked.json'), 'utf8')) as { newest?: unknown }
+    return typeof v.newest === 'string' ? v.newest : null
+  } catch {
+    return null
+  }
+}
+
+/** The ask for this batch of new data was put in front of the AI: it is not put there again. */
+export function markAsked(dataDir: string, newest: string): void {
+  mkdirSync(join(dataDir, 'analysis'), { recursive: true })
+  writeFileSync(join(dataDir, 'analysis', 'asked.json'), JSON.stringify({ newest, at: new Date().toISOString() }), { mode: 0o600 })
 }
 
 export type StartResult =
@@ -190,20 +211,40 @@ export async function startRun(deps: CoreDeps, opts: { dataFolder?: string | nul
   }
   if (folder.path) registerFolder(dataDir, folder.path)
   const profile = readProfile(dataDir)
-  const run = createRun(dataDir, { mcpUrl: config.mcpUrl, memberFolder: folder.path, trigger: opts.trigger, reasonZh: opts.reasonZh })
+  const root = rootDir(config.dataDir)
+  const who = activePerson(root)
+  // The run reads Mirobody through a link, not the page's token: give it a fresh one (ten days) for this person.
+  const link = await freshLinkFor(root, who.person).catch(() => '')
+  const run = createRun(dataDir, { mcpUrl: link || deps.config().mcpUrl, memberFolder: folder.path, trigger: opts.trigger, reasonZh: opts.reasonZh })
   const sex = profile.sex === 'male' ? '男' : '女'
+  const them = who.person ? `我的${who.label_zh}` : '我'
   const lines = [
-    `请用 ${SKILL_NAME} 为我做一次深度分析：生物学年龄、各器官状况、以后的疾病风险，再给一份能照着做的干预方案。`,
-    `我 ${profile.age} 岁，${sex}。`,
-    folder.path ? `我的检测文件在：${run.data_dir}` : `我没有另外的检测文件，只用我在健康页里已有的数据。数据文件夹用：${run.data_dir}`,
+    `请用 ${SKILL_NAME} 为${them}做一次深度分析：生物学年龄、各器官状况、以后的疾病风险，再给一份能照着做的干预方案。`,
+    who.person ? `${who.label_zh} ${profile.age} 岁，${sex}。这份分析是${who.label_zh}的，不是我自己的。` : `我 ${profile.age} 岁，${sex}。`,
+    folder.path ? `检测文件在：${run.data_dir}` : `没有另外的检测文件，只用健康页里已有的数据。数据文件夹用：${run.data_dir}`,
     `工作目录用：${run.workspace}`,
     `方法库在：${config.skillsHome || '~/longpi/longevity-skills'}`,
     run.mirobody
-      ? `我的体检和手表数据在 Mirobody 里：开始前先运行 la.py mirobody pull ${run.data_dir} --mcp-url-file ${run.mcp_url_file}（链接是我的密钥，不要把它写进命令或回复）。`
+      ? `体检和手表数据在 Mirobody 里：开始前先运行 la.py mirobody pull ${run.data_dir} --mcp-url-file ${run.mcp_url_file}（链接是密钥，不要把它写进命令或回复）。`
       : '',
     '做完后告诉我，我会在健康页「深度分析」里导入结果。',
   ].filter(Boolean)
   return { ok: true, run_id: run.id, workspace: run.workspace, data_folder: run.data_dir, prompt_zh: lines.join('\n'), mirobody: run.mirobody }
+}
+
+/** A fresh personal link for the run: the holder's own (minted with their account) or the family member's. */
+async function freshLinkFor(root: string, person: Person | null): Promise<string> {
+  const auth = holderAuth(root)
+  if ('error_zh' in auth) return ''
+  if (person) {
+    if (!person.mirobody_user_id) return ''
+    const url = await mintMemberLink(auth, person.mirobody_user_id)
+    saveMemberLink(root, person, url)
+    return url
+  }
+  const res = await fetch(`${auth.base}/personal/mcp`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${auth.token}` }, body: '{}' })
+  const json = await res.json().catch(() => ({})) as { code?: number; data?: { url?: string } }
+  return res.ok && json.code === 0 && typeof json.data?.url === 'string' ? json.data.url : ''
 }
 
 export function abandon(deps: CoreDeps, runId: string): boolean {
@@ -242,10 +283,18 @@ export function currentSummary(dataDir: string) {
   }
 }
 
-function findRun(dataDir: string, runId?: string | null): AnalysisRun | null {
+function findRun(dataDir: string, runId?: string | null, root?: string): { dir: string; run: AnalysisRun } | null {
+  if (runId && root) {
+    // A run belongs to the person it was started for, whoever the page shows when it finishes.
+    for (const dir of [root, ...readRegistry(root).people.map((p) => personDir(root, p.id))]) {
+      const run = listRuns(dir).find((r) => r.id === runId)
+      if (run) return { dir, run }
+    }
+    return null
+  }
   const runs = listRuns(dataDir)
-  if (runId) return runs.find((r) => r.id === runId) ?? null
-  return [...runs].reverse().find((r) => runStatus(r).report_ready) ?? null
+  const run = runId ? runs.find((r) => r.id === runId) : [...runs].reverse().find((r) => runStatus(r).report_ready)
+  return run ? { dir: dataDir, run } : null
 }
 
 export type ImportResult =
@@ -254,8 +303,9 @@ export type ImportResult =
 
 export async function importLatest(deps: CoreDeps, runId?: string | null): Promise<ImportResult> {
   const dataDir = deps.dataDir()
-  const run = findRun(dataDir, runId)
-  if (!run) return { ok: false, error_zh: '还没有做完的深度分析可以导入。', problems: [] }
+  const found = findRun(dataDir, runId, rootDir(deps.config().dataDir))
+  if (!found) return { ok: false, error_zh: '还没有做完的深度分析可以导入。', problems: [] }
+  const { run } = found
   const checked = readExport(run)
   if (!checked.value || !checked.html) return { ok: false, error_zh: '这次分析的结果没有通过检查，没有导入。', problems: checked.problems }
   const v = checked.value
@@ -263,7 +313,7 @@ export async function importLatest(deps: CoreDeps, runId?: string | null): Promi
   const context = await deps.context()
   const trial = normalizePlan(planInput(v, context.today), { today: context.today, medications: [], previous: null })
   if (trial.plan.items.length === 0 && v.plan.items.length > 0) return { ok: false, error_zh: '这次分析的方案读不出来，没有导入。', problems: trial.errors }
-  importRun(dataDir, run, v, checked.html)
+  importRun(found.dir, run, v, checked.html)
   deps.invalidate()
   return {
     ok: true, run_id: run.id, readouts: v.readouts.length, organs: v.organs.length, board: v.board.length,
@@ -282,8 +332,8 @@ export interface PlanReadBack {
   plan: Record<string, unknown> | null
 }
 
-export async function planReadBack(deps: CoreDeps): Promise<PlanReadBack> {
-  const dataDir = deps.dataDir()
+export async function planReadBack(deps: CoreDeps, fixedDir?: string): Promise<PlanReadBack> {
+  const dataDir = fixedDir ?? deps.dataDir()
   const cur = currentImport(dataDir)
   if (!cur) return { ok: false, run_id: null, plan_key: null, title: '', items: [], warnings: [], errors: ['还没有导入深度分析。'], plan: null }
   const context = await deps.context()
@@ -310,22 +360,24 @@ export async function planReadBack(deps: CoreDeps): Promise<PlanReadBack> {
  * (run id and the plan's key); a plan that changed since is not saved.
  */
 export async function acceptPlan(deps: CoreDeps, seen: { run_id?: unknown; plan_key?: unknown } = {}): Promise<{ ok: true; version: number; items: number } | { ok: false; error_zh: string; problems: string[]; stale?: boolean }> {
-  const back = await planReadBack(deps)
+  const dir = deps.dataDir()                         // read once: a switch mid-way never saves into another person
+  const back = await planReadBack(deps, dir)
   if (!back.ok || !back.plan) return { ok: false, error_zh: back.errors[0] ?? '方案不能保存。', problems: back.errors }
   if (seen.run_id !== back.run_id || seen.plan_key !== back.plan_key) {
     return { ok: false, stale: true, error_zh: '方案已经更新，请重新阅读后再接受。', problems: ['plan changed since it was read back'] }
   }
-  const cur = currentImport(deps.dataDir())
+  const cur = currentImport(dir)
   if (cur?.meta.plan_accepted_version) return { ok: false, error_zh: `这份方案已经保存过（第 ${cur.meta.plan_accepted_version} 版）。`, problems: [] }
   const context = await deps.context()
   const normalized = normalizePlan(back.plan, {
     today: context.today,
     medications: context.records.medications.map((row) => ({ name: row.name, ...(row.plan_id ? { plan_id: row.plan_id } : {}) })),
-    previous: currentPlan(deps.dataDir()),
+    previous: currentPlan(dir),
   })
   if (normalized.errors.length) return { ok: false, error_zh: normalized.errors[0] ?? '方案不能保存。', problems: normalized.errors }
-  const saved = savePlan(deps.dataDir(), normalized.plan)
-  markPlanAccepted(deps.dataDir(), saved.version)
+  if (deps.dataDir() !== dir) return { ok: false, stale: true, error_zh: '页面切换了人，方案没有保存；请重新阅读后再接受。', problems: ['person changed'] }
+  const saved = savePlan(dir, normalized.plan)
+  markPlanAccepted(dir, saved.version)
   deps.invalidate()
   return { ok: true, version: saved.version, items: saved.items.length }
 }

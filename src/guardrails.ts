@@ -207,6 +207,11 @@ export function rememberMedications(names: readonly string[]): void {
   rememberedDrugs = names.map((name) => name.trim()).filter((name) => name.length >= 2).slice(0, 60)
 }
 
+/** A switch to another person (M13): their medicines are read again, never the previous person's. */
+export function forgetMedications(): void {
+  rememberedDrugs = []
+}
+
 export function rememberedMedications(): string[] {
   return [...rememberedDrugs]
 }

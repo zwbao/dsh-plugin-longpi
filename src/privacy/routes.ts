@@ -16,6 +16,8 @@ const SCOPES = ['pipl_sensitive', 'data_flow_deepseek', 'session_log_upload', 's
 export interface PrivacyRuntime {
   http: CoreDeps['http']
   dataDir: () => string
+  /** Where consent is kept: the holder's store, for everyone on the install. */
+  consentDir: () => string
   mode: () => ScienceMode
   mcpUrl: () => string
   emit: (scope: ConsentRecord['scope'], decision: ConsentRecord['decision']) => void
@@ -41,7 +43,7 @@ function fail(error: string, status = 400): { ok: false; status: number; error: 
 }
 
 export function privacyStatus(runtime: PrivacyRuntime): PrivacyStatus {
-  const dir = runtime.dataDir()
+  const dir = runtime.consentDir()
   const copy = disclosureCopy()
   const rules = bannedClaims()
   const profile = readProfile(dir)
@@ -81,7 +83,7 @@ export function acceptConsent(runtime: PrivacyRuntime, body: unknown): PrivacySt
   const scope = scopeOf(raw.scope)
   const decision = decisionOf(raw.decision)
   if (!scope || !decision) return fail('scope 或 decision 不正确')
-  const dir = runtime.dataDir()
+  const dir = runtime.consentDir()
   if (raw.age != null && raw.age !== '') {
     const age = typeof raw.age === 'number' ? raw.age : Number(raw.age)
     if (!Number.isInteger(age) || age < 0 || age > 130) return fail('年龄要填 0 到 130 的整数')

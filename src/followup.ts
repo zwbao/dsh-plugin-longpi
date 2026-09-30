@@ -804,7 +804,7 @@ export async function sendNow(dataDir: string, text: string, kind: FollowupKind,
 // --- the scheduler ------------------------------------------------------------------
 
 /** One tick: read the settings and the log, and only if something may be due, the journey; then send and log. */
-export async function followupTick(input: { dataDir: string; now: Date; getState: () => Promise<FollowupState>; deps?: FollowupDeps }): Promise<FollowupLogRow[]> {
+export async function followupTick(input: { dataDir: string; now: Date; getState: () => Promise<FollowupState>; deps?: FollowupDeps; label?: string }): Promise<FollowupLogRow[]> {
   const settings = readFollowup(input.dataDir)
   const log = readFollowupLog(input.dataDir)
   if (!followupArmed(settings, log, input.now)) return []
@@ -814,7 +814,9 @@ export async function followupTick(input: { dataDir: string; now: Date; getState
   const rows: FollowupLogRow[] = []
   for (const send of decideFollowup({ now: input.now, settings, state, log })) {
     if (sentToday([...log, ...rows], input.now) >= FOLLOWUP_MAX_PER_DAY) break
-    const result = await sendFollowup(settings, send.text, { kind: send.kind, now: input.now, ...(input.deps ? { deps: input.deps } : {}) })
+    // A family member's reminder says whose it is.
+    const text = input.label ? `【${input.label}】${send.text}` : send.text
+    const result = await sendFollowup(settings, text, { kind: send.kind, now: input.now, ...(input.deps ? { deps: input.deps } : {}) })
     const row = logRow(send.kind, send.key, result, input.now)
     appendFollowupLog(input.dataDir, row)
     rows.push(row)
@@ -827,6 +829,8 @@ export interface FollowupContext {
   getState: () => Promise<FollowupState>
   /** Changes whenever something the state is built from changed (trackingGeneration); a change forces a fresh read. */
   generation?: () => number
+  /** Whose reminders these are, when not the holder's (M13): prefixed to every message. */
+  label?: string
 }
 
 /**
@@ -839,7 +843,7 @@ export function startFollowup(ctx: Context, getContext: () => FollowupContext, o
   try { armNotifier(getContext().dataDir) } catch { /* a desktop name is optional */ }
   ctx.effect(() => {
     let running = false
-    let cache: { at: number; day: string; generation: number; state: FollowupState } | null = null
+    let cache: { at: number; day: string; generation: number; state: FollowupState; dir: string } | null = null
     const timer = setInterval(() => {
       if (running) return
       running = true
@@ -849,10 +853,11 @@ export function startFollowup(ctx: Context, getContext: () => FollowupContext, o
         const generation = context.generation?.() ?? 0
         if (cache && cache.day === isoDay(now) && cache.generation === generation && now.getTime() - cache.at < STATE_REUSE_MS) return cache.state
         const state = await context.getState()
-        cache = { at: now.getTime(), day: isoDay(now), generation, state }
+        cache = { at: now.getTime(), day: isoDay(now), generation, state, dir: context.dataDir }
         return state
       }
-      void followupTick({ dataDir: context.dataDir, now, getState })
+      if (cache && cache.dir !== context.dataDir) cache = null      // another person is selected: their own state
+      void followupTick({ dataDir: context.dataDir, now, getState, ...(context.label ? { label: context.label } : {}) })
         .catch(() => undefined)
         .finally(() => {
           running = false

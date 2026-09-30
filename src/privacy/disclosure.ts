@@ -153,10 +153,25 @@ function escapeReg(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-/** Replace a saved name of 2+ characters. One-character names are stripped only from name fields, where they would erase ordinary words. */
+/** Family members' names on this install and what each becomes (their label: 妈妈), set by the plugin (M13). */
+let familyNames: () => Array<[string, string]> = () => []
+export function setFamilyNames(fn: () => Array<[string, string]>): void {
+  familyNames = fn
+}
+
+/**
+ * Replace the holder's saved name (2+ characters) with 你, and each family member's name with how the holder calls
+ * them. One-character names are stripped only from name fields, where they would erase ordinary words.
+ */
 export function redactText(text: string, name: string): string {
   const trimmed = name.trim()
   let out = text.replace(/("displayName"\s*:\s*")[^"]*(")/g, '$1$2').replace(/("display_name"\s*:\s*")[^"]*(")/g, '$1$2')
+  let family: Array<[string, string]> = []
+  try { family = familyNames() } catch { family = [] }
+  for (const [other, label] of family) {
+    const n = other.trim()
+    if (n.length >= 2 && n !== label && n !== trimmed) out = out.replace(new RegExp(escapeReg(n), 'gi'), label)
+  }
   if (trimmed.length < 2 || trimmed === '你') return out
   out = out.replace(new RegExp(escapeReg(trimmed), 'gi'), '你')
   return out

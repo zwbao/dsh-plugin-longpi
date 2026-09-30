@@ -19,7 +19,17 @@ English
   with the holder's token; a member without a link is not connected (never the holder's configured address). Uploads for
   a member use the holder's token with query_user_id (Mirobody checks write access). Deleting the holder's store keeps
   family stores. The health snapshot names whose record is shown; the page has a 在看 picker and 添加家人.
-- Deep analysis needs no consent (owner decision). The automatic switch (analysis-settings.json, off by default) gates
+- Review of M13 (1 P0, 9 P1): the settings page's Mirobody login and connection always edit the holder's own store
+  (a member's store never holds a token; effectiveConfig sends none for a member); member links are renewed on any
+  read after seven days and renewal problems show under the picker; writes carry the person the page shows and are
+  refused (409) when another tab switched; accept/import work on one person's store for the whole operation and a run
+  is imported into the person it was started for; family names are required and become their labels in anything sent
+  to the model (the holder's name becomes 你); consent is the holder's, for the whole install; the holder's export and
+  deletion never include family stores; removing a member removes their analysis folders; a member created in
+  Mirobody is kept even when the first link fails; a damaged people.json is never overwritten; reminders say whose
+  they are; per-person memos are dropped on a switch; one daily model budget per install; a "member" start is
+  confirmed by DSH's approval; the AI asks once per batch of new data.
+- Deep analysis needs no separate consent (owner decision); the install-wide data-flow consent still gates it like every health tool. The automatic switch (analysis-settings.json, off by default) gates
   trigger "ai"; with it off the snapshot tells the AI to ask once at the key moment, with the token cost.
 - M12 deep analysis, started by the AI: the health snapshot carries a 深度分析 line (new Mirobody data or new files in
   the remembered folder since the last analysis, a run going, consent); run_deep_analysis takes trigger ai|member and

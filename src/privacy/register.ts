@@ -2,13 +2,15 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
+import { resolveRootDir } from '../paths.ts'
+import { readRegistry } from '../people/store.ts'
 import type { CoreDeps } from '../contracts/index.ts'
 import type { ConsentRecord } from '../contracts/science.ts'
 import { healthWorkspacePaths, insideWorkspace, type WorkspaceLike } from '../guard-scope.ts'
 import { readProfile } from '../profile.ts'
 import { MINOR_PREFERENCE_ZH, isGranted, minorView } from './consents.ts'
 import { CONSENT_HOLD_ZH, heldStream, localAidText, modelEgress, payloadText, personTextOf } from './egress.ts'
-import { redactOutbound, redactText, stripWeightLoss, wordingRule } from './disclosure.ts'
+import { setFamilyNames, redactOutbound, redactText, stripWeightLoss, wordingRule } from './disclosure.ts'
 import { withConsentOffer } from '../home-bp.ts'
 import { bindPrivacy } from './index.ts'
 import { exportZip, registerPrivacyRoutes, type PrivacyRuntime } from './routes.ts'
@@ -19,6 +21,8 @@ const GATE_TOOLS = new Set([
   'read_person_memory', 'remember_for_me', 'read_care_navigation', 'prepare_doctor_brief', 'log_care_visit',
   'save_self_measurement', 'record_medication_statement', 'save_personal_profile',
   'query_health_indicators', 'query_medications', 'query_genetic_data', 'resolve_reading',
+  // deep analysis: no separate consent, but the same install-wide data-flow consent as every health tool
+  'run_deep_analysis', 'import_analysis', 'read_deep_analysis',
 ])
 
 const DRAFT_TOOLS = new Set(['draft_intervention_plan', 'read_intervention_plan', 'review_interventions'])
@@ -64,15 +68,22 @@ function workspacesOf(ctx: Context): WorkspaceLike[] {
   }
 }
 
+/** Consent lives with the holder, for the whole install. */
+let consentDirOf: () => string = () => ''
+const consentDir = () => consentDirOf()
+
 export function register(ctx: Context, deps: CoreDeps): void {
+  consentDirOf = () => resolveRootDir(deps.config().dataDir)
   bindPrivacy({
     dataDir: () => deps.dataDir(),
     scienceMode: () => deps.config().scienceMode ?? 'local',
     codexEnabled: () => deps.config().engage?.codex !== false,
   })
+  // The person chatting is the holder: their name becomes 你; family members' names become their labels.
+  setFamilyNames(() => readRegistry(resolveRootDir(deps.config().dataDir)).people.map((p) => [p.name, p.label_zh] as [string, string]))
   const nameOf = (): string => {
     try {
-      return readProfile(deps.dataDir()).displayName
+      return readProfile(resolveRootDir(deps.config().dataDir)).displayName
     } catch {
       return ''
     }
@@ -107,6 +118,7 @@ export function register(ctx: Context, deps: CoreDeps): void {
   const runtime: PrivacyRuntime = {
     http: deps.http,
     dataDir: () => deps.dataDir(),
+    consentDir,
     mode: () => deps.config().scienceMode ?? 'local',
     mcpUrl: () => deps.config().mcpUrl ?? '',
     emit: (scope, decision) => {
@@ -202,7 +214,7 @@ export function register(ctx: Context, deps: CoreDeps): void {
         return feedback ? { ...decision, feedback: feedback as typeof decision.feedback } : decision
       }
       if (decision.kind !== 'accept') return decision
-      const gate = GATE_TOOLS.has(tool) ? gateText(deps.dataDir()) : ''
+      const gate = GATE_TOOLS.has(tool) ? gateText(consentDir()) : ''
       // A number they just asked to record is stored, and the consent is offered in the same turn.
       if (gate && tool === 'save_self_measurement') {
         const carried = result && typeof result === 'object' && 'value' in result && result.value != null ? result.value : ('content' in decision ? decision.content : undefined)
@@ -234,7 +246,7 @@ export function register(ctx: Context, deps: CoreDeps): void {
         const next = { ...options }
         if (typeof next.system === 'string') next.system = redactText(next.system, name)
         if (Array.isArray(next.messages)) next.messages = redactMessages(next.messages, name)
-        const granted = isGranted(deps.dataDir(), 'data_flow_deepseek')
+        const granted = isGranted(consentDir(), 'data_flow_deepseek')
         const person = personTextOf(next)
         const decision = modelEgress(granted, payloadText(next), person)
         if (decision === 'local_aid') return heldStream(localAidText(person))
@@ -265,7 +277,7 @@ export function register(ctx: Context, deps: CoreDeps): void {
         const name = nameOf()
         const fields: Record<string, unknown> = {}
         const health = sessionHealth(request.sessionId)
-        const upload = health ? isGranted(deps.dataDir(), 'session_log_upload') : true
+        const upload = health ? isGranted(consentDir(), 'session_log_upload') : true
         for (const [key, value] of Object.entries(prepared?.fields ?? {})) {
           if (key === 'dsh_session_log' && !upload) continue
           fields[key] = redactOutbound(value, name)

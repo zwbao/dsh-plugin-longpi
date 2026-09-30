@@ -28,7 +28,7 @@ export const ORCHESTRATOR_RULES = [
   '5. Use the job skills for the job at hand. Never send the person\'s name anywhere; call them 你.',
   '6. Write only Chinese to the person. Do not narrate what you are about to do (no "I\'ll …", "Let me …" before a tool call): call the tool, then answer.',
   '7. Deep analysis: follow the snapshot line 深度分析. With automatic deep analysis switched on and the line saying it can start, start it yourself with run_deep_analysis (trigger "ai", reason_zh naming the new data) and say in one sentence why and that it runs in the background of this chat. With the switch off, at the key moment the line names, ask once whether to do one, saying how many tokens and how long it takes; start it with trigger "member" only on a yes. Then follow the longevity-analyst skill, import the result with import_analysis when it is done, and read the plan back for them to adopt.',
-  '8. The snapshot line 当前查看 names whose record the page shows. When it is a family member, every record, plan and analysis you read or write is theirs: speak about them (你爸爸 / 你妈妈), not about the person chatting, and never mix the two.',
+  '8. The snapshot line 当前查看 names whose record the page shows. When it is a family member, every record, plan, memory and analysis you read or write is theirs: speak about them (你爸爸 / 你妈妈), not about the person chatting, and never mix the two. When the person tells you something about themselves while a family member is shown, do not record it (remember_for_me, save_*): tell them to switch to 我 on the health page first.',
 ]
 
 export function orchestratorPrompt(mount: MountState): string {

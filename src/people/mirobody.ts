@@ -4,7 +4,7 @@
 // answers a request carrying an account token as that account, whatever link it came through.
 
 import { readConnection, saveConnection } from '../connection.ts'
-import { personDir, updatePerson, type Person } from './store.ts'
+import { activePerson, personDir, updatePerson, type Person } from './store.ts'
 
 /** Links live ten days on Mirobody; renew a little before. */
 export const RENEW_AFTER_MS = 7 * 24 * 3600 * 1000
@@ -55,18 +55,38 @@ export function saveMemberLink(root: string, person: Person, url: string, now = 
   updatePerson(root, person.id, { link_minted_at: now.toISOString() })
 }
 
-/** Renew a member's link when it is old or missing. Returns an error to show, or '' when the link is fine. */
-export async function ensureMemberLink(root: string, person: Person, fetchImpl: typeof fetch = fetch, now = new Date()): Promise<string> {
+/**
+ * Renew a member's link when it is old or missing (or always, with `force`). Returns an error to show, or '' when the
+ * link is fine. The error is kept on the person so the page can show it.
+ */
+export async function ensureMemberLink(root: string, person: Person, fetchImpl: typeof fetch = fetch, now = new Date(), force = false): Promise<string> {
   if (!person.mirobody_user_id) return ''
   const minted = Date.parse(person.link_minted_at ?? '')
   const saved = readConnection(personDir(root, person.id))
-  if (saved?.mcp_url && Number.isFinite(minted) && now.getTime() - minted < RENEW_AFTER_MS) return ''
+  if (!force && saved?.mcp_url && Number.isFinite(minted) && now.getTime() - minted < RENEW_AFTER_MS) return ''
   const auth = holderAuth(root)
-  if ('error_zh' in auth) return `${person.label_zh}的链接需要续期：${auth.error_zh}`
-  try {
-    saveMemberLink(root, person, await mintMemberLink(auth, person.mirobody_user_id, fetchImpl), now)
-    return ''
-  } catch (error) {
-    return `${person.label_zh}的链接续期失败：${error instanceof Error ? error.message : String(error)}。请在设置页重新登录你的 Mirobody 账号。`
+  let error = ''
+  if ('error_zh' in auth) error = `${person.label_zh}的链接需要续期：${auth.error_zh}`
+  else {
+    try {
+      saveMemberLink(root, person, await mintMemberLink(auth, person.mirobody_user_id, fetchImpl), now)
+    } catch (e) {
+      error = `${person.label_zh}的链接续期失败：${e instanceof Error ? e.message : String(e)}。请在设置页重新登录你自己的 Mirobody 账号。`
+    }
   }
+  updatePerson(root, person.id, { link_error: error })
+  return error
+}
+
+let lastCheck = 0
+/**
+ * The member being viewed keeps a live link: checked at most every ten minutes on any read, so a page left open or a
+ * restart past day ten renews it instead of failing (and never falls back to the holder's own access).
+ */
+export async function renewActiveMember(root: string, force = false, fetchImpl: typeof fetch = fetch): Promise<string> {
+  const person = activePerson(root).person
+  if (!person) return ''
+  if (!force && Date.now() - lastCheck < 10 * 60_000) return person.link_error ?? ''
+  lastCheck = Date.now()
+  return ensureMemberLink(root, person, fetchImpl, new Date(), force)
 }

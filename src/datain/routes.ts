@@ -2,6 +2,8 @@
 // and Mirobody login that mints the personal MCP URL (no copy-paste).
 
 import { randomBytes } from 'node:crypto'
+import { resolveRootDir } from '../paths.ts'
+import { renewActiveMember } from '../people/mirobody.ts'
 import type { CoreDeps } from '../contracts/index.ts'
 import { connectionUrlProblem, loginMirobody, maskMcpUrl, saveConnection, testConnection } from '../connection.ts'
 import { listConditions, rememberCondition } from './conditions.ts'
@@ -152,7 +154,10 @@ export function registerDatainRoutes(deps: CoreDeps, open?: SocketOpener): void 
     if (!minted.ok) return fail(minted.error)
     const tested = await testConnection({ mcp_url: minted.mcp_url, mcp_token: minted.mcp_token, member: deps.config().member })
     if (!tested.ok) return fail(tested.error)
-    saveConnection(deps.dataDir(), { mcp_url: minted.mcp_url, mcp_token: minted.mcp_token })
+    // Always the holder's own store (the login is the holder's account); then a family member being viewed gets a fresh link.
+    const root = resolveRootDir(deps.config().dataDir)
+    saveConnection(root, { mcp_url: minted.mcp_url, mcp_token: minted.mcp_token })
+    await renewActiveMember(root, true)
     try { deps.invalidate() } catch { /* the connection file is saved */ }
     return { ok: true, url_masked: maskMcpUrl(minted.mcp_url), indicators: tested.indicators }
   })

@@ -20,6 +20,8 @@ export interface Person {
   mirobody_user_id?: string
   /** When the member's personal MCP link was minted (it expires after ten days). */
   link_minted_at?: string
+  /** The last renewal problem, shown on the page until a renewal succeeds. */
+  link_error?: string
   created_at: string
 }
 
@@ -32,24 +34,39 @@ export function rootDir(configured: string): string {
   return resolveRootDir(configured)
 }
 
-export function readRegistry(root: string): Registry {
+export const PERSON_ID = /^p[a-z0-9]{6,40}$/
+
+/** The registry as saved; `damaged` when the file exists but cannot be read (writes are then refused, never overwritten). */
+function loadRegistry(root: string): Registry & { damaged: boolean } {
+  const path = join(root, 'people.json')
+  if (!existsSync(path)) return { active: SELF, people: [], damaged: false }
   try {
-    const raw = JSON.parse(readFileSync(join(root, 'people.json'), 'utf8')) as Partial<Registry>
-    const people = Array.isArray(raw.people) ? raw.people.filter((p): p is Person => Boolean(p) && typeof p.id === 'string' && typeof p.label_zh === 'string') : []
-    const active = typeof raw.active === 'string' && (raw.active === SELF || people.some((p) => p.id === raw.active)) ? raw.active : SELF
-    return { active, people }
+    const raw = JSON.parse(readFileSync(path, 'utf8')) as Partial<Registry>
+    const people = Array.isArray(raw.people)
+      ? raw.people.filter((p): p is Person => Boolean(p) && typeof p.id === 'string' && PERSON_ID.test(p.id) && typeof p.label_zh === 'string')
+      : []
+    const active = typeof raw.active === 'string' && people.some((p) => p.id === raw.active && existsSync(join(root, 'people', p.id))) ? raw.active : SELF
+    return { active, people, damaged: false }
   } catch {
-    return { active: SELF, people: [] }
+    return { active: SELF, people: [], damaged: true }
   }
 }
 
+export function readRegistry(root: string): Registry {
+  const { active, people } = loadRegistry(root)
+  return { active, people }
+}
+
 function writeRegistry(root: string, reg: Registry): void {
+  if (loadRegistry(root).damaged) throw new Error('people.json 读不出来，没有改动它（避免丢掉家人的档案）；请检查这个文件')
   mkdirSync(root, { recursive: true, mode: 0o700 })
-  writeJsonAtomic(join(root, 'people.json'), reg)
+  writeJsonAtomic(join(root, 'people.json'), { active: reg.active, people: reg.people })
 }
 
 export function personDir(root: string, id: string): string {
-  return id === SELF ? root : join(root, 'people', id)
+  if (id === SELF) return root
+  if (!PERSON_ID.test(id)) throw new Error('bad person id')
+  return join(root, 'people', id)
 }
 
 export function addPerson(root: string, input: Omit<Person, 'id' | 'created_at'>): Person {

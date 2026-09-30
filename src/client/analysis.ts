@@ -103,7 +103,7 @@ export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone
       h('label', { className: 'lp-switch' },
         h('input', { type: 'checkbox', checked: Boolean(status.readiness?.auto_on), disabled: Boolean(busy), onChange: (e: React.ChangeEvent<HTMLInputElement>) => { void toggle(e.target.checked) }, 'aria-describedby': 'lp-auto-cost' }),
         h('span', { className: 'lp-label' }, '自动深度分析')),
-      h('p', { id: 'lp-auto-cost', className: 'lp-muted' }, `注意：${t(status.cost_zh)}，会消耗大量 token。打开后，有新的体检、化验或检测文件时，LongPi 会自己判断并开始分析（两次自动分析至少间隔 30 天）；关闭时（默认），只在关键时间点问你要不要做，你同意才开始。`)),
+      h('p', { id: 'lp-auto-cost', className: 'lp-muted' }, `注意：${t(status.cost_zh)}，会消耗大量 token。打开后，有新的体检、化验或检测文件时，LongPi 会自己判断并开始分析（每个人两次自动分析至少间隔 30 天）；关闭时（默认），只在关键时间点问你要不要做，你同意才开始。这个开关对你和家人都生效。`)),
     blocked ? h('div', { className: 'lp-card', role: 'status' }, h('div', { className: 'lp-label' }, '现在还不能做'), h('p', null, blocked.reply_zh)) : null,
     !blocked && status.readiness ? h('div', { className: 'lp-card', role: 'status' },
       h('div', { className: 'lp-label' }, status.readiness.auto_on ? 'LongPi 的判断' : '现在的情况'),

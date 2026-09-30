@@ -213,6 +213,9 @@ function exportFor(run, over = {}) {
   assert.equal(ready.auto_on, false); assert.equal(ready.auto_allowed, false); assert.equal(ready.new_data, true)
   assert.match(mod.analysisReadinessLine(ready), /自动深度分析没有打开.*问他要不要做.*token/)
   assert.equal((await mod.startRun(deps, { trigger: 'ai', reasonZh: '有新数据' })).missing, 'auto_off')
+  // asked once per batch of new data
+  mod.markAsked(dataDir, ready.newest)
+  assert.match(mod.analysisReadinessLine(mod.analysisReadiness(dataDir, { dataDir }, records, '2026-09-30')), /已经问过用户，不要再问/)
   mod.setAutoEnabled(dataDir, true)
   ready = mod.analysisReadiness(dataDir, { dataDir }, records, '2026-09-30')
   assert.equal(ready.auto_allowed, true, ready.why_zh)

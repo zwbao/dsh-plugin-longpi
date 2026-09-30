@@ -30,12 +30,13 @@ import { addDays } from './interventions.ts'
 import type { CoreDeps } from './contracts/index.ts'
 import type { MemoryApi } from './contracts/memory.ts'
 import type { FactPack } from './contracts/factpack.ts'
-import { registerRoutes } from './routes.ts'
+import { setActivePersonResolver, registerRoutes } from './routes.ts'
 import { registerTools } from './tools.ts'
 import { registerTrackingTools } from './tools-tracking.ts'
 import { registerFollowupTools } from './tools-followup.ts'
-import { readiness, readinessLine } from './analysis/service.ts'
-import { activePerson } from './people/store.ts'
+import { markAsked, readiness, readinessLine } from './analysis/service.ts'
+import { activePerson, readRegistry } from './people/store.ts'
+import { renewActiveMember } from './people/mirobody.ts'
 import { resolveRootDir } from './paths.ts'
 import { startFollowup, type FollowupState } from './followup.ts'
 import { buildJourneyFull, followupStateOf, within } from './journey.ts'
@@ -190,7 +191,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     healthWorkspaces: () => healthWorkspacePaths(resolveDataDir(config.dataDir), workspaces()),
   })
   registerApprovals(ctx, guard)
-  startFollowup(ctx, () => ({ dataDir: resolveDataDir(config.dataDir), getState: () => followupState(60_000), generation: trackingGeneration }))
+  // Reminders follow the person selected on the page (their store holds their plan and settings); a family member's say whose.
+  startFollowup(ctx, () => {
+    const who = activePerson(resolveRootDir(config.dataDir))
+    return { dataDir: resolveDataDir(config.dataDir), getState: () => followupState(60_000), generation: trackingGeneration, ...(who.person ? { label: who.label_zh } : {}) }
+  })
   registerHarnessSkills(ctx)
   // 0.6.0 lanes register with registerLibraryMount. apply() does not import lane files.
   mountLibraryLanes(ctx)
@@ -213,6 +218,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   setBus(bus)
   const http = createHttp(ctx)
   const journeyContext = async () => {
+    // A family member's link is renewed before it is read (at most every ten minutes); one that cannot be renewed
+    // stays expired and reads fail, never falling back to the holder's own record.
+    await renewActiveMember(resolveRootDir(source().dataDir)).catch(() => '')
     const current = source()
     const dataDir = resolveDataDir(current.dataDir)
     const skillsHome = resolveSkillsHome(current.skillsHome)
@@ -227,7 +235,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     safetyFlags: () => memoryFor(dataDirNow()).safetyFlags(),
   }
   // Step 2: one-shot model calls with a daily budget (D8), and the model service read at call time.
-  const budget = createBudget(source, dataDirNow)
+  // One daily model budget for the whole install, not one per person.
+  const budget = createBudget(source, () => resolveRootDir(source().dataDir))
   const llmService = () => {
     try {
       return (ctx as unknown as { get?: (name: string) => unknown }).get?.('llm') as { stream?: unknown } | undefined
@@ -282,6 +291,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     rebuildTimer.unref?.()
   }, 'rebuild')
   http.route('GET', '/api/longpi/usage', async () => ({ ok: true, today: budget.today(), remaining: budget.remaining(), caps: source().budget }))
+  setActivePersonResolver(() => activePerson(resolveRootDir(source().dataDir)).id)
   registerModules(ctx, deps, (message) => logTo(ctx, 'warn', message))
   registerEmitHooks(ctx, bus)
   startTick(ctx, bus, dataDirNow)
@@ -306,14 +316,19 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     let analysisZh = ''
     try {
       const context = await within(journeyContext(), 1_000)
-      if (context && 'value' in context) analysisZh = readinessLine(readiness(dataDir, source(), context.value.records, today))
+      if (context && 'value' in context) {
+        const ready = readiness(dataDir, source(), context.value.records, today)
+        analysisZh = readinessLine(ready)
+        if (!ready.auto_on && ready.new_data && !ready.asked && !ready.blockers && ready.newest) markAsked(dataDir, ready.newest)
+      }
     } catch {
       analysisZh = ''
     }
     const who = activePerson(resolveRootDir(source().dataDir))
+    const family = readRegistry(resolveRootDir(source().dataDir)).people.length > 0
     const personZh = who.person
-      ? `当前查看：${who.label_zh}（${who.person.name || who.label_zh}，${who.person.sex === 'male' ? '男' : '女'}${who.person.birth_year ? `，${who.person.birth_year} 年生` : ''}）的记录，不是正在对话的人自己的。`
-      : ''
+      ? `当前查看：${who.label_zh}（${who.person.sex === 'male' ? '男' : '女'}${who.person.birth_year ? `，${who.person.birth_year} 年生` : ''}）的记录，不是正在对话的人自己的。${mount.peer ? '（另外安装的 Mirobody 插件的工具读的是正在对话的人自己的记录：谈家人时不要用 query_health_indicators 等工具，用健康页和 LongPi 工具的数据。）' : ''}`
+      : family ? '当前查看：正在对话的人自己的记录（页面上也可以切换到家人）。' : ''
     return { page: pageStateOf(row.set, row.pack), memory_zh: memoryFor(dataDir).digest({ purpose: 'chat', maxChars: 500 }), care_due_zh: careDue, noted_zh: noted.slice(0, 4).join('；'), analysis_zh: analysisZh, person_zh: personZh }
   }
   const orchestrator = registerOrchestrator(ctx, {
@@ -424,3 +439,6 @@ export { holderAuth, createManagedMember, mintMemberLink, saveMemberLink, ensure
 export { resolveRootDir } from './paths.ts'
 export { pushToMirobody } from './datain/upload.ts'
 export { setAutoEnabled, autoEnabled, COST_ZH } from './analysis/service.ts'
+export { setActivePersonResolver } from './routes.ts'
+export { redactText, setFamilyNames } from './privacy/disclosure.ts'
+export { markAsked } from './analysis/service.ts'

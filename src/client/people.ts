@@ -2,12 +2,12 @@
 // so every section, and the chat's next turn, reads the chosen person's store.
 
 import React from 'react'
-import { getJson, postJson } from './api.ts'
+import { getJson, postJson, setShownPerson } from './api.ts'
 import { Btn } from './ui.ts'
 
 const h = React.createElement
 
-interface PersonRow { id: string; label_zh: string; name: string; connected: boolean; managed: boolean }
+interface PersonRow { id: string; label_zh: string; name: string; connected: boolean; managed: boolean; link_error_zh?: string }
 interface PeopleView { ok: boolean; active: string; people: PersonRow[]; can_create_in_mirobody: boolean; create_hint_zh: string; warning_zh?: string }
 
 const errText = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback)
@@ -18,16 +18,17 @@ export function PeoplePicker(): React.ReactElement | null {
   const [busy, setBusy] = React.useState(false)
   const [error, setError] = React.useState('')
   const [form, setForm] = React.useState({ label_zh: '', name: '', sex: '', birth_year: '', mcp_url: '' })
-  React.useEffect(() => { void getJson<PeopleView>('/api/longpi/people').then(setView).catch(() => setView(null)) }, [])
+  React.useEffect(() => {
+    void getJson<PeopleView>('/api/longpi/people').then((v) => { setShownPerson(v.active); setView(v) }).catch(() => setView(null))
+  }, [])
   if (!view) return null
 
   const choose = async (id: string) => {
     if (id === view.active) return
     setBusy(true); setError('')
     try {
-      const res = await postJson<PeopleView>('/api/longpi/people/active', { id })
-      if (res.warning_zh) window.alert?.(res.warning_zh)
-      window.location.reload()
+      await postJson<PeopleView>('/api/longpi/people/active', { id })
+      window.location.reload()                      // a renewal problem shows under the picker after the reload
     } catch (e) {
       setError(errText(e, '切换失败')); setBusy(false)
     }
@@ -63,13 +64,17 @@ export function PeoplePicker(): React.ReactElement | null {
         ? '会在你的 Mirobody 账号下为家人建一份独立的档案（家人不需要自己的账号）。家人的体检、方案和深度分析都和你的分开。'
         : `${view.create_hint_zh} 或者粘贴家人自己的 Mirobody 个人链接。`),
       field('label_zh', '称呼（如 爸爸、妈妈）'),
-      field('name', '姓名（报告上的名字，用来核对上传的报告是不是本人的）'),
+      field('name', '姓名（必填：报告上的真实名字，用来核对上传的报告是不是本人的）'),
       h('label', { className: 'lp-field' }, h('span', { className: 'lp-label' }, '生理性别'),
         h('select', { className: 'lp-input', value: form.sex, 'aria-label': '生理性别', onChange: (e: React.ChangeEvent<HTMLSelectElement>) => setForm({ ...form, sex: e.target.value }) },
           h('option', { value: '' }, '请选择'), h('option', { value: 'male' }, '男'), h('option', { value: 'female' }, '女'))),
       field('birth_year', '出生年份', { inputMode: 'numeric', placeholder: '例如 1960' }),
       view.can_create_in_mirobody ? null : field('mcp_url', '家人的 Mirobody 个人链接（可选）'),
       error ? h('p', { className: 'lp-muted', role: 'alert' }, error) : null,
-      h(Btn, { onClick: () => { void add() }, disabled: busy || !form.label_zh.trim() || !form.sex }, '添加')) : null,
-    !adding && error ? h('p', { className: 'lp-muted', role: 'alert' }, error) : null)
+      h(Btn, { onClick: () => { void add() }, disabled: busy || !form.label_zh.trim() || form.name.trim().length < 2 || !form.sex }, '添加')) : null,
+    !adding && error ? h('p', { className: 'lp-muted', role: 'alert' }, error) : null,
+    (() => {
+      const shown = view.people.find((p) => p.id === view.active)
+      return shown?.link_error_zh ? h('p', { className: 'lp-muted', role: 'alert' }, shown.link_error_zh) : null
+    })())
 }

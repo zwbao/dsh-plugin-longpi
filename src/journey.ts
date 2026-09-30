@@ -142,6 +142,11 @@ const FOCUS_PROMPT: Record<Focus | 'none', { id: string; text_zh: string }> = {
 
 let lastBuilt: { at: number; journey: Journey } | null = null
 
+/** A switch to another person (M13). */
+export function forgetLastBuilt(): void {
+  lastBuilt = null
+}
+
 export async function buildJourney(context: JourneyContext): Promise<Journey> {
   return (await buildJourneyFull(context)).journey
 }

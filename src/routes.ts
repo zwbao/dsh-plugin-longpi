@@ -5,7 +5,8 @@ import { loadCatalog } from './catalog.ts'
 import type { Config } from './config.ts'
 import { matchSkills } from './match.ts'
 import type { MountState } from './mirobody.ts'
-import { clampMatches, resolveDataDir, resolveSkillsHome } from './paths.ts'
+import { clampMatches, resolveDataDir, resolveRootDir, resolveSkillsHome } from './paths.ts'
+import { renewActiveMember } from './people/mirobody.ts'
 import { mergeProfile, normalizeProfile, readProfile, setConsent, writeProfile } from './profile.ts'
 import { loadRecords } from './records.ts'
 import { readReceipts } from './runner.ts'
@@ -74,6 +75,12 @@ export function isJsonRequest(req: Pick<IncomingMessage, 'headers'>): boolean {
  * before anything else: no connection service, no route (503); then DSH's own rejection; then a write
  * that is not JSON (415), which a page on another site could otherwise send without a preflight.
  */
+/** Whose record the server is on now (M13); set once by the plugin. */
+let activePersonNow: () => string = () => 'self'
+export function setActivePersonResolver(fn: () => string): void {
+  activePersonNow = fn
+}
+
 export function guardRoute(connection: () => ConnectionGuard | null, handler: Handler): Handler {
   return (req, res) => {
     const service = connection()
@@ -95,6 +102,17 @@ export function guardRoute(connection: () => ConnectionGuard | null, handler: Ha
     if (WRITE_METHODS.has((req.method ?? '').toUpperCase()) && !isJsonRequest(req)) {
       sendText(res, 415, 'content type must be application/json')
       return
+    }
+    // A page shows one person; a write from a tab that still shows someone else (another tab switched) is refused,
+    // never saved into the person the server is on now.
+    const shown = req.headers['x-longpi-person']
+    if (WRITE_METHODS.has((req.method ?? '').toUpperCase()) && typeof shown === 'string' && shown && !(req.url ?? '').startsWith('/api/longpi/people')) {
+      let now = 'self'
+      try { now = activePersonNow() } catch { now = 'self' }
+      if (shown !== now) {
+        sendJson(res, 409, { ok: false, error: '这个页面显示的是另一个人的记录（在别的页面里切换过）。请刷新页面后再操作。', person_mismatch: true })
+        return
+      }
     }
     handler(req, res)
   }
@@ -293,7 +311,7 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
         }
         if (req.method === 'DELETE') {
           void (async () => {
-            const removed = clearConnection(resolveDataDir(config().dataDir))
+            const removed = clearConnection(resolveRootDir(config().dataDir))   // the settings page edits the holder's connection only
             if (removed) connectionChanged()
             sendJson(res, 200, { ok: true, removed, ...(await connectionStatus()) })
           })().catch(() => sendJson(res, 500, { ok: false, error: 'connection failed' }))
@@ -319,7 +337,10 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
             sendJson(res, 400, { ok: false, error: tested.error, ...connectionBase() })
             return
           }
-          saveConnection(resolveDataDir(current.dataDir), candidate)
+          // The settings page edits the holder's own connection, whoever the page is showing; a family member's link
+          // is made and renewed by LongPi (people/), never pasted over with the holder's.
+          saveConnection(resolveRootDir(current.dataDir), candidate)
+          await renewActiveMember(resolveRootDir(current.dataDir), true)
           connectionChanged()
           sendJson(res, 200, { ok: true, ...(await connectionStatus()) })
         })().catch((error: unknown) => {

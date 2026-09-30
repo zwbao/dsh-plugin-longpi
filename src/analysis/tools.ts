@@ -6,14 +6,14 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { CoreDeps } from '../contracts/index.ts'
 import { asJson } from '../json.ts'
 import { jsonOut } from '../core/tool-kit.ts'
-import { AUTO_MIN_DAYS, SKILL_NAME, currentSummary, importLatest, planReadBack, startRun, statusNow } from './service.ts'
+import { COST_ZH, SKILL_NAME, currentSummary, importLatest, planReadBack, startRun, statusNow } from './service.ts'
 
 export function registerAnalysisTools(ctx: Context, deps: CoreDeps): void {
   ctx.tools.register(defineTool({
     name: 'run_deep_analysis',
-    description: `Start a deep multi-omics analysis for this person with the ${SKILL_NAME} skill (biological age, organ checkup table, disease risks, gene-vs-lab insights, a question board, an intervention plan). You decide when: the health snapshot line 深度分析 gives the facts (new data since the last analysis, a run going, consent). Start it yourself when those facts show new data worth analysing (trigger "ai"; the plugin refuses when there is no new data or the last automatic run was under ${AUTO_MIN_DAYS} days ago), or when the person asks for one (trigger "member"). Returns the exact request to carry out: then load the ${SKILL_NAME} skill yourself and do what prompt_zh says, telling the person why you started it and that it takes a while.`,
+    description: `Start a deep multi-omics analysis with the ${SKILL_NAME} skill for the person whose record is shown (biological age, organ checkup table, disease risks, gene-vs-lab insights, a question board, an intervention plan). It costs a lot (${COST_ZH}). Follow the snapshot line 深度分析: trigger "ai" only when it says automatic deep analysis is on and can start (the plugin refuses otherwise); trigger "member" when the person said yes to your question or asked for one (DSH then asks them to confirm). Returns the exact request to carry out: then load the ${SKILL_NAME} skill yourself and do what prompt_zh says.`,
     parameters: {
-      trigger: { type: 'string', enum: ['ai', 'member'], required: true, description: '"ai" when you decided from the facts; "member" only when the person asked for a deep analysis in this conversation.' },
+      trigger: { type: 'string', enum: ['ai', 'member'], required: true, description: '"ai": automatic (switch on, snapshot says it can start); "member": the person said yes or asked, in this conversation.' },
       reason_zh: { type: 'string', required: true, description: 'Why now, in one or two Chinese sentences naming the facts (e.g. 9 月体检后有了新的化验和手表数据). Shown on the health page.' },
       data_folder: { type: 'string', description: 'Folder with the person\'s omics files if they named one; omit to use the folder remembered from before (or only Mirobody).' },
     },

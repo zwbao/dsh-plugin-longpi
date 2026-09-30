@@ -26,6 +26,15 @@ function httpText(status: number): string {
 
 const JSON_HEADERS = { 'content-type': 'application/json' }
 
+/** The person this page shows (set when the people list loads); every write carries it. */
+let shownPerson = ''
+export function setShownPerson(id: string): void {
+  shownPerson = id
+}
+function writeHeaders(): Record<string, string> {
+  return shownPerson ? { ...JSON_HEADERS, 'x-longpi-person': shownPerson } : JSON_HEADERS
+}
+
 export async function getJson<T>(path: string): Promise<T> {
   return read<T>(await fetch(path, { credentials: 'same-origin' }))
 }
@@ -34,14 +43,14 @@ export async function postJson<T>(path: string, body: unknown): Promise<T> {
   return read<T>(await fetch(path, {
     method: 'POST',
     credentials: 'same-origin',
-    headers: JSON_HEADERS,
+    headers: writeHeaders(),
     body: JSON.stringify(body),
   }))
 }
 
 /** DELETE carries the JSON content type too (no body): the server's write check applies to every method. */
 export async function deleteJson<T>(path: string): Promise<T> {
-  return read<T>(await fetch(path, { method: 'DELETE', credentials: 'same-origin', headers: JSON_HEADERS }))
+  return read<T>(await fetch(path, { method: 'DELETE', credentials: 'same-origin', headers: writeHeaders() }))
 }
 
 export function errorText(error: unknown, fallback: string): string {

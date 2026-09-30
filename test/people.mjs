@@ -79,4 +79,35 @@ assert.equal(mod.readRegistry(root).people.length, 1)
 mod.setActive(root, mother.id)
 assert.equal(mod.removePerson(root, mother.id).id, mother.id)
 assert.equal(mod.readRegistry(root).active, mod.SELF)
+// review fixes -------------------------------------------------------------------
+// a member's store never holds a token, whatever is saved into it
+const dad = mod.addPerson(root, { label_zh: '爸爸', name: '李建国', sex: 'male', birth_year: 1958 })
+mod.saveConnection(join(root, 'people', dad.id), { mcp_url: 'http://127.0.0.1:18060/mcp/HOLDER', mcp_token: 'HOLDER-JWT' })
+assert.ok(!mod.readConnection(join(root, 'people', dad.id)).mcp_token, 'the holder\'s token is never saved in a member\'s store')
+mod.setActive(root, dad.id)
+assert.equal(mod.effectiveConfig({ ...config }).mcpToken, '')
+
+// a write from a page showing someone else is refused
+mod.setActivePersonResolver(() => dad.id)
+const answer = { code: 0, body: '' }
+const res = { statusCode: 0, setHeader() {}, writeHead(code) { answer.code = code }, end(text) { answer.body = String(text ?? ''); if (!answer.code) answer.code = res.statusCode } }
+let reached = false
+const guarded = mod.guardRoute(() => ({ requestRejection: () => undefined }), () => { reached = true })
+guarded({ method: 'POST', url: '/api/longpi/checkin', headers: { 'content-type': 'application/json', 'x-longpi-person': 'self' } }, res)
+assert.equal(reached, false); assert.equal(answer.code || res.statusCode, 409)
+guarded({ method: 'POST', url: '/api/longpi/checkin', headers: { 'content-type': 'application/json', 'x-longpi-person': dad.id } }, res)
+assert.equal(reached, true)
+mod.setActivePersonResolver(() => 'self')
+
+// family names become their labels in anything sent to the model; the holder's becomes 你
+mod.setFamilyNames(() => [['李建国', '爸爸']])
+assert.equal(mod.redactText('李建国的血压和张三的血压', '张三'), '爸爸的血压和你的血压')
+mod.setFamilyNames(() => [])
+
+// a damaged registry is never overwritten; a bad id never names a folder
+writeFileSync(join(root, 'people.json'), '{broken')
+assert.throws(() => mod.addPerson(root, { label_zh: '姐姐', name: '李丽', sex: 'female', birth_year: 1985 }), /people.json/)
+assert.throws(() => mod.personDir(root, '../../etc'), /bad person id/)
+writeFileSync(join(root, 'people.json'), JSON.stringify({ active: 'self', people: [dad] }))
+
 console.log('people ok')

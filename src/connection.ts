@@ -8,7 +8,7 @@
 // module except toward the Mirobody address it belongs to.
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { tableOf } from './compact.ts'
 import type { Config } from './config.ts'
 import { within } from './journey.ts'
@@ -55,6 +55,8 @@ export function readConnection(dataDir: string): SavedConnection | null {
 
 /** Write the connection, private to the person (0600), replacing the file in one step. */
 export function saveConnection(dataDir: string, input: { mcp_url: string; mcp_token?: string }, now = new Date()): SavedConnection {
+  // A family member's store never holds an account token: Mirobody answers a request carrying one as that account.
+  if (basename(dirname(resolve(dataDir))) === 'people') input = { mcp_url: input.mcp_url, mcp_token: '' }
   const token = (input.mcp_token ?? '').trim()
   const row: SavedConnection = { mcp_url: input.mcp_url.trim(), ...(token ? { mcp_token: token } : {}), saved_at: now.toISOString() }
   mkdirSync(dataDir, { recursive: true, mode: 0o700 })
@@ -97,8 +99,8 @@ export function effectiveConfig(config: Config): Config {
   // A family member reads only through their own saved link, never the configured (holder's) address or token:
   // with none saved they are simply not connected.
   const family = resolveDataDir(config.dataDir) !== resolveRootDir(config.dataDir)
-  const value = saved ? { ...config, mcpUrl: saved.mcp_url, mcpToken: saved.mcp_token ?? '' }
-    : family ? { ...config, mcpUrl: '', mcpToken: '' } : config
+  const value = family ? { ...config, mcpUrl: saved?.mcp_url ?? '', mcpToken: '' }
+    : saved ? { ...config, mcpUrl: saved.mcp_url, mcpToken: saved.mcp_token ?? '' } : config
   memo = { config, stamp, value, dir: path }
   return value
 }
