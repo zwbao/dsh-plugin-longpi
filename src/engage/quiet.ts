@@ -9,8 +9,8 @@ import { memoryFor } from '../core/memory.ts'
 import { checkinStatus, currentPlan, readCheckIns } from '../interventions.ts'
 
 export const DAILY_WORDING = /打卡|每天|每晚|提醒我/
-export const QUIET_TITLE = '有空再看一眼'
-export const QUIET_DETAIL = '不安排每日任务。你想开始时再说一声。'
+export const QUIET_TITLE = '有空时查看'
+export const QUIET_DETAIL = '不安排每日任务。需要开始时，请告诉 LongPi。'
 
 const CADENCE_QUIET = new Set(['off', 'quiet', 'rare', 'monthly', 'low'])
 const CADENCE_ON = new Set(['daily', 'season', 'on'])
@@ -138,13 +138,13 @@ export function rememberAvoidance(dataDir: string, text: string): boolean {
 
 function isSeasonPressure(action: { id?: string; kind?: string; title_zh?: string; detail_zh?: string }): boolean {
   const blob = `${action.id ?? ''} ${action.kind ?? ''} ${action.title_zh ?? ''} ${action.detail_zh ?? ''}`
-  return action.kind === 'season_quest' || action.id === 'nba-season-quest' || /不用每天打卡|这一季只做几件事|这个赛季只做几件事|我这一季现在该做什么|这个赛季我现在该做什么/.test(blob)
+  return action.kind === 'season_quest' || action.id === 'nba-season-quest' || /不用每天打卡|这一季只做几件事|这个赛季只做几件事|本赛季只需完成几件事|我这一季现在该做什么|这个赛季我现在该做什么/.test(blob)
 }
 
 function scrubText(text: string, signals: QuietSignals): string {
   let out = text
   if (!seasonPressureOn(signals)) {
-    out = out.replace(/(?:这一季|这个赛季)只做几件事[，,]?\s*不用每天打卡。?/g, '')
+    out = out.replace(/(?:(?:这一季|这个赛季)只做几件事|本赛季只需完成几件事)[，,]?\s*不用每天打卡。?/g, '')
     out = out.replace(/不用每天打卡。?/g, '')
   }
   if (stripDailyWording(signals) && DAILY_WORDING.test(out)) return ''

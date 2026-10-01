@@ -137,7 +137,7 @@ try {
   assert.match(page.text, /单独同意/)
   assert.match(page.text, /id="pipl-grant"/)
   assert.match(page.text, /id="flow-grant"/)
-  assert.match(page.text, /关闭（健康对话的默认）/)
+  assert.match(page.text, /关闭（默认）/)
   assert.doesNotMatch(page.text, /id="pipl-grant"[^>]*checked/)
   assert.match(page.text, /<input type="checkbox" id="guardian">/)
 

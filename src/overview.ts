@@ -157,6 +157,6 @@ export function buildReport(input: { name: string; today: string; records: Recor
       lines.push('')
     }
   }
-  lines.push('---', '', '判断依据：变化比平常的起伏更大，才算值得注意的变化。试验里的平均效果不是对你个人的预测。模型估计不是寿命预测。')
+  lines.push('---', '', '判断依据：变化需大于平时的波动，才视为值得注意的变化。试验里的平均效果不是对你个人的预测。模型估计不是寿命预测。')
   return `${lines.join('\n')}\n`
 }

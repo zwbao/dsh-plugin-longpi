@@ -84,20 +84,20 @@ function AddPersonDialog(props: { view: PeopleView; onClose: () => void }): Reac
         h('h2', { className: 'lp-h2' }, '添加家人'),
         h('button', { type: 'button', className: 'lp-iconbtn', 'aria-label': '关闭', onClick: props.onClose }, h(Icon, { name: 'close', size: 18 }))),
       h('p', { className: 'lp-muted lp-small' }, view.can_create_in_mirobody
-        ? '会在你的 Mirobody 账号下为家人建一份独立的档案（家人不需要自己的账号）。家人的体检、方案和深度分析都和你的分开。'
-        : /个人链接/.test(view.create_hint_zh) ? view.create_hint_zh.trim() : `${view.create_hint_zh.trim().replace(/[。.]?$/, '。')}或者粘贴家人自己的 Mirobody 个人链接。`),
+        ? '将在你的健康数据服务账号下为家人建立独立档案（家人无需单独注册账号）。家人的体检、方案和深度分析都和你的分开。'
+        : /个人链接/.test(view.create_hint_zh) ? view.create_hint_zh.trim() : `${view.create_hint_zh.trim().replace(/[。.]?$/, '。')}也可以粘贴家人自己的健康数据服务个人链接。`),
       h('div', { className: 'lp-form-grid' },
         input('label_zh', '称呼', { placeholder: '如 爸爸、妈妈', autoFocus: true }),
         input('birth_year', '出生年份', { inputMode: 'numeric', placeholder: '例如 1960' }),
         // Full width, so the hint under it does not break into a one-character line (P2-10).
-        input('name', '姓名', { autoComplete: 'off' }, '报告上的真实名字，用来核对上传的报告是不是本人的', true),
+        input('name', '姓名', { autoComplete: 'off' }, '报告上的真实姓名，用于核对上传的报告是否属于本人', true),
         h('div', { className: 'lp-field lp-field-full', key: 'sex' },
           h(Segmented<SexValue>, {
             name: 'lp-person-sex', label: '生理性别', value: form.sex, disabled: busy,
             options: [{ value: 'male', label: '男' }, { value: 'female', label: '女' }],
             onChange: (sex) => setForm({ ...form, sex }),
           })),
-        view.can_create_in_mirobody ? null : input('mcp_url', '家人的 Mirobody 个人链接（可选）', {}, '', true)),
+        view.can_create_in_mirobody ? null : input('mcp_url', '家人的健康数据服务个人链接（选填）', {}, '', true)),
       error ? h('div', { className: 'lp-callout lp-callout-warn', role: 'alert' },
         h(Icon, { name: 'warn', size: 14 }), h('span', { className: 'lp-callout-body' }, error)) : null,
       h('div', { className: 'lp-modal-actions' },
@@ -128,7 +128,7 @@ export function PeoplePicker(props: { children?: React.ReactNode }): React.React
 
   return h(React.Fragment, null,
     view ? h('span', { className: 'lp-people' },
-      h('label', { className: 'lp-sr', htmlFor: 'lp-people-select' }, '在看谁的记录'),
+      h('label', { className: 'lp-sr', htmlFor: 'lp-people-select' }, '当前查看的档案'),
       h('select', {
         id: 'lp-people-select', className: 'lp-select lp-select-sm lp-people-select', value: view.active, disabled: busy,
         onChange: (e: React.ChangeEvent<HTMLSelectElement>) => { void choose(e.target.value) },
@@ -155,7 +155,7 @@ export function PersonNotice(): React.ReactElement | null {
       h('div', { className: 'lp-callout-body' },
         h('p', { className: 'lp-callout-title' }, '你在看示例档案'),
         h('p', null, `${shown.name}（虚构人物，58 岁）完整使用 LongPi 后的样子：两次体检、手环数据、一次深度分析和执行了三周的方案。数据都是合成的，不对应任何真实的人。`),
-        h('p', { className: 'lp-caption' }, '在这里随便点，改动不会保存，下次打开会还原。看完后在右上角切回「我」，继续你自己的档案。')))
+        h('p', { className: 'lp-caption' }, '可在此随意操作，改动不会保存，下次打开时恢复原样。查看完毕后，请在右上角切换回「我」。')))
   }
   if (!shown || shown.id === 'self' || !shown.link_error_zh) return null
   return h('div', { className: 'lp-callout lp-callout-warn lp-people-notice', role: 'alert' },
@@ -172,7 +172,7 @@ export function DemoInvite(props: { empty: boolean }): React.ReactElement | null
   return h('div', { className: 'lp-callout lp-people-notice' },
     h(Icon, { name: 'spark', size: 16 }),
     h('div', { className: 'lp-callout-body' },
-      h('p', null, '想先看看档案完整以后，LongPi 能为你做什么？'),
+      h('p', null, '想了解档案完整后，LongPi 能为你做什么？'),
       h('button', {
         type: 'button', className: 'lp-textbtn lp-textbtn-strong', disabled: busy,
         onClick: () => {

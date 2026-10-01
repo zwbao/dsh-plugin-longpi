@@ -288,16 +288,16 @@ function attentionLevel(label: string, value: number | null, text: string, treat
   const blob = `${label} ${text}`
   if (/血清|总蛋白|白蛋白电泳/.test(blob) && !/尿/.test(blob)) return null
   if (value != null && /尿白蛋白.?肌酐|尿微量白蛋白|UACR|\bACR\b/i.test(blob) && value >= 30) {
-    return { flag: 'high', text_zh: `尿白蛋白/肌酐比 ${value} 高于常用分界 30 mg/g。有糖尿病时要带给医生看，不是“未判断就是正常”。` }
+    return { flag: 'high', text_zh: `尿白蛋白/肌酐比 ${value} 高于常用分界 30 mg/g。如有糖尿病，请带给医生查看；「未判断」不代表正常。` }
   }
   if (/尿蛋白/.test(blob) && !/肌酐|UACR/i.test(blob) && ((value != null && value >= 30) || /阳性|\+|↑|偏高/.test(text || String(value ?? '')))) {
-    return { flag: 'high', text_zh: `尿蛋白 ${text || value}。有糖尿病时要带给医生看，不是“未判断就是正常”。` }
+    return { flag: 'high', text_zh: `尿蛋白 ${text || value}。如有糖尿病，请带给医生查看；「未判断」不代表正常。` }
   }
   if (value != null && value > 5 && value < 60 && /egfr|肾小球滤过/i.test(blob)) {
-    return { flag: 'low', text_zh: `eGFR ${value} 低于 60。有糖尿病时要和医生看肾功能，不是“未判断就是正常”。` }
+    return { flag: 'low', text_zh: `eGFR ${value} 低于 60。如有糖尿病，请与医生一起评估肾功能；「未判断」不代表正常。` }
   }
   if (/眼底|视网膜/.test(blob) && /微动脉瘤|视网膜病变|新生血管|出血/.test(blob)) {
-    return { flag: 'high', text_zh: '眼底记录里有需要医生看的描述。有糖尿病时带给眼科或内分泌科，不是“未判断就是正常”。' }
+    return { flag: 'high', text_zh: '眼底记录里有需要医生看的描述。如有糖尿病，请带给眼科或内分泌科医生查看；「未判断」不代表正常。' }
   }
   return null
 }
@@ -602,7 +602,7 @@ async function build(context: IndicatorsContext): Promise<Built> {
   const record: IndicatorsResponse['record'] = status === 'unconfigured' ? { status: 'none' }
     : status === 'error' ? { status: 'error', error: records.record_error || '记录读取失败。' }
       : failed > 0 || status === 'partial'
-        ? { status: 'partial', error: failed > 0 ? `${failed} 项指标的历史没有读到：${firstError}` : records.record_error || '部分记录没有读到。' }
+        ? { status: 'partial', error: failed > 0 ? `${failed} 项指标的历史数据未读取到：${firstError}` : records.record_error || '部分记录未读取到。' }
         : { status: 'ok' }
 
   // The summary counts days, so a read that failed or ran out of time would undercount them: then there is

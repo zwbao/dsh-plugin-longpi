@@ -134,7 +134,7 @@ try {
   }
   assert.ok(brief.candidates.some((row) => row.marker_key === 'weight'), 'weight rows serve the waist priority')
   assert.equal(brief.candidates.some((row) => /戒烟/.test(row.intervention_zh)), false, 'no smoking cessation for a non-smoker')
-  assert.ok(brief.notes_zh.includes('你说过不吸烟，所以没有列出戒烟。'))
+  assert.ok(brief.notes_zh.includes('你已说明不吸烟，因此未列出戒烟。'))
   const aerobic = brief.candidates.find((row) => row.id === 'aerobic-sbp')
   assert.equal(aerobic.expected_zh, '试验中平均使收缩压下降 3.5 mmHg（18 岁以上健康成人，荟萃分析）')
   // sorted by priority rank, then verified, then the size of the effect

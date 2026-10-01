@@ -16,7 +16,7 @@ export const CATEGORY_ZH: Record<Category, string> = {
   diet: '饮食', exercise: '运动', sleep: '睡眠', supplement: '补剂', drug: '药物', behavior: '行为', weight: '体重', other: '其他',
 }
 export const CHECKIN_TAGS = ['illness', 'travel', 'lab_change', 'stress', 'other'] as const
-export const TAG_ZH: Record<string, string> = { illness: '生病', travel: '出差旅行', lab_change: '换了检测机构', stress: '压力大', other: '其他' }
+export const TAG_ZH: Record<string, string> = { illness: '生病', travel: '出差旅行', lab_change: '更换检测机构', stress: '压力大', other: '其他' }
 
 export interface Target {
   /** A Mirobody indicator measured daily, such as dailySteps or dailyTotalSleepTime. */
@@ -216,10 +216,10 @@ export function normalizePlan(raw: unknown, context: NormalizeContext): Normaliz
     const title = cleanedTitle.text
     const where = title || `第 ${index + 1} 项`
     if (!titleIn) errors.push(`${where}没有名称。`)
-    else if (!title) errors.push(`${where}：标题只有剂量，请写做什么。`)
+    else if (!title) errors.push(`${where}：标题仅包含剂量，请填写具体做法。`)
     if (cleanedTitle.stripped || cleanedDetail.stripped) warnings.push(`${where}的剂量没有保存：${DOSE_NOT_SAVED}`)
     const category = (CATEGORIES as readonly string[]).includes(String(row.category)) ? row.category as Category : 'other'
-    if (category === 'other' && row.category && row.category !== 'other') warnings.push(`${where}的类别「${String(row.category)}」不认识，记为「其他」。`)
+    if (category === 'other' && row.category && row.category !== 'other') warnings.push(`${where}的类别「${String(row.category)}」无法识别，已归为「其他」。`)
     const detail = cleanedDetail.text
     const start = text(row.start, 10)
     if (!DATE.test(start)) errors.push(`${where}缺少开始日期（YYYY-MM-DD）。判断效果要靠它找基线。`)
@@ -241,7 +241,7 @@ export function normalizePlan(raw: unknown, context: NormalizeContext): Normaliz
       if (hit) mirobody = { medication: hit.name, ...(hit.plan_id ? { plan_id: hit.plan_id } : {}) }
       else {
         mirobody = { medication: name }
-        warnings.push(`用药计划里没有找到「${name}」。在你放体检报告的地方建好用药计划并打卡后，才能跟踪服用情况。`)
+        warnings.push(`用药计划中未找到「${name}」。请在健康数据服务中建立用药计划并打卡，之后才能跟踪服用情况。`)
       }
     }
 
@@ -318,7 +318,7 @@ export function addCheckIns(dataDir: string, entries: unknown[], context: { toda
       continue
     }
     if (item.mirobody) {
-      problems.push(`「${item.title}」是药物或补剂，服用记录记在用药计划里，这里只读。`)
+      problems.push(`「${item.title}」是药物或补剂，服用情况记录在用药计划中，此处仅可查看。`)
       continue
     }
     const date = DATE.test(text(row.date, 10)) ? text(row.date, 10) : context.today

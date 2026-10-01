@@ -18,6 +18,14 @@ import { currentBus } from '../core/bus.ts'
 import type { CareState } from './care.ts'
 import { patterns } from './rules.ts'
 
+/** 「9 月 10 日」, with the year when it is not this year. */
+function dayZhT(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
+  if (!m) return iso ?? ''
+  const md = `${Number(m[2])} 月 ${Number(m[3])} 日`
+  return Number(m[1]) === new Date().getFullYear() ? md : `${m[1]} 年 ${md}`
+}
+
 const LOOKBACK_DAYS = 10 * 365
 const MAX_COLUMNS = 6
 
@@ -107,13 +115,13 @@ function markdownOf(brief: DoctorBrief, person: { age: number | null; sex: strin
     lines.push(`| 指标 | ${days.join(' | ')} |`, `|---|${days.map(() => '---').join('|')}|`)
     for (const row of brief.trend) lines.push(`| ${row.label_zh} | ${days.map((day) => { const point = row.points.find((item) => item.date === day); return point ? fmt(point.value) : '—' }).join(' | ')} |`)
   } else {
-    lines.push('（这次没能读到历次结果，请带上纸质或电子体检报告。）')
+    lines.push('（本次未读取到历次结果，请携带纸质或电子体检报告。）')
   }
-  lines.push('', '## 目前在用的药和补剂', ...(brief.meds_zh.length > 0 ? brief.meds_zh.map((line) => `- ${line}`) : ['- 记录里没有']))
+  lines.push('', '## 目前在用的药和补剂', ...(brief.meds_zh.length > 0 ? brief.meds_zh.map((line) => `- ${line}`) : ['- 记录中无']))
   if (brief.conditions_zh.length > 0) lines.push('', '## 本人说过的情况', ...brief.conditions_zh.map((line) => `- ${line}`))
   lines.push('', '## 想问医生的问题', ...brief.questions_zh.map((line, index) => `${index + 1}. ${line}`))
   lines.push('', '## 可以请医生考虑的检查', ...brief.tests_zh.map((line) => `- ${line}`))
-  lines.push('', '## 看完医生之后', '把医生的结论告诉 LongPi（例如“医生说……，开了……，X 周后复查”），LongPi 会记下来，下一步和方案会跟着调整。', '')
+  lines.push('', '## 看完医生之后', '请将医生的结论告诉 LongPi（例如「医生说……，开了……，X 周后复查」），LongPi 会记录下来，并据此调整下一步和方案。', '')
   return lines.join('\n')
 }
 
@@ -145,7 +153,7 @@ export async function buildBrief(input: BriefInput): Promise<BriefResult | null>
     source: 'template',
   }
   const reasons = findings.map((row) => `${row.text_zh}。建议看${row.department_zh}。`)
-  const seen = input.care.seen.map(({ finding, care }) => `已看过医生${care.visit_date ? `（${care.visit_date}）` : ''}：${finding.title_zh}${care.outcome_zh ? `，医生说：${care.outcome_zh}` : ''}`)
+  const seen = input.care.seen.map(({ finding, care }) => `已看过医生${care.visit_date ? `（${dayZhT(care.visit_date)}）` : ''}：${finding.title_zh}${care.outcome_zh ? `，医生说：${care.outcome_zh}` : ''}`)
   const markdown = markdownOf(brief, { age: input.records.profile.age, sex: input.records.profile.sex }, reasons, seen)
   const dir = briefDir(input.dataDir)
   try {

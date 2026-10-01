@@ -251,7 +251,7 @@ try {
   context = await contextFor(configFor(tempDir('failing'), failing.url))
   const partial = await mod.buildIndicators(context)
   assert.equal(partial.record.status, 'partial')
-  assert.match(partial.record.error, /项指标的历史没有读到/)
+  assert.match(partial.record.error, /项指标的历史数据未读取到/)
   const crp = rowOf(partial, 'loinc:30522-7')
   assert.match(crp.read_error, /^读取失败：/)
   assert.deepEqual(crp.points, [])

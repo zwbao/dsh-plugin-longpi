@@ -64,20 +64,20 @@ export function SeasonPanel(props: {
     return h('section', { className: 'lp-card', 'aria-label': '开始一个赛季' },
       h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '开始一个赛季')),
       h('p', { className: 'lp-text' }, props.view.invite.body_zh),
-      h('p', { className: 'lp-caption lp-measure' }, '长寿图鉴是一组长寿研究的知识卡；抽卡次数只从测量、记录、就诊或复测来。'),
-      props.view.subject_zh ? h('p', { className: 'lp-caption lp-measure' }, `这个赛季用的是${props.view.subject_zh}的年龄和性别。`) : null,
+      h('p', { className: 'lp-caption lp-measure' }, '长寿图鉴是一组长寿研究的知识卡；抽卡次数仅通过测量、记录、就诊或复测获得。'),
+      props.view.subject_zh ? h('p', { className: 'lp-caption lp-measure' }, `本赛季使用${props.view.subject_zh}的年龄和性别。`) : null,
       h('a', { className: 'lp-textbtn', href: props.view.invite.odds_path }, '概率说明 →'),
       h('div', { className: 'lp-actions' },
-        h(Btn, { disabled: props.busy, onClick: () => props.onAction({ action: 'opt_in' }) }, '开始这个赛季'),
-        h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onAction({ action: 'decline_invite' }) }, '先不用')),
+        h(Btn, { disabled: props.busy, onClick: () => props.onAction({ action: 'opt_in' }) }, '开始本赛季'),
+        h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onAction({ action: 'decline_invite' }) }, '暂不参加')),
       note)
   }
   if (props.view.pressure !== true) {
     return h('section', { className: 'lp-card', 'aria-label': '赛季' },
-      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '这个赛季还没开始')),
-      h('p', { className: 'lp-small lp-muted lp-measure' }, '这个赛季先不推。想开始时点下面。'),
+      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '本赛季尚未开始')),
+      h('p', { className: 'lp-small lp-muted lp-measure' }, '本赛季暂不推送。如需开始，请点击下方按钮。'),
       h('div', { className: 'lp-actions' },
-        h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onAction({ action: 'opt_in' }) }, '开始这个赛季')),
+        h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onAction({ action: 'opt_in' }) }, '开始本赛季')),
       props.view.streak.frozen.length > 0 ? h(StreakLine, { streak: props.view.streak, onFreeze: props.onFreeze, busy: props.busy }) : null,
       note)
   }
@@ -85,7 +85,7 @@ export function SeasonPanel(props: {
   const ratio = season ? Math.min(1, season.week / Math.max(1, season.weeks)) : 0
   const family = props.view.family?.available
     ? props.view.family.opted
-      ? h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onAction({ action: 'share_recap' }) }, '把这个赛季的回看发给家人')
+      ? h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onAction({ action: 'share_recap' }) }, '将本赛季回顾发送给家人')
       : h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onAction({ action: 'family_on' }) }, '打开家人圈')
     : null
   return h(React.Fragment, null,
@@ -101,15 +101,15 @@ export function SeasonPanel(props: {
             className: 'lp-bar', role: 'progressbar', 'aria-label': '本赛季进度',
             'aria-valuemin': 0, 'aria-valuemax': season.weeks, 'aria-valuenow': season.week, 'aria-valuetext': `第 ${season.week} 周 / 共 ${season.weeks} 周`,
           }, h('span', { style: { width: `${Math.round(ratio * 100)}%` } })),
-          h('p', { className: 'lp-caption lp-measure' }, season.retest_day ? `复查 ${chineseDate(season.retest_day)}` : `${chineseDate(season.start)} → ${chineseDate(season.end)}`))
-        : h('p', { className: 'lp-small lp-muted lp-measure' }, '这一赛季还没有开始。'),
+          h('p', { className: 'lp-caption lp-measure' }, season.retest_day ? `复测 ${chineseDate(season.retest_day)}` : `${chineseDate(season.start)} → ${chineseDate(season.end)}`))
+        : h('p', { className: 'lp-small lp-muted lp-measure' }, '本赛季尚未开始。'),
       season?.status === 'closed' || family
         ? h('div', { className: 'lp-actions' },
           season?.status === 'closed' ? h(Btn, { disabled: props.busy, onClick: () => props.onAction({ action: 'next_season' }) }, '开始下一个赛季') : null,
           family)
         : null,
       h('div', { className: 'lp-card-foot' },
-        h('span', { className: 'lp-caption' }, '生病或出行的这一天：不算中断，也不算完成。'),
+        h('span', { className: 'lp-caption' }, '生病或出行当天，不计为中断，也不计为完成。'),
         h('div', { className: 'lp-actions' },
           h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onFreeze('sick') }, '今天生病'),
           h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onFreeze('travel') }, '今天出行')))),
@@ -126,13 +126,13 @@ export function SeasonPanel(props: {
           },
           h('span', { className: 'lp-row-main' }, quest.title_zh),
           quest.status === 'done'
-            ? h('span', { className: 'lp-badge lp-badge-good' }, '做完了')
+            ? h('span', { className: 'lp-badge lp-badge-good' }, '已完成')
             : h('span', { className: 'lp-caption lp-num' }, `${quest.progress}/${quest.count}`),
           h(Icon, { name: 'chevron', size: 14 })))))
       : null,
     season?.recap_zh
-      ? h('section', { className: 'lp-card', 'aria-label': '这一赛季的回看' },
-        h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '这一赛季的回看')),
+      ? h('section', { className: 'lp-card', 'aria-label': '本赛季回顾' },
+        h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '本赛季回顾')),
         h('p', { className: 'lp-text' }, season.recap_zh))
       : null,
     h(CodexPanel, { codex: props.view.codex, onDraw: props.onDraw, onOpt: props.onOpt, onRun: props.onRun, busy: props.busy, note: props.note }))

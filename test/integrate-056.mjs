@@ -18,7 +18,7 @@ const between = rangeFlag('hb', 124, 'unknown')
 assert.equal(between, null, 'HGB 124 with unknown sex is between the floors, so the change row does not apply the men\'s limit')
 const eitherSex = rangeFlag('hb', 112, 'unknown')
 assert.equal(eitherSex?.flag, 'low')
-assert.match(eitherSex.text_zh, /男女都算偏低/)
+assert.match(eitherSex.text_zh, /低于男女通用的偏低下限 115，偏低/)
 assert.equal(rangeFlag('hb', 124, 'male')?.flag, 'low', 'a known man at 124 is still low')
 
 const ferritin = absoluteLevel('铁蛋白', 8.0, 'ng/mL', 'male')

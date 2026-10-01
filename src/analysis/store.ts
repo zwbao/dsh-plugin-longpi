@@ -154,7 +154,7 @@ export function runStatus(run: AnalysisRun, now: number = Date.now()): RunStatus
       stages = parsed && typeof parsed.stages === 'object' && parsed.stages ? parsed.stages as Record<string, unknown> : {}
       last = Math.max(last, statSync(statePath).mtimeMs)
     } catch {
-      error = '工作区状态文件读不了'
+      error = '无法读取工作区状态文件'
     }
   }
   const rows = STAGES.map((key) => ({ key, label_zh: STAGE_ZH[key] ?? key, done: stages[key] === 'done' }))

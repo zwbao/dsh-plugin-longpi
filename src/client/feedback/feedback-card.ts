@@ -8,7 +8,7 @@ const h = React.createElement
 
 function retestLine(retest: NonNullable<FeedbackMessage['retest']>): string {
   if (retest.why_zh.includes('复测已在')) return datesZh(retest.why_zh)
-  return `建议复测：${dateZh(retest.earliest)} 至 ${dateZh(retest.recommended)}。${datesZh(retest.why_zh)}`
+  return `建议复测：${dateZh(retest.earliest)}至 ${dateZh(retest.recommended)}。${datesZh(retest.why_zh)}`
 }
 
 /** Keep compound names whole: γ-谷氨酰转移酶 must not break after the hyphen. */

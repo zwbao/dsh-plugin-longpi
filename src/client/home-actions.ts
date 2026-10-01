@@ -10,7 +10,7 @@ import { hasPendingPrompt, setPromptNote, takePendingPrompt, useBridgeMounted, u
 import { copyText } from './ui.ts'
 
 /** Shown while a prompt waits for a session to exist. */
-export const WAIT_FOR_WORKSPACE = '先在输入框上方选择一个工作区，选好后会自动放进输入框'
+export const WAIT_FOR_WORKSPACE = '请先在输入框上方选择工作区，选择后内容会自动填入输入框'
 
 /** The composer's action face. Older DSH builds only offer setDraft, so every method is optional. */
 interface InputActions {
@@ -62,7 +62,7 @@ export function PromptBridge(props: BridgeProps): null {
         setPromptNote(null)
         return
       }
-      void copyText(text).then((copied) => setPromptNote(copied ? '没能放进输入框，已复制，粘贴即可' : '没能放进输入框，请手动输入'))
+      void copyText(text).then((copied) => setPromptNote(copied ? '未能填入输入框，内容已复制，请直接粘贴' : '未能填入输入框，请手动输入'))
     }, 0)
     return () => window.clearTimeout(timer)
   }, [pending])

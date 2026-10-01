@@ -30,8 +30,8 @@ export const datainCandidates: CandidateProvider = (_pack) => {
   const grade = Number(lead.grade ?? 0)
   const tirads = lead.kind === 'ti-rads'
   const title = tirads
-    ? `甲状腺结节 TI-RADS ${lead.grade || grade}：把超声报告给医生看`
-    : `乳腺超声 BI-RADS ${lead.grade || grade}：按报告去专科看`
+    ? `甲状腺结节 TI-RADS ${lead.grade || grade}：请携带超声报告就诊`
+    : `乳腺超声 BI-RADS ${lead.grade || grade}：请按报告建议到专科就诊`
   const priority = tirads ? 70 + Math.min(grade, 5) : 60 + Math.min(grade, 6)
   return [action({
     id: 'narrative-imaging',
@@ -47,6 +47,6 @@ export const datainCandidates: CandidateProvider = (_pack) => {
       prompt_zh: tirads ? '体检报告里的甲状腺结节 TI-RADS 是什么意思？要不要看医生？' : '报告里的 BI-RADS 要怎么随访？',
     },
     title_zh: title,
-    detail_zh: `${lead.text_zh}分级是报告上的，不是诊断。随访和要不要穿刺由医生决定。`,
+    detail_zh: `${lead.text_zh}分级来自报告原文，不是诊断。随访方式及是否穿刺由医生决定。`,
   })]
 }

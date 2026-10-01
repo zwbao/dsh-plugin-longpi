@@ -35,8 +35,8 @@ export function storeLabel(kind: StoreKind): string {
 }
 
 export function confirmMessage(kind?: StoreKind): string {
-  const what = kind ? storeLabel(kind) : '这类'
-  return `这份是${what}数据。确认后才会记在这台电脑上，不会送到体检记录里。`
+  const what = kind ? storeLabel(kind) : '此类'
+  return `该文件为${what}数据，确认后才会保存在这台电脑上，不会上传至健康数据服务。`
 }
 
 export function storeReadBack(summaries: StoreSummary[]): string {
@@ -45,16 +45,16 @@ export function storeReadBack(summaries: StoreSummary[]): string {
   for (const row of summaries) {
     const name = storeLabel(row.kind)
     if (row.error) {
-      lines.push(`${name}没有写入：已有的文件读不出来，没有覆盖它。`)
+      lines.push(`${name}未写入：无法读取已有文件，为避免覆盖未作修改。`)
       continue
     }
-    if (row.stored === 0) lines.push(`${name}没有写入：${row.rejected} 行没有通过检查。`)
+    if (row.stored === 0) lines.push(`${name}未写入：${row.rejected} 行未通过校验。`)
     else {
-      lines.push(`${name}记下了 ${row.stored} 行。${row.coverage_zh}`)
-      if (row.rejected > 0) lines.push(`另有 ${row.rejected} 行没有写入。`)
+      lines.push(`${name}已记录 ${row.stored} 行。${row.coverage_zh}`)
+      if (row.rejected > 0) lines.push(`另有 ${row.rejected} 行未写入。`)
     }
   }
-  lines.push('原始表留在这台电脑上，没有放进对话。')
+  lines.push('原始表格仅保存在这台电脑上，未发送至对话。')
   return lines.join('')
 }
 

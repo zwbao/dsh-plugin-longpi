@@ -2,6 +2,8 @@
 // glucose and weight 8–12 weeks; body age 3–6 months; HbA1c at least 90 days.
 // The table's shorter minimum (lipids 28 days) is not what we tell the person.
 
+import { dateZh } from '../ux/plain.ts'
+
 export interface RetestAdvice {
   /** Days that must pass before a result is comparable. */
   minDays: number
@@ -30,24 +32,24 @@ export function daysBetween(from: string, to: string): number {
 export function retestAdvice(key: string): RetestAdvice {
   const k = key.trim().toLowerCase()
   if (k === 'hba1c' || k.includes('hba1c') || k.includes('a1c')) {
-    return { minDays: 90, earliestDays: 90, recommendedDays: 90, family: 'hba1c', why_zh: '糖化血红蛋白反映近 3 个月的平均血糖，两次至少要隔 90 天。' }
+    return { minDays: 90, earliestDays: 90, recommendedDays: 90, family: 'hba1c', why_zh: '糖化血红蛋白反映近 3 个月的平均血糖，两次检测至少间隔 90 天。' }
   }
   if (k === 'phenoage' || k === 'bioage' || k === 'bodyage') {
-    return { minDays: 90, earliestDays: 90, recommendedDays: 180, family: 'bioage', why_zh: '身体年龄的测量波动大约有两三岁。隔 3 到 6 个月、在同一家实验室再测，才分得清是不是真实变化。' }
+    return { minDays: 90, earliestDays: 90, recommendedDays: 180, family: 'bioage', why_zh: '身体年龄的测量波动大约有两三岁。间隔 3 到 6 个月、在同一家实验室复测，才能区分是否为真实变化。' }
   }
   if (k === 'vitd' || k === 'vitamin_d' || k === '25ohd' || k.includes('vitd')) {
-    return { minDays: 90, earliestDays: 90, recommendedDays: 90, family: 'vitamin_d', why_zh: '维生素 D 至少隔 90 天再测，更早的起伏多半是波动。' }
+    return { minDays: 90, earliestDays: 90, recommendedDays: 90, family: 'vitamin_d', why_zh: '维生素 D 至少间隔 90 天复测，更早出现的变化通常属于波动。' }
   }
   if (LIPIDS.has(k)) {
-    return { minDays: 56, earliestDays: 56, recommendedDays: 84, family: 'lipids', why_zh: '血脂的真实变化通常要 8–12 周才看得出来。' }
+    return { minDays: 56, earliestDays: 56, recommendedDays: 84, family: 'lipids', why_zh: '血脂的真实变化通常需要 8–12 周才能显现。' }
   }
   if (k === 'glucose' || k === 'fpg' || k === 'fasting_glucose') {
-    return { minDays: 56, earliestDays: 56, recommendedDays: 84, family: 'glucose', why_zh: '空腹血糖的真实变化通常要 8–12 周才看得出来。' }
+    return { minDays: 56, earliestDays: 56, recommendedDays: 84, family: 'glucose', why_zh: '空腹血糖的真实变化通常需要 8–12 周才能显现。' }
   }
   if (k === 'weight' || k === 'bmi' || k === 'bodymass') {
-    return { minDays: 56, earliestDays: 56, recommendedDays: 84, family: 'weight', why_zh: '体重的真实变化通常要 8–12 周才看得出来。' }
+    return { minDays: 56, earliestDays: 56, recommendedDays: 84, family: 'weight', why_zh: '体重的真实变化通常需要 8–12 周才能显现。' }
   }
-  return { minDays: 28, earliestDays: 28, recommendedDays: 56, family: 'other', why_zh: '这项至少隔 4 周再测，才分得清波动和真实变化。' }
+  return { minDays: 28, earliestDays: 28, recommendedDays: 56, family: 'other', why_zh: '此项至少间隔 4 周复测，才能区分波动与真实变化。' }
 }
 
 /**
@@ -58,7 +60,7 @@ export function retestAdvice(key: string): RetestAdvice {
 export function retestDates(today: string, advice: RetestAdvice, waitedDays: number | null, anchor: string | null, completedOn: string | null = null): { earliest: string; recommended: string; why_zh: string } {
   const done = completedOn && /^\d{4}-\d{2}-\d{2}/.test(completedOn) ? completedOn.slice(0, 10) : ''
   if (done && daysBetween(done, today) >= 0 && daysBetween(done, today) < advice.minDays) {
-    return { earliest: done, recommended: done, why_zh: `复测已在 ${done} 完成。` }
+    return { earliest: done, recommended: done, why_zh: `复测已在 ${dateZh(done, today)}完成。` }
   }
   const base = (anchor && /^\d{4}-\d{2}-\d{2}/.test(anchor) ? anchor : today).slice(0, 10)
   const waited = waitedDays ?? 0

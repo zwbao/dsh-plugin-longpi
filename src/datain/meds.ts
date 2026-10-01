@@ -52,6 +52,6 @@ export function rememberMedication(dataDir: string, input: { name: string; dose_
   })
   // addStatement already imports the line into memory. Read it back so a failed mirror is visible in tests.
   memoryFor(dataDir)
-  const readBack = `你记下的：${saved.name}${saved.dose_text ? ` ${saved.dose_text}` : ''}${saved.frequency_text ? ` ${saved.frequency_text}` : ''}${saved.since ? `，${saved.since} 起` : ''}`
+  const readBack = `已记录：${saved.name}${saved.dose_text ? ` ${saved.dose_text}` : ''}${saved.frequency_text ? ` ${saved.frequency_text}` : ''}${saved.since ? `，${saved.since} 起` : ''}`
   return { ok: true, read_back: readBack }
 }

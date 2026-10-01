@@ -27,7 +27,7 @@ export function SensitiveConsentScreen(props: { onDone?: () => void } & Record<s
 
   React.useEffect(() => {
     let live = true
-    void getJson<Status>('/api/longpi/privacy').then((row) => { if (live) setStatus(row) }).catch((err: unknown) => { if (live) setError(errorText(err, '没有读到同意书')) })
+    void getJson<Status>('/api/longpi/privacy').then((row) => { if (live) setStatus(row) }).catch((err: unknown) => { if (live) setError(errorText(err, '未能读取同意书')) })
     return () => { live = false }
   }, [])
 
@@ -39,7 +39,7 @@ export function SensitiveConsentScreen(props: { onDone?: () => void } & Record<s
     if (guardian) body.guardian = true
     void postJson<Status>('/api/longpi/privacy/consent', body)
       .then(() => props.onDone?.())
-      .catch((err: unknown) => setError(errorText(err, '没有记下')))
+      .catch((err: unknown) => setError(errorText(err, '保存失败')))
       .finally(() => setBusy(false))
   }
 
@@ -51,7 +51,7 @@ export function SensitiveConsentScreen(props: { onDone?: () => void } & Record<s
     ...paragraphs.map((line) => h('p', { key: line, className: 'lp-text' }, line)),
     status?.minor?.child && copy?.minor?.under_14 ? h('p', { className: 'lp-callout lp-callout-warn' }, copy.minor.under_14) : null,
     h('div', { className: 'lp-field lp-consent-age' },
-      h('label', { className: 'lp-field-label', htmlFor: 'lp-pipl-age' }, '实足年龄'),
+      h('label', { className: 'lp-field-label', htmlFor: 'lp-pipl-age' }, '年龄（周岁）'),
       h('input', { className: 'lp-input', id: 'lp-pipl-age', inputMode: 'numeric', value: age, onChange: (event: React.ChangeEvent<HTMLInputElement>) => setAge(event.target.value) })),
     h('label', { className: 'lp-checkrow' },
       h('input', { type: 'checkbox', checked: guardian, onChange: (event: React.ChangeEvent<HTMLInputElement>) => setGuardian(event.target.checked) }),

@@ -1915,7 +1915,7 @@ interface ChangesContext {
   records: RecordSnapshot;
   today: string;
 }
-declare const CHANGES_NOTE_ZH = "判断依据：两次结果之差，要比同一个人平常的起伏更大，才算值得注意的变化。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。";
+declare const CHANGES_NOTE_ZH = "判断依据：两次结果之差需大于同一个人平时的波动，才视为值得注意的变化。不同医院、不同仪器之间的差异未计入；如果两次不在同一家机构，请先复查确认。这不是诊断。";
 /** Low or high against the usual range, with the words for it; null inside it or for other markers. */
 declare function rangeFlag(key: string, value: number, sex: string): {
   flag: 'low' | 'high';
@@ -4022,7 +4022,7 @@ declare function seenNotes(state: CareState): string[];
 declare function deepseekConsentPending(decision: string | null | undefined): boolean;
 //#endregion
 //#region src/privacy/egress.d.ts
-declare const CONSENT_HOLD_ZH = "还没有同意把健康对话发给 DeepSeek，所以这次不把健康信息发出去。请在开始页或档案里选择「我知道了，同意把健康对话发给 DeepSeek」。";
+declare const CONSENT_HOLD_ZH = "你尚未同意把健康对话发给 DeepSeek，因此本次不发送健康信息。请在开始页或档案中选择「我知道了，同意把健康对话发给 DeepSeek」。";
 /**
  * `blob` is the whole call (system prompt included). `personText` is only what the person typed.
  * A symptom in the persona or a safety note does not count as their emergency.

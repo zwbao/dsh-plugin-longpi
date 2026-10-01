@@ -65,7 +65,7 @@ export interface PersonFacts {
 }
 
 export function eligibility(manifest: StudyManifest, person: PersonFacts): { ok: true } | { ok: false; reason_zh: string } {
-  if (person.age == null) return { ok: false, reason_zh: '档案里还没有出生年，无法确认不是未成年人' }
+  if (person.age == null) return { ok: false, reason_zh: '档案中尚无出生年份，无法确认是否已成年' }
   if (person.age < 18 || person.conditions.includes('minor')) return { ok: false, reason_zh: '这项研究不纳入未成年人' }
   const [low, high] = manifest.eligibility.age
   if (person.age < low || person.age > high) return { ok: false, reason_zh: `年龄不在 ${low}–${high} 岁` }
@@ -73,10 +73,10 @@ export function eligibility(manifest: StudyManifest, person: PersonFacts): { ok:
     return { ok: false, reason_zh: '这项研究的性别范围不包括你' }
   }
   for (const flag of manifest.eligibility.exclude_conditions ?? []) {
-    if (person.conditions.includes(flag)) return { ok: false, reason_zh: '按排除条件，这次先不参加' }
+    if (person.conditions.includes(flag)) return { ok: false, reason_zh: '根据排除条件，本次暂不参加' }
   }
   for (const flag of manifest.eligibility.require ?? []) {
-    if (!person.conditions.includes(flag)) return { ok: false, reason_zh: '还没有这项研究所要求的情况记录' }
+    if (!person.conditions.includes(flag)) return { ok: false, reason_zh: '尚无该研究要求的健康状况记录' }
   }
   for (const drug of manifest.eligibility.exclude_drug_classes ?? []) {
     if (person.drug_classes.includes(drug)) return { ok: false, reason_zh: '正在用的药在这项研究的排除名单里' }
@@ -101,11 +101,11 @@ export function grantConsent(input: GrantInput): { ok: true; consent: ConsentRec
   const attempts = bumpAttempts(input.dataDir, input.manifest.id)
   const comprehension = { ...grade, attempts }
   if (!input.confirm) {
-    return { ok: false, reason_zh: '需要明确确认才记为同意', comprehension }
+    return { ok: false, reason_zh: '需明确确认后才记录为同意', comprehension }
   }
   if (!grade.passed) {
-    appendLog(input.dataDir, 'consent', `理解测验还没通过（${grade.correct}/${grade.asked}），没有记为同意`, input.manifest.id, input.at)
-    return { ok: false, reason_zh: '有题目和说明不一致。请再看一遍说明，还不能记为同意。', comprehension }
+    appendLog(input.dataDir, 'consent', `理解测验未通过（${grade.correct}/${grade.asked}），未记录为同意`, input.manifest.id, input.at)
+    return { ok: false, reason_zh: '有答案与说明不一致。请重新阅读说明，暂不能记录为同意。', comprehension }
   }
   const at = input.at ?? new Date().toISOString()
   const logged = appendLog(input.dataDir, 'consent', `同意参加「${input.manifest.title_zh}」。理解测验 ${grade.correct}/${grade.asked}。`, input.manifest.id, at)
@@ -130,7 +130,7 @@ export function grantConsent(input: GrantInput): { ok: true; consent: ConsentRec
 
 export function withdrawConsent(dataDir: string, manifest: StudyManifest, at: IsoTime = new Date().toISOString()): { ok: true; consent: ConsentRecord; deleted: number; released_stays: true; statement_zh: string } | { ok: false; reason_zh: string } {
   const current = latestConsent(dataDir, manifest.id)
-  if (!current || current.decision !== 'granted') return { ok: false, reason_zh: '现在没有生效的同意' }
+  if (!current || current.decision !== 'granted') return { ok: false, reason_zh: '当前没有有效的同意' }
   const deleted = deleteUnreleased(dataDir, manifest.id)
   closeStudyBudget(dataDir, manifest.id)
   const logged = appendLog(dataDir, 'withdraw', `退出「${manifest.title_zh}」。已删除 ${deleted} 份尚未发布的合计。${RELEASE_STAYS_ZH}`, manifest.id, at)

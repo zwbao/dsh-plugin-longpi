@@ -172,7 +172,7 @@ try {
 
   assert.equal(versusCalendarAge(-8.89), '比周岁小 8.9 岁')
   assert.equal(versusCalendarAge(2.04), '比周岁大 2 岁')
-  assert.equal(versusCalendarAge(0.2), '和周岁差不多')
+  assert.equal(versusCalendarAge(0.2), '与周岁相近')
   assert.equal(measuresBodyAge(methodRow('aging-biomarker-framework', [{ key: 'horvath_skin_blood_age_deviation', value: -1.4, unit: 'a' }])), false, 'a methylation clock is not the blood body age')
   // A skill run that disagrees with the page (another age, another day) is set to the page's figure.
   const aligned = alignBodyAge([
@@ -185,7 +185,7 @@ try {
   assert.deepEqual(oneDrawAligned[0].outputs, [], 'one draw: no gap from a method either')
   const blocked = alignBodyAge([methodRow(PHENO_SKILL, [{ key: 'phenoage', value: 45.3, unit: 'a' }])], { status: 'blocked', phenoage: null, advance: null })
   assert.deepEqual(blocked[0].outputs, [], 'a blocked page leaves no body-age number on the method row')
-  assert.match(bodyAgeFactText({ status: 'ok', phenoage: 31.93, advance: -8.89, headline_zh: '身体年龄算出来小了 5.9 岁（模型估计），主要来自平均红细胞体积变小。这一项变小不一定是好事，下次看医生时问一下。' }, 'verified'), /^身体年龄 31\.9 岁（模型估计，已核对），比周岁小 8\.9 岁。身体年龄算出来小了 5\.9 岁.*不一定是好事/)
+  assert.match(bodyAgeFactText({ status: 'ok', phenoage: 31.93, advance: -8.89, headline_zh: '身体年龄的计算结果小了 5.9 岁（模型估计），主要来自平均红细胞体积变小。这一项变小不一定是好事，建议下次就诊时咨询医生。' }, 'verified'), /^身体年龄 31\.9 岁（模型估计，已核对），比周岁小 8\.9 岁。身体年龄的计算结果小了 5\.9 岁.*不一定是好事/)
 
   // --- 3. one draw: advance is null ---------------------------------------------------------------
   const single = await serve(oneDraw(loadRecord()))
@@ -230,7 +230,7 @@ try {
   })
   const glp = await mod.buildPlanBrief(await contextOf(planConfig, startsSoon), { focus: ['weight', 'cardio'] })
   assert.equal(glp.safety.weight_med, '司美格鲁肽注射液', 'a prescription that starts inside the window counts')
-  assert.ok(glp.safety.notes_zh.some((line) => /体重的变化主要会来自司美格鲁肽注射液/.test(line)), 'the attribution sentence')
+  assert.ok(glp.safety.notes_zh.some((line) => /体重的变化主要来自司美格鲁肽注射液/.test(line)), 'the attribution sentence')
   for (const row of glp.candidates.filter((item) => item.marker_key === 'weight')) {
     assert.doesNotMatch(row.expected_zh, KG, row.id)
     assert.match(row.expected_zh, /体重的变化主要会来自司美格鲁肽注射液/, row.id)
@@ -241,7 +241,7 @@ try {
   const tre = glp.candidates.filter((row) => /限时进食|16:8/.test(row.intervention_zh))
   assert.ok(tre.length > 0, 'time-restricted eating is not blocked for a GLP-1 (concrete advice, not a blanket refusal)')
   for (const row of tre) {
-    assert.ok(row.cautions_zh.some((line) => line.startsWith('先告诉开药的医生') && /恶心/.test(line) && /吃得少/.test(line)), row.id)
+    assert.ok(row.cautions_zh.some((line) => line.startsWith('先告诉开药的医生') && /恶心/.test(line) && /降低食欲/.test(line)), row.id)
   }
   const later = await mod.buildPlanBrief(await contextOf(planConfig, (records) => ({
     ...records, medications: [{ name: '司美格鲁肽注射液', status: 'active', recorded_dose: '0.25mg', since: '2027-06-01' }],
@@ -258,9 +258,9 @@ try {
   // --- 6. iron deficiency names the gastroenterologist and a time frame; a falling haemoglobin alone does not --
   const pt = (name, value, unit, date) => ({ name, label: name, value, unit, date })
   const ironStop = mod.clinicalStop({ sex: 'male', diabetesKnown: false, points: [pt('血红蛋白', 150, 'g/L', '2024-01-01'), pt('血红蛋白', 114, 'g/L', '2026-05-18'), pt('平均红细胞体积', 72.4, 'fL', '2026-05-18'), pt('铁蛋白', 8, 'ng/mL', '2026-05-18')] })
-  assert.match(ironStop.sentence_zh, /全科或血液科，缺铁的原因常要消化科一起查，尽量在 1 到 2 周内去/)
+  assert.match(ironStop.sentence_zh, /全科或血液科，缺铁的原因常要消化科一起查，尽量在 1 到 2 周内就诊/)
   const hbOnly = mod.clinicalStop({ sex: 'male', diabetesKnown: false, points: [pt('血红蛋白', 152, 'g/L', '2023-01-01'), pt('血红蛋白', 144, 'g/L', '2024-01-01'), pt('血红蛋白', 135, 'g/L', '2025-01-01')] })
-  assert.match(hbOnly.sentence_zh, /全科或血液科，尽量在 1 到 2 周内去/)
+  assert.match(hbOnly.sentence_zh, /全科或血液科，尽量在 1 到 2 周内就诊/)
   assert.doesNotMatch(hbOnly.sentence_zh, /消化科/)
 
   // --- after the gates: the yam steer fires when the heme-iron foods are missing -------------------------

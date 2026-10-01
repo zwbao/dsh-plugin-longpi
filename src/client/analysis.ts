@@ -134,7 +134,7 @@ export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone
   }
   const toggle = (on: boolean) => act('auto', async () => {
     await postJson('/api/longpi/analysis/settings', { auto: on })
-    notice(on ? '已打开自动深度分析：有新数据时 LongPi 会自己开始。' : '已关闭自动深度分析：只在关键时间点问你要不要做。', 'info')
+    notice(on ? '已开启自动深度分析：有新数据时，LongPi 将自动开始分析。' : '已关闭自动深度分析：仅在关键时间点征求你的意见。', 'info')
   }, '设置失败')
   const doImport = (runId: string) => act('import', async () => {
     await postJson('/api/longpi/analysis/import', { run_id: runId })
@@ -161,11 +161,11 @@ export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone
     h('section', { className: 'lp-section', 'aria-label': '深度分析状态' },
       h('div', { className: 'lp-card lp-an-prose' },
         h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-h3' }, '关于深度分析')),
-        h('p', { className: 'lp-text lp-muted' }, '用全基因组、甲基化、肠道菌、蛋白组和体检数据，算生物学年龄、各器官状况和以后的疾病风险，提出针对性的问题并逐一查证，最后给一份能照着做的方案。分析在对话里进行；也可以随时在对话里直接要求做一次。'),
+        h('p', { className: 'lp-text lp-muted' }, '根据全基因组、甲基化、肠道菌、蛋白组和体检数据，估算生物学年龄、各器官状况和未来的疾病风险，提出针对性问题并逐一查证，最后给出一份可执行的方案。分析在对话中进行；也可随时在对话中直接发起。'),
         h(Switch, { checked: Boolean(status.readiness?.auto_on), onChange: (on: boolean) => { void toggle(on) }, label: '自动深度分析', disabled, busy: busy === 'auto', describedBy: 'lp-auto-cost' }),
         h('div', { className: 'lp-callout lp-callout-warn', id: 'lp-auto-cost', role: 'note' },
           h(Icon, { name: 'warn', size: 16 }),
-          h('div', { className: 'lp-callout-body' }, `注意：${t(status.cost_zh)}，会消耗大量 token。打开后，有新的体检、化验或检测文件时，LongPi 会自己判断并开始分析（每个人两次自动分析至少间隔 30 天）；关闭时（默认），只在关键时间点问你要不要做，你同意才开始。这个开关对你和家人都生效。`))),
+          h('div', { className: 'lp-callout-body' }, `注意：${t(status.cost_zh)}，会消耗大量 token。开启后，有新的体检、化验或检测文件时，LongPi 会自动判断并开始分析（同一人两次自动分析至少间隔 30 天）；关闭时（默认），仅在关键时间点征求你的意见，经你同意后才开始。此开关对你和家人均生效。`))),
       h(StatusCard, { status, running, stopped, ready, disabled, onAbandon: (id: string) => { void abandon(id) }, onImport: (id: string) => { void doImport(id) } })),
 
     cur ? h(Section, { title: '报告', aside: cur.imported_at ? h('span', { className: 'lp-caption' }, `导入于 ${dateZh(t(cur.imported_at))}`) : undefined }, h(ReportCard, { cur, planItems: back?.items.length ?? 0 })) : null,
@@ -206,7 +206,7 @@ export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone
         back.items.length ? h('ul', { className: 'lp-rows' }, ...back.items.map((i) => h('li', { key: t(i.id), className: 'lp-row lp-row-stack' },
           h('span', { className: 'lp-strong' }, t(i.title)),
           i.detail ? h('span', { className: 'lp-muted' }, t(i.detail)) : null,
-          i.markers.length ? h('span', { className: 'lp-caption' }, `复测看：${i.markers.map(t).join('、')}`) : null)))
+          i.markers.length ? h('span', { className: 'lp-caption' }, `复测指标：${i.markers.map(t).join('、')}`) : null)))
           : h('p', { className: 'lp-muted' }, '这份方案里没有条目。'),
         back.warnings.length ? h('div', { className: 'lp-callout lp-callout-warn' }, h(Icon, { name: 'warn', size: 16 }),
           h('div', { className: 'lp-callout-body' }, h('ul', { className: 'lp-bullets lp-an-bullets' }, ...back.warnings.map((w, i) => h('li', { key: i }, t(w)))))) : null,
@@ -218,7 +218,7 @@ export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone
             ? h('span', { className: 'lp-badge lp-badge-good' }, h(Icon, { name: 'check', size: 12 }), `已保存为第 ${t(cur.plan_accepted_version)} 版`)
             : h('span', { className: 'lp-caption' }, '确认后才生效'),
           cur.plan_accepted_version ? null
-            : h(Btn, { onClick: () => { void accept(back) }, disabled: disabled || !back.ok }, '我读过了，接受方案')))) : null)
+            : h(Btn, { onClick: () => { void accept(back) }, disabled: disabled || !back.ok }, '我已阅读，接受方案')))) : null)
 }
 
 /** One card for where things stand: a run in progress, a stopped run, a finished run to import, or why not yet. */
@@ -243,7 +243,7 @@ function StatusCard(props: {
       : `停在第 ${at + 1} 步${nowLabel ? `「${t(nowLabel)}」` : ''} · 共 ${total} 步`
     return h('div', { className: 'lp-card lp-an-prose' },
       h('div', { className: 'lp-card-head' },
-        h('h3', { className: 'lp-h3' }, running ? '分析进行中' : '上次分析没有完成'),
+        h('h3', { className: 'lp-h3' }, running ? '分析进行中' : '上次分析未完成'),
         // folded, the line below already says where it stands
         folded ? null : h('span', { className: 'lp-caption lp-num', role: 'status', 'aria-label': `已完成 ${run.done} 步，共 ${total} 步` }, `${run.done}/${total}`)),
       h('div', { className: 'lp-bar', role: 'progressbar', 'aria-label': '分析进度', 'aria-valuemin': 0, 'aria-valuemax': total, 'aria-valuenow': run.done },
@@ -256,8 +256,8 @@ function StatusCard(props: {
       },
       h('span', { className: 'lp-progress-dot', 'aria-hidden': true }, s.done ? h(Icon, { name: 'check', size: 12, strokeWidth: 2 }) : null),
       h('span', null, s.label_zh, s.done ? h('span', { className: 'lp-sr' }, '（已完成）') : null)))),
-      running && run.reason_zh ? h('p', { className: 'lp-small lp-muted' }, `${run.trigger === 'ai' ? 'LongPi 发起' : '你要求的'}：${t(run.reason_zh)}`) : null,
-      running ? null : h('p', { className: 'lp-small lp-muted' }, '可以回到那段对话说「继续」，或者放弃后重新发起。'),
+      running && run.reason_zh ? h('p', { className: 'lp-small lp-muted' }, `${run.trigger === 'ai' ? 'LongPi 发起' : '你发起'}：${t(run.reason_zh)}`) : null,
+      running ? null : h('p', { className: 'lp-small lp-muted' }, '可回到原对话输入「继续」，或放弃后重新发起。'),
       run.state_error ? h('div', { className: 'lp-callout lp-callout-warn' }, h(Icon, { name: 'warn', size: 16 }), h('div', { className: 'lp-callout-body' }, t(run.state_error))) : null,
       ready ? h('div', { className: 'lp-callout lp-callout-good' }, h(Icon, { name: 'check', size: 16 }),
         h('div', { className: 'lp-callout-body' }, '另有一份分析已完成，可以先导入。', h('div', null, h(Btn, { onClick: () => props.onImport(ready.id), disabled }, '导入结果')))) : null,
@@ -269,7 +269,7 @@ function StatusCard(props: {
   if (ready) {
     return h('div', { className: 'lp-card lp-an-prose', role: 'status' },
       h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-h3' }, '有一份新的分析已完成')),
-      h('p', { className: 'lp-text lp-muted' }, '导入后就能在这里看到报告、器官体检表和方案。'),
+      h('p', { className: 'lp-text lp-muted' }, '导入后可在此查看报告、器官体检表和方案。'),
       h('div', { className: 'lp-card-foot' },
         h('span', { className: 'lp-caption' }, '导入后，报告和问题看板会显示在下面。'),
         h(Btn, { onClick: () => props.onImport(ready.id), disabled }, '导入结果')))
@@ -278,14 +278,14 @@ function StatusCard(props: {
   const blocked = status.blockers
   if (blocked) {
     return h('div', { className: 'lp-card lp-an-prose', role: 'status' },
-      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-h3' }, '现在还不能做')),
+      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-h3' }, '暂时无法进行')),
       h('div', { className: 'lp-callout lp-callout-warn' }, h(Icon, { name: 'info', size: 16 }), h('div', { className: 'lp-callout-body' }, t(blocked.reply_zh))))
   }
 
   const readiness = status.readiness
   if (!readiness) return null
   return h('div', { className: 'lp-card lp-an-prose', role: 'status' },
-    h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-h3' }, readiness.auto_on ? 'LongPi 的判断' : '现在的情况')),
+    h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-h3' }, readiness.auto_on ? 'LongPi 的判断' : '当前状态')),
     h('p', { className: 'lp-text' }, t(readiness.why_zh) || '现在没有进行中的分析。'),
     readiness.folder ? h('p', { className: 'lp-caption' }, `检测文件夹：${t(readiness.folder)}（只读）`) : null)
 }
@@ -336,8 +336,8 @@ function QuestionCard(props: { row: BoardRow }): React.ReactElement {
   return h('article', { className: 'lp-card lp-an-prose' },
     h('div', { className: 'lp-card-head' },
       h('h3', { className: 'lp-h3' }, `${t(b.id)} ${t(b.title_zh)}`.trim()),
-      conf ? h('span', { className: `lp-badge ${conf === '低' ? 'lp-badge-warn' : 'lp-badge-neutral'}` }, `把握：${conf}`) : null),
-    h('p', { className: 'lp-text' }, lead || '还没有结论。'),
+      conf ? h('span', { className: `lp-badge ${conf === '低' ? 'lp-badge-warn' : 'lp-badge-neutral'}` }, `可信度：${conf}`) : null),
+    h('p', { className: 'lp-text' }, lead || '暂无结论。'),
     more || limits ? h('details', null,
       h('summary', null, limits ? '证据与局限' : '证据'),
       h('div', { className: 'lp-an-more' },

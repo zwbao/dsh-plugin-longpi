@@ -223,7 +223,7 @@ try {
   const quiet = prefsEngage(adult, {}, at('2026-07-30'))
   assert.equal(quiet.nudge.enabled, false, 'in-workflow nudges stay off until opted in')
 
-  assert.match(followupSilence({ now: at('2026-07-27', '12:00'), settings: DEFAULT_FOLLOWUP, state: null, log: [] }), /关着的/)
+  assert.match(followupSilence({ now: at('2026-07-27', '12:00'), settings: DEFAULT_FOLLOWUP, state: null, log: [] }), /提醒已关闭/)
   const plain = {
     stage: 'first_result', consent_at: '2026-07-01T00:00:00.000Z', next_title_zh: '补一项', next_detail_zh: '',
     plan_exists: false, checkin_items: 0, checkin_open: [], retests: [], week: { pct: null, streak: 0, next_retest: null },

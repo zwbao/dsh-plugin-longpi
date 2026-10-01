@@ -94,7 +94,7 @@ function NotableRow(props: { row: RecordChange }): React.ReactElement {
 }
 
 /** The one plain sentence behind 判断依据 (INT062 fix 7): what "超出正常波动" means, and what it is not. */
-export const BASIS_ZH = '「超出正常波动」是说两次结果的差别，比同一个人平常的起伏更大。不同医院、不同仪器之间的差别没有算进去，这也不是诊断。'
+export const BASIS_ZH = '「超出正常波动」指两次结果的差异大于同一个人平常的起伏。不同医院、不同仪器之间的差异未计入。这不是诊断。'
 
 /**
  * 判断依据: one plain sentence and where the fluctuation data comes from. Method notes (CV scales, instrument
@@ -109,7 +109,7 @@ export function Basis(props: { journey: Journey; rows: readonly RecordChange[] }
     h('summary', null, '判断依据'),
     h('div', { className: 'lp-change-notes' },
       h('p', { className: 'lp-caption' }, BASIS_ZH),
-      unjudged.length > 0 ? h('p', { className: 'lp-caption' }, `这几项这次没有读全，先不判断：${unjudged.map((row) => row.label_zh).join('、')}。`) : null,
+      unjudged.length > 0 ? h('p', { className: 'lp-caption' }, `以下指标本次未完整读取，暂不判断：${unjudged.map((row) => row.label_zh).join('、')}。`) : null,
       sources.length > 0 ? h('p', { className: 'lp-caption lp-change-source' },
         '数据来源：',
         ...sources.flatMap((source, index) => [
@@ -132,12 +132,12 @@ export function NotableChanges(props: { journey: Journey; onOpenIndicators: () =
   const shown = notableRows(rows, covered)
   const advice = groupsOf(shown).filter((group) => group.advice && group.tone === 'warn')
   const pointer = onCard.length > 0
-    ? `${onCard[0]?.label_zh ?? ''}${onCard.length > 1 ? `等 ${onCard.length} 项` : ''}的变化，就是上面「最重要的一步」说的那件事。`
+    ? `${onCard[0]?.label_zh ?? ''}${onCard.length > 1 ? `等 ${onCard.length} 项` : ''}的变化，即上方「最重要的一步」所指的情况。`
     : ''
   return h('section', { className: 'lp-card lp-notable', id: 'lp-changes', 'aria-labelledby': 'lp-changes-title' },
     h('div', { className: 'lp-card-head' },
       h('h3', { className: 'lp-card-title', id: 'lp-changes-title' }, '值得注意的变化', rows.length > 0 ? h('span', { className: 'lp-caption' }, `${rows.length} 项超出正常波动`) : null),
-      h('button', { type: 'button', className: 'lp-textbtn', onClick: props.onOpenIndicators }, '在「化验」里看全部 →')),
+      h('button', { type: 'button', className: 'lp-textbtn', onClick: props.onOpenIndicators }, '在「化验」中查看全部 →')),
     pointer ? h('p', { className: 'lp-caption' }, pointer) : null,
     ...advice.map((group) => h('div', { key: group.advice, className: 'lp-callout lp-callout-warn' },
       h(Icon, { name: 'warn', size: 14 }), h('span', null, group.advice))),

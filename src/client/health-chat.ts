@@ -22,7 +22,7 @@ export function HealthChatButton(): React.ReactElement | null {
   return h('span', { className: 'lp-healthchat' },
     h('button', {
       type: 'button', className: 'lp-linkbtn lp-healthchat-btn',
-      onClick: () => { setError(''); void opener?.(id).catch(() => setError('没有打开，请在左侧「健康对话」里新建会话')) },
-    }, h(Icon, { name: 'send', size: 14 }), '去健康对话'),
+      onClick: () => { setError(''); void opener?.(id).catch(() => setError('未能打开，请在左侧「健康对话」中新建会话')) },
+    }, h(Icon, { name: 'send', size: 14 }), '前往健康对话'),
     error ? h('span', { className: 'lp-form-error', role: 'alert' }, error) : null)
 }

@@ -64,7 +64,7 @@ const unbound = resultSentence({
   ran_at: '2026-09-28T00:00:00Z',
   limits_zh: '',
 }, { youngerAllowed: false })
-assert.match(unbound, /还没对上/)
+assert.match(unbound, /尚未核对/)
 assert.match(unbound, /收缩压（高压）148/)
 assert.equal(unbound.includes('绑定未核对'), false)
 assert.equal(/Systolic blood pressure/.test(unbound), false)
@@ -73,7 +73,7 @@ const unboundRow = { skill: 'china-par-ascvd-risk', label: 'unverified-binding',
 const note = riskBindingNote(unboundRow, 3.4)
 assert.equal(/4\.26|%/.test(note), false, note)
 assert.match(note, /收缩压（高压）148/)
-assert.match(note, /还没对上，先不作数/)
+assert.match(note, /尚未核对，暂不采用/)
 assert.match(riskBindingNote(unboundRow, 4.26), /4\.26%/)
 
 const base = {
@@ -101,7 +101,7 @@ const concern = bodyAgeStory({
 })
 assert.ok(concern)
 assert.equal(concern.allows_younger, false)
-assert.match(concern.headline_zh, /算出来小了 6\.8 岁/)
+assert.match(concern.headline_zh, /计算结果小了 6\.8 岁/)
 assert.match(concern.headline_zh, /平均红细胞体积变小/)
 assert.match(concern.headline_zh, /不一定是好事/)
 assert.equal(concern.headline_zh.includes('你确实年轻了'), false)
@@ -147,7 +147,7 @@ const bioBase = {
 const noDoctor = { stop: false, sentence_zh: '', title_zh: '', hits: [] }
 const mcvChange = { key: 'mcv', label_zh: '平均红细胞体积', ask_doctor: true, caveat_zh: 'MCV 的个体内变异非常小' }
 const told = narrateBioAge({ ...bioBase, points: drawPoints(-1, -5.8), pheno_compare: { before: { ...base, age: 37 }, after: { ...mcvDown, age: 41 } } }, [mcvChange], noDoctor, false)
-assert.match(told.headline_zh, /^身体年龄算出来小了 \d+(\.\d)? 岁（模型估计），主要来自平均红细胞体积变小。这一项变小不一定是好事，下次看医生时问一下。/)
+assert.match(told.headline_zh, /^身体年龄的计算结果小了 \d+(\.\d)? 岁（模型估计），主要来自平均红细胞体积变小。这一项变小不一定是好事，建议下次就诊时咨询医生。/)
 assert.equal(told.allows_younger, false)
 assert.equal(told.headline_zh.includes('你确实年轻了'), false)
 // A doctor-first hit on haemoglobin is enough, even without a change row.
@@ -158,7 +158,7 @@ const crpChange = { key: 'crp', label_zh: '超敏C反应蛋白', ask_doctor: fal
 const glucoseChange = { key: 'glucose', label_zh: '空腹血糖', ask_doctor: false, verdict: 'unclear' }
 const cheered = narrateBioAge({ ...bioBase, points: drawPoints(-1, -5.8), pheno_compare: { before: { ...base, age: 37 }, after: { ...crpDown, age: 41 } } }, [crpChange, glucoseChange], noDoctor, false)
 assert.match(cheered.headline_zh, /^你确实年轻了 4\.8 岁（模型估计，超出了测量波动，是真实的变化）。主要来自/)
-assert.match(cheered.headline_zh, /主要来自(空腹血糖|超敏 C 反应蛋白)(和(空腹血糖|超敏 C 反应蛋白))?降了下来。$/)
+assert.match(cheered.headline_zh, /主要来自(空腹血糖|超敏 C 反应蛋白)(和(空腹血糖|超敏 C 反应蛋白))?有所下降。$/)
 assert.equal(cheered.allows_younger, true)
 // Without a verified band the celebration waits; the wording already on the page stays.
 const unverified = narrateBioAge({ ...bioBase, band_verified: false, points: drawPoints(-1, -5.8), pheno_compare: { before: { ...base, age: 37 }, after: { ...crpDown, age: 41 } } }, [], noDoctor, false)
@@ -176,12 +176,12 @@ const chatCheer = feedbackFor(trackingOf(cheered), null).find((row) => row.id ==
 assert.equal(chatCheer.headline_zh, cheered.headline_zh)
 assert.equal(chatCheer.allowed_claims.includes('younger'), true)
 
-// A haemoglobin fall below the lab range reads like the doctor card, not 「先不说变好或变差」.
+// A haemoglobin fall below the lab range reads like the doctor card, not 「暂不判断好转或变差」.
 const hbRow = { key: 'hb', label_zh: '血红蛋白', unit: 'g/L', compare: { from_date: '2022-04-19', from: 151, to_date: '2026-05-18', to: 114, pct: -24.5 }, band_pct: { up: 8.4, down: -8.4 }, direction: 'down', verdict: 'unclear', ask_doctor: true, verified: true, range_flag: 'low' }
 const hbMessage = gradeMarker(markerFromChange(hbRow), '2026-07-27')
 assert.match(hbMessage.headline_zh, /已经低于参考范围/)
-assert.equal(hbMessage.headline_zh.includes('先不说变好或变差'), false)
+assert.equal(hbMessage.headline_zh.includes('暂不判断好转或变差'), false)
 const { range_flag: _flag, ...inRange } = hbRow
-assert.match(gradeMarker(markerFromChange({ ...inRange, ask_doctor: false }), '2026-07-27').headline_zh, /先不说变好或变差/)
+assert.match(gradeMarker(markerFromChange({ ...inRange, ask_doctor: false }), '2026-07-27').headline_zh, /暂不判断好转或变差/)
 
 console.log('fix-062 ok')

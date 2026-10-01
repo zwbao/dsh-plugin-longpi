@@ -253,14 +253,14 @@ export function bodyAgeStory(input: {
   const main = helping[0] ?? drivers[0]
   if (main?.concern) {
     const way = verb(main.from, main.to)
-    const headline = `身体年龄算出来小了 ${yearsText(input.deltaYears)} 岁（模型估计），主要来自${main.label_zh}${way}。这一项${way}不一定是好事，下次看医生时问一下。`
+    const headline = `身体年龄的计算结果小了 ${yearsText(input.deltaYears)} 岁（模型估计），主要来自${main.label_zh}${way}。这一项${way}不一定是好事，建议下次就诊时咨询医生。`
     return { headline_zh: headline, chat_zh: headline, allows_younger: false, concern: true, drivers }
   }
   const named = helping.filter((row) => row.healthy).slice(0, 2)
   const who = named.length > 0 ? named : helping.slice(0, 2)
   const down = who.filter((row) => row.to < row.from).map((row) => row.label_zh)
   const up = who.filter((row) => row.to > row.from).map((row) => row.label_zh)
-  const moved = [down.length > 0 ? `${down.join('和')}降了下来` : '', up.length > 0 ? `${up.join('和')}升了上来` : ''].filter(Boolean).join('，')
+  const moved = [down.length > 0 ? `${down.join('和')}有所下降` : '', up.length > 0 ? `${up.join('和')}有所上升` : ''].filter(Boolean).join('，')
   const from = moved ? `主要来自${moved}。` : ''
   const headline = `你确实年轻了 ${yearsText(input.deltaYears)} 岁（模型估计，超出了测量波动，是真实的变化）。${from}`.replace(/。$/, '。')
   return { headline_zh: headline, chat_zh: headline, allows_younger: true, concern: false, drivers }

@@ -44,7 +44,7 @@ export function RecordsStatusLine(props: { journey: Journey; inline?: boolean })
     const partial = records.status === 'partial'
     return h(tag, { className: 'lp-status' },
       h('span', { className: `lp-statusdot ${partial ? 'lp-statusdot-warn' : 'lp-statusdot-on'}`, 'aria-hidden': true }),
-      `已有 ${records.indicator_count} 项指标${records.latest_checkup ? ` · 最近一次体检 ${chineseDate(records.latest_checkup)}` : ''}${partial ? ' · 有一部分这次没有读到' : ''}`)
+      `已有 ${records.indicator_count} 项指标${records.latest_checkup ? ` · 最近一次体检 ${chineseDate(records.latest_checkup)}` : ''}${partial ? ' · 部分记录本次未读取到' : ''}`)
   }
   if (records.status === 'error') {
     return h(tag, { className: 'lp-status' }, h('span', { className: 'lp-statusdot lp-statusdot-bad', 'aria-hidden': true }), `记录读取失败：${records.error || '原因不明'}`)
@@ -106,15 +106,15 @@ export function RecordsStep(props: { journey: Journey; onOpenChanges?: () => voi
   return h('div', { className: 'lp-step-body' },
     connected
       ? h(React.Fragment, null,
-        h('p', { className: 'lp-muted' }, '已经放进来的体检（只读）：'),
+        h('p', { className: 'lp-muted' }, '已有的体检记录（只读）：'),
         h(FoundTiles, { journey: props.journey }),
-        records.status === 'partial' ? h('div', { className: 'lp-callout lp-callout-warn', role: 'note' }, h(Icon, { name: 'warn', size: 14 }), h('span', null, `有一部分记录这次没有读到${records.read_errors[0] ? `：${records.read_errors[0]}` : ''}。它们不是「没测」，稍后在健康页刷新。`)) : null,
+        records.status === 'partial' ? h('div', { className: 'lp-callout lp-callout-warn', role: 'note' }, h(Icon, { name: 'warn', size: 14 }), h('span', null, `部分记录本次未读取到${records.read_errors[0] ? `：${records.read_errors[0]}` : ''}。这些指标并非未检测，请稍后在健康页刷新。`)) : null,
         h(ChangesLine, props))
       : h(React.Fragment, null,
         records.status === 'error'
           ? h('p', { className: 'lp-blocker lp-blocker-bad' }, `记录读取失败：${records.error || '没有返回原因'}`)
           // LongPi pairs with the local health-data service by itself: nothing to fill in here.
-          : h('p', { className: 'lp-muted' }, '正在连接这台电脑上的健康数据服务，稍等片刻。')))
+          : h('p', { className: 'lp-muted' }, '正在连接这台电脑上的健康数据服务，请稍候。')))
 }
 
 /** The two results, compact: a figure, or 还不能计算 with the server's reason. */
@@ -128,14 +128,14 @@ function ResultFigures(props: { journey: Journey }): React.ReactElement {
           h('div', { className: 'lp-first-figure' }, fmt(bioage.phenoage), h('span', { className: 'lp-bignum-unit' }, '岁')),
           h('div', { className: 'lp-caption' }, bioage.headline_zh ? bioage.headline_zh : (bioage.allows_younger ? versusAge(bioage.advance, bioage.checkups) : '')),
           bioage.caveat_zh ? h('p', { className: 'lp-caption lp-first-caveat', role: 'note' }, bioage.caveat_zh) : null)
-        : h('div', null, h('div', { className: 'lp-first-wait' }, '还不能计算'), h('p', { className: 'lp-blocker' }, bioage.blocker_zh))),
+        : h('div', null, h('div', { className: 'lp-first-wait' }, '暂时无法计算'), h('p', { className: 'lp-blocker' }, bioage.blocker_zh))),
     h('div', { className: 'lp-first-cell' },
       h('div', { className: 'lp-caption' }, '10 年心血管风险 · 模型估计'),
       risk.status === 'ok'
         ? h('div', null,
           h('div', { className: 'lp-first-figure' }, riskText(risk.risk_pct), h('span', { className: 'lp-bignum-unit' }, '%')),
           h('div', { className: 'lp-caption' }, risk.category_zh))
-        : h('div', null, h('div', { className: 'lp-first-wait' }, '还不能计算'), h('p', { className: 'lp-blocker' }, risk.blocker_zh))))
+        : h('div', null, h('div', { className: 'lp-first-wait' }, '暂时无法计算'), h('p', { className: 'lp-blocker' }, risk.blocker_zh))))
 }
 
 export interface NowActions {
@@ -158,14 +158,14 @@ function NowList(props: { journey: Journey; onNotice: Notify; actions: NowAction
     rows.push(h('li', { key: 'self', className: 'lp-row lp-row-wrap' },
       h(Icon, { name: 'ruler', size: 16, className: 'lp-row-icon' }),
       h('div', { className: 'lp-row-main lp-now-main' },
-        h('div', { className: 'lp-strong' }, `量一下${waist.item_zh}`),
-        h('div', { className: 'lp-caption' }, `填上就能算出${waist.unlocks_zh}`),
+        h('div', { className: 'lp-strong' }, `测量${waist.item_zh}`),
+        h('div', { className: 'lp-caption' }, `填写后即可计算${waist.unlocks_zh}`),
         h(InlineSelf, { journey, selfKey: waist.self_key, idPrefix: 'lp-onb-now', onNotice: props.onNotice }))))
   }
   rows.push(h('li', { key: 'plan', className: 'lp-row lp-row-wrap' },
     h(Icon, { name: 'spark', size: 16, className: 'lp-row-icon' }),
     h('div', { className: 'lp-row-main' },
-      h('div', { className: 'lp-strong' }, '先制定一份改善方案'),
+      h('div', { className: 'lp-strong' }, '制定改善方案'),
       h('div', { className: 'lp-caption' }, '按你关心的方面，从收录的试验证据里起草；你确认后才保存。')),
     h(Btn, { size: 'sm', variant: 'outline', onClick: props.actions.onDraft }, '起草方案')))
   if (lab.length > 0) {
@@ -173,7 +173,7 @@ function NowList(props: { journey: Journey; onNotice: Notify; actions: NowAction
       h(Icon, { name: 'flask', size: 16, className: 'lp-row-icon' }),
       h('div', { className: 'lp-row-main' },
         h('div', { className: 'lp-strong' }, `下次体检加测${lab.slice(0, 2).map((row) => row.item_zh).join('、')}${lab.length > 2 ? ' 等' : ''}`),
-        h('div', { className: 'lp-caption' }, `加上就能算${[...new Set(lab.map((row) => row.unlocks_zh))].join('、')}`)),
+        h('div', { className: 'lp-caption' }, `加测后即可计算${[...new Set(lab.map((row) => row.unlocks_zh))].join('、')}`)),
       h(Btn, { size: 'sm', variant: 'outline', onClick: props.actions.onAddons }, '加测清单')))
   }
   return h('div', { className: 'lp-now-block' },

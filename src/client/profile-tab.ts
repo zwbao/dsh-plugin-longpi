@@ -38,7 +38,7 @@ function ConnectionCard(props: { journey: Journey }): React.ReactElement {
 function AddonRows(props: { journey: Journey; onNotice: Notify; common: string | null }): React.ReactElement {
   return h('ul', { className: 'lp-rows', id: 'lp-profile-addons-addons' },
     ...props.journey.addons.map((row) => {
-      const note = [props.common ? '' : `解锁：${row.unlocks_zh}`, row.self_measurable ? '可以自己在家量' : ''].filter(Boolean).join(' · ')
+      const note = [props.common ? '' : `解锁：${row.unlocks_zh}`, row.self_measurable ? '可在家自行测量' : ''].filter(Boolean).join(' · ')
       return h('li', { key: row.item_zh, className: 'lp-row' },
         h('div', { className: 'lp-row-main lp-row-lines' },
           h('span', { className: 'lp-strong' }, row.item_zh),
@@ -94,7 +94,7 @@ export function ProfileTab(props: { journey: Journey; onNotice: Notify }): React
             h('span', { className: 'lp-caption' }, '腰围 · 家庭血压 · 体重')),
           h(SelfLatestList, { latest: journey.self.latest }),
           h(SelfMeasureForm, { journey, idPrefix: 'lp-self', onNotice: props.onNotice }),
-          h('p', { className: 'lp-caption lp-measure' }, '家庭血压按最近 7 天的平均值来判断（欧洲高血压学会的做法），单次读数只作参考。早晚各量一次、每次坐着休息 5 分钟后再量。'),
+          h('p', { className: 'lp-caption lp-measure' }, '家庭血压按最近 7 天的平均值来判断（欧洲高血压学会的做法），单次读数只作参考。建议早晚各测一次，每次坐位休息 5 分钟后测量。'),
           h(SelfRecent, { onNotice: props.onNotice })),
         h(ConnectionCard, { journey }),
         h(ExportCard, { today }))),
@@ -104,7 +104,7 @@ export function ProfileTab(props: { journey: Journey; onNotice: Notify }): React
       ? h('div', { className: 'lp-card', id: 'lp-addons-card' },
         h('div', { className: 'lp-card-head' },
           h('h3', { className: 'lp-card-title' }, '下次体检加测'),
-          h('span', { className: 'lp-caption' }, common ? `${journey.addons.length} 项 · 解锁${common}` : `${journey.addons.length} 项，加上就能算出更多结果`)),
+          h('span', { className: 'lp-caption' }, common ? `${journey.addons.length} 项 · 解锁${common}` : `${journey.addons.length} 项，加测后可计算更多结果`)),
         h(AddonRows, { journey, onNotice: props.onNotice, common }))
       : null,
     // 数据去哪里 (privacy) lives in settings → 隐私与数据; its archive download is in the 导出 card above, so it is not repeated here.

@@ -110,7 +110,7 @@ export function guardRoute(connection: () => ConnectionGuard | null, handler: Ha
       let now = 'self'
       try { now = activePersonNow() } catch { now = 'self' }
       if (shown !== now) {
-        sendJson(res, 409, { ok: false, error: '这个页面显示的是另一个人的记录（在别的页面里切换过）。请刷新页面后再操作。', person_mismatch: true })
+        sendJson(res, 409, { ok: false, error: '当前页面显示的是另一位成员的记录（已在其他页面切换）。请刷新后再操作。', person_mismatch: true })
         return
       }
     }
@@ -324,7 +324,7 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
         void (async () => {
           const body = await readJson(req, 16_000)
           const value = body.ok && isObject(body.value) ? body.value : null
-          const problem = !value ? '请求格式不对：应为 {"mcp_url": "…", "mcp_token": "…"}。' : connectionUrlProblem(value.mcp_url) || connectionTokenProblem(value.mcp_token)
+          const problem = !value ? '请求格式有误：应为 {"mcp_url": "…", "mcp_token": "…"}。' : connectionUrlProblem(value.mcp_url) || connectionTokenProblem(value.mcp_token)
           if (!value || problem) {
             sendJson(res, 400, { ok: false, error: problem, ...connectionBase() })
             return
@@ -362,7 +362,7 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
           const body = await readJson(req, 16_000)
           const value = body.ok ? (isObject(body.value) ? body.value : body.value == null ? {} : null) : null
           if (!value) {
-            sendJson(res, 400, { ok: false, error: '请求格式不对：应为 {"mcp_url": "…", "mcp_token": "…"}，都可以省略。' })
+            sendJson(res, 400, { ok: false, error: '请求格式有误：应为 {"mcp_url": "…", "mcp_token": "…"}，都可以省略。' })
             return
           }
           // Without an address, the connection in use is tested, with its own token; a new address carries its own (or none).

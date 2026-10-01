@@ -124,7 +124,7 @@ export function templateFor(facts: readonly SeasonFact[]): SeasonDraft | null {
         quest({ id: 'qs-book-dept', kind: 'care', title_zh: '预约血液科或消化科', event: 'care.booked', count: 1 }),
         quest({ id: 'qs-care-visit', kind: 'care', title_zh: '带着简报去看医生', event: 'care.visit_logged', where: { with_brief: true }, count: 1 }),
         quest({ id: 'qs-iron', kind: 'data', title_zh: '补上铁蛋白和铁代谢', event: 'selfmeasure.logged', where: { key: 'ferritin' }, count: 1 }),
-        quest({ id: 'qs-retest', kind: 'retest', title_zh: '8 到 12 周后复查血常规', event: 'retest.arrived', count: 1 }),
+        quest({ id: 'qs-retest', kind: 'retest', title_zh: '8–12 周后复查血常规', event: 'retest.arrived', count: 1 }),
       ],
     }
   }
@@ -252,19 +252,19 @@ export function chapterGrade(pairs: readonly SeasonPair[], today: IsoDay): { tex
     const verifiedWin = pair.band_verified && graded.grade === 'beyond_band_better' && graded.tone === 'celebrate'
     if (verifiedWin) celebrate = true
     const headline = !pair.band_verified
-      ? '波动范围还没核对，先不庆祝。'
+      ? '波动范围尚未核对，暂不庆祝。'
       : graded.headline_zh.replace(/你确实年轻了|比实足年龄年轻/g, '变化了')
     lines.push(`${pair.label_zh} ${pair.from} → ${pair.to} ${pair.unit}。${headline}`)
   }
   if (lines.length === 0) return { text_zh: '', celebrate: false }
-  const close = celebrate ? '这一季可以记下这次真实的变化。' : '先不把这次说成变好到可以庆祝。'
+  const close = celebrate ? '本季可记录这次真实的变化。' : '暂不将这次变化视为值得庆祝的改善。'
   return { text_zh: `${lines.join('')}${close}`, celebrate }
 }
 
 export function insightBody(days: number, doneTitles: readonly string[]): string {
   const done = doneTitles.map((title) => title.trim()).filter(Boolean).slice(0, 3)
-  const tail = done.length > 0 ? `已经做完的有：${done.join('、')}。` : '还没有做完的任务。'
-  return `你自己的记录有 ${days} 天。${tail}这张卡只说明这些记录是你留下的，不说明指标变好。`
+  const tail = done.length > 0 ? `已完成：${done.join('、')}。` : '尚无已完成的任务。'
+  return `你自己的记录有 ${days} 天。${tail}此卡仅表明这些记录由你本人留下，不代表指标改善。`
 }
 
 export function seasonHeader(input: { pressure: boolean; title: string | null; week: number | null }): { show: boolean; text_zh: string } {

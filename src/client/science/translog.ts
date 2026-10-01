@@ -15,9 +15,9 @@ export function TranslogPanel(props: { rows: LogRow[] }): React.ReactElement {
     props.rows.length === 0
       ? h('div', { className: 'lp-empty' },
         h(Icon, { name: 'send', size: 20 }),
-        h('p', { className: 'lp-empty-text lp-measure' }, '还没有东西离开这台电脑。这里只记离开的东西：什么时候、发给哪一项研究。'))
+        h('p', { className: 'lp-empty-text lp-measure' }, '尚无数据离开这台电脑。此处仅记录发出的数据：发送时间及接收的研究。'))
       : h(React.Fragment, null,
-        h('p', { className: 'lp-small lp-muted lp-measure' }, '这里只记离开这台电脑的东西：什么时候、发给哪一项研究。'),
+        h('p', { className: 'lp-small lp-muted lp-measure' }, '此处仅记录离开这台电脑的数据：发送时间及接收的研究。'),
         h('ol', { className: 'lp-rows' }, ...props.rows.map((row) => h('li', { key: row.seq, className: 'lp-row' },
         h('span', { className: 'lp-row-main' }, scrubVisible(row.detail_zh)),
         h('span', { className: 'lp-caption lp-num' }, `${chineseDate(row.at)} ${row.at.slice(11, 16)}`.trim()))))))

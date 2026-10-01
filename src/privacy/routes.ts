@@ -86,7 +86,7 @@ export function acceptConsent(runtime: PrivacyRuntime, body: unknown): PrivacySt
   const dir = runtime.consentDir()
   if (raw.age != null && raw.age !== '') {
     const age = typeof raw.age === 'number' ? raw.age : Number(raw.age)
-    if (!Number.isInteger(age) || age < 0 || age > 130) return fail('年龄要填 0 到 130 的整数')
+    if (!Number.isInteger(age) || age < 0 || age > 130) return fail('年龄须为 0 到 130 之间的整数')
     rememberAge(dir, age)
   }
   const view = minorView(readProfile(dir))
@@ -124,9 +124,9 @@ function paragraphs(lines: string[]): string {
 
 function decisionLabel(decision: string | null, grantedLabel: string): string {
   if (decision === 'granted') return grantedLabel
-  if (decision === 'declined') return '已记下：暂不同意'
+  if (decision === 'declined') return '已记录：暂不同意'
   if (decision === 'withdrawn') return '已撤回'
-  return '还没有单独同意'
+  return '尚未单独同意'
 }
 
 /** The onboarding sheet: two separate acts, then age, session log, export and delete. */
@@ -134,12 +134,12 @@ export function privacyPage(status: PrivacyStatus): string {
   const copy = status.copy
   const pipl = decisionLabel(status.consents.pipl_sensitive?.decision ?? null, '已单独同意处理健康信息')
   const flow = decisionLabel(status.consents.data_flow_deepseek?.decision ?? null, '已同意把健康对话发给 DeepSeek')
-  const session = status.session_log.upload ? '已单独打开' : '关闭（健康对话的默认）'
+  const session = status.session_log.upload ? '已单独开启' : '关闭（默认）'
   const ageValue = status.minor.age == null ? '' : String(status.minor.age)
-  const minorNote = !status.minor.known ? copy.minor.ask : status.minor.child ? copy.minor.under_14 : status.minor.minor ? copy.minor.under_18 : '已满 18 岁。图鉴抽卡可以开，也可以在设置里关掉。'
+  const minorNote = !status.minor.known ? copy.minor.ask : status.minor.child ? copy.minor.under_14 : status.minor.minor ? copy.minor.under_18 : '已满 18 岁。图鉴抽卡可开启，也可在设置中关闭。'
   const rulesLine = !status.minor.known
-    ? '图鉴抽卡：关闭，直到填写年龄。减肥项目要等年龄填了再判断。'
-    : `图鉴抽卡：${status.minor.codex_allowed ? '可以开' : '关闭'}。减肥项目：${status.minor.weight_loss ? '可以出现在方案里' : '不安排'}。`
+    ? '图鉴抽卡：填写年龄前保持关闭。减肥项目待填写年龄后再判断。'
+    : `图鉴抽卡：${status.minor.codex_allowed ? '可开启' : '关闭'}。减肥项目：${status.minor.weight_loss ? '可以出现在方案里' : '不安排'}。`
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -181,7 +181,7 @@ export function privacyPage(status: PrivacyStatus): string {
 <main>
   <article class="card lp-onb" id="privacy-onboarding">
     <div class="kicker">LongPi · 第 1 步和第 2 步是两次分开的同意</div>
-    <h1>健康信息，需要你单独点一次</h1>
+    <h1>处理健康信息，需要你单独同意</h1>
     <p class="lead">${esc(copy.pipl.lead)}</p>
     <section class="step" id="step-pipl" aria-labelledby="pipl-title">
       <div class="kicker">第 1 步，共 2 步</div>
@@ -202,7 +202,7 @@ export function privacyPage(status: PrivacyStatus): string {
       <ul>${copy.data_flow.to_deepseek.map((line) => `<li>${esc(line)}</li>`).join('')}</ul>
       <p><strong>留在这台电脑的</strong></p>
       <ul>${copy.data_flow.stays_local.map((line) => `<li>${esc(line)}</li>`).join('')}</ul>
-      <p><strong>体检原件留在原来的地方</strong></p>
+      <p><strong>体检原件保存在健康数据服务中</strong></p>
       <ul>${copy.data_flow.mirobody.map((line) => `<li>${esc(line)}</li>`).join('')}</ul>
       <p>${esc(copy.data_flow.name)}</p>
       <div class="actions">
@@ -237,7 +237,7 @@ export function privacyPage(status: PrivacyStatus): string {
     </section>
     <p id="privacy-status" role="status"></p>
     <details>
-      <summary>加入大家的研究要单独点一次。正式开始前，数据只留在这台电脑上。</summary>
+      <summary>加入社区研究需另行单独同意。研究正式开始前，数据仅保存在这台电脑上。</summary>
       <ul>${status.science.blockers_zh.map((line) => `<li>${esc(line)}</li>`).join('')}</ul>
       <p>基因数据不进入研究。</p>
     </details>
@@ -254,7 +254,7 @@ function ageBody() {
   return extra
 }
 async function post(body) {
-  status.textContent = '正在记下…'
+  status.textContent = '正在保存…'
   const res = await fetch('/api/longpi/privacy/consent', {
     method: 'POST', credentials: 'same-origin',
     headers: { 'content-type': 'application/json' },
@@ -262,10 +262,10 @@ async function post(body) {
   })
   const json = await res.json().catch(() => ({}))
   if (!res.ok || json.ok === false) {
-    status.textContent = json.error || '没有记下'
+    status.textContent = json.error || '保存失败'
     return
   }
-  status.textContent = '已记下。这是单独的一次同意。'
+  status.textContent = '已保存。这是一次单独同意。'
   location.reload()
 }
 document.getElementById('pipl-grant').onclick = () => post({ scope: 'pipl_sensitive', decision: 'granted' })
@@ -283,7 +283,7 @@ document.getElementById('delete-go').onclick = async () => {
     body: JSON.stringify({ confirm: confirmText }),
   })
   const json = await res.json().catch(() => ({}))
-  status.textContent = res.ok && json.ok ? '这台电脑上的 LongPi 档案已删除。' : (json.error || '没有删除')
+  status.textContent = res.ok && json.ok ? '这台电脑上的 LongPi 档案已删除。' : (json.error || '删除失败')
 }
 </script>
 </body>
@@ -300,7 +300,7 @@ export function registerPrivacyRoutes(runtime: PrivacyRuntime): void {
   })
   runtime.http.route('POST', '/api/longpi/privacy/consent', async (_req, body) => acceptConsent(runtime, body))
   runtime.http.route('POST', '/api/longpi/privacy/delete', async (_req, body) => {
-    if (!confirmedDelete(body)) return fail(`请输入「${deletePhrase()}」以确认。不会删除任何东西。`)
+    if (!confirmedDelete(body)) return fail(`请输入「${deletePhrase()}」以确认。本次未删除任何内容。`)
     const result = deleteLocalStore(runtime.dataDir(), runtime.mcpUrl())
     try {
       runtime.emit('pipl_sensitive', 'withdrawn')

@@ -33,8 +33,8 @@ interface TextBlock { type?: string; text?: string }
 function gateText(dataDir: string): string {
   const pipl = isGranted(dataDir, 'pipl_sensitive')
   const flow = isGranted(dataDir, 'data_flow_deepseek')
-  if (!pipl) return '还没有单独同意处理健康信息，所以这次不读取你的指标，也不把它们交给模型。请打开 /api/longpi/privacy?view=page 单独同意。'
-  if (!flow) return '健康信息的单独同意已经记下。还需要同意把健康对话发给 DeepSeek，之后才能读取这些数值。'
+  if (!pipl) return '你尚未单独同意处理健康信息，因此本次不读取你的指标，也不提供给模型。请打开 /api/longpi/privacy?view=page 完成单独同意。'
+  if (!flow) return '已记录健康信息的单独同意。还需同意把健康对话发给 DeepSeek，才能读取这些数值。'
   return ''
 }
 

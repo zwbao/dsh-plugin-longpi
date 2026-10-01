@@ -48,9 +48,9 @@ function Pill(props: PillProps & { pageShowing: boolean }): React.ReactElement |
   if (!journey || open.length === 0 || !evening || dismissed || props.pageShowing || heroShowing) return null
   const summary = open.map((item) => item.title).join('、')
   return h('div', { className: 'lp lp-pill-wrap', role: 'status' },
-    h('button', { type: 'button', className: 'lp-pill-main', onClick: () => props.openPage?.(), title: summary, 'aria-label': `LongPi：今天还有 ${open.length} 项没有打卡：${summary}。打开健康页` },
+    h('button', { type: 'button', className: 'lp-pill-main', onClick: () => props.openPage?.(), title: summary, 'aria-label': `LongPi：今天还有 ${open.length} 项未打卡：${summary}。打开健康页` },
       h('span', { className: 'lp-pill-mark' }, h(Mark, { size: 14 })),
-      h('span', null, 'LongPi · 今天还有 ', h('span', { className: 'lp-pill-count' }, open.length), ' 项没打卡')),
+      h('span', null, 'LongPi · 今天还有 ', h('span', { className: 'lp-pill-count' }, open.length), ' 项未打卡')),
     h('button', {
       type: 'button', className: 'lp-pill-x', 'aria-label': '今天不再提醒',
       onClick: () => { writePref(HIDE_KEY, today); setDismissed(true) },

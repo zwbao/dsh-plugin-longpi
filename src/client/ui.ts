@@ -165,7 +165,7 @@ export function LoadError(props: { what: string; error: string | null; onRetry: 
   const [busy, setBusy] = React.useState(false)
   return h('div', { className: `lp-loaderror ${props.compact ? 'lp-loaderror-compact' : 'lp-card'}`, role: 'alert' },
     h(Icon, { name: 'warn', size: 14 }),
-    h('span', { className: 'lp-loaderror-text' }, `没有读到${props.what}${props.error ? `：${props.error}` : ''}。`),
+    h('span', { className: 'lp-loaderror-text' }, `未能读取${props.what}${props.error ? `：${props.error}` : ''}。`),
     h('button', {
       type: 'button', className: 'lp-linkbtn', disabled: busy,
       onClick: () => {

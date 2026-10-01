@@ -28,8 +28,8 @@ export function mirobodyExportLink(dataDir: string, fallbackUrl = ''): MirobodyL
     }
   }
   const note_zh = url
-    ? '体检原件留在你原来放报告的地方。这个压缩包里没有那份原件。'
-    : '还没有连上。体检记录不在这个压缩包里。'
+    ? '体检原件保存在健康数据服务中，不在此压缩包内。'
+    : '健康数据服务尚未连接。体检记录不在此压缩包内。'
   return { url, note_zh }
 }
 
@@ -170,7 +170,7 @@ export function buildExport(dataDir: string, fallbackMcpUrl = ''): { zip: Buffer
   const note = [
     'LongPi 本地档案',
     '',
-    '这个压缩包是这台电脑上 ~/.dsh/longpi 的副本，已去掉连接用的令牌。',
+    '此压缩包为这台电脑上 ~/.dsh/longpi 的副本，已移除连接令牌。',
     link.note_zh,
     '',
     copy.data_flow.name,

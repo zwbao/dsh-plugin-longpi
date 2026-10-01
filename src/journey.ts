@@ -125,7 +125,7 @@ const JOURNEY_TTL_MS = 10 * 60_000
 
 const BIOAGE_BLOCKER: Partial<Record<BioAge['status'], string>> = {
   no_skill: '方法库里没有身体年龄这项计算。',
-  no_record: '还没有读到体检。',
+  no_record: '尚未读取到体检记录。',
   no_age: '档案里还没有周岁。',
   no_checkup: '九项血检还没有在同一天测齐。',
 }
@@ -390,13 +390,13 @@ function nextOf(stage: Stage, journey: Body): Next {
   // fact-ranked floor (surfaces/fallback.ts) puts it ahead of this stage step, at any stage after consent.
   switch (stage) {
     case 'consent':
-      return step('完成设置', '了解 LongPi 能做什么，并确认数据怎么使用。', 'consent')
+      return step('完成设置', '了解 LongPi 的功能，并确认数据的使用方式。', 'consent')
     case 'profile':
-      return step('填写年龄和性别', '填写后就能计算身体年龄。', 'profile')
+      return step('填写年龄和性别', '填写后即可计算身体年龄。', 'profile')
     case 'records':
       return journey.records.status === 'error'
-        ? step('连接体检记录', clip(`记录读取失败：${journey.records.error}`), 'records')
-        : step('上传一份体检报告', '上传后就能计算身体年龄和心血管风险。', 'records')
+        ? step('连接健康数据服务', clip(`记录读取失败：${journey.records.error}`), 'records')
+        : step('上传一份体检报告', '上传后即可计算身体年龄和心血管风险。', 'records')
     case 'first_result': {
       const n = journey.addons.length
       if (n > 0) {
@@ -405,15 +405,15 @@ function nextOf(stage: Stage, journey: Body): Next {
       }
       const facts = journey.results.risk.missing_facts.length
       if (facts > 0) return step('补充档案', `回答档案里的 ${facts} 个问题即可计算心血管风险。`, 'profile')
-      return step('暂时算不出结果', clip(journey.results.bioage.blocker_zh || journey.results.risk.blocker_zh), 'open')
+      return step('暂时无法计算结果', clip(journey.results.bioage.blocker_zh || journey.results.risk.blocker_zh), 'open')
     }
     case 'plan':
-      return step('制定改善方案', '让 LongPi 按你的检查结果和研究证据起草一份方案，你确认后才保存。', 'plan')
+      return step('制定改善方案', 'LongPi 根据你的检查结果和研究证据起草方案，经你确认后保存。', 'plan')
     case 'routine': {
       const open = journey.plan.checkin_items.filter((item) => item.done_today == null).length
       if (open > 0) return step('今天的打卡', `还有 ${open} 项待完成`, 'checkin')
       const due = journey.reminders.filter((row) => row.kind === 'retest' && row.due).map((row) => row.text_zh.replace(/^复测/, ''))
-      if (due.length > 0) return step('该复测了', `可以复测${due.slice(0, 3).join('、')}`, 'review')
+      if (due.length > 0) return step('已到复测时间', `可以复测${due.slice(0, 3).join('、')}`, 'review')
       return step('继续保持', journey.plan.days ? `方案已进行 ${journey.plan.days} 天` : '方案从今天开始', 'open')
     }
   }
@@ -424,7 +424,7 @@ function suggestionsOf(stage: Stage, journey: Body, followupOn: boolean): Journe
   if (stage === 'consent' || stage === 'profile') {
     picks.push({ id: 'what-longpi-does', text_zh: 'LongPi 能帮我做什么？' }, { id: 'build-profile', text_zh: '帮我建立健康档案' })
   } else if (stage === 'records') {
-    picks.push({ id: 'import-reports', text_zh: '体检报告放在哪里，才能在这里看到？' }, { id: 'before-records', text_zh: '还没有报告，我现在可以先做什么？' })
+    picks.push({ id: 'import-reports', text_zh: '体检报告上传到哪里，才能在这里查看？' }, { id: 'before-records', text_zh: '还没有报告，我现在可以先做什么？' })
   } else if (stage === 'first_result') {
     picks.push(...suggestedQuestions({ changes: journey.addons.slice(0, 2).map((row) => row.item_zh) }).map((text, index) => ({ id: `ask-${index}`, text_zh: text })))
     picks.push({ id: 'draft-plan', text_zh: '帮我制定一份改善方案' })
@@ -433,7 +433,7 @@ function suggestionsOf(stage: Stage, journey: Body, followupOn: boolean): Journe
     picks.push(FOCUS_PROMPT[journey.profile.focus[0] ?? 'none'], { id: 'draft-plan', text_zh: '帮我制定一份改善方案' }, { id: 'save-plan', text_zh: '帮我保存我的干预方案' })
   } else {
     picks.push({ id: 'checkin-all', text_zh: '今天的方案我都完成了' })
-    if (journey.reminders.some((row) => row.kind === 'retest' && row.due)) picks.push({ id: 'retest-due', text_zh: '该复测什么了？' })
+    if (journey.reminders.some((row) => row.kind === 'retest' && row.due)) picks.push({ id: 'retest-due', text_zh: '哪些项目需要复测？' })
     if (!followupOn) picks.push({ id: 'followup-on', text_zh: '每天晚上提醒我打卡' })
     picks.push({ id: 'plan-effect', text_zh: '我的方案有没有效果？' })
   }
@@ -448,12 +448,12 @@ function suggestionsOf(stage: Stage, journey: Body, followupOn: boolean): Journe
 
 /** The stage's one-line status (the home hero's wording), for the chat snapshot when no fact must surface. */
 function stageStatus(stage: Stage, journey: Body, next: Next): string {
-  if (stage === 'consent' || stage === 'profile') return '花 2 分钟建档，算出你的身体年龄和心血管风险'
-  if (stage === 'records') return journey.records.status === 'error' ? '体检记录读取失败，暂时算不出结果' : '上传一份体检报告后，就能算出你的身体年龄'
+  if (stage === 'consent' || stage === 'profile') return '用 2 分钟建立档案，计算你的身体年龄和心血管风险'
+  if (stage === 'records') return journey.records.status === 'error' ? '体检记录读取失败，暂时无法计算结果' : '上传一份体检报告后，即可计算你的身体年龄'
   if (stage === 'first_result' && journey.addons.length > 0) return concreteNext(journey.addons).title_zh
   const { bioage, risk } = journey.results
   const parts: string[] = []
-  if (bioage.status === 'ok' && bioage.headline_zh && /你确实年轻了|算出来小了/.test(bioage.headline_zh)) parts.push(bioage.headline_zh)
+  if (bioage.status === 'ok' && bioage.headline_zh && /你确实年轻了|计算结果小了/.test(bioage.headline_zh)) parts.push(bioage.headline_zh)
   else if (bioage.status === 'ok' && bioage.phenoage != null) parts.push(`身体年龄 ${Number(bioage.phenoage.toFixed(1))} 岁（模型估计）`)
   if (risk.status === 'ok' && risk.risk_pct != null) parts.push(`心血管 10 年风险 ${Number(risk.risk_pct.toFixed(1))}%`)
   return parts.length > 0 ? parts.join('，') : next.detail_zh
@@ -653,7 +653,7 @@ export function followupStateOf(journey: Journey, tracking: Tracking): FollowupS
 export function stageNow(profile: Profile, mcpConfigured: boolean): { stage: Stage | null; title_zh: string } {
   if (!consentAccepted(profile)) return { stage: 'consent', title_zh: '开始使用 LongPi' }
   if (!profileComplete(profile)) return { stage: 'profile', title_zh: '建立档案' }
-  if (!mcpConfigured) return { stage: 'records', title_zh: '连接体检记录' }
+  if (!mcpConfigured) return { stage: 'records', title_zh: '连接健康数据服务' }
   const last = lastBuilt && Date.now() - lastBuilt.at < JOURNEY_TTL_MS ? lastBuilt.journey : null
   if (!last || last.stage === 'consent' || last.stage === 'profile') return { stage: null, title_zh: '打开健康页查看' }
   return { stage: last.stage, title_zh: last.next.title_zh }

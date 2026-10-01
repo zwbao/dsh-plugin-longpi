@@ -327,7 +327,7 @@ try {
     plan: crpOnly, goals: [], today: TODAY, markers: { 超敏C反应蛋白: notFound }, series: {},
     adherence: { c1: followed }, courses: [], checkins: [], biovar: bv, effects: [], record_unread: recordUnread,
   })
-  for (const [recordUnread, reason] of [['failed', /^记录读取失败，没有读到超敏C反应蛋白的结果，这次无法判断。$/], ['cut', /^指标目录没有读全，超敏C反应蛋白可能在没有读到的部分，这次无法判断。$/]]) {
+  for (const [recordUnread, reason] of [['failed', /^记录读取失败，未读取到超敏C反应蛋白的结果，本次无法判断。$/], ['cut', /^指标目录未完整读取，超敏C反应蛋白可能在未读取的部分中，本次无法判断。$/]]) {
     const rows = mod.evaluatePlan(unreadInput(recordUnread))
     assert.match(rows[0].verdicts[0].reason_zh, reason)
     assert.equal(mod.suggestNext(rows, { today: TODAY }).some((row) => row.kind === 'missing_marker'), false, recordUnread)
@@ -335,7 +335,7 @@ try {
   // A marker with no variation row is found under its report name (腰围 is Waist Circumference-WC in the record)
   assert.equal(mod.resolveMarkers(['腰围'], records.indicators, bv)[0].indicator, 'Waist Circumference-WC')
   const readWhole = mod.evaluatePlan(unreadInput(undefined))
-  assert.match(readWhole[0].verdicts[0].reason_zh, /^记录里还没有超敏C反应蛋白。下次检查时加测/)
+  assert.match(readWhole[0].verdicts[0].reason_zh, /^记录中尚无超敏C反应蛋白。下次检查时请加测/)
   assert.equal(mod.suggestNext(readWhole, { today: TODAY }).filter((row) => row.kind === 'missing_marker').length, 1)
 
   // 7d: a goal the skill cannot read is named, and no "at the goal" value is shown for it
@@ -359,7 +359,7 @@ try {
   assert.ok(dietMed.warnings.some((line) => line.includes('剂量没有保存')), 'every category')
   assert.equal(plan([{ category: 'other', title: '二甲双胍 500mg', start: TODAY }]).plan.items[0].title, '二甲双胍')
   const doseOnly = plan([{ category: 'drug', title: '500mg', start: TODAY }])
-  assert.ok(doseOnly.errors.includes('第 1 项：标题只有剂量，请写做什么。'), JSON.stringify(doseOnly.errors))
+  assert.ok(doseOnly.errors.includes('第 1 项：标题仅包含剂量，请填写具体做法。'), JSON.stringify(doseOnly.errors))
   assert.equal(doseOnly.plan.items[0].title, '', 'the dose is never restored')
   for (const text of ['五百毫克', '两克', '一千单位', '每天五百毫克', '一千五百国际单位', '二百五十微克', '三毫升', '五百 mg', '０．５ｇ', '1,000 IU', '2 x 500mg', '500mg/天', '每次两克', '五百片', '一千粒']) {
     const saved = plan([{ category: 'supplement', title: '鱼油', detail: `饭后 ${text}`, start: TODAY }]).plan.items[0].detail
@@ -464,7 +464,7 @@ try {
   run = await variant('refused', (record) => { record.observations = record.observations.map((row) => (row.indicator === 'Albumin-ALB' && row.date === '2026-08-26' ? { ...row, value: '5' } : row)) })
   try {
     assert.equal(run.tracking.bioage.status, 'error')
-    assert.match(run.tracking.bioage.note_zh, /^2026-08-26 这次血检的身体年龄没有算出来/)
+    assert.match(run.tracking.bioage.note_zh, /^(2026 年 )?8 月 26 日这次血检的身体年龄未能计算/)
     assert.equal(run.tracking.bioage.points.at(-1).date, '2026-04-22', 'the older checkups are still drawn')
   } finally {
     await run.close()
@@ -508,7 +508,7 @@ try {
     assert.deepEqual(flakyTracking.bioage.missing, [])
     const flakyRisk = riskOf(flakyTracking)
     assert.deepEqual(flakyRisk.missing_labs, [], 'nothing on file is listed as a test to add')
-    assert.match(flakyRisk.note_zh, /最新值没有读到（读取失败），不是没有测过/)
+    assert.match(flakyRisk.note_zh, /最新值未读取到（读取失败），并非未检测/)
     const ready = mod.readiness(catalog, partial, {})
     assert.equal(ready.unlock.length + ready.near.length, 0, 'no add-on test for a value that failed to read')
     const matched = mod.matchSkills(catalog.cards, '', partial.indicators, 8, {
@@ -550,7 +550,7 @@ try {
     const recs = await mod.loadRecords(cutConfig, cutDir, '/nonexistent/plugin')
     const cutTracking = await mod.buildTracking({ config: cutConfig, dataDir: cutDir, skillsHome: home, catalog, records: recs, today: TODAY })
     assert.equal(cutTracking.bioage.status, 'error')
-    assert.match(cutTracking.bioage.note_zh, /读数太多被截断，没有读全/)
+    assert.match(cutTracking.bioage.note_zh, /读数过多被截断，未完整读取/)
   } finally {
     await cutSeries.close()
     rmSync(cutDir, { recursive: true, force: true })
@@ -589,7 +589,7 @@ try {
       const denseTracking = await mod.buildTracking({ config: denseConfig, dataDir: denseDir, skillsHome: home, catalog, records: recs, today: TODAY })
       const verdict = denseTracking.items[0].verdicts[0]
       assert.equal(verdict.indicator, 'systolicPressures')
-      assert.doesNotMatch(verdict.reason_zh, /没有读全/)
+      assert.doesNotMatch(verdict.reason_zh, /未完整读取/)
       assert.ok(verdict.baseline && verdict.followup && verdict.change, verdict.reason_zh)
       assert.match(verdict.reason_zh, /变化 -13%/)
       // An item aimed at 血压 (the word save_intervention_plan's description offers) is judged on both pressures.

@@ -29,11 +29,11 @@ export function StudiesTab(): React.ReactElement {
   const [data, setData] = React.useState<Payload | null>(null)
   const [error, setError] = React.useState('')
   const load = React.useCallback(() => {
-    void getJson<Payload>('/api/longpi/science/community').then(setData).catch((reason: unknown) => setError(errorText(reason, '没有读到研究')))
+    void getJson<Payload>('/api/longpi/science/community').then(setData).catch((reason: unknown) => setError(errorText(reason, '未能读取研究信息')))
   }, [])
   React.useEffect(() => { load() }, [load])
   const startPersonal = () => {
-    void postJson('/api/longpi/science/n-of-1', { confirm: true, design: 'abab' }).then(() => load()).catch((reason: unknown) => setError(errorText(reason, '没有排好')))
+    void postJson('/api/longpi/science/n-of-1', { confirm: true, design: 'abab' }).then(() => load()).catch((reason: unknown) => setError(errorText(reason, '未能安排个人对照')))
   }
   if (!data) {
     return h('div', { className: 'lp-tab-body' },
@@ -47,7 +47,7 @@ export function StudiesTab(): React.ReactElement {
       h('section', { className: 'lp-card', 'aria-label': '研究没有打开' },
         h('div', { className: 'lp-empty' },
           h('div', { className: 'lp-empty-title' }, '研究没有打开'),
-          h('p', { className: 'lp-empty-text' }, data.reason_zh || '可以在设置里再打开。不满 18 岁不参加研究。'))))
+          h('p', { className: 'lp-empty-text' }, data.reason_zh || '可在设置中重新开启。未满 18 岁者不参加研究。'))))
   }
   const personalId = ((data.studies ?? []).find((study) => study.kind === 'community_season') ?? (data.studies ?? [])[0])?.id
   return h('div', { className: 'lp-tab-body' },

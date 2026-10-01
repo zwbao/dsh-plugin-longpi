@@ -44,7 +44,7 @@ function weekOf(tracking: Tracking | null, today: string): Array<{ date: string;
   })
 }
 
-const DAY_ZH: Record<DayState, string> = { done: '都完成', part: '部分完成', missed: '没做到', unknown: '没有记录' }
+const DAY_ZH: Record<DayState, string> = { done: '都完成', part: '部分完成', missed: '未完成', unknown: '没有记录' }
 
 function WeekStrip(props: { tracking: Tracking | null; today: string }): React.ReactElement | null {
   if (!props.tracking) return null
@@ -89,9 +89,9 @@ function ctaOf(action: NextAction, props: OverviewProps): Cta | null {
     case 'checkin':
       return { label: '记录今天', run: () => props.goTab('overview', { id: 'lp-today' }) }
     case 'review':
-      return { label: '看方案效果', run: () => props.goTab('plan') }
+      return { label: '查看方案效果', run: () => props.goTab('plan') }
     case 'doctor':
-      return { label: '看这些指标', run: () => props.goTab('indicators') }
+      return { label: '查看这些指标', run: () => props.goTab('indicators') }
     default:
       return null
   }
@@ -124,9 +124,9 @@ function PartialNote(props: { journey: Journey }): React.ReactElement | null {
   return h('div', { className: 'lp-callout lp-callout-warn', role: 'note' },
     h(Icon, { name: 'warn', size: 14 }),
     h('span', null,
-      `有一部分记录这次没有读到${errors.length > 0 ? `（${errors.slice(0, 2).join('；')}）` : ''}。`,
-      missing.length > 0 ? `没读到的指标：${missing.slice(0, 6).join('、')}${missing.length > 6 ? ` 等 ${missing.length} 项` : ''}。` : '',
-      '它们不是「没测」，稍后点右上角的刷新再读一次。'))
+      `部分记录本次未读取到${errors.length > 0 ? `（${errors.slice(0, 2).join('；')}）` : ''}。`,
+      missing.length > 0 ? `未读取到的指标：${missing.slice(0, 6).join('、')}${missing.length > 6 ? ` 等 ${missing.length} 项` : ''}。` : '',
+      '这些指标并非未检测，请稍后点击右上角「刷新」重试。'))
 }
 
 export interface OverviewProps {

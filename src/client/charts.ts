@@ -156,7 +156,7 @@ export function LineChart(props: LineChartProps): React.ReactElement {
       h('div', null,
         h('span', { className: 'lp-num-md' }, fmt(only.value, digits)),
         props.unit ? h('span', { className: 'lp-unit' }, props.unit.startsWith('%') ? props.unit : ` ${props.unit}`) : null),
-      h('p', { className: 'lp-caption' }, `${pointDate(only.date)} · 还需一次复测才能画趋势`))
+      h('p', { className: 'lp-caption' }, `${pointDate(only.date)} · 再复测一次后可显示趋势`))
   }
   const values = points.map((point) => point.value)
   const extra = [props.band?.low, props.band?.high, props.goal ?? undefined, props.reference?.value].filter((value): value is number => typeof value === 'number')
@@ -282,7 +282,7 @@ export function Timeline(props: { items: TimelineItem[]; checkups: string[]; tod
   // Every item starts and ends on the same days: a chart of identical bars says nothing, one sentence does.
   if (first && props.items.every((item) => item.start === first.start && (item.end ?? null) === (first.end ?? null))) {
     const count = props.items.length === 1 ? '这 1 项' : `${props.items.length} 项都`
-    return h('p', { className: 'lp-small lp-muted' }, `${count}从 ${dateZh(first.start)} 开始${first.end ? `，到 ${dateZh(first.end)} 结束` : ''}。`)
+    return h('p', { className: 'lp-small lp-muted' }, `${count}从 ${dateZh(first.start)}开始${first.end ? `，到 ${dateZh(first.end)}结束` : ''}。`)
   }
   return h(TimelineChart, props)
 }
@@ -314,7 +314,7 @@ function TimelineChart(props: { items: TimelineItem[]; checkups: string[]; today
   // A month tick never sits on top of 「今天」.
   const ticks = months.filter((_, index) => index % step === 0).filter((iso) => Math.abs(x(dayNumber(iso)) - todayX) > 44)
   return h('div', { className: 'lp-timeline' }, h('div', { ref, className: 'lp-chart', style: { height } },
-    h('svg', { width, height, role: 'img', 'aria-label': `方案时间线：${props.items.map((item) => `${item.title} ${dateZh(item.start)} 起`).join('，')}` },
+    h('svg', { width, height, role: 'img', 'aria-label': `方案时间线：${props.items.map((item) => `${item.title} ${dateZh(item.start)}起`).join('，')}` },
       ...ticks.map((iso) => h('g', { key: iso },
         h('line', { x1: x(dayNumber(iso)), x2: x(dayNumber(iso)), y1: top - 8, y2: height - 6, className: 'lp-grid' }),
         h('text', { x: x(dayNumber(iso)) + 4, y: 12, className: 'lp-axis' }, monthLabel(iso)))),
@@ -358,7 +358,7 @@ export function AdherenceStrip(props: { calendar: Array<{ date: string; status: 
   const weeks = Math.ceil(props.calendar.length / 7)
   const width = weeks * (cell + gap)
   const height = 7 * (cell + gap)
-  const statusZh: Record<string, string> = { done: '完成', missed: '没完成', unknown: '没有记录' }
+  const statusZh: Record<string, string> = { done: '完成', missed: '未完成', unknown: '没有记录' }
   return h('div', { className: 'lp-strip', style: { width, height: height + 2 } },
     h('svg', { width, height, role: 'img', 'aria-label': `${props.label}：近 12 周，完成 ${props.calendar.filter((day) => day.status === 'done').length} 天` },
       ...props.calendar.map((day, index) => h('rect', {

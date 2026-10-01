@@ -44,7 +44,7 @@ export function peopleView(deps: CoreDeps) {
     can_create_in_mirobody: !('error_zh' in holder),
     // A link set in the installer's config (no saved connection) also reads records but cannot create accounts.
     create_hint_zh: !('error_zh' in holder) ? ''
-      : !readConnection(root) && deps.config().mcpUrl?.trim() ? '现在的连接是手动填写的个人链接，不能替家人建档。可以粘贴家人自己的 Mirobody 个人链接。'
+      : !readConnection(root) && deps.config().mcpUrl?.trim() ? '当前连接为手动填写的个人链接，无法为家人建档。可粘贴家人本人的健康数据服务个人链接。'
         : holder.error_zh,
   }
 }
@@ -61,10 +61,10 @@ export function registerPeopleRoutes(deps: CoreDeps): void {
     const year = Number(v.birth_year)
     const birthYear = Number.isInteger(year) && year >= 1900 && year <= new Date().getFullYear() ? year : null
     const pasted = text(v.mcp_url, 600)
-    if (!label) return { ok: false, status: 400, error: '写一个称呼，比如「爸爸」「妈妈」。' }
-    if (name.length < 2) return { ok: false, status: 400, error: '写家人的姓名（报告上的名字），用来核对上传的报告是不是本人的。' }
-    if (name === label) return { ok: false, status: 400, error: '姓名要写报告上的真实名字，不是称呼。' }
-    if (!sex) return { ok: false, status: 400, error: '选择生理性别（很多计算按性别分别进行）。' }
+    if (!label) return { ok: false, status: 400, error: '请填写称呼，例如「爸爸」「妈妈」。' }
+    if (name.length < 2) return { ok: false, status: 400, error: '请填写家人的姓名（与报告一致），用于核对上传的报告是否为本人的。' }
+    if (name === label) return { ok: false, status: 400, error: '姓名须与报告上的真实姓名一致，不能填写称呼。' }
+    if (!sex) return { ok: false, status: 400, error: '请选择生理性别（许多计算按性别分别进行）。' }
     if (pasted && connectionUrlProblem(pasted)) return { ok: false, status: 400, error: connectionUrlProblem(pasted) }
     const root = resolveRootDir(deps.config().dataDir)
     await ensureLocalPairing(root, { base: deps.config().mirobodyUrl ?? '', configuredUrl: deps.config().mcpUrl, force: !holderAuthOk(root) }).catch(() => undefined)
@@ -78,14 +78,14 @@ export function registerPeopleRoutes(deps: CoreDeps): void {
       try {
         memberId = await createManagedMember(holder, { name, sex, birth_year: birthYear })
       } catch (error) {
-        return { ok: false, status: 502, error: `在 Mirobody 为${label}建档没有成功：${error instanceof Error ? error.message : String(error)}` }
+        return { ok: false, status: 502, error: `在健康数据服务中为${label}建档失败：${error instanceof Error ? error.message : String(error)}` }
       }
       try {
         link = await mintMemberLink(holder, memberId)
       } catch (error) {
         // The member exists in Mirobody now: keep them here too (a retry would create a second one); the link is
         // made again when they are opened.
-        linkError = `${label}的链接还没有生成：${error instanceof Error ? error.message : String(error)}`
+        linkError = `${label}的链接尚未生成：${error instanceof Error ? error.message : String(error)}`
         link = ''
       }
     }
@@ -110,11 +110,11 @@ export function registerPeopleRoutes(deps: CoreDeps): void {
     const root = resolveRootDir(deps.config().dataDir)
     // The demo is rebuilt from its bundled assets on every open: a clean, dated-to-today copy.
     if (isDemo(id)) {
-      try { ensureDemoPerson(root); await openDemo(root) } catch (error) { return { ok: false, status: 500, error: `示例档案没有打开：${error instanceof Error ? error.message : String(error)}` } }
+      try { ensureDemoPerson(root); await openDemo(root) } catch (error) { return { ok: false, status: 500, error: `示例档案打开失败：${error instanceof Error ? error.message : String(error)}` } }
     }
     let switched = false
     try { switched = setActive(root, id) } catch (error) { return { ok: false, status: 500, error: error instanceof Error ? error.message : String(error) } }
-    if (!switched) return { ok: false, status: 404, error: '没有这个人。' }
+    if (!switched) return { ok: false, status: 404, error: '未找到该成员。' }
     forgetPersonCaches()
     let warning = ''
     const person = activePerson(root).person
@@ -129,7 +129,7 @@ export function registerPeopleRoutes(deps: CoreDeps): void {
     if (id === SELF) return { ok: false, status: 400, error: '不能移除你自己。' }
     if (isDemo(id)) return { ok: false, status: 400, error: '示例档案是内置的，不能移除。' }
     const root = resolveRootDir(deps.config().dataDir)
-    if (!readRegistry(root).people.some((p) => p.id === id)) return { ok: false, status: 404, error: '没有这个人。' }
+    if (!readRegistry(root).people.some((p) => p.id === id)) return { ok: false, status: 404, error: '未找到该成员。' }
     const dir = personDir(root, id)
     // This install's copy only (their deep-analysis folders too); Mirobody keeps their record.
     if (existsSync(dir)) deleteLocalStore(dir)

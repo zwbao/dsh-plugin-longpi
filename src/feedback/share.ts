@@ -22,7 +22,7 @@ export function shareCard(messages: readonly FeedbackMessage[]): ShareCardModel 
       title_zh: '可以分享的一句话',
       headline_zh: bio.headline_zh,
       lines_zh: lines,
-      footnote_zh: '超出了测量波动，是真实的变化。同一家实验室、间隔够了才这么说。这不是诊断。',
+      footnote_zh: '超出了测量波动，是真实的变化。仅在同一实验室、间隔充足时作此结论。这不是诊断。',
     }
   }
   const summary = messages.find((row) => row.id === 'fb-summary' && row.grade === 'beyond_band_better')
@@ -31,7 +31,7 @@ export function shareCard(messages: readonly FeedbackMessage[]): ShareCardModel 
     title_zh: '可以分享的一句话',
     headline_zh: summary?.headline_zh ?? wins[0]?.headline_zh ?? '',
     lines_zh: lines,
-    footnote_zh: '超出了测量波动，是真实的变化。这不是诊断，也不是“多活几年”。',
+    footnote_zh: '超出了测量波动，是真实的变化。这不是诊断，也不是「多活几年」。',
   }
 }
 

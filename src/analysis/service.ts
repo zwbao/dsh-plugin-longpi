@@ -15,6 +15,14 @@ import {
   registerFolder, registeredFolder, runStatus, type AnalysisRun, type RunStatus,
 } from './store.ts'
 
+/** 「9 月 10 日」, with the year when it is not this year. */
+function dayZhA(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
+  if (!m) return iso ?? ''
+  const md = `${Number(m[2])} 月 ${Number(m[3])} 日`
+  return Number(m[1]) === new Date().getFullYear() ? md : `${m[1]} 年 ${md}`
+}
+
 export const SKILL_NAME = 'longevity-analyst'
 /** The first skill version that writes la-export/1 and reads Mirobody. */
 export const MIN_SKILL_VERSION = [0, 7, 0] as const
@@ -51,24 +59,24 @@ export function analystSkillVersion(): { version: string | null; ok: boolean } {
 /** Everything that must hold before a run is prepared. Returns the first thing missing, in the person's words. */
 export function startBlockers(dataDir: string, config: { member?: string } = {}): { reply_zh: string; missing: string } | null {
   if (/[\\/]people[\\/]pdemolimh01[\\/]?$/.test(dataDir)) {
-    return { missing: 'demo', reply_zh: '这是示例档案，只用来看完整档案的效果，不能开始新的深度分析。切回「我」，用你自己的档案。' }
+    return { missing: 'demo', reply_zh: '示例档案仅用于展示完整档案的效果，不能发起新的深度分析。请切换到「我」，使用你自己的档案。' }
   }
   const skill = analystSkillVersion()
   if (!skill.version) {
-    return { missing: 'skill', reply_zh: '这台电脑上还没有安装深度分析（longevity-analyst）。用 LongPi 安装器加 --with-analyst 装好后再来。' }
+    return { missing: 'skill', reply_zh: '这台电脑尚未安装深度分析（longevity-analyst）。请使用 LongPi 安装器加 --with-analyst 安装后再试。' }
   }
   if (!skill.ok) {
-    return { missing: 'skill_version', reply_zh: `这台电脑上的深度分析是 ${skill.version} 版，需要 0.7.0 或更新的版本。用 LongPi 安装器加 --with-analyst 重新安装。` }
+    return { missing: 'skill_version', reply_zh: `这台电脑上的深度分析是 ${skill.version} 版，需要 0.7.0 或更新的版本。请使用 LongPi 安装器加 --with-analyst 重新安装。` }
   }
   if ((config.member ?? '').trim()) {
-    return { missing: 'member', reply_zh: '现在连着的是照护圈里一位家人的记录。深度分析只为链接主人本人做；切回本人的记录后再发起。' }
+    return { missing: 'member', reply_zh: '当前连接的是照护圈中一位家人的记录。深度分析仅面向链接所有者本人；请切换到本人记录后再发起。' }
   }
   const minor = personMinor()
-  if (minor?.minor) return { missing: 'adult', reply_zh: '深度分析只为成年人做。' }
+  if (minor?.minor) return { missing: 'adult', reply_zh: '深度分析仅面向成年人。' }
   const profile = readProfile(dataDir)
-  if (!profile.age) return { missing: 'profile', reply_zh: '深度分析要用到你的年龄。请先在健康页「档案」里填好。' }
+  if (!profile.age) return { missing: 'profile', reply_zh: '深度分析需要你的年龄，请先在健康页「档案」中填写。' }
   if (profile.sex !== 'male' && profile.sex !== 'female') {
-    return { missing: 'profile', reply_zh: '深度分析里很多公式按生理性别分别计算，目前只支持男或女。请在健康页「档案」里填写生理性别。' }
+    return { missing: 'profile', reply_zh: '深度分析里很多公式按生理性别分别计算，目前仅支持男或女。请在健康页「档案」中填写生理性别。' }
   }
   return null
 }
@@ -141,9 +149,9 @@ export function readiness(dataDir: string, config: { member?: string; dataDir?: 
   const why = blockers ? `不能开始：${blockers.reply_zh}`
     : running ? '有一次深度分析正在进行。'
       : !newest ? '还没有可分析的数据。'
-        : !newData ? `上次分析（${lastAnalysis}）之后没有新数据。`
-          : !spaced ? `上次自动分析在 ${lastAuto}，距今不足 ${AUTO_MIN_DAYS} 天；会员主动要求时可以做。`
-            : lastAnalysis ? `上次分析（${lastAnalysis}）之后有新数据（最新 ${newest}）。` : `有数据（最新 ${newest}），还没有做过深度分析。`
+        : !newData ? `上次分析（${dayZhA(lastAnalysis)}）之后没有新数据。`
+          : !spaced ? `上次自动分析为 ${dayZhA(lastAuto)}，距今不足 ${AUTO_MIN_DAYS} 天；你主动要求时可进行。`
+            : lastAnalysis ? `上次分析（${dayZhA(lastAnalysis)}）之后有新数据（最新 ${dayZhA(newest)}）。` : `已有数据（最新 ${dayZhA(newest)}），尚未进行深度分析。`
   const asked = Boolean(newest) && readAsked(dataDir) === newest
   return { blockers, running, last_analysis: lastAnalysis, last_auto_start: lastAuto, newest_record: newestRecord, newest_file: newestFile,
     folder, new_data: newData, newest, asked, auto_on: autoOn, auto_allowed: autoAllowed, why_zh: why }
@@ -210,7 +218,7 @@ export async function startRun(deps: CoreDeps, opts: { dataFolder?: string | nul
     const ready = readiness(dataDir, config, context.records, context.today)
     if (!ready.auto_allowed) return { ok: false, missing: 'not_now', reply_zh: ready.why_zh }
   } else if (listRuns(dataDir).some((run) => runStatus(run).active)) {
-    return { ok: false, missing: 'running', reply_zh: '有一次深度分析正在进行；等它做完，或者先放弃它。' }
+    return { ok: false, missing: 'running', reply_zh: '已有一次深度分析正在进行；请等待完成，或先放弃该次分析。' }
   }
   if (folder.path) registerFolder(dataDir, folder.path)
   const profile = readProfile(dataDir)
@@ -307,15 +315,15 @@ export type ImportResult =
 export async function importLatest(deps: CoreDeps, runId?: string | null): Promise<ImportResult> {
   const dataDir = deps.dataDir()
   const found = findRun(dataDir, runId, rootDir(deps.config().dataDir))
-  if (!found) return { ok: false, error_zh: '还没有做完的深度分析可以导入。', problems: [] }
+  if (!found) return { ok: false, error_zh: '暂无已完成的深度分析可供导入。', problems: [] }
   const { run } = found
   const checked = readExport(run)
-  if (!checked.value || !checked.html) return { ok: false, error_zh: '这次分析的结果没有通过检查，没有导入。', problems: checked.problems }
+  if (!checked.value || !checked.html) return { ok: false, error_zh: '本次分析结果未通过校验，未导入。', problems: checked.problems }
   const v = checked.value
   // Everything the page and the plan need is built before anything is written.
   const context = await deps.context()
   const trial = normalizePlan(planInput(v, context.today), { today: context.today, medications: [], previous: null })
-  if (trial.plan.items.length === 0 && v.plan.items.length > 0) return { ok: false, error_zh: '这次分析的方案读不出来，没有导入。', problems: trial.errors }
+  if (trial.plan.items.length === 0 && v.plan.items.length > 0) return { ok: false, error_zh: '本次分析的方案无法读取，未导入。', problems: trial.errors }
   importRun(found.dir, run, v, checked.html)
   deps.invalidate()
   return {
@@ -338,7 +346,7 @@ export interface PlanReadBack {
 export async function planReadBack(deps: CoreDeps, fixedDir?: string): Promise<PlanReadBack> {
   const dataDir = fixedDir ?? deps.dataDir()
   const cur = currentImport(dataDir)
-  if (!cur) return { ok: false, run_id: null, plan_key: null, title: '', items: [], warnings: [], errors: ['还没有导入深度分析。'], plan: null }
+  if (!cur) return { ok: false, run_id: null, plan_key: null, title: '', items: [], warnings: [], errors: ['尚未导入深度分析。'], plan: null }
   const context = await deps.context()
   const input = planInput(cur.value, context.today)
   const normalized = normalizePlan(input, {
@@ -365,7 +373,7 @@ export async function planReadBack(deps: CoreDeps, fixedDir?: string): Promise<P
 export async function acceptPlan(deps: CoreDeps, seen: { run_id?: unknown; plan_key?: unknown } = {}): Promise<{ ok: true; version: number; items: number } | { ok: false; error_zh: string; problems: string[]; stale?: boolean }> {
   const dir = deps.dataDir()                         // read once: a switch mid-way never saves into another person
   const back = await planReadBack(deps, dir)
-  if (!back.ok || !back.plan) return { ok: false, error_zh: back.errors[0] ?? '方案不能保存。', problems: back.errors }
+  if (!back.ok || !back.plan) return { ok: false, error_zh: back.errors[0] ?? '方案无法保存。', problems: back.errors }
   if (seen.run_id !== back.run_id || seen.plan_key !== back.plan_key) {
     return { ok: false, stale: true, error_zh: '方案已经更新，请重新阅读后再接受。', problems: ['plan changed since it was read back'] }
   }
@@ -377,8 +385,8 @@ export async function acceptPlan(deps: CoreDeps, seen: { run_id?: unknown; plan_
     medications: context.records.medications.map((row) => ({ name: row.name, ...(row.plan_id ? { plan_id: row.plan_id } : {}) })),
     previous: currentPlan(dir),
   })
-  if (normalized.errors.length) return { ok: false, error_zh: normalized.errors[0] ?? '方案不能保存。', problems: normalized.errors }
-  if (deps.dataDir() !== dir) return { ok: false, stale: true, error_zh: '页面切换了人，方案没有保存；请重新阅读后再接受。', problems: ['person changed'] }
+  if (normalized.errors.length) return { ok: false, error_zh: normalized.errors[0] ?? '方案无法保存。', problems: normalized.errors }
+  if (deps.dataDir() !== dir) return { ok: false, stale: true, error_zh: '页面已切换成员，方案未保存；请重新阅读后再接受。', problems: ['person changed'] }
   const saved = savePlan(dir, normalized.plan)
   markPlanAccepted(dir, saved.version)
   deps.invalidate()

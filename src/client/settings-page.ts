@@ -42,21 +42,21 @@ function ScienceSwitch(): React.ReactElement {
     setError(null)
     void postJson('/api/longpi/science/preference', { mode: next })
       .then(() => setMode(next))
-      .catch(() => setError('没有保存，请稍后再试。'))
+      .catch(() => setError('保存失败，请稍后再试。'))
       .finally(() => setBusy(false))
   }
   return h('div', { className: 'lp-set-body' },
-    h(Switch, { id: 'lp-set-science-on', checked: mode === 'local', busy, disabled: busy, label: '在本机参与研究', onChange: (next) => set(next ? 'local' : 'off') }),
-    h('p', { className: 'lp-set-text lp-muted' }, '开着时，研究页、个人小试验和本机统计都能用，数据只保存在这台电脑上。关掉后这些会停。不满 18 岁时始终关闭。'),
+    h(Switch, { id: 'lp-set-science-on', checked: mode === 'local', busy, disabled: busy, label: '在这台电脑上参与研究', onChange: (next) => set(next ? 'local' : 'off') }),
+    h('p', { className: 'lp-set-text lp-muted' }, '开启后，可使用研究页、个人对照和本地统计，数据仅保存在这台电脑上。关闭后以上功能停止。未满 18 岁时始终关闭。'),
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
     h('a', { className: 'lp-textbtn', href: '/api/longpi/science/community?view=page' }, '打开研究页 →'))
 }
 
 function Privacy(): React.ReactElement {
   const rows: Array<[string, string]> = [
-    ['存在哪里', '档案、方案、记录、自测和提醒只保存在这台电脑上。体检和手环的原件留在原来的地方，这里只读。'],
-    ['什么会发给模型', '和 LongPi 对话时，你的问题和为回答读出的档案、化验，在你同意后才会发给回答用的人工智能（默认 DeepSeek）。不对话就不发送。'],
-    ['发给手机', '默认不用。只有你自己配置后才会发，提醒里不写化验数字和项目名字。'],
+    ['存储位置', '档案、方案、记录、自测和提醒只保存在这台电脑上。体检和手环原始数据保存在健康数据服务中，LongPi 只读取。'],
+    ['哪些内容会发送给模型', '与 LongPi 对话时，经你同意，你的问题以及回答所需的档案和化验数据才会发送给 DeepSeek 模型（默认）。不对话则不发送。'],
+    ['发送到手机', '默认关闭，仅在你自行配置后发送。默认不含项目名称和健康数值；选择「详细」后会带上项目名称、执行率和复测指标。'],
   ]
   return h('div', { className: 'lp-set-body' },
     h('dl', { className: 'lp-kv lp-set-kv' },
@@ -93,7 +93,7 @@ export function LongPiSettings(props: SettingsPageProps): React.ReactElement {
       h('h2', { className: 'lp-h2' }, 'LongPi'),
       props.openPage ? h('button', { type: 'button', className: 'lp-textbtn', onClick: () => { props.close?.(); props.openPage?.() } }, '打开健康页 →') : null),
     notice ? h('div', { className: 'lp-notice-slot' }, notice) : null,
-    h(Block, { id: 'lp-set-followup', title: '提醒', hint: '默认关闭。这个窗口关了，就不会响。' }, h(FollowupPanel, { onNotice: notify })),
+    h(Block, { id: 'lp-set-followup', title: '提醒', hint: '默认关闭。关闭此窗口后不会发送提醒。' }, h(FollowupPanel, { onNotice: notify })),
     // Paired automatically; the manual form is for whoever installs LongPi against another Mirobody.
     h(Block, { id: 'lp-set-connection', title: '数据连接' }, h(Connection)),
     h(Block, { id: 'lp-set-science', title: '一起研究' }, h(ScienceSwitch)),

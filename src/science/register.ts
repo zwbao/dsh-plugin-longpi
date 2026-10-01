@@ -32,7 +32,7 @@ export function register(ctx: Context, deps: CoreDeps): void {
     const decision = await next()
     if (!decision || decision.kind !== 'allow') return decision
     if (exec.name !== 'record_study_consent') return decision
-    return { kind: 'ask', reason: '记下参加这项研究的同意。原始化验、姓名和基因不会离开这台电脑。请确认说明已经看过，并且理解测验是本人答的。' }
+    return { kind: 'ask', reason: '记录参加这项研究的同意。原始化验、姓名和基因不会离开这台电脑。请确认已阅读说明，且理解测验由本人作答。' }
   })
   const path = skillFile()
   if (!path) return

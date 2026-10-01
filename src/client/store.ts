@@ -115,7 +115,7 @@ function load(key: Key, mode: Mode = 'reuse'): Promise<void> {
     })
     .catch((error: unknown) => {
       if (seq !== entry.seq) return
-      entry.error = errorText(error, '没有读到')
+      entry.error = errorText(error, '未能读取')
     })
     .finally(() => {
       if (seq !== entry.seq) return

@@ -109,13 +109,13 @@ for (let n = 1; n <= 10; n += 1) {
   assert.equal(shareCard(panel) != null, rule.share, id)
   if (rule.worse) assert.ok(panel.some((row) => row.grade === 'beyond_band_worse'), id)
   if (rule.story) {
-    assert.match(summary.headline_zh, /方向对了|都还在测量波动/)
+    assert.match(summary.headline_zh, /方向正确|均在测量波动/)
     assert.match(summary.headline_zh, /项/)
     assert.match(textOf(summary), /8–12 周|复测|复查/)
   }
   if (rule.celebrate) {
     assert.match(summary.headline_zh, /超出了测量波动，是真实的变化/)
-    assert.match(textOf(summary), /\d+ 项里 \d+ 项/)
+    assert.match(textOf(summary), /\d+ 项中 \d+ 项/)
   }
 }
 

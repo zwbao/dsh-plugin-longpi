@@ -20,7 +20,7 @@ export const FOCUS_FALLBACK: ReadonlyArray<{ key: Focus; label_zh: string }> = [
   { key: 'glucose', label_zh: '血糖' },
   { key: 'weight', label_zh: '体重' },
   { key: 'sleep', label_zh: '睡眠' },
-  { key: 'plan', label_zh: '看方案有没有用' },
+  { key: 'plan', label_zh: '方案效果' },
 ]
 
 /** Units offered first in the self-measurement form; the server accepts more spellings. */
@@ -39,9 +39,9 @@ export const SELF_FALLBACK: ReadonlyArray<{ key: SelfKey; label_zh: string; unit
 ]
 
 export const CONSENT_SENTENCES = [
-  'LongPi 用你自己的体检和手环数据计算身体年龄、10 年心血管风险，并记下生活上的小计划做得怎么样。它不能证明某件事有效，也不做诊断，不开处方，不给用药剂量。',
-  '体检存在你原来放报告的地方。档案、方案和记录只在这台电脑上。对话在你同意之后，才会发给用来回答的人工智能。',
-  '每个数字都写明从哪来，并标出正常波动的范围（这点变化算不算数）。',
+  'LongPi 用你自己的体检和手环数据计算身体年龄、10 年心血管风险，并记录生活改善计划的执行情况。它不能证明某项措施有效，也不做诊断，不开处方，不给用药剂量。',
+  '体检报告保存在健康数据服务中。档案、方案和记录只保存在这台电脑上。经你同意后，对话内容才会发送给 DeepSeek 模型。',
+  '每个数字都注明来源，并标出正常波动范围。',
 ] as const
 
-export const BOUNDARY_FALLBACK = '模型估计，不是诊断，也不是用药建议，也不是你能活多久。紧急情况请拨打 120。'
+export const BOUNDARY_FALLBACK = '模型估计，不是诊断或用药建议，也不代表预期寿命。紧急情况请拨打 120。'

@@ -262,8 +262,8 @@ export function adherenceFor(
   }
   const sourceZh = { wearable: '手环数据', dose_log: '服用记录', check_in: '打卡', none: '没有记录' }[source]
   let note = ''
-  if (source === 'none') note = item.mirobody ? '在你放体检报告的地方记下服用后，才有执行记录。' : '还没有打卡记录。'
-  else if (level === 'unknown') note = `${sourceZh}覆盖 ${Math.round(coverage * 100)}% 的天数，太少，执行率不作数。`
+  if (source === 'none') note = item.mirobody ? '在健康数据服务中记录服用情况后，才会生成执行记录。' : '还没有打卡记录。'
+  else if (level === 'unknown') note = `${sourceZh}仅覆盖 ${Math.round(coverage * 100)}% 的天数，数据不足，暂不计算执行率。`
   else note = `${sourceZh}：执行率 ${Math.round((rate ?? 0) * 100)}%（覆盖 ${Math.round(coverage * 100)}% 的天数）。`
   return { source, rate, coverage, known_days: knownDays, done_days: doneDays, window_days: days, level, streak, calendar, note_zh: note }
 }
@@ -385,16 +385,16 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
   if (seriesNames.length === 0 && input.record_unread) {
     base.unread = true
     base.reason_zh = input.record_unread === 'failed'
-      ? `记录读取失败，没有读到${marker.label}的结果，这次无法判断。`
-      : `指标目录没有读全，${marker.label}可能在没有读到的部分，这次无法判断。`
+      ? `记录读取失败，未读取到${marker.label}的结果，本次无法判断。`
+      : `指标目录未完整读取，${marker.label}可能在未读取的部分中，本次无法判断。`
     return base
   }
   if (seriesNames.length === 0) {
-    base.reason_zh = `记录里还没有${marker.label}。下次检查时加测，才能看这项干预对它的影响。`
+    base.reason_zh = `记录中尚无${marker.label}。下次检查时请加测，才能评估这项干预对它的影响。`
     return base
   }
   if (openNames.length === 0) {
-    base.reason_zh = `${marker.label}的历次结果没有读全（读取失败或被截断），这次无法判断。`
+    base.reason_zh = `${marker.label}的历次结果未完整读取（读取失败或被截断），本次无法判断。`
     return base
   }
   // Every result in the variation row's unit, with the row's own factors (as changes.ts does); a result that
@@ -423,7 +423,7 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
   // Means over several days (home blood pressure) leave such a result out and count the days that remain.
   const unitProblem = window > 0 ? undefined : blocked(before, inBefore) ?? blocked(after, inAfter)
   if (unitProblem) {
-    base.reason_zh = `${unitProblem.date} 的${marker.label}单位是 ${unitProblem.unit || '（没有单位）'}，无法换算成 ${unit}，这次无法比较。`
+    base.reason_zh = `${dayZh(unitProblem.date, input.today)}的${marker.label}单位是 ${unitProblem.unit || '（没有单位）'}，无法换算成 ${unit}，这次无法比较。`
     base.next_retest = earliest > input.today ? earliest : null
     base.first_due = base.next_retest ? earliest : null
     return base
@@ -454,10 +454,10 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
     base.first_due = earliest
     if (earlyHit) {
       base.followup = { date: earlyHit.date, value: earlyHit.value }
-      base.reason_zh = `太早：${earlyHit.date} 的${marker.label}距方案开始只有 ${Math.max(0, daysBetween(item.start, earlyHit.date))} 天，这项至少隔 ${retestDays} 天才能比较，${earliest} 之后再测。`
+      base.reason_zh = `太早：${dayZh(earlyHit.date, input.today)}的${marker.label}距方案开始只有 ${Math.max(0, daysBetween(item.start, earlyHit.date))} 天，这项至少隔 ${retestDays} 天才能比较，${dayZh(earliest, input.today)}之后再测。`
     } else {
       base.reason_zh = earliest > input.today
-        ? `太早：开始才 ${Math.max(0, daysBetween(item.start, input.today))} 天。${marker.label}至少要隔 ${retestDays} 天复测才可比，${earliest} 之后再测。`
+        ? `太早：开始才 ${Math.max(0, daysBetween(item.start, input.today))} 天。${marker.label}至少要隔 ${retestDays} 天复测才可比，${dayZh(earliest, input.today)}之后再测。`
         : followup
           ? `需要连续 ${window} 天的${homeZh}：复测只有 ${followMean?.days ?? 0} 天的读数，还不能比较。`
           : `开始后还没有复测${marker.label}。现在可以复测了。`
@@ -470,8 +470,8 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
   const labChange = input.checkins.some((row) => row.tags.includes('lab_change') && row.date > baseline.date && row.date <= followup.date)
   if ((fromLab && toLab && fromLab !== toLab) || labChange) {
     const where = fromLab && toLab && fromLab !== toLab
-      ? `${baseline.date} 来自${fromLab}，${followup.date} 来自${toLab}`
-      : `${baseline.date} 到 ${followup.date} 之间记了换检测机构`
+      ? `${dayZh(baseline.date, input.today)}来自${fromLab}，${dayZh(followup.date, input.today)}来自${toLab}`
+      : `${dayZh(baseline.date, input.today)}至${dayZh(followup.date, input.today)}之间记录了更换检测机构`
     base.reason_zh = `不可比：${where}，${marker.label}的两次结果不能直接比较。`
     return base
   }
@@ -525,7 +525,7 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
 
   const adherence = input.adherence[item.id]
   if (isCrp(marker) && (crpInMgL(baseline) > CRP_ACUTE_MG_L || crpInMgL(followup) > CRP_ACUTE_MG_L)) {
-    base.reason_zh = 'CRP 高于 10 mg/L，多半是急性炎症（感冒、感染、受伤），这次比较不作数。建议恢复两周后复测。'
+    base.reason_zh = 'CRP 高于 10 mg/L，通常提示急性炎症（感冒、感染、受伤），本次比较不予采用。建议恢复两周后复测。'
     return base
   }
   if (!biovar) {
@@ -549,7 +549,7 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
   if (!beyondUp && !beyondDown) {
     base.direction = 'within'
     base.verdict = '波动内'
-    base.reason_zh = `变化 ${(pct * 100).toFixed(0)}%，在正常波动范围（${(band.down * 100).toFixed(0)}% 至 +${(band.up * 100).toFixed(0)}%）内，还不能算真实变化。`
+    base.reason_zh = `变化 ${(pct * 100).toFixed(0)}%，在正常波动范围（${(band.down * 100).toFixed(0).replace(/^-/, '−')}% 至 +${(band.up * 100).toFixed(0)}%）内，尚不能视为真实变化。`
   } else if (aim) {
     const toward = (aim === 'lower' && beyondDown) || (aim === 'higher' && beyondUp)
     base.direction = toward ? 'improved' : 'worse'
@@ -559,14 +559,14 @@ export function evaluateMarker(item: PlanItem, marker: ResolvedMarker, input: Ev
     base.reason_zh = `变化 ${(pct * 100).toFixed(0)}%，${words}，超出正常波动。${passed}${rangeNote}`
   } else {
     base.direction = 'unknown'
-    base.reason_zh = `变化 ${(pct * 100).toFixed(0)}%，超出正常波动；这一项没有“越低越好”或“越高越好”的方向，请结合参考范围看。`
+    base.reason_zh = `变化 ${(pct * 100).toFixed(0)}%，超出正常波动；这一项没有「越低越好」或「越高越好」的方向，请结合参考范围看。`
   }
   base.reason_zh += goalNote
   if ((base.verdict === '有效' || base.verdict === '反向') && base.combined_with.length > 0) {
     base.reason_zh += togetherZh([item.title, ...base.combined_with])
   }
   if ((base.verdict === '有效' || base.verdict === '反向') && base.confounders.length > 0) {
-    base.reason_zh += `期间还有其他变化（${base.confounders.slice(0, 2).join('；')}），结论要打折扣。`
+    base.reason_zh += `期间还有其他变化（${base.confounders.slice(0, 2).join('；')}），结论的可靠性降低。`
   }
   if (adherence?.level === 'low') {
     base.verdict = '无法判断'
@@ -631,15 +631,15 @@ export function suggestNext(summaries: readonly ItemSummary[], context: { today:
     if ((item.adherence.level === 'low' || item.adherence.level === 'partial') && item.days >= 14) {
       out.push({
         kind: 'adherence', priority: item.adherence.level === 'low' ? 1 : 3, item: item.id,
-        text_zh: `「${item.title}」执行率 ${Math.round((item.adherence.rate ?? 0) * 100)}%。先把执行稳定在八成以上，再判断它有没有用。`,
+        text_zh: `「${item.title}」执行率 ${Math.round((item.adherence.rate ?? 0) * 100)}%。请先将执行率稳定在八成以上，再判断其效果。`,
       })
     }
     if (item.adherence.source === 'none' && item.days >= 7) {
       out.push({
         kind: 'record', priority: 4, item: item.id,
-        text_zh: item.adherence.note_zh.startsWith('在你放体检报告的地方')
+        text_zh: item.adherence.note_zh.startsWith('在健康数据服务')
           ? `「${item.title}」没有服用记录。${item.adherence.note_zh}`
-          : `「${item.title}」还没有执行记录。每天在对话里说一句“今天${item.title}完成了”就能记下。`,
+          : `「${item.title}」还没有执行记录。每天在对话中告知「今天${item.title}完成了」，即可记录。`,
       })
     }
     for (const row of item.verdicts) {

@@ -44,7 +44,7 @@ export function communityHtml(view: CommunityView): string {
   const early = view.early_zh
     ? `<section class="card" id="cold-start"><p class="kicker">先做个人对照</p><p>${esc(view.early_zh)}</p><button type="button" id="start-nof1">开始个人对照</button><p class="status" id="nof1-status"></p></section>`
     : ''
-  const pulse = view.pulse ? `<h2>${esc(view.pulse.headline_zh)}</h2><p>${esc(view.pulse.detail_zh)}</p>` : '<p>群体结果还没发回。一个人的时候不会发布合计。</p>'
+  const pulse = view.pulse ? `<h2>${esc(view.pulse.headline_zh)}</h2><p>${esc(view.pulse.detail_zh)}</p>` : '<p>群体结果尚未发回。仅有一人时不会发布合计。</p>'
   return `<!doctype html>
 <html lang="zh-CN">
 <meta charset="utf-8">
@@ -91,8 +91,8 @@ export function communityHtml(view: CommunityView): string {
   <section class="card"><p class="kicker">发回给你</p><p>${esc(view.give_back_zh)}</p></section>
   <section class="card" id="vote">
     <p class="kicker">下个赛季的题目</p>
-    <h2>你想先研究哪一件</h2>
-    <form id="vote-form">${topics}<button type="submit">记下我的一票</button></form>
+    <h2>你希望优先研究哪个题目</h2>
+    <form id="vote-form">${topics}<button type="submit">提交投票</button></form>
     <p class="note">${esc(view.voting.note_zh)}</p>
   </section>
   ${studies}
@@ -120,7 +120,7 @@ document.querySelectorAll('form[data-consent]').forEach((form) => {
     })
     try {
       await post('/api/longpi/science/consent', { confirm: form.confirm.checked === true, study_id: id, answers, explained_by: 'page' })
-      status.textContent = '已记下同意。'
+      status.textContent = '已记录同意。'
     } catch (error) { status.textContent = error.message }
   })
 })
@@ -130,7 +130,7 @@ document.querySelectorAll('[data-withdraw]').forEach((button) => {
     const status = button.parentElement.querySelector('[data-status]')
     try {
       await post('/api/longpi/science/withdraw', { study_id: id, confirm: true })
-      status.textContent = '已退出。还没发出的那一份已删掉。已经发出的合计不会收回。'
+      status.textContent = '已退出。尚未发出的部分已删除。已发出的合计无法收回。'
     } catch (error) { status.textContent = error.message }
   })
 })
@@ -139,7 +139,7 @@ if (nof1) nof1.addEventListener('click', async () => {
   const status = document.getElementById('nof1-status')
   try {
     const json = await post('/api/longpi/science/n-of-1', { confirm: true, design: 'abab' })
-    status.textContent = json.protocol_zh || '个人对照已经排好，只留在这台电脑。'
+    status.textContent = json.protocol_zh || '个人对照已安排，仅保存在这台电脑上。'
   } catch (error) { status.textContent = error.message }
 })
 document.getElementById('vote-form').addEventListener('submit', async (event) => {

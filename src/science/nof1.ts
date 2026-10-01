@@ -60,7 +60,7 @@ function schedule(kind: DesignKind, start: string, first: 'morning' | 'after_din
     if (index < order.length - 1) {
       const washFrom = cursor
       const washTo = addDays(washFrom, washDays - 1)
-      blocks.push({ arm: 'washout', label_zh: '洗脱，这几天不比较', from: washFrom, to: washTo, role: 'washout' })
+      blocks.push({ arm: 'washout', label_zh: '洗脱期，不纳入比较', from: washFrom, to: washTo, role: 'washout' })
       cursor = addDays(washTo, 1)
     }
   })
@@ -84,7 +84,7 @@ function explainContrast(labelA: string, labelB: string, row: Contrast, unit: st
   const head = `${labelA}平均 ${round(row.mean_a)} ${unit}，${labelB}平均 ${round(row.mean_b)} ${unit}，相差 ${round(row.diff)} ${unit}（${labelB}减${labelA}）。${t}`
   return enough
     ? `${head}这是你自己这 ${row.n} 对记录里的差别，只留在这台电脑上，不能当成治疗结论。`
-    : `${head}现在只有 ${row.n} 对，次数还少，先不要下结论，按协议继续记。`
+    : `${head}目前仅有 ${row.n} 对记录，数量较少，暂不下结论，请按协议继续记录。`
 }
 
 /** Descriptive split of the watch series: high-step days versus low-step days. Not a randomised trial. */
@@ -137,7 +137,7 @@ export function designNOf1(opts: {
   const posterior = morning.length >= 2 && after.length >= 2 ? posteriorDiff(morning, after) : null
   const periods = blocks.filter((row) => row.role === 'treatment').length
   const stopping = stoppingRule(posterior, { mcid, periods_done: opts.readings && opts.readings.length > 0 ? periods : 0, max_periods: periods, min_n: 4 })
-  let result = '手表的每日步数没有区分早晨和晚饭后，所以现有记录还不能比较这两种走法。从今天起按上面的安排走，并把血糖记下来，记在这台电脑上。'
+  let result = '手表的每日步数没有区分早晨和晚饭后，所以现有记录还不能比较这两种走法。请从今天起按上述安排步行，并记录血糖（保存在这台电脑上）。'
   if (posterior) {
     const row = contrast(morning, after)
     if (row) {
@@ -156,12 +156,12 @@ export function designNOf1(opts: {
     if (split) {
       const row = contrast(split.low, split.high)
       if (row) {
-        result = `现有手表记录不能区分早晨和晚饭后。作为本机的描述（不是随机对照）：步数较低的日子静息心率平均 ${round(row.mean_a)} 次/分，步数较高的日子平均 ${round(row.mean_b)} 次/分，相差 ${round(row.diff)}。${row.n < 4 ? '天数还少。' : ''}这不能说明走路方式改变了血糖。`
+        result = `现有手表记录不能区分早晨和晚饭后。作为本机的描述（不是随机对照）：步数较低的日子静息心率平均 ${round(row.mean_a)} 次/分，步数较高的日子平均 ${round(row.mean_b)} 次/分，相差 ${round(row.diff)}。${row.n < 4 ? '天数较少。' : ''}这不能说明走路方式改变了血糖。`
         numbers.push({ key: 'hr.low_steps', text: round(row.mean_a) }, { key: 'hr.high_steps', text: round(row.mean_b) })
       }
     }
   } else {
-    result = `按随机顺序排好了。洗脱和每段开头 ${carryover} 天先不比较。现在有效记录还不够，继续记在这台电脑上。`
+    result = `已按随机顺序完成排期。洗脱期和每段开头 ${carryover} 天不纳入比较。目前有效记录不足，请继续在这台电脑上记录。`
   }
   const built: NOf1Result = {
     design,
@@ -178,7 +178,7 @@ export function designNOf1(opts: {
     carryover_days: carryover,
   }
   const problem = wordingProblem(`${built.protocol_zh} ${built.result_zh} ${built.stopping.reason_zh}`)
-  if (problem) built.result_zh = '这次对照只留在本机，次数或记录还不够比较。'
+  if (problem) built.result_zh = '本次对照仅保存在本机，记录尚不足以比较。'
   return built
 }
 

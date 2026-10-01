@@ -68,7 +68,7 @@ const servers = []
 try {
   // --- 1. profile: focus and consent -------------------------------------------
   assert.deepEqual(mod.FOCUS, ['bioage', 'cardio', 'glucose', 'weight', 'sleep', 'plan'])
-  assert.equal(mod.FOCUS_ZH.plan, '看方案有没有用')
+  assert.equal(mod.FOCUS_ZH.plan, '方案效果')
   assert.equal(mod.CONSENT_VERSION, '2026-09-24')
   assert.deepEqual(mod.EMPTY_PROFILE.focus, [])
   assert.equal(mod.EMPTY_PROFILE.consent, null)
@@ -191,7 +191,7 @@ try {
   assert.equal(journey.today, TODAY)
   assert.equal(journey.stage, 'consent')
   assert.deepEqual(journey.consent, { accepted: false, version: '', accepted_at: null, current: mod.CONSENT_VERSION })
-  assert.deepEqual(journey.next, { stage: 'consent', title_zh: '完成设置', detail_zh: '了解 LongPi 能做什么，并确认数据怎么使用。', action: 'consent' })
+  assert.deepEqual(journey.next, { stage: 'consent', title_zh: '完成设置', detail_zh: '了解 LongPi 的功能，并确认数据的使用方式。', action: 'consent' })
   assertSuggestions(journey, ['LongPi 能帮我做什么？', '帮我建立健康档案'])
   assert.equal(journey.boundary_zh, '模型估计，不是诊断，也不是用药建议。紧急情况请拨打 120。')
   assert.deepEqual(journey.focus_options.map((row) => row.key), mod.FOCUS)
@@ -234,17 +234,17 @@ try {
   assert.equal(journey.records.status, 'unconfigured')
   assert.equal(journey.records.summary, null, 'no record, no summary')
   assert.equal(journey.next.action, 'records')
-  assert.equal(journey.next.detail_zh, '上传后就能计算身体年龄和心血管风险。')
-  assertSuggestions(journey, ['体检报告放在哪里，才能在这里看到？', '还没有报告，我现在可以先做什么？'])
+  assert.equal(journey.next.detail_zh, '上传后即可计算身体年龄和心血管风险。')
+  assertSuggestions(journey, ['体检报告上传到哪里，才能在这里查看？', '还没有报告，我现在可以先做什么？'])
   assert.equal(journey.results.bioage.status, 'blocked')
-  assert.equal(journey.results.bioage.blocker_zh, '还没有读到体检。')
+  assert.equal(journey.results.bioage.blocker_zh, '尚未读取到体检记录。')
   // without a record the risk card still lists the labs it needs and the facts still unanswered
   const offlineRisk = journey.results.risk
   assert.equal(offlineRisk.status, 'blocked')
   for (const lab of ['收缩压', '总胆固醇', '高密度脂蛋白胆固醇', '腰围']) assert.ok(offlineRisk.missing_labs.includes(lab), `needs ${lab}`)
   assert.ok(offlineRisk.missing_facts.includes(mod.RISK_FACT_ZH.smoker))
   assert.ok(!offlineRisk.missing_facts.includes(mod.RISK_FACT_ZH.north), 'an answered fact is not missing')
-  assert.match(offlineRisk.blocker_zh, /还没有读到体检/)
+  assert.match(offlineRisk.blocker_zh, /尚未读取到体检记录/)
   const offlineCard = step.tracking.models.find((card) => card.model === 'china-par')
   assert.deepEqual(offlineCard.missing, [...offlineCard.missing_labs, ...offlineCard.missing_facts], 'missing stays their concatenation')
   const waistAddon = journey.addons.find((row) => row.item_zh === '腰围')
@@ -272,8 +272,8 @@ try {
     { item_zh: '腰围', unlocks_zh: '心血管风险', self_measurable: true, self_key: 'waist' },
     { item_zh: 'C反应蛋白', unlocks_zh: '身体年龄', self_measurable: false },
   ])
-  assert.deepEqual(journey.next, { stage: 'first_result', title_zh: '量一次腰围', detail_zh: '补上这一项，才能算出心血管风险。之后还可以补：C反应蛋白。', action: 'addons' })
-  assertSuggestions(journey, ['腰围、C反应蛋白跟上次比，变了多少？', '下次看医生，我要问哪几件？', '现在我先做哪一件？'])
+  assert.deepEqual(journey.next, { stage: 'first_result', title_zh: '量一次腰围', detail_zh: '补充这一项后，即可计算心血管风险。之后还可补充：C反应蛋白。', action: 'addons' })
+  assertSuggestions(journey, ['腰围、C反应蛋白与上次相比变化了多少？', '下次就诊时，我应该询问哪些问题？', '我现在应优先做哪一件？'])
 
   // a plan saved before any first result is lived day by day: the routine, not first_result
   const early = tempDir('plan-before-result')
@@ -299,7 +299,7 @@ try {
   assert.deepEqual(journey.self.latest.map((row) => [row.key, row.value, row.n]), [['waist', 88, 1]])
   assert.equal(journey.records.indicator_count, step.records.indicators.filter((row) => row.source !== 'self').length, 'self rows are not Mirobody indicators')
   assertSuggestions(journey, ['我的心血管风险怎么样？哪些因素影响最大？', '帮我制定一份改善方案', '帮我保存我的干预方案'])
-  assert.deepEqual(journey.next, { stage: 'plan', title_zh: '制定改善方案', detail_zh: '让 LongPi 按你的检查结果和研究证据起草一份方案，你确认后才保存。', action: 'plan' })
+  assert.deepEqual(journey.next, { stage: 'plan', title_zh: '制定改善方案', detail_zh: 'LongPi 根据你的检查结果和研究证据起草方案，经你确认后保存。', action: 'plan' })
   assert.equal(journey.suggestions[0].text_zh, '我的心血管风险怎么样？哪些因素影响最大？', 'the first suggestion follows the first focus')
 
   // the full fixture record: both results, several checkups
@@ -396,7 +396,7 @@ try {
     { kind: 'checkin', text_zh: '今天还有 1 项待打卡', date: TODAY, due: true },
   ])
   assert.deepEqual(journey.next, { stage: 'routine', title_zh: '今天的打卡', detail_zh: '还有 1 项待完成', action: 'checkin' })
-  assertSuggestions(journey, ['今天的方案我都完成了', '该复测什么了？', '每天晚上提醒我打卡'])
+  assertSuggestions(journey, ['今天的方案我都完成了', '哪些项目需要复测？', '每天晚上提醒我打卡'])
   assert.deepEqual(journey.followup, { enabled: false, channels: [], next_at: null }, 'follow-up is off until the person turns it on')
 
   mod.addCheckIns(dataDir, [{ item: '地中海饮食', date: TODAY, done: true }, { item: '地中海饮食', date: '2026-09-23', done: true }], { today: TODAY, source: 'board' })
@@ -404,7 +404,7 @@ try {
   journey = step.journey
   assert.equal(journey.plan.checkin_items[0].done_today, true)
   assert.equal(journey.reminders.some((row) => row.kind === 'checkin'), false)
-  assert.deepEqual(journey.next, { stage: 'routine', title_zh: '该复测了', detail_zh: '可以复测甘油三酯', action: 'review' })
+  assert.deepEqual(journey.next, { stage: 'routine', title_zh: '已到复测时间', detail_zh: '可以复测甘油三酯', action: 'review' })
   assert.ok(journey.plan.streak >= 2)
   assert.ok(journey.plan.adherence_pct >= 0 && journey.plan.adherence_pct <= 100)
 
@@ -581,9 +581,9 @@ try {
   assert.match(situation.record_changes_how_to_read, /ask_doctor/)
   const status = await host.tools.get('longpi_status').execute({})
   assert.equal(status.stage, 'records')
-  assert.equal(status.next, '连接体检记录')
+  assert.equal(status.next, '连接健康数据服务')
   const command = host.commands.get('longpi').handler({ rawInput: '/longpi' })
-  assert.match(command.text, /^stage records · next 连接体检记录$/m)
+  assert.match(command.text, /^stage records · next 连接健康数据服务$/m)
   assert.match(command.text, /^followup off$/m)
   assert.doesNotMatch(command.text, /mmHg|cm|kg/, 'no health values in the command')
 
@@ -658,7 +658,7 @@ try {
   assert.equal(brokenStep.journey.stage, 'records')
   assert.match(brokenStep.journey.results.bioage.blocker_zh, /^记录读取失败：/)
   assert.match(brokenStep.journey.results.risk.blocker_zh, /^记录读取失败：/)
-  assert.doesNotMatch(JSON.stringify(brokenStep.journey.results), /还没有连接/)
+  assert.doesNotMatch(JSON.stringify(brokenStep.journey.results), /还没有连接|尚未连接/)
   assert.deepEqual(brokenStep.journey.addons, [], 'no add-on tests while the record cannot be read')
   assert.deepEqual(brokenStep.journey.changes, [], 'nor changes')
   assert.match(brokenStep.journey.next.detail_zh, /^记录读取失败：/)
@@ -767,14 +767,14 @@ try {
   assert.equal(falseCut.calls.some((call) => (call.args.indicators ?? []).includes('30522-7')), false, 'a complete catalogue is not looked up again')
   assert.deepEqual(falseStep.journey.results.bioage.missing, ['C反应蛋白'])
   assert.equal(falseStep.journey.results.bioage.blocker_zh, '记录里还缺C反应蛋白。')
-  assert.equal(falseStep.journey.results.bioage.blocker_zh.includes('目录没有读全'), false)
+  assert.equal(falseStep.journey.results.bioage.blocker_zh.includes('目录未完整读取'), false)
   assert.deepEqual(falseStep.journey.results.risk.missing_labs, ['腰围'])
-  assert.match(falseStep.journey.results.risk.blocker_zh, /腰围还没有测过，现在量一下填上就能算/)
+  assert.match(falseStep.journey.results.risk.blocker_zh, /腰围尚未测量，测量并填写后即可计算/)
   assert.equal(falseStep.journey.results.risk.blocker_zh.includes('读取失败'), false)
   // The owner's MCV 65 and RDW-CV 19 go to a doctor before the add-ons or a plan (0.5.2).
   assert.equal(falseStep.journey.next.action, 'doctor')
   assert.equal(falseStep.journey.next.title_zh, '请先去看医生：平均红细胞体积 68 fL 偏低，红细胞分布宽度 18% 偏高')
-  assert.match(falseStep.journey.next.detail_zh, /平均红细胞体积（MCV）68 fL（2026-02-11）偏低，低于 80/)
+  assert.match(falseStep.journey.next.detail_zh, /平均红细胞体积（MCV）68 fL（(2026 年 )?2 月 11 日）偏低，低于 80/)
   assert.doesNotMatch(falseStep.journey.next.detail_zh, /不能评/)
   assert.equal(falseStep.journey.addons.length, 2, 'the add-ons are still listed')
   assert.equal(falseStep.journey.suggestions[0].id, 'doctor-first')
@@ -796,7 +796,7 @@ try {
   assert.deepEqual(cutStep.journey.results.bioage.missing, ['C反应蛋白'])
   assert.equal(cutStep.journey.results.bioage.blocker_zh, '记录里还缺C反应蛋白。')
   assert.deepEqual(cutStep.journey.results.risk.missing_labs, ['腰围'])
-  assert.match(cutStep.journey.results.risk.blocker_zh, /还没有测过/)
+  assert.match(cutStep.journey.results.risk.blocker_zh, /尚未测量/)
   assert.equal(cutStep.journey.results.risk.blocker_zh.includes('读取失败'), false)
 
   host.dispose()

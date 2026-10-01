@@ -125,7 +125,7 @@ try {
   assert.equal(drawn.ok, true, drawn.error)
   assert.ok(rarityRank(drawn.card.rarity) >= rarityRank('rare'))
   if (drawn.card.offer) {
-    assert.match(drawn.card.offer.text_zh, /这个方法现在可以用你的记录算|再补.+就能解锁|证据/)
+    assert.match(drawn.card.offer.text_zh, /该方法现已可用你的记录计算|补充.+即可解锁|证据/)
   }
 
   const home = process.env.LONGEVITY_SKILLS_HOME || ''
@@ -134,13 +134,13 @@ try {
   const evidence = offerForCard(whale, home, { home, indicators: [], profile: { age: 40, sex: 'female' } })
   assert.equal(evidence.kind, 'evidence')
   assert.equal(evidence.label, 'evidence-only')
-  assert.match(evidence.text_zh, /证据。这不是你的数字。/)
-  assert.equal(evidence.text_zh.startsWith('这个方法'), false)
+  assert.match(evidence.text_zh, /研究证据，并非你的数据。/)
+  assert.equal(evidence.text_zh.startsWith('该方法'), false)
   const pheno = pack.cards.find((card) => card.skill === 'accelerated-biological-aging-risk')
   const missing = offerForCard(pheno, home, { home, indicators: [], profile: { age: 40, sex: 'female' } })
   assert.equal(missing.kind, 'unlock')
-  assert.match(missing.text_zh, /^再补/)
-  assert.match(missing.text_zh, /就能解锁$/)
+  assert.match(missing.text_zh, /^补充/)
+  assert.match(missing.text_zh, /即可解锁$/)
   assert.doesNotMatch(insightBody(21, ['预约血液科或消化科']), /年轻|付费/)
   assert.match(insightBody(21, ['预约血液科或消化科']), /21 天/)
 

@@ -170,7 +170,7 @@ export function doctorLineGap(doctorFirst: string, reply: string): string | null
   return add.length > 0 ? `${add.join('，')}。` : null
 }
 
-export const BRIEF_SENTENCE = '我可以按这些结果整理一份给医生看的简报（数值、日期和要问医生的几个问题），你去看病时直接给医生看。'
+export const BRIEF_SENTENCE = '我可以根据这些结果整理一份就诊简报（含数值、日期和建议向医生提出的问题），就诊时可直接出示给医生。'
 
 // ------------------------------------------------------------------------------------------ medication review
 

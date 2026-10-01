@@ -12,6 +12,14 @@ import { addDays } from '../interventions.ts'
 import { DOCTOR_ZH, type StopResult } from '../plan-safety.ts'
 import { findingsFrom, patterns } from './rules.ts'
 
+/** 「9 月 10 日」, with the year when it is not this year. */
+function dayZhC(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
+  if (!m) return iso ?? ''
+  const md = `${Number(m[2])} 月 ${Number(m[3])} 日`
+  return Number(m[1]) === new Date().getFullYear() ? md : `${m[1]} 年 ${md}`
+}
+
 export type CareStatus = CareItem['care_status']
 
 export function careItems(dataDir: string): CareItem[] {
@@ -27,7 +35,7 @@ export function careFor(dataDir: string, findingId: string): CareItem | null {
   return items.at(-1) ?? null
 }
 
-const STATUS_ZH: Record<CareStatus, string> = { advised: '建议看医生', booked: '已预约', visited: '已看过医生', declined: '暂时不去', unknown: '不确定' }
+const STATUS_ZH: Record<CareStatus, string> = { advised: '建议看医生', booked: '已预约', visited: '已看过医生', declined: '暂不就诊', unknown: '不确定' }
 
 /** What the doctor said, without a leading 医生说 (the sentence around it already says so). */
 export function outcomeText(text: string | undefined): string {
@@ -37,7 +45,7 @@ export function outcomeText(text: string | undefined): string {
 export function careText(input: { status: CareStatus; department_zh?: string; visit_date?: string; outcome_zh?: string; label_zh?: string }): string {
   const what = input.label_zh ? `${input.label_zh}：` : ''
   const where = input.department_zh ? `（${input.department_zh}）` : ''
-  const when = input.visit_date ? ` ${input.visit_date}` : ''
+  const when = input.visit_date ? ` ${dayZhC(input.visit_date)}` : ''
   const outcome = input.outcome_zh ? `，医生说：${outcomeText(input.outcome_zh)}` : ''
   return `${what}${STATUS_ZH[input.status]}${when}${where}${outcome}`
 }
@@ -131,7 +139,7 @@ export function logCareVisit(dataDir: string, input: VisitInput, findings: reado
       const ghost = {
         ...(booked[0] ?? previous ?? { id: 'cleared', kind: 'care' as const, text_zh: '', confirmed: true, status: 'retracted' as const, safety_relevant: false, provenance, updated: provenance.at }),
         care_status: 'unknown' as const,
-        text_zh: '已删掉这条预约',
+        text_zh: '已删除这条预约',
         confirmed: true,
         status: 'retracted' as const,
         visit_date: undefined,
@@ -144,13 +152,13 @@ export function logCareVisit(dataDir: string, input: VisitInput, findings: reado
     } else if (previous?.care_status === 'visited' || (previous?.care_status === 'booked' && previous.confirmed !== false)) {
       return { ok: true, kept: true, item: previous }
     } else {
-      const proposed = day || '未写日期'
+      const proposed = day || '未注明日期'
       const proposal = {
         kind: 'care',
         ...(findingId ? { finding_id: findingId } : {}),
         care_status: 'advised' as const,
         ...(input.department_zh || finding?.department_zh ? { department_zh: input.department_zh || finding?.department_zh } : {}),
-        text_zh: `待确认：提到 ${proposed} 看医生，你还没有亲口说约了这一天。`,
+        text_zh: `待确认：提到 ${proposed} 就诊，但你尚未确认已预约该日。`,
         confirmed: false,
         provenance,
       } as NewMemoryItem
@@ -234,13 +242,13 @@ export function careState(dataDir: string, stop: StopResult, today: string): Car
   if (left.length === stop.hits.length) return { stop, findings, seen }
   if (left.length === 0) return { stop: { stop: false, sentence_zh: '', title_zh: '', hits: [] }, findings, seen }
   // Some findings seen, others not: the sentence is rebuilt from the hits still open.
-  const sentence = `请先去看医生：${left.map((hit) => hit.text_zh).join('；')}。请带着这几次体检报告去看医生，查清原因。${DOCTOR_ZH}`
+  const sentence = `请先去看医生：${left.map((hit) => hit.text_zh).join('；')}。请携带这几次体检报告就诊，查明原因。${DOCTOR_ZH}`
   return { stop: { stop: true, sentence_zh: sentence, title_zh: `请先去看医生：${left.map((hit) => hit.short_zh).slice(0, 3).join('，')}`, hits: left }, findings, seen }
 }
 
 /** What the doctor said, for the plan's notes: one line per finding seen. */
 export function seenNotes(state: CareState): string[] {
-  return state.seen.map(({ finding, care }) => `医生已经看过${finding.title_zh.replace(/ 偏低| 偏高| 在下降/g, '')}${care.visit_date ? `（${care.visit_date}）` : ''}${care.outcome_zh ? `，医生说：${outcomeText(care.outcome_zh)}` : ''}。这份方案只安排生活方式；用药、补铁或补剂按医生的处方，不在方案里。`)
+  return state.seen.map(({ finding, care }) => `医生已经看过${finding.title_zh.replace(/ 偏低| 偏高| 在下降/g, '')}${care.visit_date ? `（${dayZhC(care.visit_date)}）` : ''}${care.outcome_zh ? `，医生说：${outcomeText(care.outcome_zh)}` : ''}。本方案仅安排生活方式；用药、补铁或补剂遵医嘱，不纳入方案。`)
 }
 
 /** The record-change keys a finding a doctor has seen already covers (the red-cell indices for the red-cell finding). */

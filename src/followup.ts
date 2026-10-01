@@ -465,7 +465,7 @@ export function decideFollowup(input: { now: Date; settings: FollowupSettings; s
       key: `weekly:${isoWeek(now)}`,
       text: full
         ? `LongPi：${state.week.pct == null ? '本周还没有执行记录' : `本周方案执行率 ${state.week.pct}%`}，连续 ${state.week.streak} 天；下次复测：${next ? `${next.marker} ${monthDay(next.date)}` : '暂无'}。`
-        : 'LongPi 本周小结已更新，打开健康页查看。',
+        : 'LongPi 本周小结已更新，请打开健康页查看。',
     })
   }
   const consentDay = state.consent_at ? isoDay(new Date(state.consent_at)) : null
@@ -477,14 +477,14 @@ export function decideFollowup(input: { now: Date; settings: FollowupSettings; s
       key: `nudge:${state.stage}:${today}`,
       text: full && state.next_detail_zh
         ? `LongPi：下一步「${state.next_title_zh}」：${state.next_detail_zh}`
-        : `LongPi：下一步「${state.next_title_zh}」，打开健康页继续。`,
+        : `LongPi：下一步「${state.next_title_zh}」，请打开健康页继续。`,
     })
   }
   if (!state.plan_exists && state.plain_reminder_zh && weekly && isoWeekday(now) === weekly.day && minutes >= minutesOf(weekly.time) && !sent.has(`plain:${isoWeek(now)}`)) {
     out.push({
       kind: 'nudge',
       key: `plain:${isoWeek(now)}`,
-      text: `LongPi：${state.plain_reminder_zh}。打开健康页看这一季就好，没有每天催。`,
+      text: `LongPi：${state.plain_reminder_zh}。可打开健康页查看本季进度，不会每日提醒。`,
     })
   }
   return out
@@ -504,18 +504,18 @@ function withPlain(dataDir: string, state: FollowupState | null): FollowupState 
 export function followupSilence(input: { now: Date; settings: FollowupSettings; state: FollowupState | null; log: readonly FollowupLogRow[] }): string {
   const { now, settings, state, log } = input
   if (!settings.enabled) {
-    return '提醒是关着的。打开之后，没有方案时，只有到期的复测、待解锁的检查或本季任务才会提醒；这些都没有，就保持安静。'
+    return '提醒已关闭。开启后，若没有方案，仅在有到期复测、待解锁的检查或本季任务时提醒；均无则不发送。'
   }
-  if (inQuiet(settings.quiet, now)) return '现在是免打扰时段，到点的提醒会在时段结束后同一天再发。'
+  if (inQuiet(settings.quiet, now)) return '当前为免打扰时段，到期提醒将在时段结束后当天发送。'
   if (state && decideFollowup({ now, settings, state, log }).length > 0) return ''
   if (!state || (!state.plan_exists && state.checkin_open.length === 0 && state.retests.length === 0 && !state.plain_reminder_zh)) {
     return '没有方案，也没有到期的复测或待解锁的检查，所以不发提醒。'
   }
-  if (!state.plan_exists && state.plain_reminder_zh) return `没有方案，不会每天催。每周会提一句：${state.plain_reminder_zh}`
+  if (!state.plan_exists && state.plain_reminder_zh) return `暂无方案，不会每日提醒。每周提醒一次：${state.plain_reminder_zh}`
   const today = isoDay(now)
-  if (state.plan_exists && state.checkin_open.length > 0) return '今天还有没打卡的项目，到了设定的时间会提醒，不会提前催。'
-  if (state.retests.some((row) => row.date === today)) return '今天有复测，到了设定的时间会提醒。'
-  return '今天没有待打卡，也没有到期的复测，所以不发提醒。每周小结在设定的那天发送。'
+  if (state.plan_exists && state.checkin_open.length > 0) return '今天还有未打卡的项目，将在设定时间提醒，不会提前提醒。'
+  if (state.retests.some((row) => row.date === today)) return '今天有复测，将在设定时间提醒。'
+  return '今天没有待打卡项目，也没有到期复测，因此不发送提醒。每周小结在设定日期发送。'
 }
 
 /** Whether anything could be due now, from the clock, the settings and the log alone: the journey is read only then. */
@@ -793,7 +793,7 @@ function logRow(kind: FollowupKind, key: string, result: SendResult, now: Date):
 export async function sendNow(dataDir: string, text: string, kind: FollowupKind, now: Date = new Date()): Promise<SendResult & { error?: string }> {
   const settings = readFollowup(dataDir)
   if (sentToday(readFollowupLog(dataDir), now) >= FOLLOWUP_MAX_PER_DAY) {
-    return { ok: false, channels: {}, error: `今天已经发送了 ${FOLLOWUP_MAX_PER_DAY} 条提醒，达到上限，明天再试。` }
+    return { ok: false, channels: {}, error: `今天已发送 ${FOLLOWUP_MAX_PER_DAY} 条提醒，已达上限，请明天再试。` }
   }
   const result = await sendFollowup(settings, text, { kind, now })
   const row = logRow(kind, `${kind}:${now.toISOString()}`, result, now)

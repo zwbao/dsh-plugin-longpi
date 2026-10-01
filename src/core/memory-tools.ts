@@ -125,7 +125,7 @@ export function registerMemoryTools(ctx: Context, deps: CoreDeps): void {
       return asJson({
         ok: Boolean(saved),
         saved: saved ? brief(saved) : null,
-        read_back_zh: saved ? `我记下了：${saved.text_zh}${confirmed ? '' : '（没有对上你的原话，先当作提醒用，说"撤销"即可取消）'}` : '',
+        read_back_zh: saved ? `已记录：${saved.text_zh}${confirmed ? '' : '（与你的原话未完全对应，暂作为提醒；说「撤销」即可取消）'}` : '',
       })
     },
   }))

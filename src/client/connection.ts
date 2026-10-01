@@ -58,13 +58,13 @@ export function ConnectionStatus(props: { connection: Connection; brief?: boolea
   return h('div', { className: 'lp-conn-status' },
     h('div', { className: 'lp-status' },
       h('span', { className: `lp-statusdot ${ok ? 'lp-statusdot-on' : bad ? 'lp-statusdot-bad' : ''}`, 'aria-hidden': true }),
-      ok ? '已连上' : bad ? `连接失败：${connection.error || '没有返回原因'}` : '还没有连上'),
+      ok ? '已连接' : bad ? `连接失败：${connection.error || '未返回原因'}` : '尚未连接'),
     ok && connection.summary && !props.brief ? h('div', { className: 'lp-caption' }, `找到：${summaryParts(connection.summary).join(' · ')}`) : null)
 }
 
 function TestOutcome(props: { result: ConnectionResult }): React.ReactElement {
   const { result } = props
-  if (!result.ok) return h('p', { className: 'lp-form-error', role: 'alert' }, `连接没有成功：${result.error}`)
+  if (!result.ok) return h('p', { className: 'lp-form-error', role: 'alert' }, `连接失败：${result.error}`)
   const summary = result.connection?.summary
   return h('p', { className: 'lp-conn-ok', role: 'status' },
     h(Icon, { name: 'check', size: 14 }),
@@ -94,12 +94,12 @@ function MirobodyLogin(props: { idPrefix: string; onSaved?: () => void }): React
     try {
       const result = await postJson<{ ok?: boolean; url_masked?: string; indicators?: number }>('/api/longpi/mirobody/login', { base_url: base.trim(), email: email.trim(), password })
       setPassword('')
-      setDone(`已登录并连上${typeof result.indicators === 'number' ? `，读到 ${result.indicators} 项` : ''}。`)
+      setDone(`已登录并连接${typeof result.indicators === 'number' ? `，读取到 ${result.indicators} 项` : ''}。`)
       notifyChanged()
       await reload('connection')
       props.onSaved?.()
     } catch (err) {
-      setError(errorText(err, '没有登录成功'))
+      setError(errorText(err, '登录失败'))
     } finally {
       setBusy(false)
     }
@@ -173,7 +173,7 @@ export function ConnectionForm(props: { connection: Connection | null; idPrefix:
       notifyChanged()
       await reload('connection')
     } catch (err) {
-      setError(`没有清除：${errorText(err, '请稍后再试')}`)
+      setError(`清除失败：${errorText(err, '请稍后再试')}`)
     } finally {
       setBusy(null)
     }
@@ -182,9 +182,9 @@ export function ConnectionForm(props: { connection: Connection | null; idPrefix:
   return h('form', { className: 'lp-conn-form', noValidate: true, onSubmit: (event: React.FormEvent) => { event.preventDefault(); void run('save') } },
     h(MirobodyLogin, { idPrefix: props.idPrefix }),
     h('details', { className: 'lp-conn-advanced' },
-      h('summary', null, '改用连接地址（给安装的人）'),
+      h('summary', null, '改用连接地址（供安装人员使用）'),
       props.connection?.url_masked ? h('p', { className: 'lp-caption' }, `当前地址 ${props.connection.url_masked}`) : null,
-      h('p', { className: 'lp-caption' }, '安装的人如果已经拿到连接地址，再展开填写。平时不用看。'),
+      h('p', { className: 'lp-caption' }, '仅在安装人员提供连接地址时填写，一般无需设置。'),
       h('div', { className: 'lp-field' },
         h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-url` }, '连接地址'),
         h('input', {
@@ -193,10 +193,10 @@ export function ConnectionForm(props: { connection: Connection | null; idPrefix:
           onChange: (event: React.ChangeEvent<HTMLInputElement>) => { setUrl(event.target.value); setError(null) },
         })),
       h('div', { className: 'lp-field' },
-        h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-token` }, '访问口令', h('span', { className: 'lp-optional' }, '地址里已经带了就留空')),
+        h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-token` }, '访问令牌', h('span', { className: 'lp-optional' }, '地址中已包含时可留空')),
         h('input', {
           id: `${props.idPrefix}-token`, type: 'password', className: 'lp-input', value: token, autoComplete: 'new-password',
-          placeholder: '可不填',
+          placeholder: '选填',
           onChange: (event: React.ChangeEvent<HTMLInputElement>) => setToken(event.target.value),
         }))),
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
@@ -208,7 +208,7 @@ export function ConnectionForm(props: { connection: Connection | null; idPrefix:
         h(Icon, { name: 'trash', size: 13 }), busy === 'clear' ? '清除中' : '清除保存的地址') : null),
     h('p', { className: 'lp-fine' }, saved
       ? '清除后改用安装时配置的地址（如果有）。'
-      : '保存前会先用这个地址读一次记录目录，读到了才保存；地址和令牌只存在这台电脑上。'))
+      : '保存前会先用此地址读取记录目录，读取成功后才保存；地址和令牌仅保存在这台电脑上。'))
 }
 
 /** Status plus form. collapsed: when connected, the form waits behind 换一个地址 (onboarding step 3). */
@@ -224,7 +224,7 @@ export function ConnectionPanel(props: { idPrefix: string; collapsed?: boolean; 
     props.hideStatus ? null : h(ConnectionStatus, { connection: data, brief: props.collapsed }),
     showForm
       ? h(ConnectionForm, { connection: data, idPrefix: props.idPrefix, onSaved: (connection) => { setOpen(false); props.onSaved?.(connection) } })
-      : h('button', { type: 'button', className: 'lp-textbtn', onClick: () => setOpen(true) }, '换一个连接 →'))
+      : h('button', { type: 'button', className: 'lp-textbtn', onClick: () => setOpen(true) }, '更换连接 →'))
 }
 
 /** One line for places that only point at the connection (档案, the page header). */
@@ -232,9 +232,9 @@ export function connectionLine(connection: Connection | null): string {
   if (!connection) return ''
   if (connection.status === 'ok') {
     const summary = connection.summary
-    return summary ? `已连上 · ${summaryParts(summary).slice(0, 2).join(' · ')}` : '已连上'
+    return summary ? `已连接 · ${summaryParts(summary).slice(0, 2).join(' · ')}` : '已连接'
   }
-  return connection.status === 'error' ? `连接失败：${connection.error || '没有返回原因'}` : '还没有连上'
+  return connection.status === 'error' ? `连接失败：${connection.error || '未返回原因'}` : '尚未连接'
 }
 
 export function lastCheckupText(summary: RecordsSummary | null): string {

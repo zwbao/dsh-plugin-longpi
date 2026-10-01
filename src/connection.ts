@@ -149,15 +149,15 @@ export function connectionUrlProblem(url: unknown): string {
   if (parsed.username || parsed.password) return '地址里不能包含用户名或密码。'
   if (parsed.protocol === 'https:') return ''
   if (parsed.protocol === 'http:' && (parsed.hostname === '127.0.0.1' || parsed.hostname === 'localhost')) return ''
-  return '只接受 https:// 地址。这台电脑上的服务可以用 http。'
+  return '仅接受 https:// 地址；这台电脑上的服务可使用 http。'
 }
 
 /** Why a token cannot be used, in Chinese; '' when it can (or when there is none). */
 export function connectionTokenProblem(token: unknown): string {
   if (token === undefined || token === null) return ''
-  if (typeof token !== 'string') return '令牌必须是文字。'
+  if (typeof token !== 'string') return '令牌须为文本。'
   if (token.trim().length > TOKEN_MAX) return `令牌太长（最多 ${TOKEN_MAX} 个字符）。`
-  if (/\s/.test(token.trim())) return '令牌里不能有空格或换行。'
+  if (/\s/.test(token.trim())) return '令牌中不能包含空格或换行。'
   return ''
 }
 
@@ -184,13 +184,13 @@ export async function loginMirobody(input: { base_url: string; email: string; pa
     })
     loginBody = await response.json() as typeof loginBody
     if (!response.ok || loginBody.code !== 0 || !loginBody.data?.access_token) {
-      return { ok: false, error: '没有接受这个邮箱或密码。' }
+      return { ok: false, error: '邮箱或密码未通过验证。' }
     }
   } catch {
-    return { ok: false, error: '连不上这个地址。请确认你放体检报告的地方正在运行。' }
+    return { ok: false, error: '无法连接该地址。请确认健康数据服务正在运行。' }
   }
   const token = loginBody.data?.access_token
-  if (!token) return { ok: false, error: '没有接受这个邮箱或密码。' }
+  if (!token) return { ok: false, error: '邮箱或密码未通过验证。' }
   try {
     const response = await fetchImpl(`${base}/personal/mcp`, {
       method: 'POST',
@@ -199,22 +199,22 @@ export async function loginMirobody(input: { base_url: string; email: string; pa
     })
     const minted = await response.json() as { code?: number; data?: { url?: string } }
     const url = minted.data?.url ?? ''
-    if (!response.ok || minted.code !== 0 || !url.startsWith('http')) return { ok: false, error: '登录成功，但没有连上。' }
+    if (!response.ok || minted.code !== 0 || !url.startsWith('http')) return { ok: false, error: '登录成功，但未能建立连接。' }
     return { ok: true, mcp_url: url, mcp_token: token }
   } catch {
-    return { ok: false, error: '登录成功，但生成个人地址时没有连上。' }
+    return { ok: false, error: '登录成功，但生成个人地址时连接失败。' }
   }
 }
 
 function timeoutText(timeoutMs: number): string {
-  return `${Math.round(timeoutMs / 1000)} 秒内没有回应。请确认它正在运行、地址无误。`
+  return `${Math.round(timeoutMs / 1000)} 秒内无响应。请确认健康数据服务正在运行且地址无误。`
 }
 
 function refusedText(result: McpCallResult, secrets: string[], timeoutMs: number): string {
   const detail = redact(result.error || '', secrets)
   if (result.error_kind === 'unavailable' && /time(?:d)? ?out/i.test(result.error ?? '')) return timeoutText(timeoutMs)
-  if (result.error_kind === 'denied') return `对方拒绝了这个地址或口令${detail ? `（${detail}）` : ''}。请重新登录后再试。`
-  if (result.error_kind === 'unavailable') return `连不上这个地址${detail ? `（${detail}）` : ''}。请确认它正在运行、地址无误。`
+  if (result.error_kind === 'denied') return `健康数据服务拒绝了该地址或令牌${detail ? `（${detail}）` : ''}。请重新登录后再试。`
+  if (result.error_kind === 'unavailable') return `无法连接该地址${detail ? `（${detail}）` : ''}。请确认健康数据服务正在运行且地址无误。`
   return `读取记录目录失败${detail ? `（${detail}）` : ''}。`
 }
 
@@ -237,6 +237,6 @@ export async function testConnection(
   if (result.success === false) return { ok: false, error: refusedText(result, secrets, timeoutMs) }
   const payload = result.result ?? result.text ?? null
   const refused = tableOf(payload)?.error
-  if (refused) return { ok: false, error: `没有给出记录目录（${redact(`${refused.kind}: ${refused.message}`, secrets)}）。` }
+  if (refused) return { ok: false, error: `未返回记录目录（${redact(`${refused.kind}: ${refused.message}`, secrets)}）。` }
   return { ok: true, indicators: summarizeIndicators(payload, 10_000).length }
 }

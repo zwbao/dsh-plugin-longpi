@@ -25,11 +25,11 @@ export function shapeReply(input: ReplyParts): string {
   const short = question.length > 0 && question.length <= 24 && !question.includes('\n')
   const cap = short ? 42 : 120
   const next = input.offerBrief
-    ? `${clip(input.next, cap)} 我可以按这些结果整理一份给医生看的简报。`
+    ? `${clip(input.next, cap)}我可以根据这些结果整理一份就诊简报（含数值、日期和建议向医生提出的问题），就诊时可直接出示给医生。`
     : clip(input.next, cap)
   const body = [
-    `我看到的\n${clip(input.seen, cap)}`,
-    `数据说明不了的\n${clip(input.unknown, cap)}`,
+    `数据显示\n${clip(input.seen, cap)}`,
+    `数据尚不能说明的\n${clip(input.unknown, cap)}`,
     `下一步\n${next}`,
   ].join('\n\n')
   const emergency = input.emergency ? scrubVisible(input.emergency) : ''
@@ -37,8 +37,8 @@ export function shapeReply(input: ReplyParts): string {
 }
 
 export function replyHasThreeParts(text: string): boolean {
-  const seen = text.indexOf('我看到的')
-  const unknown = text.indexOf('数据说明不了的')
+  const seen = text.indexOf('数据显示')
+  const unknown = text.indexOf('数据尚不能说明的')
   const next = text.indexOf('下一步')
   return seen >= 0 && unknown > seen && next > unknown
 }

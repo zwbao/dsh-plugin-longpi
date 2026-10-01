@@ -32,7 +32,7 @@ export const FOCUS_ZH: Record<Focus, string> = {
   glucose: '血糖',
   weight: '体重',
   sleep: '睡眠',
-  plan: '看方案有没有用',
+  plan: '方案效果',
 }
 
 export interface Consent {

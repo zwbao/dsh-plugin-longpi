@@ -102,7 +102,7 @@ function lostInQuiet(form: Form): string | null {
   const times: Array<[string, string]> = [['打卡提醒', form.checkin_time], ['复测提醒', form.retest_time]]
   if (form.weeklyDay !== '0') times.push(['每周小结', form.weeklyTime])
   const hit = times.find(([, time]) => minutesOf(time) >= start)
-  return hit ? `${hit[0]}的时间 ${hit[1]} 在免打扰时段（${form.quietStart}–${form.quietEnd}）的午夜前部分，当天就发不出去了；请调整时间或免打扰时段。` : null
+  return hit ? `${hit[0]}的时间 ${hit[1]} 处于免打扰时段（${form.quietStart}–${form.quietEnd}）中午夜之前的部分，当天将无法发送；请调整时间或免打扰时段。` : null
 }
 
 function problemOf(form: Form, settings: FollowupSettings): string | null {
@@ -202,7 +202,7 @@ function TestResult(props: { result: FollowupTestResponse; kind: WebhookKind | n
   const rows: Array<{ name: string; ok: boolean; error?: string }> = []
   if (props.result.channels.desktop) rows.push({ name: '桌面通知', ...props.result.channels.desktop })
   if (props.result.channels.webhook) rows.push({ name: props.kind ? KIND_ZH[props.kind] : 'Webhook', ...props.result.channels.webhook })
-  if (rows.length === 0) return h('span', { className: 'lp-caption', role: 'status' }, '没有可用的渠道：打开桌面通知或填写 Webhook 后再试。')
+  if (rows.length === 0) return h('span', { className: 'lp-caption', role: 'status' }, '没有可用的渠道：请开启桌面通知或填写 Webhook 后重试。')
   return h('span', { className: 'lp-test-result', role: 'status' },
     ...rows.map((row) => h('span', { key: row.name, className: `lp-badge ${row.ok ? 'lp-badge-good' : 'lp-badge-warn'}` },
       h(Icon, { name: row.ok ? 'check' : 'close', size: 12, strokeWidth: 2 }),
@@ -231,7 +231,7 @@ function Settings(props: { data: FollowupResponse; onNotice: Notify; hideSwitch?
 
   async function post(body: FollowupUpdate): Promise<boolean> {
     const result = await postJson<{ ok: boolean; error?: string } & Partial<FollowupResponse>>('/api/longpi/followup', body)
-    if (!result.ok) throw new Error(result.error || '没有保存')
+    if (!result.ok) throw new Error(result.error || '保存失败')
     if (result.settings) putFollowup(result)
     notifyChanged()
     return true
@@ -244,7 +244,7 @@ function Settings(props: { data: FollowupResponse; onNotice: Notify; hideSwitch?
       await post({ enabled: next })
       props.onNotice(next ? '随访提醒已开启。' : '随访提醒已关闭。', 'good')
     } catch (err) {
-      setError(`没有保存：${errorText(err, '请稍后再试')}`)
+      setError(`保存失败：${errorText(err, '请稍后再试')}`)
     } finally {
       setSwitching(false)
     }
@@ -262,7 +262,7 @@ function Settings(props: { data: FollowupResponse; onNotice: Notify; hideSwitch?
       await post(update)
       props.onNotice('随访设置已保存。', 'good')
     } catch (err) {
-      setError(`没有保存：${errorText(err, '请稍后再试')}`)
+      setError(`保存失败：${errorText(err, '请稍后再试')}`)
     } finally {
       setSaving(false)
     }
@@ -276,7 +276,7 @@ function Settings(props: { data: FollowupResponse; onNotice: Notify; hideSwitch?
       setTest(await postJson<FollowupTestResponse>('/api/longpi/followup/test', {}))
       void reload('followup')
     } catch (err) {
-      setError(`测试没有发出：${errorText(err, '请稍后再试')}`)
+      setError(`测试消息发送失败：${errorText(err, '请稍后再试')}`)
     } finally {
       setTesting(false)
     }
@@ -288,7 +288,7 @@ function Settings(props: { data: FollowupResponse; onNotice: Notify; hideSwitch?
     props.hideSwitch ? null : h('div', { className: 'lp-followup-head' },
       h(Switch, { id: 'lp-followup-on', checked: settings.enabled, busy: switching, disabled: switching, label: '开启随访提醒', onChange: (next) => { void toggle(next) } }),
       h('span', { className: 'lp-caption' }, settings.enabled
-        ? hasChannel ? nextLine(data) : '已开启，但还没有可用的渠道：打开桌面通知或填写 Webhook。'
+        ? hasChannel ? nextLine(data) : '已开启，但暂无可用渠道：请开启桌面通知或填写 Webhook。'
         : '关闭时不会发送任何提醒。开启后按下面的时间提醒打卡、到期复测和每周小结。')),
     h('div', { className: 'lp-grid-2 lp-followup-grid' },
       h('fieldset', { className: 'lp-fieldset' },
@@ -318,7 +318,7 @@ function Settings(props: { data: FollowupResponse; onNotice: Notify; hideSwitch?
         h(Check, { id: 'lp-fu-desktop', checked: form.desktop && data.platform_desktop, disabled: !data.platform_desktop, onChange: (checked) => set('desktop', checked) },
           '桌面通知', h('span', { className: 'lp-caption' }, data.platform_desktop ? '这台电脑的系统通知' : '这台电脑的系统不支持')),
         h('div', { className: 'lp-field' },
-          h('label', { className: 'lp-field-label', htmlFor: 'lp-fu-kind' }, 'Webhook 渠道', h('span', { className: 'lp-optional' }, '可选：发到手机上的群机器人或 App')),
+          h('label', { className: 'lp-field-label', htmlFor: 'lp-fu-kind' }, 'Webhook 渠道', h('span', { className: 'lp-optional' }, '选填：发送到手机上的群机器人或 App')),
           h('select', {
             id: 'lp-fu-kind', className: 'lp-select lp-select-wide', value: form.kind,
             onChange: (event: React.ChangeEvent<HTMLSelectElement>) => setForm((current) => ({ ...current, kind: event.target.value as WebhookKind | '', url: '', secret: '', clearSecret: false })),
@@ -331,11 +331,11 @@ function Settings(props: { data: FollowupResponse; onNotice: Notify; hideSwitch?
             onChange: (event: React.ChangeEvent<HTMLInputElement>) => set('url', event.target.value),
           })) : null,
         kind && SIGNED.includes(kind) ? h('div', { className: 'lp-field' },
-          h('label', { className: 'lp-field-label', htmlFor: 'lp-fu-secret' }, '签名密钥', h('span', { className: 'lp-optional' }, '机器人开了「加签」才需要')),
+          h('label', { className: 'lp-field-label', htmlFor: 'lp-fu-secret' }, '签名密钥', h('span', { className: 'lp-optional' }, '仅在机器人开启「加签」时需要')),
           h('div', { className: 'lp-input-unit' },
             h('input', {
               id: 'lp-fu-secret', type: 'password', className: 'lp-input', value: form.secret, autoComplete: 'new-password',
-              placeholder: storedSame && settings.webhook?.secret_set ? (form.clearSecret ? '保存后清除' : '已设置（留空保持不变）') : '可不填',
+              placeholder: storedSame && settings.webhook?.secret_set ? (form.clearSecret ? '保存后清除' : '已设置（留空保持不变）') : '选填',
               onChange: (event: React.ChangeEvent<HTMLInputElement>) => setForm((current) => ({ ...current, secret: event.target.value, clearSecret: false })),
             }),
             storedSame && settings.webhook?.secret_set && !form.clearSecret && !form.secret
@@ -363,9 +363,9 @@ function Settings(props: { data: FollowupResponse; onNotice: Notify; hideSwitch?
 function switchCaption(data: FollowupResponse): string {
   const settings = data.settings
   const channels = [settings.desktop && data.platform_desktop ? '桌面通知' : '', settings.webhook ? '手机（Webhook）' : ''].filter(Boolean)
-  const where = channels.length > 0 ? channels.join('和') : data.platform_desktop ? '桌面通知' : '（还没有可用的渠道，在「更多设置」里填写 Webhook）'
+  const where = channels.length > 0 ? channels.join('和') : data.platform_desktop ? '桌面通知' : '（暂无可用渠道，请在「更多设置」中填写 Webhook）'
   const what = settings.detail === 'minimal' ? '不含健康数值' : '含方案项目名称和执行率'
-  return `还有没打的卡时，${settings.checkin_time} 发${where}；${what}。`
+  return `当天有未完成的打卡时，${settings.checkin_time} 通过${where}提醒；${what}。`
 }
 
 /**
@@ -386,12 +386,12 @@ function ReminderSwitch(props: { data: FollowupResponse; onNotice: Notify }): Re
     setError(null)
     try {
       const result = await postJson<{ ok: boolean; error?: string } & Partial<FollowupResponse>>('/api/longpi/followup', body)
-      if (!result.ok) throw new Error(result.error || '没有保存')
+      if (!result.ok) throw new Error(result.error || '保存失败')
       if (result.settings) putFollowup(result)
       notifyChanged()
       props.onNotice(done, 'good')
     } catch (err) {
-      setError(`没有保存：${errorText(err, '请稍后再试')}`)
+      setError(`保存失败：${errorText(err, '请稍后再试')}`)
     } finally {
       setBusy(false)
     }
@@ -413,7 +413,7 @@ function ReminderSwitch(props: { data: FollowupResponse; onNotice: Notify }): Re
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null)
 }
 
-const SEASON_DEFAULT = '没有方案时，有待补的检查或本赛季的小目标，才会每周提醒一次；都没有就不发。'
+const SEASON_DEFAULT = '没有方案时，仅在有待补的检查或本赛季小目标时每周提醒一次；否则不发送。'
 
 /**
  * The season's weekly reminder, said against the real state of the switch above (the same read as the
@@ -431,7 +431,7 @@ function SeasonNote(props: { enabled: boolean }): React.ReactElement | null {
   const line = view?.reminder_zh
     ? view.reminder_zh
     : view?.needs_consent
-      ? props.enabled ? '打卡提醒已开启。赛季的每周提醒要等你同意使用说明后才开始。' : '还没有同意使用说明，赛季的每周提醒还没开始。'
+      ? props.enabled ? '打卡提醒已开启。赛季每周提醒将在你同意使用说明后开始。' : '你尚未同意使用说明，赛季每周提醒暂未开始。'
       // 「没有方案时…」 only says something when there is no plan (and only once we know).
       : journey && !journey.plan.exists ? SEASON_DEFAULT : null
   if (!line) return null
@@ -449,6 +449,6 @@ export function FollowupPanel(props: { onNotice: Notify }): React.ReactElement {
     h(ReminderSwitch, { data, onNotice: props.onNotice }),
     h(SeasonNote, { enabled: data.settings.enabled }),
     h('details', null,
-      h('summary', null, '更多设置', h('span', { className: 'lp-optional' }, '复测提醒、每周小结、免打扰、发到飞书或手机、内容详略')),
+      h('summary', null, '更多设置', h('span', { className: 'lp-optional' }, '复测提醒、每周小结、免打扰、发送到飞书或手机、内容详略')),
       h(Settings, { data, onNotice: props.onNotice, hideSwitch: true })))
 }

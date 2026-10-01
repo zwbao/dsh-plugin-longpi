@@ -1,11 +1,12 @@
 // Plain-language disclosure and the advertising-law wording list (PLAN §B item 11, R13).
-// The JSON files are the copy the page shows. A short built-in copy is only there if the files are missing.
+// The JSON files are the copy the page shows. disclosure_zh.json is also bundled as the built-in copy, so it is the single source.
 
 import { existsSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import type { Id } from '../contracts/common.ts'
 import type { FactPack } from '../contracts/factpack.ts'
 import type { ValidatorRule } from '../contracts/agents.ts'
+import DISCLOSURE_JSON from '../../data/privacy/disclosure_zh.json' with { type: 'json' }
 
 export interface DisclosureCopy {
   version: string
@@ -26,39 +27,8 @@ export interface BannedClaims {
   share_card_zh: string
 }
 
-const FALLBACK_COPY: DisclosureCopy = {
-  version: '2026-09-28',
-  pipl: {
-    title: '单独同意：处理你的健康信息',
-    lead: '这一页是单独的一次同意，不是「开始使用」那一页里的一句说明。',
-    paragraphs: [
-      '健康信息是敏感个人信息。处理它们需要你单独同意。',
-      '不同意时，LongPi 不会把你的健康数值交给 DeepSeek。',
-    ],
-  },
-  data_flow: {
-    title: '数据去哪里',
-    to_deepseek: ['健康对话里的问题和为回答而读出的指标数值。'],
-    stays_local: ['档案、方案和记录保存在这台电脑上。'],
-    mirobody: ['体检原件留在你原来放报告的地方。'],
-    name: '你的名字不会放进发给 DeepSeek 的内容。',
-    session_log: '健康对话的会话日志默认不上传。',
-  },
-  minor: {
-    ask: '请填写周岁。还不知道年龄时，图鉴抽卡保持关闭。',
-    under_18: '未满 18 岁：不开启图鉴抽卡，也不安排减肥项目。研究也保持关闭。',
-    under_14: '未满 14 岁还需要家长（监护人）同意。',
-  },
-  buttons: {
-    pipl_grant: '我单独同意处理我的健康信息',
-    pipl_decline: '暂不同意',
-    flow_grant: '我知道了，同意把健康对话发给 DeepSeek',
-    flow_decline: '先不把健康数值用于对话',
-    session_on: '单独打开会话日志上传',
-    session_off: '保持关闭（默认）',
-  },
-  delete: { phrase: '删除全部', note: '删除这台电脑上的 LongPi 档案。体检原件不在这里删除。' },
-}
+// The built-in copy is the same JSON, bundled at build time, so the consent text never shrinks when the file is missing.
+const FALLBACK_COPY: DisclosureCopy = DISCLOSURE_JSON
 
 const FALLBACK_BANNED: BannedClaims = {
   version: '2026-09-28',

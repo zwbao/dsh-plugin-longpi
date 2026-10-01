@@ -79,7 +79,7 @@ export function parseCall(block: unknown): ParsedCall {
   if (node.isError === true) {
     const err = objectOf(node.error)
     const code = [err.name, err.code].filter((part) => typeof part === 'string' && part).join(': ')
-    return { state: 'error', args, result: null, text, error: text.split('\n')[0] || code || '工具没有完成' }
+    return { state: 'error', args, result: null, text, error: text.split('\n')[0] || code || '工具未完成' }
   }
   let result: Raw | null = null
   try {
@@ -145,14 +145,14 @@ function DraftCard(props: { callId: string; data: PlanDraftResponse; draft: Plan
     try {
       const result = await acceptDraft(draft, kept, remind, props.source)
       if (!result.ok) {
-        setError(`没有保存：${result.error}`)
+        setError(`保存失败：${result.error}`)
         return
       }
       setAdopted(props.callId, result.version)
       props.onSaved({ version: result.version, reminder: result.reminder })
       setConfirming(false)
     } catch (err) {
-      setError(`没有保存：${errorText(err, '请稍后再试')}`)
+      setError(`保存失败：${errorText(err, '请稍后再试')}`)
     } finally {
       setBusy(false)
     }
@@ -197,10 +197,10 @@ export function DraftToolView(props: ToolViewProps): React.ReactElement {
   } catch {
     data = null
   }
-  if (!data) return h(Shell, { call, icon: 'spark', title: '起草方案', summary: '结果无法显示，展开看原始结果', tone: 'warn' })
+  if (!data) return h(Shell, { call, icon: 'spark', title: '起草方案', summary: '结果无法显示，请展开查看原始结果', tone: 'warn' })
   if (!data.draft) {
-    return h(Shell, { call, icon: 'spark', title: '方案草稿', summary: '现在还起草不了' },
-      h('p', { className: 'lp-muted' }, data.brief.notes_zh[0] || '记录里还没有能对上研究证据的指标。'))
+    return h(Shell, { call, icon: 'spark', title: '方案草稿', summary: '暂时无法起草' },
+      h('p', { className: 'lp-muted' }, data.brief.notes_zh[0] || '你的记录中暂无与研究证据匹配的指标。'))
   }
   return h(Shell, { call, icon: 'spark', title: '方案草稿', summary: saved ? `${data.draft.items.length} 项 · 已采用` : `${data.draft.items.length} 项 · 按证据起草 · 还没有保存` },
     h(DraftCard, { callId: props.callId, data, draft: data.draft, source: draftSource(call.args, data), saved, onSaved: setSaved, openPage: props.openPage }))
@@ -270,7 +270,7 @@ export function CheckinToolView(props: ToolViewProps): React.ReactElement {
   const undone = isUndone(props.callId)
   const [error, setError] = React.useState<string | null>(null)
   if (call.state === 'running') return h(Shell, { call, icon: 'check', title: '打卡', summary: '正在记录…' })
-  if (call.state === 'error') return h(Shell, { call, icon: 'check', title: '打卡', summary: `没有记下：${call.error}`, tone: 'bad' })
+  if (call.state === 'error') return h(Shell, { call, icon: 'check', title: '打卡', summary: `记录失败：${call.error}`, tone: 'bad' })
   const result = call.result ?? {}
   const entries: LoggedEntry[] = (Array.isArray(result.entries) ? result.entries : []).map((row) => {
     const entry = objectOf(row)
@@ -286,7 +286,7 @@ export function CheckinToolView(props: ToolViewProps): React.ReactElement {
   // The tool names each item; an older result only has the id, which today's items may still name.
   const titleOf = (row: LoggedEntry) => row.title || journey?.plan.checkin_items.find((item) => item.id === row.item)?.title || row.item
   const today = journey?.today ?? localToday()
-  const nameOf = (row: LoggedEntry, withState: boolean) => `${titleOf(row)}${withState && row.done === false ? '（没做到）' : ''}${row.date && row.date !== today ? `（${chineseDate(row.date) || row.date}）` : ''}`
+  const nameOf = (row: LoggedEntry, withState: boolean) => `${titleOf(row)}${withState && row.done === false ? '（未完成）' : ''}${row.date && row.date !== today ? `（${chineseDate(row.date) || row.date}）` : ''}`
   // Only a 完成 or 没做到 recorded for today can be taken back here; an undo or a note alone cannot.
   const answered = entries.filter((row) => !row.undo && row.done !== null)
   const undoable = answered.filter((row) => row.date === today)
@@ -296,7 +296,7 @@ export function CheckinToolView(props: ToolViewProps): React.ReactElement {
   const parts = [
     recorded.length > 0 ? `已记录：${recorded.map((row) => nameOf(row, true)).join('、')}` : '',
     taken.length > 0 ? `已撤销：${taken.map((row) => nameOf(row, false)).join('、')}` : '',
-    noted.length > 0 ? `已记下备注：${noted.map((row) => nameOf(row, false)).join('、')}` : '',
+    noted.length > 0 ? `已保存备注：${noted.map((row) => nameOf(row, false)).join('、')}` : '',
   ].filter(Boolean)
   const onlyTaken = recorded.length === 0 && noted.length === 0
 
@@ -307,14 +307,14 @@ export function CheckinToolView(props: ToolViewProps): React.ReactElement {
       for (const row of undoable) await postCheckIn(today, row.item, null)
       setUndone(props.callId)
     } catch (err) {
-      setError(`没有撤销：${errorText(err, '请稍后再试')}`)
+      setError(`撤销失败：${errorText(err, '请稍后再试')}`)
     } finally {
       setUndoing(false)
     }
   }
 
   if (entries.length === 0) {
-    return h(Shell, { call, icon: 'check', title: '打卡', summary: '没有记下', tone: 'warn', quiet: true },
+    return h(Shell, { call, icon: 'check', title: '打卡', summary: '记录失败', tone: 'warn', quiet: true },
       ...problems.map((text) => h('p', { key: text, className: 'lp-caption' }, text)))
   }
   return h(Shell, {
@@ -369,11 +369,11 @@ export function SkillToolView(props: ToolViewProps): React.ReactElement {
   const name = typeof call.args.name === 'string' ? call.args.name : ''
   const plain = name === PHENOAGE_SKILL ? BIOAGE_LABEL : name === RISK_SKILL ? RISK_LABEL : skillName(board, name, call.result)
   if (call.state === 'running') return h(Shell, { call, icon: 'play', title: `计算${plain}`, summary: '正在运行方法…' })
-  if (call.state === 'error') return h(Shell, { call, icon: 'play', title: plain, summary: `没有算完：${call.error}`, tone: 'bad' })
+  if (call.state === 'error') return h(Shell, { call, icon: 'play', title: plain, summary: `计算未完成：${call.error}`, tone: 'bad' })
   const result = call.result ?? {}
   if (result.ok !== true) {
-    const reason = typeof result.error === 'string' && result.error ? result.error : typeof result.error_kind === 'string' ? result.error_kind : '方法没有给出结果'
-    return h(Shell, { call, icon: 'play', title: plain, summary: `没有算出：${reason}`, tone: 'warn' })
+    const reason = typeof result.error === 'string' && result.error ? result.error : typeof result.error_kind === 'string' ? result.error_kind : '方法未返回结果'
+    return h(Shell, { call, icon: 'play', title: plain, summary: `未能算出：${reason}`, tone: 'warn' })
   }
   if (name === PHENOAGE_SKILL) {
     const phenoage = numberOf(outputValue(result, 'phenoage'))
@@ -402,7 +402,7 @@ export function SkillToolView(props: ToolViewProps): React.ReactElement {
 export function SituationToolView(props: ToolViewProps): React.ReactElement {
   const call = parseCall(props.block)
   if (call.state === 'running') return h(Shell, { call, icon: 'user', title: '读取档案与记录', quiet: true, summary: '正在读取…' })
-  if (call.state === 'error') return h(Shell, { call, icon: 'user', title: '读取档案与记录', quiet: true, summary: `没有读到：${call.error}`, tone: 'bad' })
+  if (call.state === 'error') return h(Shell, { call, icon: 'user', title: '读取档案与记录', quiet: true, summary: `读取失败：${call.error}`, tone: 'bad' })
   const result = call.result ?? {}
   const indicators = typeof result.indicator_count === 'number' ? result.indicator_count : null
   const summary = objectOf(result.records_summary)
@@ -411,7 +411,7 @@ export function SituationToolView(props: ToolViewProps): React.ReactElement {
   const changes = (Array.isArray(result.record_changes) ? result.record_changes : []).map(objectOf).filter((row) => row.ask_doctor === true)
   const failed = result.record_status === 'error' || result.record_status === 'partial'
   return h(Shell, { call, icon: 'user', title: counts ? `已读取你的档案与记录（${counts}）` : '已读取你的档案与记录', quiet: true },
-    failed ? h('p', { className: 'lp-caption lp-tool-warn' }, h(Icon, { name: 'warn', size: 12 }), ` 有一部分记录没有读到${typeof result.record_error === 'string' && result.record_error ? `：${result.record_error}` : ''}`) : null,
+    failed ? h('p', { className: 'lp-caption lp-tool-warn' }, h(Icon, { name: 'warn', size: 12 }), ` 部分记录未读取到${typeof result.record_error === 'string' && result.record_error ? `：${result.record_error}` : ''}`) : null,
     changes.length > 0 ? h('p', { className: 'lp-tool-doctor' }, h(Icon, { name: 'warn', size: 13 }),
       ` ${changes.slice(0, 3).map((row) => String(row.label_zh ?? '')).filter(Boolean).join('、')}${changes.length > 3 ? ` 等 ${changes.length} 项` : ''}的变化超出正常波动。${typeof changes[0]?.advice_zh === 'string' ? changes[0].advice_zh : ''}`) : null)
 }

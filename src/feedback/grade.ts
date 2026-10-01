@@ -56,7 +56,7 @@ export interface BioAgeInput {
  */
 export function bioAgeStory(headline: string | undefined, allowsYounger: boolean | undefined): Pick<BioAgeInput, 'story_zh' | 'story_younger'> {
   const text = (headline ?? '').trim()
-  if (!/你确实年轻了|算出来小了/.test(text)) return {}
+  if (!/你确实年轻了|计算结果小了/.test(text)) return {}
   return { story_zh: text, story_younger: allowsYounger === true && !/不一定是好事/.test(text) }
 }
 
@@ -116,7 +116,7 @@ export function projectionSentence(label: string, target: string, years: number 
       ? `，身体年龄约年轻 ${showYears(-years)} 岁`
       : years > 0.05
         ? `，身体年龄约增加 ${showYears(years)} 岁`
-        : '，身体年龄几乎不动'
+        : '，身体年龄基本不变'
   return `模型估计：${label}${verb} ${target}${yearsText}。`
 }
 
@@ -257,13 +257,13 @@ function caveat(marker: LabMarkerInput, grade: EvidenceGrade): string {
   const parts: string[] = []
   if (/adherence|执行/.test(blocked)) {
     parts.push(grade === 'beyond_band_better' || grade === 'beyond_band_worse'
-      ? '执行记录还不够，这次不能把变化算成方案的效果。'
-      : '执行记录还不够，这次不评价方案本身。')
+      ? '执行记录不足，本次变化不能归因于方案。'
+      : '执行记录不足，本次不评价方案本身。')
   }
   if (marker.confounders && marker.confounders.length > 0) {
-    parts.push(`同期还有其他变化（${marker.confounders.slice(0, 2).join('；')}），不能把变化算成某一项单独的效果。`)
+    parts.push(`同期还有其他变化（${marker.confounders.slice(0, 2).join('；')}），无法将变化归因于其中某一项。`)
   }
-  if (marker.ask_doctor) parts.push('这项要先给医生看，不要自己当成进步。')
+  if (marker.ask_doctor) parts.push('此项请先咨询医生，不要自行视为改善。')
   return parts.join('')
 }
 
@@ -285,23 +285,23 @@ export function gradeMarker(marker: LabMarkerInput, today: string): FeedbackMess
   let headline = ''
   let body = ''
   if (/home mean|one office|诊室/.test(marker.blocked_by ?? '')) {
-    headline = `${marker.label_zh}只有一次诊室读数，还不能比较。请连续 7 天在家测量后再看方向。`
-    body = '一次诊室血压落在波动里或外面，都不能下结论。'
+    headline = `${marker.label_zh}只有一次诊室读数，暂不能比较。请连续 7 天在家测量后再判断变化方向。`
+    body = '单次诊室血压无论是否超出波动范围，都不能据此下结论。'
   } else if (/no direction|没有方向/.test(marker.blocked_by ?? '') && marker.range_flag && ask && marker.from != null && marker.to != null) {
     // A two-way marker that left the lab's range says the same thing as the doctor card above it.
-    headline = `${movePhrase(marker)}，变化超出了波动，而且已经${marker.range_flag === 'low' ? '低于' : '高于'}参考范围。建议带着这几次体检报告问医生。`
+    headline = `${movePhrase(marker)}，变化超出了波动，而且已经${marker.range_flag === 'low' ? '低于' : '高于'}参考范围。建议携带这几次体检报告咨询医生。`
   } else if (/no direction|没有方向/.test(marker.blocked_by ?? '')) {
     headline = marker.from != null && marker.to != null
-      ? `${movePhrase(marker)}，变化${isBeyond(marker) ? '超出了波动' : '还不大'}，但${marker.label_zh}没有单一的好坏方向，所以先不说变好或变差。`
-      : `${marker.label_zh}没有单一的好坏方向，所以先不说变好或变差。`
+      ? `${movePhrase(marker)}，变化${isBeyond(marker) ? '超出了波动' : '还不大'}，但${marker.label_zh}没有单一的好坏方向，因此暂不判断好转或变差。`
+      : `${marker.label_zh}没有单一的好坏方向，因此暂不判断好转或变差。`
   } else if (/glucose fall/.test(marker.blocked_by ?? '')) {
-    headline = `${movePhrase(marker)}。血糖下降不一定是好事，先对照参考范围，不把它说成进步。`
+    headline = `${movePhrase(marker)}。血糖下降不一定是好事，请先对照参考范围，暂不视为改善。`
   } else if (grade === 'too_early') {
     const dates = schedule(marker, advice, today, grade)
-    headline = `${marker.label_zh}还不到能下结论的时间。${advice.why_zh}最早 ${dayZhG(dates?.earliest)}再测。`
-    body = '这次先不下结论。'
+    headline = `${marker.label_zh}尚未到可下结论的时间。${advice.why_zh}最早可于 ${dayZhG(dates?.earliest)}复测。`
+    body = '本次暂不下结论。'
   } else if (grade === 'not_comparable') {
-    headline = `${marker.label_zh}这两次不能直接比（单位或实验室对不上）。先复查一次再下结论。`
+    headline = `${marker.label_zh}两次结果无法直接比较（单位或实验室不一致）。请先复查一次再下结论。`
   } else if (grade === 'beyond_band_better') {
     headline = `${movePhrase(marker)}，超出了测量波动，是真实的变化。`
     body = extra
@@ -310,24 +310,24 @@ export function gradeMarker(marker: LabMarkerInput, today: string): FeedbackMess
     body = extra
   } else if (grade === 'within_band_improving') {
     const dates = schedule(marker, advice, today, grade)
-    headline = `${movePhrase(marker)}，方向是对的，但还在测量波动里。${dates?.why_zh ?? ''}最早 ${dayZhG(dates?.earliest)}再测，才能确定是不是真实变化。`
+    headline = `${movePhrase(marker)}，方向正确，但仍在测量波动范围内。${dates?.why_zh ?? ''}最早可于 ${dayZhG(dates?.earliest)}复测，以确认是否为真实变化。`
     body = extra
   } else if (grade === 'within_band_worse') {
     const dates = schedule(marker, advice, today, grade)
-    headline = `${movePhrase(marker)}，在波动里略偏反方向，还没有超出测量波动。先不下结论。${dates?.why_zh ?? ''}`
+    headline = `${movePhrase(marker)}，略偏不利方向，但未超出测量波动。暂不下结论。${dates?.why_zh ?? ''}`
     body = extra
   } else if (grade === 'within_band_flat') {
     const dates = schedule(marker, advice, today, grade)
-    headline = `${marker.label_zh}几乎没动，还在测量波动里。${dates?.why_zh ?? ''}最早 ${dayZhG(dates?.earliest)}再测。`
+    headline = `${marker.label_zh}基本不变，仍在测量波动范围内。${dates?.why_zh ?? ''}最早可于 ${dayZhG(dates?.earliest)}复测。`
     body = extra
   } else {
     headline = marker.from == null
-      ? `${marker.label_zh}还没有可以对比的基线。补上一次结果之后再看，不是没有变化。`
-      : `${marker.label_zh}这次先不下结论：${marker.blocked_by || '还缺一个能对比的结果'}。`
-    body = '缺的是可比的复测或记录，不是“没有变化”。'
+      ? `${marker.label_zh}尚无可对比的基线。补充一次结果后再评估，这并不代表没有变化。`
+      : `${marker.label_zh}本次暂不下结论：${marker.blocked_by || '尚缺可对比的结果'}。`
+    body = '目前缺少可比的复测或记录，并非「没有变化」。'
   }
   headline = headline.replace(/。。+/g, '。')
-  if (BARE.test(headline) || headline.length < 8) headline = `${marker.label_zh}这次先不下结论，补上可比的结果后再看。`
+  if (BARE.test(headline) || headline.length < 8) headline = `${marker.label_zh}本次暂不下结论，补充可比结果后再评估。`
   const claims = claimsFor(grade, 'marker', ask).filter((claim) => claim !== 'younger')
   const message: FeedbackMessage = {
     id: slug('fb-m', marker.key),
@@ -374,7 +374,7 @@ export function gradeBioAge(input: BioAgeInput, today: string): FeedbackMessage 
         grade: 'not_judgeable',
         allowed_claims: ['progress_story', 'retest_when'],
         retest: { earliest: dates.earliest, recommended: dates.recommended, why_zh: advice.why_zh },
-        headline_zh: '几次身体年龄还没有对齐，先不说变年轻。对上同一天的九项血检后再比。',
+        headline_zh: '历次身体年龄的计算依据尚未统一，暂不判断是否变年轻。待九项血检在同一天测齐后再比较。',
         tone: 'neutral',
       }
     }
@@ -386,7 +386,7 @@ export function gradeBioAge(input: BioAgeInput, today: string): FeedbackMessage 
           : `这次算出 ${showNum(pheno)} 岁，和实足年龄相当。`)
       : pheno != null ? `这次算出 ${showNum(pheno)} 岁。` : ''
     const dates = retestDates(today, advice, 0, today)
-    const headline = `${low}这是第一次身体年龄，一次检查不能说明你变年轻了。${advice.why_zh}最早 ${dayZhG(dates.earliest)}再测。`
+    const headline = `${low}这是首次计算身体年龄，单次检查不能说明你变年轻了。${advice.why_zh}最早 ${dayZhG(dates.earliest)}再测。`
     return {
       ...base,
       grade: 'first_draw',
@@ -417,8 +417,8 @@ export function gradeBioAge(input: BioAgeInput, today: string): FeedbackMessage 
   if (input.same_lab === false) {
     return {
       ...base, numbers, grade: 'not_comparable', allowed_claims: ['retest_when', 'progress_story'], delta,
-      retest: { earliest: dates.earliest, recommended: dates.recommended, why_zh: '两次不是同一家实验室，身体年龄不能直接比。' },
-      headline_zh: '两次身体年龄不是同一家实验室，数字不能直接比，先不说变年轻。用同一家实验室再测一次。',
+      retest: { earliest: dates.earliest, recommended: dates.recommended, why_zh: '两次检测不在同一家实验室，身体年龄不能直接比较。' },
+      headline_zh: '两次身体年龄来自不同实验室，数值不能直接比较，暂不判断是否变年轻。请在同一家实验室复测一次。',
       tone: 'neutral',
     }
   }
@@ -428,13 +428,13 @@ export function gradeBioAge(input: BioAgeInput, today: string): FeedbackMessage 
     return {
       ...base, numbers, grade: 'too_early', allowed_claims: ['retest_when', 'progress_story'], delta,
       retest: { earliest: early.earliest, recommended: early.recommended, why_zh: advice.why_zh },
-      headline_zh: `${moved}但只隔了 ${span} 天，不到 3 个月，还不能说变年轻。最早 ${dayZhG(early.earliest)}再测。`,
+      headline_zh: `${moved}但仅间隔 ${span} 天，不足 3 个月，尚不能说变年轻。最早可于 ${dayZhG(early.earliest)}复测。`,
       tone: 'neutral',
     }
   }
   const beyond = band != null && deltaYears != null && Math.abs(deltaYears) > Math.abs(band)
   const younger = beyond && deltaYears != null && deltaYears < 0 && input.band_verified
-  if (input.story_zh && input.story_younger === false && /算出来小了|不一定是好事/.test(input.story_zh)) {
+  if (input.story_zh && input.story_younger === false && /计算结果小了|不一定是好事/.test(input.story_zh)) {
     return {
       ...base, numbers, grade: 'beyond_band_worse', allowed_claims: ['see_doctor', 'retest_when'], delta,
       retest: { earliest: dates.earliest, recommended: dates.recommended, why_zh: advice.why_zh },
@@ -459,7 +459,7 @@ export function gradeBioAge(input: BioAgeInput, today: string): FeedbackMessage 
     return {
       ...base, numbers, grade: 'beyond_band_worse', allowed_claims: ['see_doctor', 'retest_when'], delta,
       retest: { earliest: dates.earliest, recommended: dates.recommended, why_zh: advice.why_zh },
-      headline_zh: `身体年龄高了 ${showYears(deltaYears)} 岁，超出了测量波动。这不是“变年轻”。建议和医生看一看是哪项指标带上去的。`,
+      headline_zh: `身体年龄高了 ${showYears(deltaYears)} 岁，超出了测量波动。这不是「变年轻」。建议与医生一起查看是哪些指标导致升高。`,
       tone: 'care',
     }
   }
@@ -467,7 +467,7 @@ export function gradeBioAge(input: BioAgeInput, today: string): FeedbackMessage 
     return {
       ...base, numbers, grade: 'beyond_band_better', allowed_claims: ['celebrate', 'improved', 'retest_when'], delta,
       retest: { earliest: dates.earliest, recommended: dates.recommended, why_zh: advice.why_zh },
-      headline_zh: `身体年龄低了 ${showYears(Math.abs(deltaYears))} 岁，超出了给出的波动范围。波动数据的来源还没核对，所以先不说你变年轻了。`,
+      headline_zh: `身体年龄低了 ${showYears(Math.abs(deltaYears))} 岁，超出了给出的波动范围。波动数据的来源尚未核对，因此暂不判断是否变年轻。`,
       body_zh: advice.why_zh, tone: 'encourage',
     }
   }
@@ -475,12 +475,12 @@ export function gradeBioAge(input: BioAgeInput, today: string): FeedbackMessage 
   const grade: EvidenceGrade = way === 'improving' ? 'within_band_improving' : way === 'worse' ? 'within_band_worse' : 'within_band_flat'
   const bandText = band != null ? `测量波动大约 ±${showYears(band)} 岁。` : ''
   const moved = deltaYears != null && Math.abs(deltaYears) >= 0.05
-    ? `身体年龄变化 ${showYears(Math.abs(deltaYears))} 岁，还在波动里。`
-    : '身体年龄几乎没动，还在测量波动里。'
+    ? `身体年龄变化 ${showYears(Math.abs(deltaYears))} 岁，仍在波动范围内。`
+    : '身体年龄基本不变，仍在测量波动范围内。'
   return {
     ...base, numbers, grade, allowed_claims: ['progress_story', 'retest_when'], delta,
     retest: { earliest: dates.earliest, recommended: dates.recommended, why_zh: advice.why_zh },
-    headline_zh: `${moved}${bandText}还不能说变年轻。${advice.why_zh}`,
+    headline_zh: `${moved}${bandText}尚不能说变年轻。${advice.why_zh}`,
     tone: way === 'improving' ? 'encourage' : 'neutral',
   }
 }
@@ -511,14 +511,14 @@ export function progressStory(markers: FeedbackMessage[], today: string): Feedba
   const latestDraw = drawn.at(-1) ?? null
   const completedDraw = drawn.length >= 2 ? latestDraw : null
   let grade: EvidenceGrade = 'not_judgeable'
-  let headline = '这次先不下结论：还没有可以对比的结果。补上复测后再看，不是没有变化。'
+  let headline = '本次暂不下结论：尚无可对比的结果。完成复测后再评估，这并不代表没有变化。'
   let tone: FeedbackMessage['tone'] = 'neutral'
   if (better.length > 0) {
     grade = 'beyond_band_better'
     tone = 'celebrate'
     const lead = listZh(better.map((row) => row.subject.label_zh))
     headline = `${lead}超出了测量波动，是真实的变化。`
-    if (n > better.length) headline += `${n} 项里 ${k} 项在变好${withinNames ? `，波动里往好走的有${withinNames}` : ''}。再隔 8–12 周复查，才能给其余项一个确切答案。`
+    if (n > better.length) headline += `${n} 项中 ${k} 项正在改善${withinNames ? `，波动范围内向好的有${withinNames}` : ''}。间隔 8–12 周后复查，才能确定其余各项的结果。`
   } else if (worse.length > 0 && k === 0) {
     grade = 'beyond_band_worse'
     tone = 'care'
@@ -526,21 +526,21 @@ export function progressStory(markers: FeedbackMessage[], today: string): Feedba
   } else if (k > 0) {
     grade = 'within_band_improving'
     tone = 'encourage'
-    headline = `方向对了：${n} 项里 ${k} 项在变好${withinNames ? `（${withinNames}）` : ''}。还在测量波动里，再隔 8–12 周复查，才看得出是不是确切变化。`
+    headline = `方向正确：${n} 项中 ${k} 项正在改善${withinNames ? `（${withinNames}）` : ''}。仍在测量波动范围内，间隔 8–12 周后复查，才能确认是否为真实变化。`
   } else if (markers.some((row) => row.grade === 'within_band_worse')) {
     grade = 'within_band_worse'
     tone = 'neutral'
-    headline = `${n} 项都还在测量波动里，有的略偏反方向。先不下结论。再隔 8–12 周复查。`
+    headline = `${n} 项均在测量波动范围内，部分略偏不利方向。暂不下结论，请间隔 8–12 周后复查。`
   } else if (markers.some((row) => row.grade === 'within_band_flat')) {
     grade = 'within_band_flat'
     tone = 'neutral'
-    headline = `这 ${n} 项都还在测量波动里，没有一项已经超出。再隔 8–12 周复查，才能确定有没有确切变化。`
+    headline = `这 ${n} 项均在测量波动范围内，尚无一项超出。间隔 8–12 周后复查，才能确定是否有真实变化。`
   } else if (markers.some((row) => movedPastBand(row))) {
     tone = 'care'
     headline = `${listZh(markers.filter((row) => movedPastBand(row)).map((row) => row.subject.label_zh))}的变化超出了正常波动。先不说变好或变差。`
   } else if (markers.some((row) => row.grade === 'too_early')) {
     grade = 'too_early'
-    headline = '这几项还不到能下结论的时间。按每项自己的间隔再测，糖化血红蛋白至少要满 90 天。'
+    headline = '这几项尚未到可下结论的时间。请按各项的复测间隔再测，糖化血红蛋白至少间隔 90 天。'
   }
   const dates = retestDates(today, advice, advice.minDays, latestDraw, grade === 'too_early' ? null : completedDraw)
   const claims = claimsFor(grade, 'marker', false).filter((claim) => claim !== 'younger')
@@ -562,7 +562,7 @@ function bodyOf(markers: FeedbackMessage[]): string {
   const wait = markers.filter((row) => row.grade === 'too_early').map((row) => row.subject.label_zh)
   const hold = markers.filter((row) => row.grade === 'not_judgeable' || row.grade === 'not_comparable')
   const parts: string[] = []
-  if (wait.length > 0) parts.push(`${listZh(wait)}还要等到间隔够了再测，糖化血红蛋白和维生素 D 至少 90 天。`)
+  if (wait.length > 0) parts.push(`${listZh(wait)}需待间隔足够后再测，糖化血红蛋白和维生素 D 至少间隔 90 天。`)
   if (hold.length > 0) parts.push(hold.slice(0, 3).map((row) => row.headline_zh).join(''))
   return parts.join('')
 }
@@ -573,11 +573,11 @@ export function gradeBehaviours(rows: BehaviourInput[], today: string): Feedback
   const names = listZh(done.map((row) => row.title_zh))
   return {
     id: 'fb-behaviour',
-    subject: { kind: 'behaviour', key: 'checkin', label_zh: '今天做到的' },
+    subject: { kind: 'behaviour', key: 'checkin', label_zh: '今日完成情况' },
     grade: 'behaviour_done',
     allowed_claims: ['affirm'],
     numbers: [],
-    headline_zh: done.length === 1 ? `今天的「${done[0]?.title_zh}」完成了，先把这一步记下来。` : `今天完成了${names}，这些都算数。`,
+    headline_zh: done.length === 1 ? `今天的「${done[0]?.title_zh}」已完成并记录。` : `今天完成了${names}，均已记录。`,
     tone: 'celebrate',
     source: 'template',
   }

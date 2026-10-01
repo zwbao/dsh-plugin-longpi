@@ -27,13 +27,13 @@ function RunReady(props: { board: Board; onNotice: Notify }): React.ReactElement
       setResults(json.results)
       notifyChanged()
     } catch (err) {
-      props.onNotice(`没有算完：${errorText(err, '请稍后再试')}`, 'bad')
+      props.onNotice(`计算未完成：${errorText(err, '请稍后再试')}`, 'bad')
     } finally {
       setRunning(false)
     }
   }
   return h('div', { className: 'lp-card' },
-    h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '你的记录现在就能算')),
+    h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '可用现有记录计算')),
     ready.length === 0
       ? h('p', { className: 'lp-small lp-muted lp-measure' }, '还没有能直接计算的方法。')
       : h('ul', { className: 'lp-rows' }, ...ready.slice(0, 8).map((row) => h('li', { key: row.name, className: 'lp-row lp-row-stack' },
@@ -64,7 +64,7 @@ function Search(props: { board: Board }): React.ReactElement {
       setMatches(json.matches ?? [])
       setNote(json.note ?? '')
     } catch (err) {
-      setError(`没有匹配到：${errorText(err, '请稍后再试')}`)
+      setError(`匹配失败：${errorText(err, '请稍后再试')}`)
     } finally {
       setBusy(false)
     }
@@ -93,11 +93,11 @@ export function MethodsSection(props: { board: Board | null; loading: boolean; e
   const meds = board.records?.medications ?? []
   const readouts = board.readouts ?? []
   return h('div', { className: 'lp-stack', id: 'lp-methods' },
-    h('p', { className: 'lp-caption lp-measure' }, `方法库 ${board.skills?.version ?? ''} · ${board.readiness?.declared ?? 0} 个个人方法。对话里照常可用。`),
+    h('p', { className: 'lp-caption lp-measure' }, `方法库 ${board.skills?.version ?? ''} · ${board.readiness?.declared ?? 0} 个个人方法。在对话中同样可以使用。`),
     h('div', { className: 'lp-grid-2 lp-grid-top' },
       h(RunReady, { board, onNotice: props.onNotice }),
       h('div', { className: 'lp-card' },
-        h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '再测一项就能解锁')),
+        h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '再测一项即可解锁')),
         unlock.length === 0
           ? h('p', { className: 'lp-small lp-muted lp-measure' }, '没有只差一项的方法。')
           : h('ul', { className: 'lp-rows' }, ...unlock.slice(0, 8).map((row) => h('li', { key: row.item, className: 'lp-row' },
@@ -106,14 +106,14 @@ export function MethodsSection(props: { board: Board | null; loading: boolean; e
       h('div', { className: 'lp-card' },
         h('div', { className: 'lp-card-head' },
           h('h3', { className: 'lp-card-title' }, '用药计划'),
-          h('span', { className: 'lp-caption' }, '只读，来自原来的用药记录')),
+          h('span', { className: 'lp-caption' }, '只读，来自健康数据服务的用药计划')),
         meds.length === 0
-          ? h('p', { className: 'lp-small lp-muted lp-measure' }, '没有读到用药计划。')
+          ? h('p', { className: 'lp-small lp-muted lp-measure' }, '未读取到用药计划。')
           : h('ul', { className: 'lp-rows' }, ...meds.map((row) => h('li', { key: row.name, className: 'lp-row' }, h('span', null, row.name), h('span', { className: 'lp-caption' }, row.status ?? ''))))),
       h('div', { className: 'lp-card' },
-        h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '最近读出')),
+        h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '最近结果')),
         readouts.length === 0
-          ? h('p', { className: 'lp-small lp-muted lp-measure' }, '还没有算过。')
+          ? h('p', { className: 'lp-small lp-muted lp-measure' }, '尚未计算。')
           : h('ul', { className: 'lp-rows' }, ...readouts.slice(0, 8).map((row) => h('li', { key: row.key, className: 'lp-row' },
             h('span', null, row.label_zh || row.key),
             h('span', { className: 'lp-row-end' },

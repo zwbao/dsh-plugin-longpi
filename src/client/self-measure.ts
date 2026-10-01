@@ -90,17 +90,17 @@ export function SelfMeasureForm(props: { journey: Journey | null; idPrefix: stri
       const value = numberOf(values[key])
       if (value == null) continue
       if (Number.isNaN(value)) {
-        setError(`${spec(key).label_zh}请填一个数字。`)
+        setError(`${spec(key).label_zh}请填写数字。`)
         return
       }
       entries.push({ key, value, unit: units[key], date })
     }
     if ((values.sbp.trim() === '') !== (values.dbp.trim() === '')) {
-      setError('血压请同时填收缩压和舒张压（高压和低压）。')
+      setError('血压请同时填写收缩压和舒张压（高压和低压）。')
       return
     }
     if (entries.length === 0) {
-      setError('先填一项再记录。')
+      setError('请至少填写一项后再记录。')
       return
     }
     setBusy(true)
@@ -110,7 +110,7 @@ export function SelfMeasureForm(props: { journey: Journey | null; idPrefix: stri
       props.onNotice(result.problems.length > 0 ? `已记录 ${result.saved.length} 项；${result.problems.join(' ')}` : `已记录 ${result.saved.length} 项。`, result.problems.length > 0 ? 'info' : 'good')
       notifyChanged()
     } catch (err) {
-      setError(errorText(err, '没有记下，请稍后再试。'))
+      setError(errorText(err, '记录失败，请稍后再试。'))
     } finally {
       setBusy(false)
     }
@@ -154,7 +154,7 @@ export function SelfMeasureForm(props: { journey: Journey | null; idPrefix: stri
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
     h('div', { className: 'lp-form-actions' },
       h(Btn, { type: 'submit', disabled: busy }, busy ? '记录中…' : '记录'),
-      h('span', { className: 'lp-caption' }, '单位可以选斤、尺或寸，会换算成 kg 和 cm。')))
+      h('span', { className: 'lp-caption' }, '单位可选斤、尺或寸，将自动换算为 kg 和 cm。')))
 }
 
 export function SelfRecent(props: { onNotice: Notify }): React.ReactElement | null {
@@ -172,7 +172,7 @@ export function SelfRecent(props: { onNotice: Notify }): React.ReactElement | nu
       props.onNotice(`已删除 ${chineseDate(row.date)}的${labelOf(row.key)}。`, 'good')
       notifyChanged()
     } catch (err) {
-      props.onNotice(`没有删除：${errorText(err, '请稍后再试')}`, 'bad')
+      props.onNotice(`删除失败：${errorText(err, '请稍后再试')}`, 'bad')
     } finally {
       setBusy(null)
     }
@@ -184,7 +184,7 @@ export function SelfRecent(props: { onNotice: Notify }): React.ReactElement | nu
         h('span', { className: 'lp-row-main' },
           h('span', null, labelOf(row.key)),
           h('span', { className: 'lp-num' }, ` ${fmt(row.value)} ${row.unit}`),
-          row.given ? h('span', { className: 'lp-caption' }, `（记为 ${fmt(row.given.value)} ${row.given.unit}）`) : null),
+          row.given ? h('span', { className: 'lp-caption' }, `（原始填写 ${fmt(row.given.value)} ${row.given.unit}）`) : null),
         h('span', { className: 'lp-row-end' }, h('span', { className: 'lp-caption' }, chineseDate(row.date)),
           h('button', {
             type: 'button', className: 'lp-iconbtn', disabled: busy === row.id,
@@ -211,7 +211,7 @@ export function InlineSelf(props: { journey: Journey | null; selfKey: SelfKey; i
     const first = numberOf(value)
     const second = bp ? numberOf(dbp) : null
     if (first == null || Number.isNaN(first) || (bp && (second == null || Number.isNaN(second)))) {
-      props.onNotice(bp ? '请填收缩压和舒张压两个数字。' : `${spec.label_zh}请填一个数字。`, 'bad')
+      props.onNotice(bp ? '请填写收缩压和舒张压。' : `${spec.label_zh}请填写数字。`, 'bad')
       return
     }
     setBusy(true)
@@ -225,7 +225,7 @@ export function InlineSelf(props: { journey: Journey | null; selfKey: SelfKey; i
       props.onNotice(result.problems.length > 0 ? result.problems.join(' ') : `已记录${bp ? '血压' : spec.label_zh}，正在重新计算。`, result.problems.length > 0 ? 'info' : 'good')
       notifyChanged()
     } catch (err) {
-      props.onNotice(errorText(err, '没有记下，请稍后再试。'), 'bad')
+      props.onNotice(errorText(err, '记录失败，请稍后再试。'), 'bad')
     } finally {
       setBusy(false)
     }

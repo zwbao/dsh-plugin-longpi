@@ -20,8 +20,8 @@ export function NudgeOffer(props: { offer: boolean; onAccept: () => void; onDism
   if (!props.offer || busy || turnBusy()) return null
   return h('div', { className: 'lp-callout lp-callout-info', role: 'status' },
     h('div', { className: 'lp-callout-body' },
-      h('p', null, '要不要在别的对话里，偶尔看到一句这个赛季的事？默认关闭。'),
+      h('p', null, '是否在其他对话中偶尔显示一条本赛季提示？默认关闭。'),
       h('div', { className: 'lp-actions' },
-        h(Btn, { variant: 'outline', onClick: props.onAccept }, '偶尔一句'),
-        h(Btn, { variant: 'ghost', onClick: props.onDismiss }, '不用'))))
+        h(Btn, { variant: 'outline', onClick: props.onAccept }, '允许显示'),
+        h(Btn, { variant: 'ghost', onClick: props.onDismiss }, '不需要'))))
 }

@@ -130,7 +130,7 @@ export async function ensureLocalPairing(
   } catch (error) {
     lastCheck.set(root, now() - CHECK_EVERY_MS + 60_000)   // try again in a minute, not ten
     const detail = error instanceof Error ? error.message : String(error)
-    return { status: 'error', error_zh: `没能连上这台电脑上的健康数据服务（${detail}）。它可能没有在运行。` }
+    return { status: 'error', error_zh: `无法连接这台电脑上的健康数据服务（${detail}），服务可能未在运行。` }
   }
 }
 

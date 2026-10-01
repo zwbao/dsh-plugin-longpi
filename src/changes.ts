@@ -11,6 +11,7 @@
 // too. This module never names a cause.
 
 import type { Config } from './config.ts'
+import { dateZh, minusZh } from './ux/plain.ts'
 import { addDays } from './interventions.ts'
 import { loadSeries, recordReadable, type RecordSnapshot, type SeriesPoint } from './records.ts'
 import { checkupMarkerFor, loadReference, rcvBand, type BiovarMarker } from './reference.ts'
@@ -55,8 +56,8 @@ export interface ChangesContext {
   today: string
 }
 
-export const CHANGES_NOTE_ZH = '判断依据：两次结果之差，要比同一个人平常的起伏更大，才算值得注意的变化。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。'
-const WORSE_ZH = '建议带着这几次体检报告咨询医生，看看是否需要进一步检查。'
+export const CHANGES_NOTE_ZH = '判断依据：两次结果之差需大于同一个人平时的波动，才视为值得注意的变化。不同医院、不同仪器之间的差异未计入；如果两次不在同一家机构，请先复查确认。这不是诊断。'
+const WORSE_ZH = '建议带着这几次体检报告咨询医生，评估是否需要进一步检查。'
 // A 'range' marker (haemoglobin, MCV, white cells) can be fine or not either way; only the lab's reference range tells.
 const RANGE_ZH = '变化超出了正常波动；是否需要处理要结合参考范围判断，建议带着这几次体检报告咨询医生。'
 const BETTER_ZH = '变化超出了正常波动，方向是好的。'
@@ -83,8 +84,8 @@ export function rangeFlag(key: string, value: number, sex: string): { flag: 'low
   if (differs && sex !== 'male' && sex !== 'female') {
     const lowLine = Math.min(range.male[0], range.female[0])
     const highLine = Math.max(range.male[1], range.female[1])
-    if (value < lowLine) return { flag: 'low', text_zh: `最近一次 ${shown(value)} 低于男女都算偏低的下限 ${lowLine}，偏低。建议带着这几次体检报告咨询医生。` }
-    if (value > highLine) return { flag: 'high', text_zh: `最近一次 ${shown(value)} 高于男女都算偏高的上限 ${highLine}，偏高。建议带着这几次体检报告咨询医生。` }
+    if (value < lowLine) return { flag: 'low', text_zh: `最近一次 ${shown(value)} 低于男女通用的偏低下限 ${lowLine}，偏低。建议带着这几次体检报告咨询医生。` }
+    if (value > highLine) return { flag: 'high', text_zh: `最近一次 ${shown(value)} 高于男女通用的偏高上限 ${highLine}，偏高。建议带着这几次体检报告咨询医生。` }
     return null
   }
   const [low, high] = sex === 'female' ? range.female : range.male
@@ -121,7 +122,7 @@ export function absoluteLevel(label: string, value: number, unit: string, sex: s
   const expected = band.unit.replace(/\s/g, '')
   if (given && expected && given.toLowerCase() !== expected.toLowerCase() && !(expected === 'ng/mL' && /μg\/L|ug\/L/i.test(given))) return null
   const who = band.sexed ? (sex === 'female' ? '女性' : '男性') : ''
-  const unknown = sex !== 'female' && sex !== 'male' && band.sexed ? `（档案里还没有性别，先按男性下限 ${band.low}；女性下限是 ${row.female.low}）` : ''
+  const unknown = sex !== 'female' && sex !== 'male' && band.sexed ? `（档案中尚无性别，暂按男性下限 ${band.low}；女性下限为 ${row.female.low}）` : ''
   if (value < band.low) return { flag: 'low', text_zh: `最近一次 ${shown(value)} ${band.unit} 低于${who}常用参考下限 ${band.low}，偏低。${unknown}建议带着报告咨询医生。` }
   if (value > band.high) return { flag: 'high', text_zh: `最近一次 ${shown(value)} ${band.unit} 高于${who}常用参考上限 ${band.high}，偏高。${unknown}建议带着报告咨询医生。` }
   return null
@@ -233,7 +234,7 @@ function changeOf(marker: BiovarMarker, points: Point[], z: number, glucoseTreat
   const down = marker.log_normal ? round1(band.down * 100) : -up
   const range = marker.better === 'range' ? rangeFlag(marker.key, last.value, sex) : null
   // Log-normal rows (CRP, triglycerides) have an asymmetric band: both sides are shown.
-  const bandText = marker.log_normal ? `${down.toFixed(1)}% 至 +${up.toFixed(1)}%` : `±${up.toFixed(1)}%`
+  const bandText = marker.log_normal ? `${minusZh(down.toFixed(1))}% 至 +${up.toFixed(1)}%` : `±${up.toFixed(1)}%`
   return {
     key: marker.key,
     label_zh: marker.label_zh,
@@ -244,7 +245,7 @@ function changeOf(marker: BiovarMarker, points: Point[], z: number, glucoseTreat
     direction,
     verdict,
     ask_doctor: askDoctor,
-    text_zh: `${marker.label_zh} ${marker.unit === '%' ? `${shown(pick.from.value)}%` : shown(pick.from.value)} → ${withUnit(pick.to.value, marker.unit)}（${pick.from.date} → ${pick.to.date}），${direction === 'down' ? '下降' : '上升'} ${Math.abs(pick.pct).toFixed(1)}%，超出正常波动（${bandText}）`,
+    text_zh: `${marker.label_zh} ${marker.unit === '%' ? `${shown(pick.from.value)}%` : shown(pick.from.value)} → ${withUnit(pick.to.value, marker.unit)}（${dateZh(pick.from.date)} → ${dateZh(pick.to.date)}），${direction === 'down' ? '下降' : '上升'} ${Math.abs(pick.pct).toFixed(1)}%，超出正常波动（${bandText}）`,
     advice_zh: verdict === 'worse' ? WORSE_ZH : verdict === 'better' ? BETTER_ZH : glucoseFall && askDoctor ? GLUCOSE_FALL_ZH : askDoctor ? (range ? range.text_zh : RANGE_ZH) : NEUTRAL_ZH,
     ...(askDoctor && range ? { range_flag: range.flag } : {}),
     ...(marker.caveat_zh ? { caveat_zh: marker.caveat_zh } : {}),
@@ -308,7 +309,7 @@ export async function buildChanges(context: ChangesContext): Promise<{ changes: 
       continue
     }
     if (rows.some((name) => cut.has(name))) {
-      unjudged.push({ label_zh: marker.label_zh, reason_zh: '历次结果太多，读取时被截断，没有读全，这次没有判断它的变化。' })
+      unjudged.push({ label_zh: marker.label_zh, reason_zh: '历次结果过多，读取时被截断，未完整读取，本次未判断其变化。' })
       continue
     }
     const daily = dailyPoints(marker, rows.flatMap((name) => series[name] ?? []))
@@ -358,13 +359,13 @@ function diabetesWatch(indicators: RecordSnapshot['indicators']): Array<RecordCh
     const value = numberOf(row)
     if (/血清|总蛋白|白蛋白电泳/.test(text) && !/尿/.test(text)) continue
     if (value != null && /尿白蛋白.?肌酐|尿微量白蛋白|UACR|\bACR\b/i.test(text) && value >= 30) {
-      push('uacr', '尿白蛋白/肌酐比', value, row.unit || 'mg/g', date || '未知日期', `尿白蛋白/肌酐比 ${value} ${row.unit || 'mg/g'}（${date}）高于常用分界 30 mg/g。有糖尿病时这项要带给医生看，不是“未判断就是正常”。`)
+      push('uacr', '尿白蛋白/肌酐比', value, row.unit || 'mg/g', date || '未知日期', `尿白蛋白/肌酐比 ${value} ${row.unit || 'mg/g'}（${date}）高于常用分界 30 mg/g。如有糖尿病，请将此项带给医生查看；「未判断」不代表正常。`)
     } else if (/尿蛋白/.test(text) && !/肌酐|白蛋白.?肌酐|UACR/i.test(text) && /阳性|\+|↑|偏高/.test(String(row.value))) {
-      push('urine-protein', '尿蛋白', value ?? 1, row.unit || '', date || '未知日期', `尿蛋白 ${row.value}（${date}）。有糖尿病时尿蛋白要带给医生看，不是“未判断就是正常”。`)
+      push('urine-protein', '尿蛋白', value ?? 1, row.unit || '', date || '未知日期', `尿蛋白 ${row.value}（${date}）。如有糖尿病，请将尿蛋白结果带给医生查看；「未判断」不代表正常。`)
     } else if (value != null && value < 60 && value > 5 && /egfr|肾小球滤过/i.test(text)) {
-      push('egfr', 'eGFR', value, row.unit || 'mL/min/1.73m²', date || '未知日期', `eGFR ${value} ${row.unit || ''}（${date}）低于 60。有糖尿病时要和医生看肾功能，不是“未判断就是正常”。`)
+      push('egfr', 'eGFR', value, row.unit || 'mL/min/1.73m²', date || '未知日期', `eGFR ${value} ${row.unit || ''}（${date}）低于 60。如有糖尿病，请与医生一起评估肾功能；「未判断」不代表正常。`)
     } else if (/眼底|视网膜/.test(text) && /微动脉瘤|视网膜病变|新生血管|出血/.test(text)) {
-      push('retina', '眼底', value ?? 1, '', date || '未知日期', `眼底记录（${date}）：${String(row.value).slice(0, 80)}。有糖尿病时这项要带给眼科或内分泌科，不是“未判断就是正常”。`)
+      push('retina', '眼底', value ?? 1, '', date || '未知日期', `眼底记录（${date}）：${String(row.value).slice(0, 80)}。如有糖尿病，请将此项带给眼科或内分泌科医生查看；「未判断」不代表正常。`)
     }
   }
   return out

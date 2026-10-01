@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Readable } from 'node:stream'
 import * as mod from '../lib/index.js'
+import { dateZh } from '../src/ux/plain.ts'
 import { loadRecord, startFakeMirobody } from './fake-mirobody.mjs'
 import { startFlakyMirobody } from './flaky-mirobody.mjs'
 import { skillsHome } from './lib/skills-home.mjs'
@@ -28,8 +29,8 @@ const TODAY = '2026-09-24'
 const NOW = new Date(`${TODAY}T12:00:00Z`)
 const FACTS = { smoker: false, diabetes: false, bp_treated: false, north: true, urban: true, family_history: false }
 const MOUNT = { mounted: true, peer: false, error: '', pluginHome: '' }
-const NOTE = '判断依据：两次结果之差，要比同一个人平常的起伏更大，才算值得注意的变化。不同医院、不同仪器之间的差异没有算进去；如果两次不在同一家机构，请先复查确认。这不是诊断。'
-const ASK = '建议带着这几次体检报告咨询医生，看看是否需要进一步检查。'
+const NOTE = '判断依据：两次结果之差需大于同一个人平时的波动，才视为值得注意的变化。不同医院、不同仪器之间的差异未计入；如果两次不在同一家机构，请先复查确认。这不是诊断。'
+const ASK = '建议带着这几次体检报告咨询医生，评估是否需要进一步检查。'
 const GOOD = '变化超出了正常波动，方向是好的。'
 const RANGE = '变化超出了正常波动；是否需要处理要结合参考范围判断，建议带着这几次体检报告咨询医生。'
 const NEUTRAL = '变化超出了正常波动。'
@@ -159,7 +160,7 @@ try {
   assert.equal(mcv.verdict, 'unclear', 'MCV has no good direction')
   assert.equal(mcv.ask_doctor, true)
   assert.equal(mcv.unit, 'fL')
-  assert.equal(mcv.text_zh, `平均红细胞体积 91 → 84 fL（${D1} → ${D3}），下降 ${Math.abs(pctOf(91, 84)).toFixed(1)}%，超出正常波动（±${mcv.band_pct.up.toFixed(1)}%）`)
+  assert.equal(mcv.text_zh, `平均红细胞体积 91 → 84 fL（${dateZh(D1)} → ${dateZh(D3)}），下降 ${Math.abs(pctOf(91, 84)).toFixed(1)}%，超出正常波动（±${mcv.band_pct.up.toFixed(1)}%）`)
   assert.equal(mcv.advice_zh, RANGE, 'a range marker: the reference range decides')
   assert.equal(mcv.caveat_zh, markerOf('mcv').caveat_zh)
   assert.deepEqual(mcv.source, { title: markerOf('mcv').cvi_source.title, url: markerOf('mcv').cvi_source.url, doi: markerOf('mcv').cvi_source.doi })
@@ -233,7 +234,7 @@ try {
   const tgServer = await serve({ tz: 'Asia/Shanghai', today: TODAY, observations: tgRecord, medications: { plans: [], log: [], history: [] } })
   const tg = (await mod.buildChanges(await contextOf(configFor(synthDir, tgServer.url)))).changes[0]
   assert.deepEqual(tg.band_pct, { up: round1(tgBand.up * 100), down: round1(tgBand.down * 100) })
-  assert.ok(tg.text_zh.endsWith(`超出正常波动（${tg.band_pct.down.toFixed(1)}% 至 +${tg.band_pct.up.toFixed(1)}%）`), tg.text_zh)
+  assert.ok(tg.text_zh.endsWith(`超出正常波动（${tg.band_pct.down.toFixed(1).replace(/^-/, '−')}% 至 +${tg.band_pct.up.toFixed(1)}%）`), tg.text_zh)
   assert.equal(tg.points.length, 2, 'two checkup days are enough')
 
   // at most six, every eligible marker doubling: ask_doctor first, then the furthest past its band
@@ -305,7 +306,7 @@ try {
   assert.equal(journey.changes[0].ask_doctor, true)
   assert.equal(journey.changes[0].points.length, 4)
   assert.equal(journey.results.bioage.status, 'ok')
-  assert.match(journey.results.bioage.headline_zh, /算出来小了/)
+  assert.match(journey.results.bioage.headline_zh, /计算结果小了/)
   assert.match(journey.results.bioage.headline_zh, /平均红细胞体积/)
   assert.match(journey.results.bioage.headline_zh, /不一定是好事/)
   assert.equal(journey.results.bioage.allows_younger, false)

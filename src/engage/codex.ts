@@ -19,8 +19,8 @@ export function codexBlock(input: { age: number | null; minorFlag: boolean; optO
 export function codexBlockZh(block: CodexBlock): string {
   switch (block) {
     case 'minor': return '图鉴对未满 18 岁的人不开放。'
-    case 'age_unknown': return '先在档案里填写年龄。未满 18 岁不开放图鉴。'
-    case 'opt_out': return '图鉴已关闭。想打开时再说一声。'
+    case 'age_unknown': return '请先在档案中填写年龄。未满 18 岁不开放图鉴。'
+    case 'opt_out': return '图鉴已关闭。如需开启，请告诉 LongPi。'
     case 'config': return '图鉴没有打开。'
     default: return ''
   }

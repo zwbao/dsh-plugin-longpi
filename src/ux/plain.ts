@@ -1,18 +1,18 @@
 // Plain Chinese for the screens a person actually reads. Internal names stay in
 // code and in the model's tool notes. They do not stay in these sentences.
 
-export const SEASON_INTRO = '一个赛季大约 8–12 周，从现在到你下次复查。这段时间里有几个小目标，复查那天一起看看成绩，然后开始下一个赛季。'
-export const CODEX_INTRO = '做完一件对健康有用的事（比如看医生、复查、量腰围），就能得到一张长寿图鉴卡。每张卡讲一个长寿研究或一种长寿动物，有的还能直接用你的数据算一算。'
-export const SCIENCE_INTRO = 'LongPi 的用户在一起研究怎样延缓衰老。你可以用自己的数据做个人小试验，也可以加入大家的研究。'
+export const SEASON_INTRO = '一个赛季大约 8–12 周，从现在到你下次复查。这段时间里有几个小目标，复查当天一起回顾结果，然后开始下一个赛季。'
+export const CODEX_INTRO = '做完一件对健康有用的事（比如看医生、复查、量腰围），即可获得一张长寿图鉴卡。每张卡讲一个长寿研究或一种长寿动物，部分卡片还可以用你的数据进行计算。'
+export const SCIENCE_INTRO = 'LongPi 的用户共同研究如何延缓衰老。你可以用自己的数据做个人小试验，也可以加入大家的研究。'
 export const OUTBOX_ZH = '研究正式开始后才会发出，现在只保存在你的设备上。'
 export const RECRUITING_ZH = '招募中'
 
 export const JUDGEMENT = {
-  beyond: '超出正常波动（比你平常的起伏更大，值得问医生。不是急症。）',
-  within: '在正常波动范围内（这点变化不算数）',
-  too_early: '太早（离上次太近，现在的变化多半只是起伏）',
-  not_comparable: '不可比（两次不是同一家机构测的，不好直接比）',
-  unjudged: '还不能下结论（看缺的是哪一步）',
+  beyond: '超出正常波动（比你平时的波动更大，建议咨询医生。不是急症。）',
+  within: '在正常波动范围内（尚不能视为真实变化）',
+  too_early: '太早（距上次检测时间过短，目前的变化多为正常波动）',
+  not_comparable: '不可比（两次检测不在同一家机构，无法直接比较）',
+  unjudged: '暂不能下结论（请查看缺少的环节）',
 } as const
 
 export type JudgementKey = keyof typeof JUDGEMENT
@@ -46,6 +46,20 @@ export interface Movement {
   lead: string
 }
 
+/** 「9 月 10 日」, with the year when it is not this year (docs/design-system.md). `today` fixes "this year" for tests. */
+export function dateZh(iso: string | null | undefined, today?: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
+  if (!m) return iso ?? ''
+  const md = `${Number(m[2])} 月 ${Number(m[3])} 日`
+  const year = today && /^\d{4}/.test(today) ? Number(today.slice(0, 4)) : new Date().getFullYear()
+  return Number(m[1]) === year ? md : `${m[1]} 年 ${md}`
+}
+
+/** A typographic minus for a signed number shown to a person: -12.3 → −12.3. */
+export function minusZh(text: string): string {
+  return text.replace(/^-/, '−')
+}
+
 function trimNum(value: number): string {
   if (!Number.isFinite(value)) return '—'
   const abs = Math.abs(value)
@@ -64,7 +78,7 @@ export function movementOf(points: readonly MovePoint[], unit: string): Movement
   if (rows.length === 1) {
     return {
       from: first.value, to: first.value, pct: null, n: 1, start: first.date, end: first.date,
-      lead: `${trimNum(first.value)}${unitText} · 1 次 · ${first.date}`,
+      lead: `${trimNum(first.value)}${unitText} · 1 次 · ${dateZh(first.date)}`,
     }
   }
   const pct = first.value === 0 ? null : ((last.value - first.value) / Math.abs(first.value)) * 100
@@ -76,7 +90,7 @@ export function movementOf(points: readonly MovePoint[], unit: string): Movement
     n: rows.length,
     start: first.date,
     end: last.date,
-    lead: `${trimNum(first.value)} → ${trimNum(last.value)}${unitText}${pctText} · ${rows.length} 次 · ${first.date}–${last.date}`,
+    lead: `${trimNum(first.value)} → ${trimNum(last.value)}${unitText}${pctText} · ${rows.length} 次 · ${dateZh(first.date)}–${dateZh(last.date)}`,
   }
 }
 
@@ -99,20 +113,20 @@ export function insightSentence(input: { sleepHours?: number | null; steps?: num
   const steps = input.steps
   if ((sleep == null || !Number.isFinite(sleep)) && (steps == null || !Number.isFinite(steps))) return null
   const bits: string[] = []
-  if (sleep != null && Number.isFinite(sleep)) bits.push(`昨晚睡了 ${trimNum(sleep)} 小时`)
-  if (steps != null && Number.isFinite(steps)) bits.push(`今天走了 ${trimNum(steps)} 步`)
+  if (sleep != null && Number.isFinite(sleep)) bits.push(`昨晚睡眠 ${trimNum(sleep)} 小时`)
+  if (steps != null && Number.isFinite(steps)) bits.push(`今日步数 ${trimNum(steps)} 步`)
   const lab = input.labNote
-    ? `和化验放在一起看：${input.labNote}`
-    : '手环是这一两天的情况，化验要隔几周才测一次，两件事先分开看。'
+    ? `结合化验结果：${input.labNote}`
+    : '手环数据反映近一两天的情况，化验通常间隔数周检测一次，两者宜分开解读。'
   return `${bits.join('，')}。${lab}`
 }
 
 /** Questions in the person's own voice, about what changed and the next visit. */
 export function suggestedQuestions(input: { changes?: readonly string[]; visit?: string | null }): string[] {
   const names = (input.changes ?? []).filter(Boolean).slice(0, 2)
-  const change = names.length > 0 ? `${names.join('、')}跟上次比，变了多少？` : '和上次比，哪一项变了？'
-  const visit = input.visit ? `下次 ${input.visit} 看医生，我要问哪几件？` : '下次看医生，我要问哪几件？'
-  return [change, visit, '现在我先做哪一件？']
+  const change = names.length > 0 ? `${names.join('、')}与上次相比变化了多少？` : '与上次相比，哪些项目有变化？'
+  const visit = input.visit ? `下次 ${dateZh(input.visit)}就诊时，我应该询问哪些问题？` : '下次就诊时，我应该询问哪些问题？'
+  return [change, visit, '我现在应优先做哪一件？']
 }
 
 export interface AddonLike { item_zh: string; unlocks_zh: string; self_measurable?: boolean; self_key?: string }
@@ -120,14 +134,14 @@ export interface AddonLike { item_zh: string; unlocks_zh: string; self_measurabl
 /** One concrete next step. Never "还差 N 项检查". */
 export function concreteNext(addons: readonly AddonLike[]): { title_zh: string; detail_zh: string } {
   const first = addons.find((row) => row.self_measurable) ?? addons[0]
-  if (!first) return { title_zh: '暂时算不出结果', detail_zh: '还缺计算要用的信息。' }
+  if (!first) return { title_zh: '暂时无法计算结果', detail_zh: '尚缺计算所需的信息。' }
   const waist = first.self_key === 'waist' || /腰围/.test(first.item_zh)
   const title = waist ? '量一次腰围' : first.self_measurable ? `量一次${first.item_zh}` : `下次体检加测${first.item_zh}`
   const rest = addons.filter((row) => row !== first).slice(0, 2).map((row) => row.item_zh)
   const unlock = first.unlocks_zh || '后面的结果'
   const detail = rest.length > 0
-    ? `补上这一项，才能算出${unlock}。之后还可以补：${rest.join('、')}。`
-    : `补上这一项，才能算出${unlock}。`
+    ? `补充这一项后，即可计算${unlock}。之后还可补充：${rest.join('、')}。`
+    : `补充这一项后，即可计算${unlock}。`
   return { title_zh: title, detail_zh: detail }
 }
 
@@ -153,7 +167,7 @@ export function buildTimeline(input: {
 }): TimelineItem[] {
   const items: TimelineItem[] = []
   for (const row of input.checkups ?? []) {
-    items.push({ date: row.date, kind: 'lab', title_zh: '体检', detail_zh: row.note || '这一天有化验' })
+    items.push({ date: row.date, kind: 'lab', title_zh: '体检', detail_zh: row.note || '当天有化验记录' })
   }
   for (const row of input.wearables ?? []) {
     items.push({ date: row.date, kind: 'wearable', title_zh: row.label_zh, detail_zh: row.value_zh })
@@ -166,7 +180,7 @@ export function buildTimeline(input: {
 }
 
 const SCRUB: Array<[RegExp, string]> = [
-  [/Mirobody/gi, '体检记录'],
+  [/Mirobody/gi, '健康数据服务'],
   [/longevity-skills/gi, ''],
   [/\bMCP\b/g, ''],
   [/\/mcp\/\S*/g, ''],
@@ -174,10 +188,10 @@ const SCRUB: Array<[RegExp, string]> = [
   [/HARNESS/gi, ''],
   [/\bLOINC\b/g, ''],
   [/\bRCV\b/g, '正常波动'],
-  [/\bCVI\b/g, '个体起伏'],
+  [/\bCVI\b/g, '个体波动'],
   [/ChiCTR/g, ''],
   [/签署密钥/g, ''],
-  [/参考变化值/g, '平常的起伏'],
+  [/参考变化值/g, '平时的波动'],
   [/加了噪声/g, ''],
   [/\blive\b/g, ''],
   [/record_status/g, ''],
@@ -189,8 +203,8 @@ const SCRUB: Array<[RegExp, string]> = [
   [/\b(?:NaN|undefined|null)\b/g, ''],
   [/\b\d[\d,]*\s*tok(?:\/s)?\b/gi, ''],
   [/User says[:：][^\n]*/gi, ''],
-  [/\bTHE PATTERN\b/g, '我看到的'],
-  [/\bWHAT WE DON'T KNOW\b/g, '数据说明不了的'],
+  [/\bTHE PATTERN\b/g, '数据显示'],
+  [/\bWHAT WE DON'T KNOW\b/g, '数据尚不能说明的'],
   [/[A-Za-z]+(?:[ \t]+[A-Za-z]+){2,}/g, ''],
 ]
 
@@ -275,17 +289,17 @@ export const FACING_SAMPLES = [
   JUDGEMENT.unjudged,
   '身体年龄是用九项常规血检和周岁算出来的数（模型估计，不是诊断，也不是你能活多久）。论文里叫表型年龄。',
   '10 年心血管风险：和你情况相近的人里，未来 10 年出现心梗或中风的比例（模型估计）。论文里叫 China-PAR。',
-  '加入大家的研究要你自己再点一次。没有预先勾上，也不能用「开始使用」代替。',
-  '以后再说',
+  '加入共同研究需要你单独确认一次。该选项未预先勾选，也不能以「开始使用」代替。',
+  '暂不加入',
   '量一次腰围',
   '本赛季 · 第 1 周 / 共 12 周',
   '今天生病',
   '今天出行',
   '概率说明',
-  '我看到的',
-  '数据说明不了的',
+  '数据显示',
+  '数据尚不能说明的',
   '下一步',
-  '我可以按这些结果整理一份给医生看的简报。',
+  '我可以根据这些结果整理一份就诊简报（含数值、日期和建议向医生提出的问题），就诊时可直接出示给医生。',
   '不满 18 岁不参加研究。',
   '冻结的意思是：生病或出行的这一天，不算中断，也不算完成。',
   '保底：连续 10 次里至少有一次是银或更好。这不是指标变好了。',

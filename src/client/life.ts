@@ -39,7 +39,7 @@ export function AskTab(props: { journey: Journey; openChat?: () => void }): Reac
   return h('div', { className: 'lp-tab-body' },
     h('section', { className: 'lp-card', 'aria-labelledby': 'lp-ask-title' },
       h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title', id: 'lp-ask-title' }, '可以这样问')),
-      h('p', { className: 'lp-muted lp-text' }, '想问就问，不用攒着。问吃药、补剂、饮食、检查或身体不舒服，会先直接回答，再把该知道的说全；问记录的变化和进度，回答分三小段：我看到的、数据说明不了的、下一步。'),
+      h('p', { className: 'lp-muted lp-text' }, '随时可以提问。问用药、补剂、饮食、检查或身体不适，会先直接回答，再补充需要了解的信息；问记录变化和进度，回答分为三部分：观察到的情况、数据无法说明的内容、下一步。'),
       h('ul', { className: 'lp-ask-list' },
         ...questions.map((text) => h('li', { key: text },
           h('button', { type: 'button', className: 'lp-ask-btn', onClick: () => ask(text) },
@@ -77,32 +77,32 @@ export function CalendarTab(props: { journey: Journey }): React.ReactElement {
   React.useEffect(() => { load() }, [load])
   const retests = props.journey.reminders.filter((row) => row.kind === 'retest' && row.date)
   const confirm = (row: { date: string; title_zh: string; brief_zh: string; questions_zh: string[]; kind: string }) => {
-    void postJson('/api/longpi/schedule', { ...row, confirm: true }).then(() => { setNote('已放进日程。'); load() }).catch((error: unknown) => setNote(errorText(error, '没有放进去')))
+    void postJson('/api/longpi/schedule', { ...row, confirm: true }).then(() => { setNote('已加入日程。'); load() }).catch((error: unknown) => setNote(errorText(error, '未能加入日程')))
   }
   const fallback = suggestions.length === 0 ? retests[0] : undefined
   const suggestionRows = suggestions.length > 0
     ? suggestions.map((row) => h('li', { key: row.id, className: 'lp-row lp-cal-row' },
       h('span', { className: 'lp-cal-date' }, dateZh(row.date ?? '')),
       h('div', { className: 'lp-row-main' }, row.title_zh),
-      h('div', { className: 'lp-cal-actions' }, h(Btn, { size: 'sm', onClick: () => confirm(row) }, '放进日程'))))
+      h('div', { className: 'lp-cal-actions' }, h(Btn, { size: 'sm', onClick: () => confirm(row) }, '加入日程'))))
     : fallback
       ? [h('li', { key: 'retest', className: 'lp-row lp-cal-row' },
         h('span', { className: 'lp-cal-date' }, dateZh(fallback.date ?? '')),
         h('div', { className: 'lp-row-main' },
           h('div', null, fallback.text_zh),
-          h('div', { className: 'lp-caption' }, '带着上次的简报和你想问的问题。')),
+          h('div', { className: 'lp-caption' }, '请携带上次的简报和想咨询的问题。')),
         h('div', { className: 'lp-cal-actions' },
-          h(Btn, { size: 'sm', onClick: () => confirm({ date: fallback.date ?? '', title_zh: fallback.text_zh, brief_zh: '带着简报和问题。', questions_zh: suggestedQuestions({ visit: fallback.date }).slice(0, 2), kind: 'retest' }) }, '放进日程'),
-          h(Btn, { size: 'sm', variant: 'outline', onClick: () => setNote('先不写上。') }, '先不用')))]
+          h(Btn, { size: 'sm', onClick: () => confirm({ date: fallback.date ?? '', title_zh: fallback.text_zh, brief_zh: '携带简报和问题。', questions_zh: suggestedQuestions({ visit: fallback.date }).slice(0, 2), kind: 'retest' }) }, '加入日程'),
+          h(Btn, { size: 'sm', variant: 'outline', onClick: () => setNote('暂不添加。') }, '暂不添加')))]
       : []
   return h('div', { className: 'lp-tab-body' },
     events.length === 0 && retests.length === 0
       // Empty: the empty state's title is the card's only title.
-      ? h('section', { className: 'lp-card', 'aria-label': '已写上的日期' },
-        h(EmptyLine, { icon: 'calendar', title: '还没有写上的日期', text: '复查、看医生、稍后要做的事。LongPi 的建议要你点一下才写上日期。' }),
+      ? h('section', { className: 'lp-card', 'aria-label': '已安排的日程' },
+        h(EmptyLine, { icon: 'calendar', title: '暂无已安排的日程', text: '复查、就诊和待办事项。LongPi 的建议需经你确认后才会加入日程。' }),
         suggestionRows.length === 0 && note ? h('p', { className: 'lp-caption', role: 'status' }, note) : null)
       : h('section', { className: 'lp-card', 'aria-labelledby': 'lp-cal-title' },
-        h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title', id: 'lp-cal-title' }, '已写上的日期')),
+        h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title', id: 'lp-cal-title' }, '已安排的日程')),
         h('ul', { className: 'lp-rows' },
           ...events.map((row) => h('li', { key: row.id, className: 'lp-row lp-cal-line' },
             h('span', { className: 'lp-cal-date' }, dateZh(row.date ?? '')),
@@ -116,7 +116,7 @@ export function CalendarTab(props: { journey: Journey }): React.ReactElement {
         suggestionRows.length === 0 && note ? h('p', { className: 'lp-caption', role: 'status' }, note) : null),
     suggestionRows.length > 0
       ? h('section', { className: 'lp-card', id: 'lp-cal-suggest', 'aria-labelledby': 'lp-cal-suggest-title' },
-        h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title', id: 'lp-cal-suggest-title' }, '建议，还没写上')),
+        h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title', id: 'lp-cal-suggest-title' }, '建议日程（未添加）')),
         h('ul', { className: 'lp-rows' }, ...suggestionRows),
         note ? h('p', { className: 'lp-caption', role: 'status' }, note) : null)
       : null,
@@ -149,13 +149,13 @@ export function Timeline(props: { journey: Journey }): React.ReactElement {
     life: props.journey.reminders.filter((row) => row.kind === 'retest' && row.date).map((row) => ({ date: row.date as string, kind: 'visit' as const, note: row.text_zh })),
   })
   if (items.length === 0) {
-    return h('section', { className: 'lp-card', id: 'lp-timeline', 'aria-label': '按日期排' },
-      h(EmptyLine, { icon: 'calendar', title: '还没有可以按日期排的事', text: '化验、手环和生活上的事放在一起，才看得出比如复查前生过病。' }))
+    return h('section', { className: 'lp-card', id: 'lp-timeline', 'aria-label': '时间线' },
+      h(EmptyLine, { icon: 'calendar', title: '暂无可显示的事件', text: '将化验、手环数据和生活事件按时间排列，便于发现关联，例如复查前曾经生病。' }))
   }
   return h('section', { className: 'lp-card', id: 'lp-timeline', 'aria-labelledby': 'lp-timeline-title' },
-    h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title', id: 'lp-timeline-title' }, '按日期排')),
+    h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title', id: 'lp-timeline-title' }, '时间线')),
     h(React.Fragment, null,
-        h('p', { className: 'lp-muted' }, '化验、手环和生活上的事放在一起，才看得出比如复查前生过病。'),
+        h('p', { className: 'lp-muted' }, '将化验、手环数据和生活事件按时间排列，便于发现关联，例如复查前曾经生病。'),
         h('ol', { className: 'lp-rows' },
           // A day's date is written once, on its first row.
           ...items.slice(-8).map((item, index, shown) => h('li', { key: `${item.kind}-${item.date}-${item.title_zh}`, className: 'lp-row lp-cal-line' },
@@ -182,7 +182,7 @@ export function InsightCard(props: { journey: Journey; covered?: Covered }): Rea
       }
       const concern = /不一定是好事/.test(props.journey.results.bioage.headline_zh ?? '')
       const lab = concern ? undefined : (props.journey.changes ?? []).find((row) => row.ask_doctor && !(props.covered && isCovered(props.covered, row)))
-      const labNote = lab ? `${lab.label_zh}最近的变化比平常大。睡眠或步数说明不了这个化验，复查时再看。` : null
+      const labNote = lab ? `${lab.label_zh}近期变化大于平常。睡眠或步数无法解释这项化验结果，建议复查时再关注。` : null
       setText(insightSentence({ sleepHours: sleep, steps, labNote }))
     }).catch(() => { if (live) setText(null) })
     return () => { live = false }

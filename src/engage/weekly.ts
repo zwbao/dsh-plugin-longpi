@@ -2,6 +2,14 @@
 
 import type { IsoDay } from '../contracts/common.ts'
 
+/** 「9 月 10 日」, with the year when it is not this year. */
+function dayZhW(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
+  if (!m) return iso ?? ''
+  const md = `${Number(m[2])} 月 ${Number(m[3])} 日`
+  return Number(m[1]) === new Date().getFullYear() ? md : `${m[1]} 年 ${md}`
+}
+
 export function weeklyText(input: {
   title: string
   week: number
@@ -19,13 +27,13 @@ export function weeklyText(input: {
     `第 ${input.week} 周，共 ${input.weeks} 周 · ${input.title}`,
     `连续记录 ${input.streak} 天。生病或出行冻结 ${input.frozen} 天，这些天不算中断。`,
     input.open.length > 0
-      ? `任务完成 ${input.done} / ${input.total}。还开着：${input.open.join('、')}。`
+      ? `任务完成 ${input.done} / ${input.total}。未完成：${input.open.join('、')}。`
       : `任务完成 ${input.done} / ${input.total}。这一季的任务都做完了。`,
   ]
   if (input.reminder) lines.push(input.reminder)
   if (input.status === 'retest_window') {
-    lines.push(input.retestDay ? `复测窗口开了，到 ${input.retestDay} 前做一次同样的检查，这一季就收束。` : '复测窗口开了，这一季就收束。')
+    lines.push(input.retestDay ? `复测窗口已开启，请在 ${dayZhW(input.retestDay)}前完成一次相同的检查，本季即告结束。` : '复测窗口已开启，本季即将结束。')
   }
-  lines.push('这里只讲你做了什么，不把一次检查说成身体年龄下降。')
+  lines.push('此处仅总结你完成的事项，不将单次检查解读为身体年龄下降。')
   return lines.join('\n')
 }

@@ -36,11 +36,11 @@ export function ReportUpload(props: { onDone?: (readBack: string) => void; simpl
 
   async function send(file: File): Promise<void> {
     if (file.size > 32 * 1024 * 1024) {
-      setError('超过 32 MB。叙述版基因报告请发到健康对话，不要从这里整本上传。')
+      setError('文件超过 32 MB。叙述版基因报告请发送到健康对话，请勿在此上传整份报告。')
       return
     }
     if (kind && !confirmStore) {
-      setError('请先确认：这份表只留在这台电脑上，不送进体检记录。')
+      setError('请先确认：此表格仅保存在这台电脑上，不写入体检记录。')
       return
     }
     setBusy(true)
@@ -54,7 +54,7 @@ export function ReportUpload(props: { onDone?: (readBack: string) => void; simpl
       })
       const id = started.id
       const total = started.total ?? 1
-      if (!id) throw new Error('没有开始上传')
+      if (!id) throw new Error('上传未能开始')
       for (let index = 0; index < total; index += 1) {
         const slice = bytes.subarray(index * PIECE, (index + 1) * PIECE)
         let binary = ''
@@ -62,7 +62,7 @@ export function ReportUpload(props: { onDone?: (readBack: string) => void; simpl
         setStatus(`正在上传 ${index + 1}/${total}`)
         await postJson('/api/longpi/upload', { op: 'chunk', id, index, b64: btoa(binary) })
       }
-      setStatus('正在读这份报告…')
+      setStatus('正在读取报告…')
       const done = await postJson<UploadAnswer>('/api/longpi/upload', { op: 'finish', id })
       setStatus(done.read_back_zh || '已读取这份报告')
       props.onDone?.(done.read_back_zh || '')
@@ -111,7 +111,7 @@ export function ReportUpload(props: { onDone?: (readBack: string) => void; simpl
         id: 'lp-upload-confirm', type: 'checkbox', checked: confirmStore, disabled: busy,
         onChange: (event: React.ChangeEvent<HTMLInputElement>) => setConfirmStore(event.target.checked),
       }),
-      h('span', null, '确认后记在这台电脑上，不送进体检记录')) : null,
+      h('span', null, '确认后保存在这台电脑上，不写入体检记录')) : null,
     h('div', { className: 'lp-field' },
       h('span', { className: 'lp-field-label' }, '文件'),
       fileInput(false),
@@ -120,7 +120,7 @@ export function ReportUpload(props: { onDone?: (readBack: string) => void; simpl
         h('span', { className: 'lp-caption lp-upload-chosen', role: 'status', id: 'lp-upload-status' },
           status ? (chosen ? `${chosen} · ${status}` : status) : chosen || 'PDF、照片，或 CSV、TXT 表格'))),
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
-    h('p', { className: 'lp-caption' }, '也可以直接把 PDF 或照片发到健康对话。'))
+    h('p', { className: 'lp-caption' }, '也可以直接将 PDF 或照片发送到健康对话。'))
 }
 
 /** An upload glyph (arrow up into a tray), drawn like icons.ts's 16px strokes. */

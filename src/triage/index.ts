@@ -5,6 +5,14 @@ import type { TriageFinding } from '../contracts/triage.ts'
 import type { CandidateProvider, NextBestAction } from '../contracts/surfaces.ts'
 import { addDays } from '../interventions.ts'
 
+/** 「9 月 10 日」, with the year when it is not this year. */
+function dayZhI(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
+  if (!m) return iso ?? ''
+  const md = `${Number(m[2])} 月 ${Number(m[3])} 日`
+  return Number(m[1]) === new Date().getFullYear() ? md : `${m[1]} 年 ${md}`
+}
+
 export function triageFindings(pack: Pick<FactPack, 'triage'>): TriageFinding[] {
   return pack.triage?.findings ?? []
 }
@@ -32,7 +40,7 @@ export const triageCandidates: CandidateProvider = (pack) => {
       id: 'answer-sex', kind: 'answer_profile', priority: 100, mandatory: true, fact_ids: [],
       target: { surface: 'page', section: 'profile', prompt_zh: '帮我填写性别' },
       title_zh: stop.title_zh || '填写性别',
-      detail_zh: stop.sentence_zh || '男女参考下限不同。先填写性别，再判断要不要看医生。这次不转诊。',
+      detail_zh: stop.sentence_zh || '男女参考下限不同。请先填写性别，再判断是否需要就医。本次暂不转诊。',
       reason_codes: ['profile.sex_needed'],
     })]
   }
@@ -40,7 +48,7 @@ export const triageCandidates: CandidateProvider = (pack) => {
   const factIds = open.map((row) => row.id)
   const care = (pack.triage?.care ?? []).filter((row) => factIds.includes(row.finding_id)).sort((a, b) => a.updated.localeCompare(b.updated)).at(-1)
   const out: NextBestAction[] = []
-  const sexNote = stop.needs_sex ? '档案里还没有性别。男女参考下限不同，请先填写性别；介于两者之间的数值这次不转诊。' : ''
+  const sexNote = stop.needs_sex ? '档案里还没有性别。男女参考下限不同，请先填写性别；介于两者之间的数值本次暂不转诊。' : ''
   const booked = care?.care_status === 'booked' && care.visit_date
   const asked = care?.care_status === 'advised' || care?.care_status === 'declined'
   const due = (booked && (care.visit_date as string) < pack.today) || (asked && addDays(care.updated.slice(0, 10), ASK_AFTER_DAYS) <= pack.today)
@@ -48,8 +56,8 @@ export const triageCandidates: CandidateProvider = (pack) => {
     out.push(action({
       id: 'log-visit-outcome', kind: 'log_visit_outcome', priority: 100, mandatory: true, blocks: ['draft_plan'], fact_ids: factIds,
       target: { surface: 'page', section: 'care', prompt_zh: VISIT_PROMPT_ZH },
-      title_zh: booked ? `${care.visit_date} 看医生了吗？医生怎么说？` : '约上医生了吗？医生怎么说？',
-      detail_zh: '告诉 LongPi 医生的结论（或者还没去），下一步和方案会跟着调整。',
+      title_zh: booked ? `${dayZhI(care.visit_date)}看医生了吗？医生怎么说？` : '是否已预约就诊？医生怎么说？',
+      detail_zh: '请告诉 LongPi 医生的结论（或尚未就诊），下一步和方案将随之调整。',
       reason_codes: ['care.follow_up'],
     }))
   }
@@ -57,14 +65,14 @@ export const triageCandidates: CandidateProvider = (pack) => {
     // Once the visit date has passed, "how did it go" leads and the doctor step follows it.
     id: 'doctor-first', kind: 'see_doctor', priority: due ? 95 : 100, mandatory: true, blocks: ['draft_plan'], fact_ids: factIds,
     target: { surface: 'page', section: 'doctor', prompt_zh: DOCTOR_PROMPT_ZH },
-    title_zh: booked && !due ? `已约 ${care.visit_date} 看医生：${stop.title_zh.replace(/^请先去看医生：/, '')}` : stop.title_zh,
+    title_zh: booked && !due ? `已约 ${dayZhI(care.visit_date)}看医生：${stop.title_zh.replace(/^请先去看医生：/, '')}` : stop.title_zh,
     detail_zh: `${stop.sentence_zh}${sexNote}`,
     reason_codes: open.map((row) => row.rule),
   }))
   out.push(action({
     id: 'prepare-brief', kind: 'prepare_brief', priority: 80, mandatory: false, fact_ids: factIds,
     target: { surface: 'page', section: 'brief', prompt_zh: BRIEF_PROMPT_ZH },
-    title_zh: '准备一页给医生看的简报',
+    title_zh: '准备一页就诊简报',
     detail_zh: '多年趋势、要问医生的问题和建议复查的项目，可以打印或存成文件带去。',
     reason_codes: ['brief.offer'],
   }))

@@ -12,7 +12,7 @@ export function releaseLine(enrolled: number, threshold: number): string {
   return `${groupThousands(enrolled)} / ${groupThousands(threshold)}，到达后所有人一起看到答案`
 }
 
-export const EARLY_ZH = '人数还没到发布线。先在这台电脑上做个人对照：随机安排早晨走和晚饭后走，中间留几天照常生活、不做比较，结果只留在这里。到齐之后，所有人一起看到群体答案。'
+export const EARLY_ZH = '人数尚未达到发布线。可先在这台电脑上进行个人对照：随机安排早晨走和晚饭后走，其间留几天照常生活、不作比较，结果仅保存在本机。人数达到后，所有人将同时看到群体结果。'
 
 export interface ThresholdCard {
   study_id: string

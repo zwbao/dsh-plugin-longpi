@@ -38,10 +38,10 @@ export async function postCheckIn(day: string, id: string, state: CheckState): P
   notifyChanged()
 }
 
-const SAID: Record<'true' | 'false' | 'null', string> = { true: '今天完成', false: '今天没做到', null: '已撤销今天的记录' }
+const SAID: Record<'true' | 'false' | 'null', string> = { true: '今天完成', false: '今天未完成', null: '已撤销今天的记录' }
 
 export function saidText(title: string, state: CheckState): string {
-  return state === null ? `「${title}」${SAID.null}。` : `已记下：${title}，${SAID[String(state) as 'true' | 'false']}。`
+  return state === null ? `「${title}」${SAID.null}。` : `已记录：${title}，${SAID[String(state) as 'true' | 'false']}。`
 }
 
 export function useCheckIns(journey: Journey, onNotice?: Notify): {
@@ -60,7 +60,7 @@ export function useCheckIns(journey: Journey, onNotice?: Notify): {
     postCheckIn(today, id, state)
       .then(() => onNotice?.(saidText(title, state), 'good'))
       .catch((err: unknown) => {
-        const text = `没有记下「${title}」：${errorText(err, '请稍后再试')}`
+        const text = `未能记录「${title}」：${errorText(err, '请稍后再试')}`
         setError(text)
         onNotice?.(text, 'bad')
       })
@@ -94,11 +94,11 @@ export function CheckChoices(props: { title: string; state: CheckState; busy: bo
     return h('span', { className: 'lp-choices', role: 'group', 'aria-label': `${props.title}：今天` },
       h('button', { type: 'button', className: 'lp-choice lp-choice-done', disabled: busy, onClick: () => props.onAnswer(true) },
         h(Icon, { name: 'check', size: 13, strokeWidth: 2 }), busy ? '记录中' : '完成'),
-      h('button', { type: 'button', className: 'lp-choice', disabled: busy, onClick: () => props.onAnswer(false) }, '没做到'))
+      h('button', { type: 'button', className: 'lp-choice', disabled: busy, onClick: () => props.onAnswer(false) }, '未完成'))
   }
   return h('span', { className: 'lp-choices', role: 'group', 'aria-label': `${props.title}：今天` },
     h('span', { className: `lp-badge ${state ? 'lp-badge-good' : 'lp-badge-neutral'}` },
-      h(Icon, { name: state ? 'check' : 'close', size: 12, strokeWidth: 2 }), state ? '已完成' : '没做到'),
+      h(Icon, { name: state ? 'check' : 'close', size: 12, strokeWidth: 2 }), state ? '已完成' : '未完成'),
     h('button', { type: 'button', className: 'lp-choice lp-choice-undo', disabled: busy, onClick: () => props.onAnswer(null), 'aria-label': `撤销「${props.title}」今天的记录` },
       busy ? '撤销中' : '撤销'))
 }

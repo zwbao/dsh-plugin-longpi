@@ -72,7 +72,7 @@ export function HealthPane(props: Partial<Face>): React.ReactElement {
       h(Skeleton, { height: 120, className: 'lp-card-skeleton' }), h(Skeleton, { height: 160, className: 'lp-card-skeleton' }))
   } else if (!journey) {
     body = h('div', { className: 'lp-card lp-failed', role: 'alert' },
-      h('p', { className: 'lp-muted' }, `没有读到数据：${error ?? '没有返回'}。`),
+      h('p', { className: 'lp-muted' }, `未能读取数据：${error ?? '未返回数据'}。`),
       h(Btn, { variant: 'outline', onClick: () => { void refresh(true) } }, h(Icon, { name: 'refresh', size: 14 }), '重试'))
   } else {
     body = h(Overview, { journey, tracking: tracking.data, onNotice: notify, onAction, goTab: toPage, openOnboarding: () => toPage('overview') })

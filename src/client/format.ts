@@ -66,8 +66,8 @@ export function pct(value: number): string {
  */
 export function versusAge(advance: number | null | undefined, checkups: number | null | undefined = 2): string {
   if (advance == null || !Number.isFinite(advance)) return ''
-  if (Math.abs(advance) < 0.5) return '和实足年龄相当'
-  if (advance < 0 && (checkups ?? 0) < 2) return `一次检查算出来的数（模型估计，不是诊断），比周岁小 ${fmt(-advance)} 岁。一次检查不能说明你变年轻了`
+  if (Math.abs(advance) < 0.5) return '与实足年龄相当'
+  if (advance < 0 && (checkups ?? 0) < 2) return `根据单次检查估算（模型估计，不是诊断），比实足年龄小 ${fmt(-advance)} 岁。单次检查不能说明你变年轻了`
   return advance < 0 ? `比实足年龄年轻 ${fmt(-advance)} 岁` : `比实足年龄大 ${fmt(advance)} 岁`
 }
 

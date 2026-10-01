@@ -92,7 +92,7 @@ export function ProfileEditor(props: {
   async function save(event?: React.FormEvent): Promise<void> {
     event?.preventDefault()
     if (!ageCheck.ok) {
-      setError('年龄请填整数，例如 52。')
+      setError('年龄请填写整数，例如 52。')
       return
     }
     setBusy(true)
@@ -111,7 +111,7 @@ export function ProfileEditor(props: {
       notifyChanged()
       props.onSaved?.()
     } catch (err) {
-      setError(`没有保存：${errorText(err, '请稍后再试')}`)
+      setError(`保存失败：${errorText(err, '请稍后再试')}`)
     } finally {
       setBusy(false)
     }
@@ -132,13 +132,13 @@ export function ProfileEditor(props: {
       h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-name` }, '称呼', h('span', { className: 'lp-optional' }, '选填')),
       h('input', {
         id: `${props.idPrefix}-name`, className: 'lp-input', value: draft.displayName, maxLength: 40, autoComplete: 'nickname',
-        placeholder: '页面上怎么称呼你',
+        placeholder: '页面中对你的称呼',
         onChange: (event: React.ChangeEvent<HTMLInputElement>) => edit({ displayName: event.target.value }),
       })),
     h('div', { className: 'lp-profile-group' },
       h('div', { className: 'lp-profile-basics' },
         h('div', { className: 'lp-field lp-profile-age' },
-          h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-age` }, '实足年龄'),
+          h('label', { className: 'lp-field-label', htmlFor: `${props.idPrefix}-age` }, '年龄（周岁）'),
           h('div', { className: 'lp-input-unit' },
             h('input', {
               id: `${props.idPrefix}-age`, className: 'lp-input', inputMode: 'numeric', value: draft.age, placeholder: '例如 52',
@@ -156,20 +156,20 @@ export function ProfileEditor(props: {
     h('fieldset', { className: 'lp-facts' },
       h('legend', { className: 'lp-facts-legend' },
         h('span', { className: 'lp-field-label' }, '心血管风险还需要这 6 项'),
-        h('span', { className: 'lp-caption' }, `已回答 ${answeredFacts} 项。不确定就选「不确定」，不会当作「否」。`)),
+        h('span', { className: 'lp-caption' }, `已回答 ${answeredFacts} 项。如不确定，请选择「不确定」，不会按「否」处理。`)),
       ...facts.map((row) => h('div', { className: 'lp-fact', key: row.key },
         h('div', { className: 'lp-fact-text' },
           h('div', { className: 'lp-fact-label', id: `${props.idPrefix}-${row.key}-text` }, row.label_zh),
           h('div', { className: 'lp-caption' },
             `解锁：${row.unlocks_zh || '心血管风险'}`,
-            row.men_only ? (female ? ' · 女性的公式不用这一项，可以跳过' : ' · 只用于男性的公式') : '')),
+            row.men_only ? (female ? ' · 女性公式不使用此项，可跳过' : ' · 只用于男性的公式') : '')),
         h(Segmented<Exclude<Answer, ''>>, {
           name: `${props.idPrefix}-${row.key}`, label: row.label_zh, hideLabel: true, options: ANSWERS,
           value: draft.risk[row.key as RiskFact] ?? '',
           onChange: (value) => edit({ risk: { ...draft.risk, [row.key]: value } }),
         })))),
     h('div', { className: 'lp-profile-focus' },
-      h('div', { className: 'lp-field-label', id: `${props.idPrefix}-focus` }, '你最关心什么', h('span', { className: 'lp-optional' }, '可多选，按点选先后排序')),
+      h('div', { className: 'lp-field-label', id: `${props.idPrefix}-focus` }, '你最关心什么', h('span', { className: 'lp-optional' }, '可多选，按选择顺序排列')),
       h('div', { className: 'lp-toggles', role: 'group', 'aria-labelledby': `${props.idPrefix}-focus` },
         ...focusOptions.map((option) => {
           const index = draft.focus.indexOf(option.key)

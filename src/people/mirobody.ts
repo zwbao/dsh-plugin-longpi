@@ -15,16 +15,16 @@ export function holderAuth(root: string): HolderAuth | { error_zh: string } {
   const saved = readConnection(root)
   if (saved?.mcp_url && !saved.mcp_token) {
     // Connected through a link someone set up by hand: it reads records but cannot create accounts.
-    return { error_zh: '现在的连接是手动填写的个人链接，不能替家人建档。可以粘贴家人自己的 Mirobody 个人链接。' }
+    return { error_zh: '当前连接为手动填写的个人链接，无法为家人建档。可粘贴家人本人的健康数据服务个人链接。' }
   }
   if (!saved?.mcp_token || !saved.mcp_url) {
-    return { error_zh: 'LongPi 还没有连上这台电脑上的健康数据服务，暂时不能为家人建档。请确认它正在运行，稍后再试。' }
+    return { error_zh: 'LongPi 尚未连接这台电脑上的健康数据服务，暂时无法为家人建档。请确认服务正在运行，稍后再试。' }
   }
   try {
     const url = new URL(saved.mcp_url)
     return { base: `${url.protocol}//${url.host}`, token: saved.mcp_token }
   } catch {
-    return { error_zh: '你保存的 Mirobody 地址读不出来，请在设置页重新登录。' }
+    return { error_zh: '无法读取已保存的健康数据服务地址，请在设置页重新登录。' }
   }
 }
 
@@ -42,14 +42,14 @@ export async function createManagedMember(auth: HolderAuth, input: { name: strin
     name: input.name, gender: input.sex, ...(input.birth_year ? { birth: `${input.birth_year}-01-01` } : {}),
   }, fetchImpl)
   const id = String(json.data?.id ?? '')
-  if (!/^\d+$/.test(id)) throw new Error('Mirobody 没有返回家人的编号')
+  if (!/^\d+$/.test(id)) throw new Error('健康数据服务未返回家人编号')
   return id
 }
 
 export async function mintMemberLink(auth: HolderAuth, memberId: string, fetchImpl: typeof fetch = fetch): Promise<string> {
   const json = await post(auth.base, '/personal/mcp', auth.token, { user_id: memberId }, fetchImpl)
   const url = String(json.data?.url ?? '')
-  if (!/^https?:\/\//.test(url)) throw new Error('Mirobody 没有返回家人的链接')
+  if (!/^https?:\/\//.test(url)) throw new Error('健康数据服务未返回家人链接')
   return url
 }
 
@@ -75,7 +75,7 @@ export async function ensureMemberLink(root: string, person: Person, fetchImpl: 
     try {
       saveMemberLink(root, person, await mintMemberLink(auth, person.mirobody_user_id, fetchImpl), now)
     } catch (e) {
-      error = `${person.label_zh}的链接续期失败：${e instanceof Error ? e.message : String(e)}。请在设置页重新登录你自己的 Mirobody 账号。`
+      error = `${person.label_zh}的链接续期失败：${e instanceof Error ? e.message : String(e)}。请在设置页重新登录你的健康数据服务账号。`
     }
   }
   updatePerson(root, person.id, { link_error: error })

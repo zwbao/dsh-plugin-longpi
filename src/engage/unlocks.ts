@@ -4,8 +4,8 @@ import type { IsoTime } from '../contracts/common.ts'
 import type { Unlock } from '../contracts/engagement.ts'
 
 export const REMINDER_ZH: Record<string, string> = {
-  cvd_risk: '量一次腰围，就能解锁心血管风险',
-  bioage: '下次体检加测超敏 C 反应蛋白，就能解锁身体年龄',
+  cvd_risk: '测量一次腰围，即可解锁心血管风险',
+  bioage: '下次体检加测超敏 C 反应蛋白，即可解锁身体年龄',
 }
 
 export function makeUnlocks(): Unlock[] {

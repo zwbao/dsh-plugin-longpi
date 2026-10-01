@@ -52,7 +52,7 @@ export function rememberCondition(dataDir: string, input: {
   if (!name || name.length > 80) return { ok: false, error: '需要一个病情或诊断的名称。' }
   const state = input.state && STATES.has(input.state) ? input.state : 'current'
   const since = input.since && /^\d{4}-\d{2}-\d{2}$/.test(input.since) ? input.since : ''
-  const text = state === 'past' ? `${name}（以前）` : state === 'suspected' ? `${name}（还不确定）` : state === 'ruled_out' ? `${name}（已排除）` : name
+  const text = state === 'past' ? `${name}（以前）` : state === 'suspected' ? `${name}（疑似）` : state === 'ruled_out' ? `${name}（已排除）` : name
   const at = now.toISOString()
   const provenance: Provenance = {
     kind: input.via === 'chat' ? 'chat' : 'page',
@@ -83,6 +83,6 @@ export function rememberCondition(dataDir: string, input: {
     ...(applied.applied[0] ? { memory_id: applied.applied[0] } : {}),
   }
   appendJsonl(pathOf(dataDir), row)
-  const readBack = `记下了：${text}${since ? `，${since} 起` : ''}。这只存在这台电脑上。`
+  const readBack = `已记录：${text}${since ? `，${since} 起` : ''}。此信息仅保存在这台电脑上。`
   return { ok: true, row, read_back: readBack }
 }

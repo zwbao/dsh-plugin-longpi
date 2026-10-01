@@ -36,9 +36,9 @@ function EstimateTag(): React.ReactElement {
 }
 
 function labelText(label: ResultLabel): string {
-  if (label === 'verified') return '数据对得上'
-  if (label === 'unverified-binding') return '还没对上，先别当成你的结果'
-  return '这是研究里的说法，不是用你的体检算的'
+  if (label === 'verified') return '数据已核对'
+  if (label === 'unverified-binding') return '尚未核对，暂不能视为你的结果'
+  return '这是研究中的结论，并非根据你的体检计算'
 }
 
 function LabelTag(props: { label: ResultLabel }): React.ReactElement {
@@ -75,13 +75,13 @@ function riskFacts(facts: readonly string[]): string[] {
   return facts.filter((fact) => !/^(实足)?年龄$|^性别/.test(fact.trim()))
 }
 
-export const UNMATCHED_NOTE_ZH = '标着「来源」的结果还没和你的记录对上，先别当成你的结果。'
+export const UNMATCHED_NOTE_ZH = '标有「来源」的结果尚未与你的记录核对，暂不能视为你的结果。'
 
 /** An unmatched result's caption: only its source (来源：肌酐(Cr) 84 μmol/L。), or nothing. */
 function bindingCaption(result: MethodResult): string {
   const out = primaryOutput(result)
   const rest = restOfSentence(resultSentence(result, { youngerAllowed: false }), titleOf(result.skill, result.title_zh, out?.key ?? ''), shownOf(result))
-    .replace(/^还没对上[，,。]?/, '').trim()
+    .replace(/^(?:还没对上|尚未核对)[，,。]?/, '').trim()
   return rest && rest !== '。' ? rest : ''
 }
 
@@ -163,7 +163,7 @@ function Blocked(props: {
       h('span', { className: 'lp-caption' }, `还差 ${count}`),
       ...all.slice(0, NEEDS_SHOWN).map((need) => h('span', { className: 'lp-tag', key: need }, need)),
       all.length > NEEDS_SHOWN ? h('span', { className: 'lp-caption' }, '…') : null)
-    : h('p', { className: 'lp-blocker' }, props.blocker ? `还缺：${props.blocker.replace(/^记录里还缺|^档案里还缺|^还缺/, '').replace(/^[：:]/, '')}` : '还缺计算需要的数据。')
+    : h('p', { className: 'lp-blocker' }, props.blocker ? `还缺：${props.blocker.replace(/^记录里还缺|^档案里还缺|^还缺/, '').replace(/^[：:]/, '')}` : '缺少计算所需的数据。')
   // What to do about it sits on the card's floor (#39).
   return h('div', { className: 'lp-card lp-result' },
     h(CardHead, { label: props.label, info: props.info }),
@@ -173,7 +173,7 @@ function Blocked(props: {
     self?.self_key
       ? h('div', { className: 'lp-result-foot' },
         h('div', { className: 'lp-result-self' },
-          h('div', { className: 'lp-caption' }, `${self.item_zh}可以自己在家量，记下就能算：`),
+          h('div', { className: 'lp-caption' }, `${self.item_zh}可在家自行测量，记录后即可计算：`),
           h(InlineSelf, { journey: props.journey, selfKey: self.self_key, idPrefix: `${props.idPrefix}-self`, onNotice: props.onNotice })))
       : action ? h('div', { className: 'lp-result-foot' }, h(Btn, { variant: 'outline', onClick: () => props.onAction(action.target) }, action.label)) : null)
 }
@@ -221,7 +221,7 @@ export function BodyAgeCard(props: {
     : [binding, gradedText].filter(Boolean).join('')
   const info = h(React.Fragment, null,
     h('span', { className: 'lp-info-line' }, BIOAGE_INFO),
-    band != null ? h('span', { className: 'lp-info-line' }, `浅色带是第一次检查的个体正常波动（±${fmt(band)} 岁${partial ? `，未含${bio?.band_missing?.join('、')}` : ''}），落在带外才算真实变化。`) : null,
+    band != null ? h('span', { className: 'lp-info-line' }, `浅色带表示首次检查的个体正常波动范围（±${fmt(band)} 岁${partial ? `，未含${bio?.band_missing?.join('、')}` : ''}），落在带外才视为真实变化。`) : null,
     date ? h('span', { className: 'lp-info-line' }, `最近一次：${chineseDate(date)}体检，共 ${count} 次完整血检。`) : null)
   return h('div', { className: 'lp-card lp-result', ...(props.method ? { 'data-result-label': props.method.label } : {}) },
     h(CardHead, { label: '身体年龄', info, mark: props.method?.label ?? null }),
@@ -229,7 +229,7 @@ export function BodyAgeCard(props: {
       // Not yet matched to the record: a medium figure, not the headline size of a confirmed result.
       h('span', { className: props.method?.label === 'unverified-binding' ? 'lp-num-md' : 'lp-num-lg' }, plainUnits(fmt(phenoage))),
       h('span', { className: 'lp-bignum-unit' }, '岁'),
-      younger ? h('span', { className: 'lp-badge lp-badge-good' }, '真实的变化') : null),
+      younger ? h('span', { className: 'lp-badge lp-badge-good' }, '真实变化') : null),
     // The method results that measure body age are folded in here as one line in glossary words (INT062 fix 7):
     // the page's own gap, never a second big number. One draw has no gap (advance is null).
     !older && versusCalendarAge(result.advance) ? h('p', { className: 'lp-caption lp-bioage-gap' }, versusCalendarAge(result.advance)) : null,
@@ -243,7 +243,7 @@ export function BodyAgeCard(props: {
     }) : props.tracking == null ? h(Skeleton, { height: 40 }) : null,
     caption ? h('p', { className: 'lp-caption lp-method-sentence', id: 'lp-bioage-feedback' }, plainUnits(caption)) : null,
     h(KeyTrends, { journey: props.journey, older: (latest?.advance ?? result.advance ?? 0) > 0, covered: props.covered }),
-    h('p', { className: 'lp-fine lp-result-note' }, [count > 0 ? `${count} 次体检` : '', points.length > 1 && band != null ? '浅色带为正常波动（这点变化不算数）' : ''].filter(Boolean).join(' · ')))
+    h('p', { className: 'lp-fine lp-result-note' }, [count > 0 ? `${count} 次体检` : '', points.length > 1 && band != null ? '浅色带为正常波动范围' : ''].filter(Boolean).join(' · ')))
 }
 
 function KeyTrends(props: { journey: Journey; older: boolean; covered?: Covered }): React.ReactElement | null {
@@ -255,8 +255,8 @@ function KeyTrends(props: { journey: Journey; older: boolean; covered?: Covered 
   const trends = pickKeyTrends(changes.filter((row) => !isCovered(covered, row) && !below.has(row.key)), props.older)
   if (trends.length === 0) return null
   return h('div', { className: 'lp-key-trends' },
-    h('div', { className: 'lp-caption' }, '旁边的变化'),
-    h('ul', { 'aria-label': '旁边的变化' },
+    h('div', { className: 'lp-caption' }, '相关变化'),
+    h('ul', { 'aria-label': '相关变化' },
     ...trends.map((row) => h('li', { key: row.label_zh },
       h('span', { className: 'lp-strong' }, row.label_zh),
       h('span', { className: 'lp-caption' }, ` ${plainUnits(row.text_zh.startsWith(row.label_zh) ? row.text_zh.slice(row.label_zh.length).trim() : row.text_zh)}`)))))
@@ -388,8 +388,8 @@ export function ResultsRow(props: {
   // results in a grid of their own, so 这次的变化 is never a half-width card on its own (#17).
   return h('div', { className: 'lp-stack', id: 'lp-results' },
     unmatched ? h('p', { className: 'lp-caption' }, unmatchedCount === shownMethods.filter(Boolean).length
-      ? '下面的结果都还没和你的记录逐项对上（各卡写了用的是哪个数值），先别当成你的结果。'
-      : `其中 ${unmatchedCount} 项结果还没和你的记录逐项对上（卡里写了用的是哪个数值），先别当成你的结果。`) : null,
+      ? '以下结果均未与你的记录逐项核对（各卡已注明所用数值），暂不能视为你的结果。'
+      : `其中 ${unmatchedCount} 项结果未与你的记录逐项核对（卡片已注明所用数值），暂不能视为你的结果。`) : null,
     h('div', { className: 'lp-grid-2 lp-results' }, ...cards, ...values),
     evidence.length > 0 ? h('div', { className: 'lp-stack', id: 'lp-methods' }, ...evidence) : null,
     h('div', { className: 'lp-grid-2 lp-results lp-results-plan' }, feedback))
@@ -406,7 +406,7 @@ export function AddonList(props: { journey: Journey; onNotice: Notify; idPrefix:
       h(Icon, { name: row.self_measurable ? 'ruler' : 'flask', size: 16, className: 'lp-row-icon' }),
       h('div', { className: 'lp-row-main' },
         h('div', { className: 'lp-strong' }, row.item_zh),
-        h('div', { className: 'lp-caption' }, `解锁：${row.unlocks_zh}${row.self_measurable ? ' · 可以自己在家量' : ' · 下次体检加测'}`)),
+        h('div', { className: 'lp-caption' }, `解锁：${row.unlocks_zh}${row.self_measurable ? ' · 可在家自行测量' : ' · 下次体检加测'}`)),
       row.self_measurable && row.self_key
         ? h(InlineSelf, { journey: props.journey, selfKey: row.self_key, idPrefix: `${props.idPrefix}-${row.self_key}`, onNotice: props.onNotice })
         : null)))

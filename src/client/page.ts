@@ -169,8 +169,8 @@ function Loading(): React.ReactElement {
 
 function Failed(props: { error: string; onRetry: () => void }): React.ReactElement {
   return h('div', { className: 'lp-card lp-failed', role: 'alert' },
-    h('div', { className: 'lp-strong' }, 'LongPi 没有读到数据'),
-    h('p', { className: 'lp-muted' }, `服务返回：${props.error}。通常是刚打开，稍等几秒再试。`),
+    h('div', { className: 'lp-strong' }, 'LongPi 未能读取数据'),
+    h('p', { className: 'lp-muted' }, `服务返回：${props.error}。通常是刚启动所致，请稍等几秒后重试。`),
     h(Btn, { variant: 'outline', onClick: props.onRetry }, h(Icon, { name: 'refresh', size: 14 }), '重试'))
 }
 
@@ -263,12 +263,12 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
       props.openChat()
       return
     }
-    void copying.then((copied) => notify(copied ? '已复制，粘贴到对话里发送即可。' : text, 'info'))
+    void copying.then((copied) => notify(copied ? '已复制，请粘贴到对话中发送。' : text, 'info'))
   }
 
   let body: React.ReactNode
   if (!journey && loading) body = h(Loading)
-  else if (!journey) body = h(Failed, { error: error ?? '没有返回', onRetry: () => { void doRefresh() } })
+  else if (!journey) body = h(Failed, { error: error ?? '未返回数据', onRetry: () => { void doRefresh() } })
   else {
     let panel: React.ReactNode
     if (tab === 'overview') {

@@ -56,5 +56,5 @@ export function methylationCoverage(rows: MethylationRow[]): string {
   const ids = new Set(rows.map((row) => row.probe_id))
   const hit = FRAILTY_PROBE_IDS.filter((id) => ids.has(id)).length
   const dates = [...new Set(rows.map((row) => row.sample_date))].slice(0, 4).join('、')
-  return `共 ${ids.size} 个探针${dates ? `（${dates}）` : ''}。衰弱风险分用到的 20 个位点里有 ${hit} 个。`
+  return `共 ${ids.size} 个探针${dates ? `（${dates}）` : ''}。衰弱风险评分所需的 20 个位点中，覆盖 ${hit} 个。`
 }

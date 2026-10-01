@@ -58,13 +58,13 @@ function DraftAction(props: { call: TailCall }): React.ReactElement | null {
     try {
       const result = await acceptDraft(draft, draft.items, remind, source)
       if (!result.ok) {
-        setError(`没有保存：${result.error}`)
+        setError(`保存失败：${result.error}`)
         return
       }
       setAdopted(props.call.callId, result.version)
       setConfirming(false)
     } catch (err) {
-      setError(`没有保存：${errorText(err, '请稍后再试')}`)
+      setError(`保存失败：${errorText(err, '请稍后再试')}`)
     } finally {
       setBusy(false)
     }
@@ -89,7 +89,7 @@ function CheckinAction(props: { call: TailCall }): React.ReactElement | null {
   const entries = (Array.isArray(objectOf(props.call.result).entries) ? objectOf(props.call.result).entries as unknown[] : []).map(objectOf)
   const undoable = entries.filter((row) => row.undo !== true && (row.done === true || row.done === false) && row.date === today && typeof row.item === 'string')
   if (undoable.length === 0) return null
-  const names = undoable.map((row) => `${String(row.title || row.item)}${row.done === false ? '（没做到）' : ''}`).join('、')
+  const names = undoable.map((row) => `${String(row.title || row.item)}${row.done === false ? '（未完成）' : ''}`).join('、')
   if (isUndone(props.call.callId)) return h('span', { className: 'lp-badge lp-badge-neutral' }, h(Icon, { name: 'close', size: 12, strokeWidth: 2 }), `已撤销：${names}`)
 
   async function undo(): Promise<void> {
@@ -99,7 +99,7 @@ function CheckinAction(props: { call: TailCall }): React.ReactElement | null {
       for (const row of undoable) await postCheckIn(today, String(row.item), null)
       setUndone(props.call.callId)
     } catch (err) {
-      setError(`没有撤销：${errorText(err, '请稍后再试')}`)
+      setError(`撤销失败：${errorText(err, '请稍后再试')}`)
     } finally {
       setBusy(false)
     }
@@ -128,7 +128,7 @@ export function LongPiTurnTail(props: TurnTailProps): React.ReactElement | null 
     match.readBack && !match.saved ? h('span', { className: 'lp-tail-group' },
       h('span', { className: 'lp-caption' }, '方案还没有保存'),
       h('button', { type: 'button', className: 'lp-linkbtn lp-linkbtn-sm lp-btn-primary', onClick: () => reply('确认，保存这份方案') }, h(Icon, { name: 'check', size: 13 }), '确认保存'),
-      h('button', { type: 'button', className: 'lp-linkbtn lp-linkbtn-sm', onClick: () => reply('我想调整一下：') }, '还要调整')) : null,
+      h('button', { type: 'button', className: 'lp-linkbtn lp-linkbtn-sm', onClick: () => reply('我想调整一下：') }, '继续调整')) : null,
     match.saved ? h('span', { className: 'lp-badge lp-badge-good' }, h(Icon, { name: 'check', size: 12, strokeWidth: 2 }), savedVersion != null ? `已保存为方案第 ${savedVersion} 版` : '方案已保存') : null,
     match.checkin ? h(CheckinAction, { call: match.checkin }) : null,
     h('span', { className: 'lp-tail-links' },

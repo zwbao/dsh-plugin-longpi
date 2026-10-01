@@ -45,7 +45,7 @@ export function offerForCard(codex: CodexCard, home: string, view: RecordView | 
   if (codex.family === 'species' || tierC(skill, codex)) {
     return {
       kind: 'evidence',
-      text_zh: `${species}证据。这不是你的数字。`,
+      text_zh: `${species}研究证据，并非你的数据。`,
       skill: skillName,
       label: 'evidence-only',
       species_zh: species,
@@ -55,7 +55,7 @@ export function offerForCard(codex: CodexCard, home: string, view: RecordView | 
   if (!skill || !view) {
     return {
       kind: 'unlock',
-      text_zh: '再补这项方法需要的记录就能解锁',
+      text_zh: '补充该方法所需的记录即可解锁',
       skill: skillName,
       label: null,
       species_zh: '',
@@ -66,7 +66,7 @@ export function offerForCard(codex: CodexCard, home: string, view: RecordView | 
   if (skill.tier === 'C') {
     return {
       kind: 'evidence',
-      text_zh: `${species}证据。这不是你的数字。`,
+      text_zh: `${species}研究证据，并非你的数据。`,
       skill: skill.name,
       label: 'evidence-only',
       species_zh: species,
@@ -79,7 +79,7 @@ export function offerForCard(codex: CodexCard, home: string, view: RecordView | 
   if (runnable) {
     return {
       kind: 'run',
-      text_zh: '这个方法现在可以用你的记录算',
+      text_zh: '该方法现已可用你的记录计算',
       skill: skill.name,
       label: report.label,
       species_zh: '',
@@ -89,7 +89,7 @@ export function offerForCard(codex: CodexCard, home: string, view: RecordView | 
   const names = missing.slice(0, 3)
   return {
     kind: 'unlock',
-    text_zh: names.length > 0 ? `再补${names.join('、')}就能解锁` : '再补这项方法需要的记录就能解锁',
+    text_zh: names.length > 0 ? `补充${names.join('、')}即可解锁` : '补充该方法所需的记录即可解锁',
     skill: skill.name,
     label: report.label,
     species_zh: '',

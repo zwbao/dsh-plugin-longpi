@@ -548,7 +548,7 @@ export function normalizeConnectionResult(input: unknown): ConnectionResult {
     connection = null
   }
   const ok = raw.ok === false ? false : raw.ok === true || (connection != null && connection.status === 'ok')
-  return { ok, error: ok ? '' : error || connection?.error || '连接没有成功', connection }
+  return { ok, error: ok ? '' : error || connection?.error || '连接失败', connection }
 }
 
 // --- indicators ---------------------------------------------------------------------------

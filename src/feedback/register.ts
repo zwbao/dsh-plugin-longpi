@@ -74,9 +74,9 @@ export function register(ctx: Context, deps: CoreDeps): void {
       mandatory: false,
       reason_codes: ['feedback'],
       fact_ids: [],
-      target: { surface: 'page' as const, section: 'lp-feedback', prompt_zh: '我这次的变化算不算真的？' },
+      target: { surface: 'page' as const, section: 'lp-feedback', prompt_zh: '我这次的变化是否为真实变化？' },
       title_zh: lead.headline_zh.slice(0, 42),
-      detail_zh: '按测量波动看过了',
+      detail_zh: '已按测量波动评估',
     }]
   })
 }

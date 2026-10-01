@@ -28,7 +28,7 @@ export function nOf1SeasonQuest(seasonId: string): NOf1Quest {
     id: 'qs-n-of-1',
     season_id: seasonId,
     kind: 'science_n_of_1',
-    title_zh: '按打乱的顺序做完这个赛季的个人小试验；中间休息的日子照常生活，血糖只记在这台电脑上',
+    title_zh: '按随机顺序完成本赛季的个人小试验；间隔期照常生活，血糖仅记录在这台电脑上',
     criteria: { event: 'study.n_of_1_completed', count: 1 },
     reward: { draws: 1 },
     origin: 'rule',
@@ -166,8 +166,8 @@ export function stoppingRule(posterior: Posterior | null, opts: { mcid: number; 
   const cap = opts.periods_done >= opts.max_periods
   if (!posterior || posterior.n_a < 2 || posterior.n_b < 2) {
     return cap
-      ? { decision: 'stop_cap', reason_zh: '计划里的段落已经走完，记录还不够算区间。按计划停止。' }
-      : { decision: 'continue', reason_zh: '每一段的有效记录还不够，按安排继续记。' }
+      ? { decision: 'stop_cap', reason_zh: '计划阶段已全部完成，记录不足以计算区间。按计划停止。' }
+      : { decision: 'continue', reason_zh: '各阶段有效记录不足，请按计划继续记录。' }
   }
   const [low, high] = posterior.ci95
   const separates = (low > 0 && posterior.mean >= opts.mcid) || (high < 0 && -posterior.mean >= opts.mcid)
@@ -177,10 +177,10 @@ export function stoppingRule(posterior: Posterior | null, opts: { mcid: number; 
     return { decision: 'stop_difference', reason_zh: `两组差别的 95% 区间已经离开 0，绝对值至少 ${opts.mcid}。这只是你自己的对照，不能当成治疗结论。` }
   }
   if (enough && inside) {
-    return { decision: 'stop_futility', reason_zh: `95% 区间落在 ±${opts.mcid} 里面。以这个最小差别来看，再记一段也不太会分开。` }
+    return { decision: 'stop_futility', reason_zh: `95% 区间落在 ±${opts.mcid} 里面。以此最小差别衡量，继续记录一段也不太可能出现差别。` }
   }
-  if (cap) return { decision: 'stop_cap', reason_zh: '计划里的段落已经走完。区间仍跨过 0，按计划停止，不追加段落。' }
-  return { decision: 'continue', reason_zh: '区间还跨过 0，按安排继续记。洗脱和每段开头的几天不进入比较。' }
+  if (cap) return { decision: 'stop_cap', reason_zh: '计划阶段已全部完成。区间仍跨过 0，按计划停止，不追加段落。' }
+  return { decision: 'continue', reason_zh: '区间仍跨过 0，请按计划继续记录。洗脱和每段开头的几天不进入比较。' }
 }
 
 export interface ScheduleBlock {

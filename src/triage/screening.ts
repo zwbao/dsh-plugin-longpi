@@ -10,7 +10,7 @@ import type { NextBestAction } from '../contracts/surfaces.ts'
 interface Rule { id: string; sex: 'female' | 'male' | 'any'; age: [number, number]; family_rx?: string; priority: 'must_surface' | 'should_surface'; topic_zh: string; prompt_zh: string }
 
 const BUILT_IN: Rule[] = [
-  { id: 'breast-family', sex: 'female', age: [18, 80], family_rx: '乳腺癌|乳癌', priority: 'must_surface', topic_zh: '家里有人得过乳腺癌：比一般人更早开始乳腺筛查，并问问要不要做遗传咨询', prompt_zh: '家里有人得过乳腺癌，我该怎么筛查？' },
+  { id: 'breast-family', sex: 'female', age: [18, 80], family_rx: '乳腺癌|乳癌', priority: 'must_surface', topic_zh: '家里有人得过乳腺癌：宜比一般人更早开始乳腺筛查，并咨询医生是否需要遗传咨询', prompt_zh: '家里有人得过乳腺癌，我该怎么筛查？' },
   { id: 'cervix-age', sex: 'female', age: [25, 65], priority: 'should_surface', topic_zh: '按你的年龄，可以问医生宫颈筛查（HPV 或 TCT）', prompt_zh: '像我这个年龄该做哪些乳腺和宫颈筛查？' },
 ]
 

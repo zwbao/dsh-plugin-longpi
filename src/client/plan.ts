@@ -23,7 +23,7 @@ type Answer = (id: string, title: string, state: CheckState) => void
 /** Today's items with their three answers; also the 概览 tab's today card. */
 export function TodayList(props: { journey: Journey; stateOf: (id: string) => CheckState; busy: string | null; onAnswer: Answer }): React.ReactElement {
   const items = props.journey.plan.checkin_items
-  if (items.length === 0) return h('p', { className: 'lp-small lp-muted lp-measure' }, '今天没有需要亲手记的项目。手环和已经记下的服药会自动算进去。')
+  if (items.length === 0) return h('p', { className: 'lp-small lp-muted lp-measure' }, '今天没有需要手动记录的项目。手环数据和已记录的服药情况会自动计入。')
   return h('ul', { className: 'lp-today-list' },
     ...items.map((row) => {
       const state = props.stateOf(row.id)
@@ -46,8 +46,8 @@ function TodayTile(props: { journey: Journey; className?: string }): React.React
         h('div', {
           className: 'lp-bar', role: 'progressbar', 'aria-label': '今天的打卡', 'aria-valuemin': 0, 'aria-valuemax': counts.total, 'aria-valuenow': counts.done,
         }, h('span', { style: { width: `${Math.round(share * 100)}%` } })),
-        h('p', { className: 'lp-caption' }, '在下面的项目里打卡。'))
-      : h('p', { className: 'lp-small lp-muted lp-measure' }, '今天没有需要亲手记的项目。手环和已经记下的服药会自动算进去。'))
+        h('p', { className: 'lp-caption' }, '请在下方项目中打卡。'))
+      : h('p', { className: 'lp-small lp-muted lp-measure' }, '今天没有需要手动记录的项目。手环数据和已记录的服药情况会自动计入。'))
 }
 
 function AdherenceTile(props: { journey: Journey; tracking: Tracking | null }): React.ReactElement {
@@ -61,7 +61,7 @@ function AdherenceTile(props: { journey: Journey; tracking: Tracking | null }): 
     return h('div', { className: 'lp-card' },
       h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '方案执行')),
       h('div', { className: 'lp-empty' },
-        h('div', { className: 'lp-empty-title' }, '还没有执行记录'),
+        h('div', { className: 'lp-empty-title' }, '暂无执行记录'),
         h('p', { className: 'lp-empty-text' }, '在下面的项目里打卡后，这里显示近 12 周的执行率。')))
   }
   return h('div', { className: 'lp-card' },
@@ -109,8 +109,8 @@ function RetestTile(props: { tracking: Tracking | null; today: string; failed: b
             h('div', { className: 'lp-num-md' }, `${daysBetween(props.today, first.date)} 天后`),
             h('div', { className: 'lp-caption' }, `${chineseDate(first.date)}之后 · ${first.marker}`))
           : h('div', null, h('div', { className: 'lp-h2 lp-muted' }, '—'),
-            h('div', { className: 'lp-caption' }, props.failed ? '复测日期没有读到' : '方案里的指标还没有排出复测日'))),
-    h('p', { className: 'lp-caption lp-measure' }, '复测太早，变化多半只是波动。'))
+            h('div', { className: 'lp-caption' }, props.failed ? '未读取到复测日期' : '方案中的指标尚未安排复测日期'))),
+    h('p', { className: 'lp-caption lp-measure' }, '复测过早，变化多半只是正常波动。'))
 }
 
 /**
@@ -124,8 +124,8 @@ export function Wins(props: { tracking: Tracking | null }): React.ReactElement |
   const wins = items.flatMap((item) => (item.verdicts ?? []).filter((row) => row.verdict === '有效').map((row) => ({ item, row })))
   if (wins.length === 0) {
     return h('div', { className: 'lp-card' },
-      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '方案相关指标还没有超出正常波动')),
-      h('p', { className: 'lp-small lp-muted lp-measure' }, '血脂、血糖、炎症指标通常要 1–3 个月才会动。坚持执行、按时复测，就是在积累证据。'))
+      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '方案相关指标尚未超出正常波动')),
+      h('p', { className: 'lp-small lp-muted lp-measure' }, '血脂、血糖、炎症指标通常需要 1–3 个月才会变化。坚持执行、按时复测，就是在积累证据。'))
   }
   return h('div', { className: 'lp-card' },
     h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '朝目标方向、超出正常波动的变化')),
@@ -141,8 +141,8 @@ export function Wins(props: { tracking: Tracking | null }): React.ReactElement |
 
 /** Check-in items not running today (not started, or ended) get no button, as the server leaves them out of today's list. */
 function checkinFoot(item: Item, today: string): string | null {
-  if (item.start > today) return `${chineseDate(item.start)}开始，到时再打卡`
-  if (item.end && item.end < today) return '已结束，不用再打卡'
+  if (item.start > today) return `${chineseDate(item.start)}开始，届时再打卡`
+  if (item.end && item.end < today) return '已结束，无需打卡'
   return null
 }
 
@@ -163,8 +163,8 @@ function ItemRow(props: { item: Item; raw?: PlanItemRaw; today: string; onAnswer
     : source === 'checkin'
       ? props.checkable
         ? h(CheckChoices, { title: item.title, state: props.state, busy: props.busy, onAnswer: (next) => props.onAnswer(item.id, item.title, next) })
-        : h('span', { className: 'lp-caption' }, '今天不用打卡')
-      : h('span', { className: 'lp-caption' }, source === 'wearable' ? '手环自动记录' : '服用情况在原来的用药记录里')
+        : h('span', { className: 'lp-caption' }, '今天无需打卡')
+      : h('span', { className: 'lp-caption' }, source === 'wearable' ? '手环自动记录' : '服用情况记录在健康数据服务的用药计划中')
   return h('li', { className: `lp-row lp-plan-row ${props.state === true ? 'lp-today-done' : ''}` },
     h('div', { className: 'lp-row-main lp-plan-row-main' },
       h('div', { className: 'lp-plan-row-title' }, item.title),
@@ -193,7 +193,7 @@ function ItemRow(props: { item: Item; raw?: PlanItemRaw; today: string; onAnswer
 function PlanStart(props: { journey: Journey; onPrompt: (text: string) => void }): React.ReactElement {
   return h('div', { className: 'lp-card' },
     h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '已经有自己的方案？')),
-    h('p', { className: 'lp-text lp-muted' }, '说出你的方案，或上传医生、长寿师给的方案。LongPi 会读给你确认后保存，再按每个指标安排复测日，并算出达到目标时的模型估计。'),
+    h('p', { className: 'lp-text lp-muted' }, '描述你的方案，或上传医生、长寿师提供的方案。LongPi 会复述并经你确认后保存，再按各项指标安排复测日，并计算达到目标时的模型估计。'),
     props.journey.suggestions.length > 0 ? h('div', { className: 'lp-stack' },
       ...props.journey.suggestions.map((row) => h('button', { key: row.id, type: 'button', className: 'lp-row-btn', onClick: () => props.onPrompt(row.text_zh) },
         h('span', { className: 'lp-row-main' }, row.text_zh), h(Icon, { name: 'chevron', size: 14 })))) : null,
@@ -247,12 +247,12 @@ export function PlanSection(props: {
           items: items.map((item) => ({ id: item.id, title: item.title, start: item.start, end: item.end ?? null, subtitle: `${chineseDate(item.start)}起，第 ${item.days ?? 0} 天`, headline: item.headline ?? '' })),
           checkups, today,
         })
-        : h('p', { className: 'lp-small lp-muted lp-measure' }, failed ? '方案的项目没有读到。' : '方案里还没有项目。')),
+        : h('p', { className: 'lp-small lp-muted lp-measure' }, failed ? '未读取到方案项目。' : '方案中暂无项目。')),
     items.length > 0 ? h('section', { className: 'lp-card', 'aria-labelledby': 'lp-plan-items-title' },
       h('div', { className: 'lp-card-head' },
         h('h3', { className: 'lp-card-title', id: 'lp-plan-items-title' }, '方案项目'),
-        h('span', { className: 'lp-caption' }, '完成 / 没做到 记在这里，点错了可以撤销')),
-      young ? h('p', { className: 'lp-caption lp-measure' }, `方案开始才 ${days ?? 0} 天。执行率和指标变化要满 ${YOUNG_DAYS} 天才能判断${firstRetest ? `，${chineseDate(firstRetest)}之后再看` : ''}。`) : null,
+        h('span', { className: 'lp-caption' }, '在此记录完成或未完成，误操作可撤销')),
+      young ? h('p', { className: 'lp-caption lp-measure' }, `方案开始仅 ${days ?? 0} 天。执行率和指标变化需满 ${YOUNG_DAYS} 天才能判断${firstRetest ? `，请于${chineseDate(firstRetest)}之后查看` : ''}。`) : null,
       h('ul', { className: 'lp-rows' },
         ...items.map((item) => h(ItemRow, {
           key: item.id, item, raw: plan?.items.find((raw) => raw.id === item.id), today, onAnswer: answer, busy: busy === item.id,
@@ -284,12 +284,12 @@ export function Markers(props: { tracking: Tracking | null }): React.ReactElemen
   const dateOf = (chart: (typeof charts)[number], iso: string) => (chart.weekly ? `${chineseDate(iso)}起一周` : chineseDate(iso))
   // What applies to several cards is said once, under the section title.
   const notes = [
-    charts.some((chart) => chart.points.length < 2) ? '只有一次数值的指标，还需一次复测才能画趋势。' : '',
-    charts.some((chart) => !chart.band) ? '没有浅色带的指标缺少个体变异数据，分不清真实变化和波动。' : '',
+    charts.some((chart) => chart.points.length < 2) ? '仅有一次数值的指标，需再复测一次才能显示趋势。' : '',
+    charts.some((chart) => !chart.band) ? '没有浅色带的指标缺少个体变异数据，无法区分真实变化与波动。' : '',
   ].filter(Boolean).join('')
   return h(Section, {
     id: 'lp-markers', title: '方案相关的指标',
-    aside: h(Info, { label: '图上的浅色带', align: 'end' }, '浅色带是以基线为中心的平常起伏。落在带外才值得注意；带里的起伏多半不算数。'),
+    aside: h(Info, { label: '图上的浅色带', align: 'end' }, '浅色带表示以基线为中心的正常波动范围。落在带外的变化才值得关注；带内的起伏通常没有实际意义。'),
   },
     notes ? h('p', { className: 'lp-caption lp-measure' }, notes) : null,
     h('div', { className: 'lp-grid-2 lp-grid-top' },

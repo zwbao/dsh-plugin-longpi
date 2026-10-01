@@ -38,15 +38,23 @@ import { computeStreak, daysInRange } from './streak.ts'
 import { makeUnlocks, openUnlock, REMINDER_ZH } from './unlocks.ts'
 import { weeklyText } from './weekly.ts'
 
+/** 「9 月 10 日」, with the year when it is not this year. */
+function dayZhE(iso: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
+  if (!m) return iso ?? ''
+  const md = `${Number(m[2])} 月 ${Number(m[3])} 日`
+  return Number(m[1]) === new Date().getFullYear() ? md : `${m[1]} 年 ${md}`
+}
+
 const TITLES: Record<string, string> = {
-  care: '先把该问医生的事问完',
-  data: '补上缺的那一项检查',
-  bioage: '这一季看身体年龄',
-  cardio: '这一季看心血管',
-  glucose: '这一季看血糖',
-  weight: '这一季看体重',
-  sleep: '这一季看睡眠',
-  plan: '这一季把一件事做完',
+  care: '先向医生问清需要咨询的事项',
+  data: '补做缺失的检查',
+  bioage: '本季关注身体年龄',
+  cardio: '本季关注心血管',
+  glucose: '本季关注血糖',
+  weight: '本季关注体重',
+  sleep: '本季关注睡眠',
+  plan: '本季完成一件事',
 }
 
 interface StoredAction { key: string; day: IsoDay; kind: 'care' | 'hscrp' | 'waist' | 'retest' | 'life' | 'booked' | 'ferritin' | 'iron' }
@@ -615,7 +623,7 @@ function viewOf(state: State, world: World, dataDir = ''): EngageView {
       status: quest.status,
       progress: quest.progress,
       count: quest.criteria.count,
-      reward_zh: quest.reward.guaranteed_min_rarity ? '完成后来一张至少是银的卡' : '完成后来一张卡',
+      reward_zh: quest.reward.guaranteed_min_rarity ? '完成后获得一张银卡或更高等级的卡' : '完成后获得一张卡',
     })),
     unlocks: state.unlocks.map((unlock) => ({
       id: unlock.id,
@@ -635,7 +643,7 @@ function viewOf(state: State, world: World, dataDir = ''): EngageView {
       enabled: !block && Boolean(season),
       hidden: Boolean(block) || !season,
       reason: season ? block : (world.age == null && world.consent ? 'age_unknown' : block),
-      reason_zh: !world.consent ? '先完成知情同意。' : codexBlockZh(block),
+      reason_zh: !world.consent ? '请先完成知情同意。' : codexBlockZh(block),
       odds_zh: !block && pack ? oddsDisclosure(pack.table, pack.cards) : null,
       draws_available: block ? 0 : state.codex.grants.filter((row) => !row.used_by).length,
       draws_today: state.codex.draw_days[world.today] ?? 0,
@@ -652,14 +660,14 @@ function viewOf(state: State, world: World, dataDir = ''): EngageView {
       })),
     },
     weekly_zh: state.weekly_zh,
-    reminder_zh: !pressure ? null : locked && season && season.status !== 'closed' ? (REMINDER_ZH[locked.key] ?? null) : (season && season.status !== 'closed' && state.quests.some((quest) => quest.status === 'open') ? '这一季还有没做完的事，打开健康页看一眼就好' : null),
+    reminder_zh: !pressure ? null : locked && season && season.status !== 'closed' ? (REMINDER_ZH[locked.key] ?? null) : (season && season.status !== 'closed' && state.quests.some((quest) => quest.status === 'open') ? '本季还有未完成的任务，请打开健康页查看' : null),
     nudge,
     pressure,
     personal_origin: state.personal_origin,
     invite: world.consent && state.invite.ready && !state.invite.declined && !pressure && season ? {
       show: true,
       title_zh: season.title_zh,
-      body_zh: '一个赛季大约 8–12 周，从现在到你下次复查。这段时间里有几个小目标，复查那天一起看看成绩，然后开始下一个赛季。长寿图鉴不用花钱，每个成年人抽到各种卡的机会都一样。未满 18 岁不开放图鉴。',
+      body_zh: '一个赛季约 8–12 周，从现在到你下次复查。期间设有几个小目标，复查当天一起回顾完成情况，然后开始下一个赛季。长寿图鉴免费，每位成年人抽到各类卡的概率相同。未满 18 岁不开放图鉴。',
       odds_path: '/api/longpi/codex/odds',
     } : null,
     header: seasonHeader({ pressure, title: season?.title_zh ?? null, week: season ? weekOf(season, world.today) : null }),
@@ -696,7 +704,7 @@ export function plainReminderOf(dataDir: string): string | null {
   if (!state.season || state.season.status === 'closed') return null
   const locked = state.unlocks.find((unlock) => unlock.status === 'locked')
   if (locked) return REMINDER_ZH[locked.key] ?? null
-  if (state.quests.some((quest) => quest.status === 'open')) return '这一季还有没做完的事，打开健康页看一眼就好'
+  if (state.quests.some((quest) => quest.status === 'open')) return '本季还有未完成的任务，请打开健康页查看'
   return null
 }
 
@@ -716,13 +724,13 @@ export type EngageAction =
 
 export function actEngage(dataDir: string, action: EngageAction, now: Date = new Date()): { ok: boolean; error?: string; note?: string; view: EngageView } {
   const world = readWorld(dataDir, now)
-  if (!world.consent) return { ok: false, error: '先完成知情同意，这一季再开始。', view: syncEngage(dataDir, now) }
+  if (!world.consent) return { ok: false, error: '请先完成知情同意，再开始本季。', view: syncEngage(dataDir, now) }
   const state = readState(dataDir)
   if (action.action === 'next_season') {
     if (!state.season || seasonStatus(state.season, world.today) !== 'closed') {
       reduce(state, world, now)
       saveState(dataDir, state)
-      return { ok: false, error: '这一季还没有结束。', view: viewOf(state, world, dataDir) }
+      return { ok: false, error: '本季尚未结束。', view: viewOf(state, world, dataDir) }
     }
     state.season = null
     state.quests = []
@@ -738,11 +746,11 @@ export function actEngage(dataDir: string, action: EngageAction, now: Date = new
     if (!state.care.booked) state.care.booked = world.today
     emit('care.booked', { department_zh: action.department_zh?.slice(0, 40) || '医生', day: world.today })
   } else if (action.action === 'care_visit') {
-    if (!action.with_brief) return { ok: false, error: '这次要算完成，需要带着简报去。简报可以在健康页准备。', view: syncEngage(dataDir, now) }
+    if (!action.with_brief) return { ok: false, error: '需携带简报就诊才算完成。简报可在健康页准备。', view: syncEngage(dataDir, now) }
     addAction(state, 'care', world.today)
     if (!state.care.visited) state.care.visited = world.today
   } else if (action.action === 'addon') {
-    if (action.key !== 'hscrp' && action.key !== 'waist' && action.key !== 'ferritin' && action.key !== 'iron') return { ok: false, error: '只能记下腰围、hs-CRP 或铁蛋白。', view: syncEngage(dataDir, now) }
+    if (action.key !== 'hscrp' && action.key !== 'waist' && action.key !== 'ferritin' && action.key !== 'iron') return { ok: false, error: '仅可记录腰围、hs-CRP 或铁蛋白。', view: syncEngage(dataDir, now) }
     addAction(state, action.key === 'iron' ? 'ferritin' : action.key, world.today)
   } else if (action.action === 'retest') {
     addAction(state, 'retest', world.today)
@@ -753,7 +761,7 @@ export function actEngage(dataDir: string, action: EngageAction, now: Date = new
     if (season && world.today < windowStart) {
       reduce(state, world, now)
       saveState(dataDir, state)
-      return { ok: true, note: `已记下。复测窗口从 ${windowStart} 开始，到那时才算完成这项任务。`, view: viewOf(state, world, dataDir) }
+      return { ok: true, note: `已记录。复测窗口自 ${dayZhE(windowStart)}开始，届时复测才算完成此任务。`, view: viewOf(state, world, dataDir) }
     }
   }
   reduce(state, world, now)
@@ -763,17 +771,17 @@ export function actEngage(dataDir: string, action: EngageAction, now: Date = new
 
 export function freezeEngage(dataDir: string, input: { reason: 'sick' | 'travel' | 'other'; from: IsoDay; to: IsoDay }, now: Date = new Date()): { ok: boolean; error?: string; view: EngageView } {
   const synced = syncEngage(dataDir, now)
-  if (synced.needs_consent || !synced.season) return { ok: false, error: '先完成知情同意，这一季再开始。', view: synced }
+  if (synced.needs_consent || !synced.season) return { ok: false, error: '请先完成知情同意，再开始本季。', view: synced }
   const state = readState(dataDir)
   const world = readWorld(dataDir, now)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.from) || !/^\d{4}-\d{2}-\d{2}$/.test(input.to) || input.to < input.from) {
-    return { ok: false, error: '日期要写成 YYYY-MM-DD，结束不早于开始。', view: synced }
+    return { ok: false, error: '日期格式须为 YYYY-MM-DD，且结束日期不早于开始日期。', view: synced }
   }
   if (daysBetween(input.from, input.to) > 13) return { ok: false, error: '一次最多冻结 14 天。', view: synced }
   const active = new Set(activeDays(state, world))
   const days = daysInRange(input.from, input.to, world.today).filter((day) => !active.has(day) && !state.streak.frozen.some((row) => row.day === day))
-  if (days.length === 0) return { ok: false, error: '这些天已经有记录，或者还在未来，不用冻结。', view: synced }
-  if (state.streak.freezes_available < 1) return { ok: false, error: '没有可用的冻结了。抽到「连续记录冻结」可以再加一天。', view: synced }
+  if (days.length === 0) return { ok: false, error: '这些日期已有记录或尚未到来，无需冻结。', view: synced }
+  if (state.streak.freezes_available < 1) return { ok: false, error: '已无可用的冻结次数。抽到「连续记录冻结」可增加一天。', view: synced }
   const applied: IsoDay[] = []
   for (const day of days) {
     if (state.streak.freezes_available < 1) break
@@ -787,7 +795,7 @@ export function freezeEngage(dataDir: string, input: { reason: 'sick' | 'travel'
   const missed = days.length - applied.length
   return {
     ok: true,
-    ...(missed > 0 ? { error: `冻结了 ${applied.length} 天，其余 ${missed} 天没有冻结次数了。` } : {}),
+    ...(missed > 0 ? { error: `已冻结 ${applied.length} 天，其余 ${missed} 天因冻结次数不足未冻结。` } : {}),
     view: viewOf(state, world, dataDir),
   }
 }
@@ -830,7 +838,7 @@ export interface DrawResponse {
 export function drawEngage(dataDir: string, now: Date = new Date()): DrawResponse {
   const world = readWorld(dataDir, now)
   const state = readState(dataDir)
-  if (!world.consent) return { ok: false, reason: 'consent', error: '先完成知情同意。', view: viewOf(state, world, dataDir) }
+  if (!world.consent) return { ok: false, reason: 'consent', error: '请先完成知情同意。', view: viewOf(state, world, dataDir) }
   reduce(state, world, now)
   const block = blockOf(state, world)
   if (block) {
@@ -840,17 +848,17 @@ export function drawEngage(dataDir: string, now: Date = new Date()): DrawRespons
   const pack = safePack()
   if (!pack) {
     saveState(dataDir, state)
-    return { ok: false, reason: 'pack', error: '图鉴卡组还没有放进安装包。', view: viewOf(state, world, dataDir) }
+    return { ok: false, reason: 'pack', error: '安装包中尚未包含图鉴卡组。', view: viewOf(state, world, dataDir) }
   }
   const grantRow = state.codex.grants.find((row) => !row.used_by)
   if (!grantRow) {
     saveState(dataDir, state)
-    return { ok: false, reason: 'no_grant', error: '还没有抽卡次数。完成一项健康行动（测量、记录、带着简报就诊或复测）才会获得。', view: viewOf(state, world, dataDir) }
+    return { ok: false, reason: 'no_grant', error: '暂无抽卡次数。完成一项健康行动（测量、记录、带着简报就诊或复测）后即可获得。', view: viewOf(state, world, dataDir) }
   }
   const usedToday = state.codex.draw_days[world.today] ?? 0
   if (usedToday >= pack.table.daily_cap) {
     saveState(dataDir, state)
-    return { ok: false, reason: 'daily_cap', error: `今天的 ${pack.table.daily_cap} 次已经抽完，明天再抽。次数还留着。`, view: viewOf(state, world, dataDir) }
+    return { ok: false, reason: 'daily_cap', error: `今日 ${pack.table.daily_cap} 次抽取已用完，请明天再抽；剩余次数会保留。`, view: viewOf(state, world, dataDir) }
   }
   ensureSeed(state)
   const seed = Buffer.from(state.codex.seed_hex, 'hex')
@@ -887,11 +895,11 @@ export function drawEngage(dataDir: string, now: Date = new Date()): DrawRespons
     state.streak.freezes_available += 1
     state.codex.utility_used.push(drawn.card.id)
   } else if (drawn.card.utility === 'doctor_questions') {
-    const locked = state.unlocks.filter((unlock) => unlock.status === 'locked').map((unlock) => `要不要补上「${unlock.title_zh}」？`)
+    const locked = state.unlocks.filter((unlock) => unlock.status === 'locked').map((unlock) => `是否补做「${unlock.title_zh}」？`)
     questions = ['这次最该先看的一项是什么？', '有没有需要复查或加测的项目？', ...locked].slice(0, 3)
   } else if (drawn.card.utility === 'deep_dive') {
     const method = state.codex.owned.map((id) => cardById(pack, id)).find((card) => card?.family === 'method')
-    deep = method ? `可以把「${method.title_zh}」读完。它讲的是研究方法，不是你的检查结论。` : '还没有方法卡。完成一项健康行动后再抽。'
+    deep = method ? `可以阅读「${method.title_zh}」。它讲的是研究方法，不是你的检查结论。` : '尚无方法卡。完成一项健康行动后即可抽取。'
   }
   appendDraw(dataDir, drawn.result)
   emit('codex.drawn', { draw_id: drawn.result.id, card_id: drawn.card.id, rarity: drawn.card.rarity })
@@ -1024,16 +1032,16 @@ export function shareEngage(dataDir: string, input: { kind: 'card' | 'recap'; ca
   const state = readState(dataDir)
   const view = () => viewOf(state, world, dataDir)
   if ((world.accountAge ?? -1) < 18 || (world.age ?? -1) < 18) return { ok: false, error: '家人圈只对成年人开放。', view: view() }
-  if (!state.family.opted) return { ok: false, error: '先打开家人圈。', view: view() }
+  if (!state.family.opted) return { ok: false, error: '请先开启家人圈。', view: view() }
   let text = ''
   if (input.kind === 'recap') {
-    if (!state.recap_zh) return { ok: false, error: '这一季还没有回看。', view: view() }
+    if (!state.recap_zh) return { ok: false, error: '本季尚无回顾。', view: view() }
     text = shareRecapText(state.recap_zh, world.displayName)
   } else {
     const pack = safePack()
     const card = pack && input.card_id ? cardById(pack, input.card_id) : null
     if (!card || !state.codex.owned.includes(card.id)) return { ok: false, error: '只能分享已经抽到的卡。', view: view() }
-    if (blockOf(state, world)) return { ok: false, error: '图鉴没有打开，不能分享卡。', view: view() }
+    if (blockOf(state, world)) return { ok: false, error: '图鉴未开启，无法分享卡片。', view: view() }
     text = shareCardText({
       rarity_zh: rarityZh(card.rarity),
       title_zh: card.title_zh,
@@ -1108,7 +1116,7 @@ export async function runCodexMethod(dataDir: string, cardId: string, now: Date 
     text_zh: offer.text_zh,
     label,
     ran: true,
-    ...(ran.ok ? {} : { error: ran.error || '这次没有算出结果。' }),
+    ...(ran.ok ? {} : { error: ran.error || '本次未能计算出结果。' }),
     view: viewOf(state, world, dataDir),
   }
 }
@@ -1178,8 +1186,8 @@ export function candidateSeeds(dataDir: string, now: Date = new Date()): Array<{
     })
   }
   const quest = view.quests.find((row) => row.status === 'open')
-  if (quest && view.pressure) out.push({ id: 'nba-season-quest', kind: 'season_quest', priority: 42, title_zh: quest.title_zh, detail_zh: '这个赛季只做几件事，其余日子不必打开。', prompt_zh: '这个赛季我现在该做什么？' })
-  if (view.codex.enabled && view.codex.draws_available > 0) out.push({ id: 'nba-claim-draw', kind: 'claim_draw', priority: 38, title_zh: '有一次图鉴抽取', detail_zh: '次数来自健康行动。没有付费。', prompt_zh: '我想抽一张长寿图鉴' })
+  if (quest && view.pressure) out.push({ id: 'nba-season-quest', kind: 'season_quest', priority: 42, title_zh: quest.title_zh, detail_zh: '本赛季只需完成几件事，其余时间无需打开。', prompt_zh: '这个赛季我现在该做什么？' })
+  if (view.codex.enabled && view.codex.draws_available > 0) out.push({ id: 'nba-claim-draw', kind: 'claim_draw', priority: 38, title_zh: '有一次图鉴抽取机会', detail_zh: '抽取次数来自健康行动，无需付费。', prompt_zh: '我想抽一张长寿图鉴' })
   return out
 }
 

@@ -117,7 +117,7 @@ function Welcome(props: { onDone: () => void; onLater: () => void; openSettings:
         onClick: () => {
           setBusy(true)
           setError('')
-          agreeAll().then(props.onDone).catch((err: unknown) => setError(`没有保存成功：${errorText(err, '请稍后再试')}`)).finally(() => setBusy(false))
+          agreeAll().then(props.onDone).catch((err: unknown) => setError(`保存失败：${errorText(err, '请稍后再试')}`)).finally(() => setBusy(false))
         },
       }, busy ? '正在保存…' : '同意并开始')))
 }
@@ -156,7 +156,7 @@ function BasicInfo(props: { journey: Journey; onDone: () => void; onSkip: () => 
           setError('')
           postJson('/api/longpi/profile', { age: ageNum, sex })
             .then(() => { notifyChanged(); props.onDone() })
-            .catch((err: unknown) => setError(`没有保存成功：${errorText(err, '请稍后再试')}`))
+            .catch((err: unknown) => setError(`保存失败：${errorText(err, '请稍后再试')}`))
             .finally(() => setBusy(false))
         },
       }, busy ? '正在保存…' : '下一步')))
@@ -178,7 +178,7 @@ function FirstData(props: { onFinish: () => void; openChat: () => void; consentA
           h('li', null, '在健康对话里说说你想改善什么（睡眠、体重、血糖……）')),
         h('p', { className: 'lp-caption' }, '以后拿到体检报告，随时在「健康」页上传。'))) : null,
     h('div', { className: 'lp-onb-actions' },
-      none && !read ? h(Btn, { variant: 'outline', onClick: props.openChat }, '去健康对话') : null,
+      none && !read ? h(Btn, { variant: 'outline', onClick: props.openChat }, '前往健康对话') : null,
       // Before anything is uploaded or skipped, 上传报告 is the one primary action on screen.
       h(Btn, { variant: read || none ? 'primary' : 'outline', onClick: () => { if (!read && props.consentAt) writePref(UPLOAD_SKIPPED_KEY, props.consentAt); props.onFinish() } }, '完成')))
 }

@@ -81,7 +81,7 @@ try {
   assert.ok(move)
   assert.match(move.lead, /152 → 116/)
   assert.match(move.lead, /3 次/)
-  assert.match(move.lead, /2023-11-14–2026-02-11/)
+  assert.match(move.lead, /2023 年 11 月 14 日–(2026 年 )?2 月 11 日/)
   assert.ok((move.pct ?? 0) < 0)
 
   const trends = pickKeyTrends([
@@ -95,11 +95,11 @@ try {
   assert.ok(trends.length >= 2 && trends.length <= 4)
 
   assert.equal(insightSentence({ sleepHours: null, steps: null, labNote: null }), null)
-  assert.match(insightSentence({ sleepHours: 5.5, steps: 3200, labNote: '血红蛋白最近在往下走。' }) ?? '', /昨晚睡了/)
-  assert.deepEqual(suggestedQuestions({ changes: ['血红蛋白'], visit: '2026-12-20' })[1], '下次 2026-12-20 看医生，我要问哪几件？')
+  assert.match(insightSentence({ sleepHours: 5.5, steps: 3200, labNote: '血红蛋白最近在往下走。' }) ?? '', /昨晚睡眠/)
+  assert.match(suggestedQuestions({ changes: ['血红蛋白'], visit: '2026-12-20' })[1], /^下次 (2026 年 )?12 月 20 日就诊时，我应该询问哪些问题？$/)
   assert.equal(concreteNext([{ item_zh: '腰围', unlocks_zh: '心血管风险', self_measurable: true, self_key: 'waist' }]).title_zh, '量一次腰围')
-  assert.match(judgementText('within', true), /这点变化不算数/)
-  assert.match(judgementText('beyond', true), /值得问医生/)
+  assert.match(judgementText('within', true), /尚不能视为真实变化/)
+  assert.match(judgementText('beyond', true), /建议咨询医生/)
 
   const timeline = buildTimeline({
     checkups: [{ date: '2026-02-11', note: 'C反应蛋白' }],
@@ -117,7 +117,7 @@ try {
     offerBrief: true,
   })
   assert.equal(replyHasThreeParts(short), true)
-  assert.match(short, /给医生看的简报/)
+  assert.match(short, /就诊简报/)
   assert.ok(short.split('\n').filter((line) => line && !line.startsWith('我看到') && !line.startsWith('数据') && !line.startsWith('下一步')).every((line) => line.length < 90))
   const emergency = shapeReply({
     question: '我胸口疼',
@@ -130,7 +130,7 @@ try {
   assert.equal(scrubVisible('Mirobody MCP record_status ~/.dsh/longpi tok/s User says: hi').includes('Mirobody'), false)
 
   const lines = personaLines({ mounted: true, peer: false, error: '', pluginHome: '' })
-  assert.ok(lines.some((line) => line.includes('我看到的') && line.includes('数据说明不了的') && line.includes('下一步')))
+  assert.ok(lines.some((line) => line.includes('数据显示') && line.includes('数据尚不能说明的') && line.includes('下一步')))
 
   const scheduleDir = tempDir()
   const suggested = suggestEvent({ date: '2026-12-20', kind: 'retest', title_zh: '复查血红蛋白', brief_zh: '带上简报', questions_zh: ['这次和上次差多少？'] })

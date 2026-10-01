@@ -63,8 +63,8 @@ export function judgeIdentity(text: string, dataDir: string): IdentityJudgement 
     const other = distinct.find((name) => normName(name) !== mine) ?? ''
     return {
       wrong_person: true,
-      reason_zh: '这份报告里有和档案不同的姓名，没有写入你的记录。请只上传你自己的那几页。',
-      page_note_zh: other ? `报告上还有「${other}」，和档案里的姓名不同，这一份没有写入。` : '报告上有两个姓名，没有写入。',
+      reason_zh: '报告中出现与档案不一致的姓名，未写入你的记录。请仅上传本人的报告页。',
+      page_note_zh: other ? `报告中还有「${other}」，与档案姓名不一致，本份报告未写入。` : '报告中有两个姓名，未写入。',
       names: distinct,
     }
   }
@@ -72,16 +72,16 @@ export function judgeIdentity(text: string, dataDir: string): IdentityJudgement 
     const other = distinct.find((name) => normName(name) !== mine) ?? distinct[0] ?? ''
     return {
       wrong_person: true,
-      reason_zh: '报告上的姓名和档案不一致，没有写入。请核对是不是你的报告。',
-      page_note_zh: `报告姓名「${other}」和档案不同，没有写入你的记录。`,
+      reason_zh: '报告姓名与档案不一致，未写入。请核对是否为本人报告。',
+      page_note_zh: `报告姓名「${other}」与档案不一致，未写入你的记录。`,
       names: distinct,
     }
   }
   if (!mine && distinct.length >= 2) {
     return {
       wrong_person: true,
-      reason_zh: '这份报告里有两个不同的姓名，没有写入。请先在档案里填写你的姓名，再分开上传。',
-      page_note_zh: `报告里出现了两个姓名（${distinct.join('、')}）。档案还没有姓名，所以没有写入。`,
+      reason_zh: '报告中有两个不同的姓名，未写入。请先在档案中填写你的姓名，再分别上传。',
+      page_note_zh: `报告中出现两个姓名（${distinct.join('、')}）。档案尚未填写姓名，因此未写入。`,
       names: distinct,
     }
   }
@@ -90,8 +90,8 @@ export function judgeIdentity(text: string, dataDir: string): IdentityJudgement 
     if (years.length > 0 && years.every((year) => Math.abs(year - (profile.birthYear as number)) > 1)) {
       return {
         wrong_person: true,
-        reason_zh: '报告上的出生年份和档案差得较多，没有写入。请核对是不是你的报告。',
-        page_note_zh: `报告出生年份是 ${years.join('、')}，档案是 ${profile.birthYear}，没有写入。`,
+        reason_zh: '报告中的出生年份与档案相差较大，未写入。请核对是否为本人报告。',
+        page_note_zh: `报告出生年份为 ${years.join('、')}，档案为 ${profile.birthYear}，未写入。`,
         names: [],
       }
     }

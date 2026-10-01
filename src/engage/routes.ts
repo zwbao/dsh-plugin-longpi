@@ -49,7 +49,7 @@ function day(value: unknown): string {
 
 export function mountEngageRoutes(register: (path: string, handler: Handler) => void, dataDir: () => string): void {
   const fail = (res: ServerResponse, error: unknown) => {
-    const message = error instanceof Error && error.message === 'json' ? '请求不是 JSON。' : '这一季暂时没有读出来，请再试一次。'
+    const message = error instanceof Error && error.message === 'json' ? '请求不是 JSON。' : '暂时无法读取本季内容，请重试。'
     sendJson(res, error instanceof Error && error.message === 'json' ? 400 : 500, { ok: false, error: message })
   }
 

@@ -153,7 +153,7 @@ try {
   assert.equal(mod.isoWeek(at('2021-01-03', '12:00')), '2020-W53', 'ISO week-numbering year')
   const sunday = at('2026-09-27', '20:00')
   const weekly = decide(sunday, on(), state({ checkin_open: [] })).find((send) => send.kind === 'weekly')
-  assert.deepEqual(weekly, { kind: 'weekly', key: 'weekly:2026-W39', text: 'LongPi 本周小结已更新，打开健康页查看。' })
+  assert.deepEqual(weekly, { kind: 'weekly', key: 'weekly:2026-W39', text: 'LongPi 本周小结已更新，请打开健康页查看。' })
   assert.equal(decide(sunday, on({ detail: 'full' }), state({ checkin_open: [] })).find((send) => send.kind === 'weekly').text, 'LongPi：本周方案执行率 80%，连续 5 天；下次复测：超敏C反应蛋白 9 月 29 日。')
   assert.equal(kinds(decide(at('2026-09-27', '21:30'), on(), state(), [row('weekly', 'weekly:2026-W39', sunday)])).includes('weekly'), false, 'once per week')
   assert.equal(kinds(decide(at('2026-09-28', '21:30'))).includes('weekly'), false, 'Monday does not back-fill Sunday')
@@ -172,8 +172,8 @@ try {
   assert.equal(mod.inQuiet(night, at('2026-09-24', '22:29')), false)
 
   // the nudge: an early stage for 3 days after consent, once in 7 days, at check-in time
-  const stuck = state({ stage: 'records', plan_exists: false, checkin_items: 0, checkin_open: [], retests: [], next_title_zh: '连接体检记录', next_detail_zh: '在 Mirobody 中生成个人 MCP 地址。', consent_at: at('2026-09-21', '10:00').toISOString() })
-  assert.deepEqual(decide(at('2026-09-24', '21:00'), on(), stuck), [{ kind: 'nudge', key: 'nudge:records:2026-09-24', text: 'LongPi：下一步「连接体检记录」，打开健康页继续。' }])
+  const stuck = state({ stage: 'records', plan_exists: false, checkin_items: 0, checkin_open: [], retests: [], next_title_zh: '连接健康数据服务', next_detail_zh: '在 Mirobody 中生成个人 MCP 地址。', consent_at: at('2026-09-21', '10:00').toISOString() })
+  assert.deepEqual(decide(at('2026-09-24', '21:00'), on(), stuck), [{ kind: 'nudge', key: 'nudge:records:2026-09-24', text: 'LongPi：下一步「连接健康数据服务」，请打开健康页继续。' }])
   assert.deepEqual(decide(at('2026-09-23', '21:00'), on(), stuck), [], 'not before 3 days')
   assert.deepEqual(decide(at('2026-09-24', '20:00'), on(), stuck), [], 'not before check-in time')
   assert.deepEqual(decide(at('2026-09-24', '21:00'), on(), stuck, [row('nudge', 'nudge:records:2026-09-18', at('2026-09-18', '21:00'))]), [], 'not twice in 7 days')
@@ -331,7 +331,7 @@ try {
   assert.equal(res.status, 200)
   let body = res.json()
   assert.deepEqual(Object.keys(body).sort(), ['log', 'next', 'platform_desktop', 'settings', 'silence_zh'])
-  assert.match(body.silence_zh, /关着的/)
+  assert.match(body.silence_zh, /提醒已关闭/)
   assert.equal(body.settings.enabled, false)
   assert.deepEqual(body.next, { checkin: null, retest: null, weekly: null })
   assert.equal(body.platform_desktop, true)

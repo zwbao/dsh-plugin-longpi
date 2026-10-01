@@ -152,9 +152,9 @@ function delay(ms: number): Promise<void> {
 /** A database fault, not a slow query. The test fixture's "database timeout" is not this. */
 const DB_DOWN = /OperationalError|InterfaceError|connection refused|could not connect to server|server closed the connection unexpectedly|too many clients already|the database system is starting up|the database system is shutting down|password authentication failed|remaining connection slots|psycopg|asyncpg/i
 
-const DB_DOWN_HEALTHY_ZH = '体检记录的服务显示正常，但数据库没有连上，暂时读不到。请稍后再试。'
-const DB_DOWN_ZH = '体检记录的数据库没有连上，暂时读不到。请稍后再试。'
-const AUTH_ZH = '没有认出这次登录，请在设置里重新连接体检记录。'
+const DB_DOWN_HEALTHY_ZH = '健康数据服务运行正常，但数据库未连接，暂时无法读取。请稍后再试。'
+const DB_DOWN_ZH = '健康数据服务的数据库未连接，暂时无法读取。请稍后再试。'
+const AUTH_ZH = '无法识别本次登录，请在设置中重新连接健康数据服务。'
 
 function isDbDown(text: string): boolean {
   return DB_DOWN.test(text)
@@ -670,7 +670,7 @@ async function loadRemote(config: Config, pluginHome: string): Promise<Remote> {
         // Mirobody is down or refuses this account: the other batches would fail the same way, each after a timeout.
         if (latest.kind === 'unavailable' || latest.kind === 'denied' || latest.kind === 'db' || latest.kind === 'auth') {
           unread.push(...names.slice(start + LATEST_CHUNK))
-          if (start + LATEST_CHUNK < names.length) snapshot.read_errors.push(`其余 ${names.length - start - LATEST_CHUNK} 项没有再读。`)
+          if (start + LATEST_CHUNK < names.length) snapshot.read_errors.push(`其余 ${names.length - start - LATEST_CHUNK} 项未继续读取。`)
           break
         }
         continue
@@ -730,11 +730,11 @@ function catalogueCut(payload: unknown, table: ReturnType<typeof tableOf>, liste
   const charCut = textOf(payload).includes('… cut at ')
   const short = claimed != null && claimed > parsed
   if (charCut || short || (total != null && total > parsed)) {
-    return `指标目录没有读全：这次只读到 ${table?.rows.length ?? parsed} 项${total != null ? `（共 ${total} 项）` : ''}，其余没有读到。`
+    return `指标目录未完整读取：本次仅读取 ${table?.rows.length ?? parsed} 项${total != null ? `（共 ${total} 项）` : ''}，其余未读取。`
   }
   // No "of N" to go by: a catalogue exactly at Mirobody's cap was most likely cut there.
   if (table && total == null && parsed >= MIROBODY_CATALOG_CAP) {
-    return `指标目录返回了 ${parsed} 项，正好到了一次能读的上限，可能还有指标没有读到。`
+    return `指标目录返回了 ${parsed} 项，已达到单次读取上限，可能仍有指标未读取。`
   }
   if (listed > MAX_INDICATORS) return `指标目录超过 ${MAX_INDICATORS} 项，只读取了前 ${MAX_INDICATORS} 项。`
   return ''

@@ -27,9 +27,9 @@ function GeneticsCard(): React.ReactElement {
     }).catch(() => { if (!gone) setRow(null) })
     return () => { gone = true }
   }, [])
-  if (!row) return h('p', { className: 'lp-small lp-muted lp-measure', id: 'lp-genetics-empty' }, '还没有基因摘要。叙述版 PDF 请发到健康对话。普通体检不要选基因文件。')
+  if (!row) return h('p', { className: 'lp-small lp-muted lp-measure', id: 'lp-genetics-empty' }, '暂无基因摘要。叙述版 PDF 请发送到健康对话。上传普通体检报告时请勿选择基因文件。')
   return h('div', { className: 'lp-stack', id: 'lp-genetics' },
-    h('p', null, (row.headlines_zh ?? []).join('；') || '已记下基因报告。'),
+    h('p', null, (row.headlines_zh ?? []).join('；') || '已保存基因报告。'),
     (row.variants ?? []).length > 0
       ? h('ul', { className: 'lp-rows' }, ...(row.variants ?? []).slice(0, 12).map((item) => h('li', { key: item.rsid, className: 'lp-row' },
         h('span', { className: 'lp-row-main' }, item.note_zh || item.rsid),
@@ -37,7 +37,7 @@ function GeneticsCard(): React.ReactElement {
       : null,
     (row.caveats_zh ?? []).length > 0 ? h('ul', { className: 'lp-bullets' }, ...(row.caveats_zh ?? []).map((line) => h('li', { key: line }, line))) : null,
     row.raw_export_zh ? h('p', { className: 'lp-caption lp-measure' }, row.raw_export_zh) : null,
-    row.sample_id ? h('p', { className: 'lp-caption lp-measure' }, `样本号存在这台电脑上，不会发给模型。`) : null)
+    row.sample_id ? h('p', { className: 'lp-caption lp-measure' }, `样本号仅保存在这台电脑上，不会发送给 DeepSeek 模型。`) : null)
 }
 
 function MedsForm(): React.ReactElement {
@@ -57,26 +57,26 @@ function MedsForm(): React.ReactElement {
       setName(''); setDose(''); setTimes('')
       load()
     } catch (err) {
-      setError(errorText(err, '没有记下'))
+      setError(errorText(err, '保存失败'))
     }
   }
   return h('div', { className: 'lp-stack', id: 'lp-meds' },
     lines.length > 0
       ? h('ul', { className: 'lp-rows' }, ...lines.map((line) => h('li', { key: line, className: 'lp-row' }, h('span', { className: 'lp-row-main' }, line))))
-      : h('p', { className: 'lp-small lp-muted lp-measure' }, '还没有你让 LongPi 记下的药。'),
+      : h('p', { className: 'lp-small lp-muted lp-measure' }, '尚未记录用药。'),
     h('div', { className: 'lp-form-grid' },
       h('div', { className: 'lp-field lp-field-full' },
         h('label', { className: 'lp-field-label', htmlFor: 'lp-med-name' }, '药名'),
         h('input', { id: 'lp-med-name', className: 'lp-input', value: name, onChange: (event: React.ChangeEvent<HTMLInputElement>) => setName(event.target.value) })),
       h('div', { className: 'lp-field' },
-        h('label', { className: 'lp-field-label', htmlFor: 'lp-med-dose' }, '用法', h('span', { className: 'lp-optional' }, '照处方抄，可不填')),
+        h('label', { className: 'lp-field-label', htmlFor: 'lp-med-dose' }, '用法', h('span', { className: 'lp-optional' }, '按处方填写，选填')),
         h('input', { id: 'lp-med-dose', className: 'lp-input', value: dose, placeholder: '10 mg', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setDose(event.target.value) })),
       h('div', { className: 'lp-field' },
-        h('label', { className: 'lp-field-label', htmlFor: 'lp-med-times' }, '什么时候吃', h('span', { className: 'lp-optional' }, '可不填')),
-        h('input', { id: 'lp-med-times', className: 'lp-input', value: times, placeholder: '每天早上一次', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setTimes(event.target.value) }))),
+        h('label', { className: 'lp-field-label', htmlFor: 'lp-med-times' }, '服用时间', h('span', { className: 'lp-optional' }, '选填')),
+        h('input', { id: 'lp-med-times', className: 'lp-input', value: times, placeholder: '每日早晨一次', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setTimes(event.target.value) }))),
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
     h('div', { className: 'lp-actions' },
-      h(Btn, { type: 'button', disabled: !name.trim(), onClick: () => { void save() } }, '记下这味药')))
+      h(Btn, { type: 'button', disabled: !name.trim(), onClick: () => { void save() } }, '保存用药')))
 }
 
 function ConditionsForm(): React.ReactElement {
@@ -94,20 +94,20 @@ function ConditionsForm(): React.ReactElement {
       setName('')
       load()
     } catch (err) {
-      setError(errorText(err, '没有记下'))
+      setError(errorText(err, '保存失败'))
     }
   }
   return h('div', { className: 'lp-stack', id: 'lp-conditions' },
     rows.length > 0
       ? h('ul', { className: 'lp-rows' }, ...rows.map((row) => h('li', { key: row.id, className: 'lp-row' }, h('span', { className: 'lp-row-main' }, row.text_zh))))
-      : h('p', { className: 'lp-small lp-muted lp-measure' }, '还没有记下病情。'),
+      : h('p', { className: 'lp-small lp-muted lp-measure' }, '尚未记录病情。'),
     h('div', { className: 'lp-field' },
       h('label', { className: 'lp-field-label', htmlFor: 'lp-cond-name' }, '病情或诊断'),
       h('input', { id: 'lp-cond-name', className: 'lp-input', value: name, placeholder: '脂肪肝', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setName(event.target.value) })),
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
     h('div', { className: 'lp-actions' },
-      h(Btn, { type: 'button', disabled: !name.trim(), onClick: () => { void save() } }, '记下')),
-    h('p', { className: 'lp-caption lp-measure' }, '诊断记在这台电脑上。体检原件那边不接收病情。'))
+      h(Btn, { type: 'button', disabled: !name.trim(), onClick: () => { void save() } }, '保存')),
+    h('p', { className: 'lp-caption lp-measure' }, '诊断保存在这台电脑上；健康数据服务不接收病情信息。'))
 }
 
 export function DataInSection(): React.ReactElement {

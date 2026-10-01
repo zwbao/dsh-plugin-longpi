@@ -185,8 +185,8 @@ export function runLocal(opts: {
   const logged = appendLog(opts.dataDir, 'run', budgetNote
     ? budgetNote
     : prepared.length > 0
-    ? `在本机算完「${opts.manifest.title_zh}」（${prepared.length} 项）。人数不够或还没进入一轮汇总，没有发布。`
-    : `「${opts.manifest.title_zh}」在本机还没有够用的序列，没有发布。`, opts.manifest.id, at)
+    ? `已在本机完成「${opts.manifest.title_zh}」的计算（${prepared.length} 项）。人数不足或尚未进入汇总轮次，未发布。`
+    : `「${opts.manifest.title_zh}」在本机尚无足够的数据序列，未发布。`, opts.manifest.id, at)
   const result = resultOf(opts.manifest, prepared, runId, at, logged.seq, null, false)
   writeJsonAtomic(join(opts.dataDir, 'science', 'results', `${opts.manifest.id}.json`), { ...result, local_only: prepared.map(publicLocal) })
   const give = giveBack(opts.manifest, prepared, null)
@@ -225,9 +225,9 @@ export function giveBack(manifest: StudyManifest, prepared: readonly PreparedSta
   const own = prepared.map((row) => row.detail_zh).join('；')
   const communityLine = community
     ? `本机汇总了 ${community.n} 人的加噪合计，平均大约 ${round(community.mean)}。噪声会让这个平均和真实平均有差别，ε 越小差别越大。`
-    : `还没有够人数的汇总（至少 ${manifest.analysis.release.min_cohort} 人）。你自己的数字留在这台电脑上。`
+    : `尚无达到人数要求的汇总（至少 ${manifest.analysis.release.min_cohort} 人）。你自己的数字留在这台电脑上。`
   const parts = [
-    own || '本机还没有足够的多次记录，先不计算波动。',
+    own || '本机尚无足够的重复记录，暂不计算波动。',
     communityLine,
     ethicsLine(manifest),
     '这只描述波动或两组的差别，不是诊断，也不能代替看医生。原始化验、姓名和基因都没有送出。',

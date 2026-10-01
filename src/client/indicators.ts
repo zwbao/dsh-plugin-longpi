@@ -54,7 +54,7 @@ function noiseSentence(detail: IndicatorDetail): string | null {
   const tooEarly = row.gate === 'too_early' || (row.reason_zh ?? '').startsWith('太早')
   const beyond = row.judged === 'changed'
   if (tooEarly || beyond) return null
-  return `正常波动：+${fmt(biovar.band_pct.up, 1)}% / ${fmt(biovar.band_pct.down, 1)}%（个体内变异 ${fmt(biovar.cvi_pct, 1)}%）。两次结果之差在这个范围内，多半是测量和生理波动。`
+  return `正常波动：+${fmt(biovar.band_pct.up, 1)}% / ${fmt(biovar.band_pct.down, 1)}%（个体内变异 ${fmt(biovar.cvi_pct, 1)}%）。两次结果的差异在此范围内时，多半属于测量误差和生理波动。`
 }
 
 const FILTERS: Array<{ key: IndicatorFilter; label: string; test: (row: IndicatorRow) => boolean }> = [
@@ -100,7 +100,7 @@ export function JudgedChip(props: { row: IndicatorRow; gate?: string; reason?: s
   if (kind === 'within') return h('span', { className: 'lp-badge lp-badge-good', title: full }, judgementText(kind, false))
   if (kind === 'unjudged') {
     // No judgement is shown as 「—」; the reason stays in the tooltip and the detail panel.
-    const why = row.read_error ? '这项没有读到' : row.points.length < 2 ? '只有一次结果，还不能下结论' : '还缺比较要用的信息，还不能下结论'
+    const why = row.read_error ? '此项未读取到' : row.points.length < 2 ? '只有一次结果，还不能下结论' : '还缺比较要用的信息，还不能下结论'
     return h('span', { className: 'lp-caption', title: why, 'aria-label': judgementText(kind, false) }, '—')
   }
   return h('span', { className: 'lp-caption', title: reason || full }, judgementText(kind, false))
@@ -120,7 +120,7 @@ function panelSlug(id: string): string {
 function IndicatorLine(props: { row: IndicatorRow; open: boolean; onToggle: () => void; gate?: string; reason?: string }): React.ReactElement {
   const { row } = props
   const slug = panelSlug(row.id)
-  const missed = row.read_error ? scrubVisible(row.read_error).replace(/没有在 \d+ 秒内返回这一项/, '这次没有读到，稍后刷新再看') : ''
+  const missed = row.read_error ? scrubVisible(row.read_error).replace(/没有在 \d+ 秒内返回这一项/, '本次未读取到，请稍后刷新') : ''
   const unit = unitText(row.unit)
   const when = row.latest ? dateZh(row.latest.date) : ''
   return h('li', { className: `lp-ind-row ${props.open ? 'lp-ind-open' : ''}` },
@@ -129,7 +129,7 @@ function IndicatorLine(props: { row: IndicatorRow; open: boolean; onToggle: () =
         h('span', { className: 'lp-ind-label', title: cleanLabel(row.label_zh) }, cleanLabel(row.label_zh)),
         row.plan_marker ? h('span', { className: 'lp-tag' }, '方案') : null),
       missed
-        ? h('span', { className: 'lp-ind-value' }, h('span', { className: 'lp-ind-error', title: missed }, h(Icon, { name: 'warn', size: 12 }), '没有读到'))
+        ? h('span', { className: 'lp-ind-value' }, h('span', { className: 'lp-ind-error', title: missed }, h(Icon, { name: 'warn', size: 12 }), '未读取到'))
         : h('span', { className: 'lp-ind-value' },
           // 「5.8%」: a percent sign belongs to the number, never a gap before it.
           h('span', { className: 'lp-ind-num' }, unit.startsWith('%') ? `${latestText(row)}${unit}` : latestText(row)),
@@ -169,7 +169,7 @@ function DetailBody(props: { detail: IndicatorDetail }): React.ReactElement {
   const move = movementOf(numeric.map((point) => ({ date: point.date, value: point.value })), unitText(units[0] ?? row.unit))
   return h('div', { className: 'lp-ind-detail' },
     move ? h('p', { className: 'lp-small lp-num' }, tidy(move.lead)) : null,
-    row.read_error ? h('p', { className: 'lp-blocker lp-blocker-bad' }, `这项这次没有读到：${row.read_error}。下面是能读到的部分。`) : null,
+    row.read_error ? h('p', { className: 'lp-blocker lp-blocker-bad' }, `此项本次未读取到：${row.read_error}。以下为已读取的部分。`) : null,
     row.change?.text_zh ? h('p', { className: 'lp-muted' }, tidy(row.change.text_zh)) : null,
     numeric.length > 1 && units.length <= 1
       ? h(LineChart, { points: numeric.map((point) => ({ date: point.date, value: point.value })), unit: unitText(units[0] ?? row.unit), label: row.label_zh, height: 150, digits })
@@ -181,18 +181,18 @@ function DetailBody(props: { detail: IndicatorDetail }): React.ReactElement {
         biovar?.source.url ? h(React.Fragment, null, ' 来源：', h('a', { href: biovar.source.url, target: '_blank', rel: 'noopener noreferrer', title: biovar.source.title || undefined }, sourceLabel(biovar.source.title))) : biovar?.source.title ? ` 来源：${sourceLabel(biovar.source.title)}` : '',
         biovar?.source.doi ? ` · doi:${biovar.source.doi}` : '')
       : biovar && (row.gate === 'too_early' || (row.reason_zh ?? '').startsWith('太早'))
-        ? h('p', { className: 'lp-caption' }, reasonBesideChip(row.gate, row.reason_zh) || '间隔还没到这项的最短复测时间。')
+        ? h('p', { className: 'lp-caption' }, reasonBesideChip(row.gate, row.reason_zh) || '距上次检测尚未达到此项的最短复测间隔。')
         : biovar && row.judged === 'changed'
           ? h('p', { className: 'lp-caption' }, '两次结果之差超出了上面的正常波动范围。')
           : h('p', { className: 'lp-caption' }, row.range_zh
-            ? '这项没有用来比较两次变化的波动数据。上面按参考范围标了偏低或偏高。'
-            : row.source === 'checkup' ? '这项没有收录个体正常波动数据，分不清真实变化和波动，所以不作判断。' : '手环和自测数据按周均值或日值显示趋势，不作正常波动判断。'),
+            ? '此项缺少用于比较两次变化的波动数据，上方已按参考范围标注偏低或偏高。'
+            : row.source === 'checkup' ? '此项未收录个体正常波动数据，无法区分真实变化与波动，因此不作判断。' : '手环和自测数据按周均值或日值显示趋势，不作正常波动判断。'),
     biovar ? h('p', { className: 'lp-caption' }, `研究里用来判断变化的范围：+${fmt(biovar.band_pct.up, 1)}% / ${fmt(biovar.band_pct.down, 1)}%（来源：${sourceLabel(biovar.source.title)}）`) : null,
     biovar?.caveat_zh && !row.gate ? h('p', { className: 'lp-caption' }, biovar.caveat_zh) : null,
     points.length > 0
       ? h('div', { className: 'lp-table-wrap' }, h('table', { className: 'lp-table' },
         h('caption', { className: 'lp-sr' }, `${row.label_zh}历次数值`),
-        h('thead', null, h('tr', null, ...['日期', '数值', '单位', '来自'].map((cell) => h('th', { key: cell, scope: 'col', className: cell === '数值' ? 'lp-td-num' : undefined }, cell)))),
+        h('thead', null, h('tr', null, ...['日期', '数值', '单位', '来源'].map((cell) => h('th', { key: cell, scope: 'col', className: cell === '数值' ? 'lp-td-num' : undefined }, cell)))),
         h('tbody', null, ...[...points].reverse().map((point, index) => h('tr', { key: `${point.date}-${index}` },
           h('td', null, dateZh(point.date)),
           h('td', { className: 'lp-td-num' }, point.text ?? (point.value == null ? '—' : fmt(point.value, digits))),
@@ -219,8 +219,8 @@ function EmptyCard(props: { icon: string; title: string; text: string; action?: 
 }
 
 const AREA_EMPTY: Record<Exclude<LifeArea, 'labs'>, { icon: string; title: string; text: string }> = {
-  sleep: { icon: 'pulse', title: '还没有睡眠数据', text: '连上手环或导入睡眠记录后，这里会列出睡眠时长和变化趋势。' },
-  training: { icon: 'flame', title: '还没有运动数据', text: '连上手环或导入运动记录后，这里会列出步数、活动量和变化趋势。' },
+  sleep: { icon: 'pulse', title: '还没有睡眠数据', text: '连接手环或导入睡眠记录后，这里会列出睡眠时长和变化趋势。' },
+  training: { icon: 'flame', title: '还没有运动数据', text: '连接手环或导入运动记录后，这里会列出步数、活动量和变化趋势。' },
 }
 
 function Empty(props: { data: IndicatorsResponse; area: LifeArea; onConnect?: () => void }): React.ReactElement {
@@ -231,7 +231,7 @@ function Empty(props: { data: IndicatorsResponse; area: LifeArea; onConnect?: ()
   return h(EmptyCard, {
     icon: 'flask',
     title: '还没有化验数据',
-    text: '上传体检报告后，这里会列出每一项化验，先看变化，再看这点变化算不算数。',
+    text: '上传体检报告后，这里会列出每项化验及其变化，并判断变化是否超出正常波动。',
     action: { label: '上传报告', onClick: () => requestView({ tab: 'profile', id: 'lp-findings-card' }) },
   })
 }
@@ -276,7 +276,7 @@ function useGates(stamp: string | undefined): Record<string, { gate?: string; re
   return gates
 }
 
-const JUDGEMENT_HELP = '超出正常波动：比你平常的起伏更大，值得问医生，不是急症。在正常波动范围内：这点变化不算数。太早：离上次太近。不可比：两次不是同一家机构。还不能下结论：看缺的是哪一步。'
+const JUDGEMENT_HELP = '超出正常波动：变化大于你平常的起伏，建议咨询医生，但不属于急症。在正常波动范围内：变化没有实际意义。太早：距上次检测时间过短。不可比：两次检测不在同一机构。还不能下结论：请查看缺少哪一步。'
 
 export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filter: IndicatorFilter) => void; onConnect?: () => void; area?: LifeArea }): React.ReactElement {
   const { data, loading, error } = useIndicators()
@@ -311,7 +311,7 @@ export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filte
     data.record.status === 'partial' || data.record.status === 'error'
       ? h('div', { className: 'lp-callout lp-callout-warn', role: 'note' }, h(Icon, { name: 'warn', size: 14 }),
         h('div', { className: 'lp-callout-body' },
-          `有一部分记录这次没有读到${data.record.error ? `：${data.record.error}` : failed > 0 ? `（${failed} 项）` : ''}。标着「没有读到」的指标不是没测，稍后刷新再读。`))
+          `部分记录本次未读取到${data.record.error ? `：${data.record.error}` : failed > 0 ? `（${failed} 项）` : ''}。标有「未读取到」的指标并非未检测，请稍后刷新重试。`))
       : null,
     h('div', { className: 'lp-ind-toolbar' },
       h('div', { className: 'lp-seg', role: 'group', 'aria-label': '筛选指标' },
@@ -326,7 +326,7 @@ export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filte
       latestLine ? h('span', { className: 'lp-caption lp-ind-meta' }, latestLine,
         judgedAny ? h(Info, { label: '和正常波动比', align: 'end' }, JUDGEMENT_HELP) : null) : null),
     groups.length === 0
-      ? h(EmptyCard, { icon: 'check', title: `没有「${filter.label}」的指标`, text: '换一个筛选看看。', action: { label: '看全部', onClick: () => props.onFilter('all') } })
+      ? h(EmptyCard, { icon: 'check', title: `没有「${filter.label}」的指标`, text: '请更换筛选条件。', action: { label: '查看全部', onClick: () => props.onFilter('all') } })
       : h('div', { className: `lp-card lp-ind-card ${judgedAny ? '' : 'lp-ind-nojudge'} ${oneSource ? 'lp-ind-nosource' : ''}`.replace(/\s+/g, ' ').trim() },
         h('div', { className: 'lp-ind-head', 'aria-hidden': true },
           h('span', null, '指标'), h('span', { className: 'lp-ind-value' }, h('span', { className: 'lp-ind-num' }, '最近一次'), h('span', null)), h('span', { className: 'lp-ind-date' }, '日期'), h('span', null, '趋势'), h('span', { className: 'lp-ind-head-judged' }, '和正常波动比'), h('span', { className: 'lp-ind-source' }, '来源'), h('span', null)),
@@ -337,5 +337,5 @@ export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filte
               key: row.id, row, open: open === row.id, ...gateOf(row),
               onToggle: () => setOpen((current) => (current === row.id ? null : row.id)),
             })))))),
-    h('p', { className: 'lp-fine' }, '点任一行看历次数值、单位、来自哪份报告，以及正常波动的依据。'))
+    h('p', { className: 'lp-fine' }, '点击任一行，可查看历次数值、单位、来源报告及正常波动依据。'))
 }

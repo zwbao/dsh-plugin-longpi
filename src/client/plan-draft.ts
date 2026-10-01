@@ -78,8 +78,8 @@ export function DraftItemCard(props: { item: DraftItem; onRemove: () => void; co
         item.category_zh ? h('span', { className: 'lp-tag' }, item.category_zh) : null,
         h('span', null, item.title),
         item.needs_doctor ? h('span', { className: 'lp-badge lp-badge-warn' }, h(Icon, { name: 'warn', size: 12 }), '需先与医生确认') : null),
-      h('button', { type: 'button', className: 'lp-textbtn', onClick: props.onRemove, 'aria-label': `去掉「${item.title}」` },
-        h(Icon, { name: 'close', size: 12 }), '去掉')),
+      h('button', { type: 'button', className: 'lp-textbtn', onClick: props.onRemove, 'aria-label': `移除「${item.title}」` },
+        h(Icon, { name: 'close', size: 12 }), '移除')),
     behaviorOf(item) ? h('p', { className: 'lp-draft-detail' }, behaviorOf(item)) : null,
     h(EvidenceLine, { item }),
     item.cautions_zh.length > 0 ? h('div', { className: 'lp-callout lp-callout-warn' },
@@ -99,9 +99,9 @@ export function DraftItems(props: { draft: PlanDraft; removed: Set<string>; onTo
   return h('div', { className: 'lp-draft-block' },
     kept.length > 0
       ? h('ul', { className: 'lp-draft-items' }, ...kept.map((item) => h(DraftItemCard, { key: item.id, item, compact: props.compact, onRemove: () => props.onToggle(item.id) })))
-      : h('p', { className: 'lp-small lp-muted lp-measure' }, '所有项目都去掉了。恢复一项，或在对话里说说你想怎么调整。'),
+      : h('p', { className: 'lp-small lp-muted lp-measure' }, '所有项目均已移除。可恢复其中一项，或在对话中说明希望如何调整。'),
     gone.length > 0 ? h('div', { className: 'lp-draft-removed' },
-      h('span', { className: 'lp-caption' }, '已去掉：'),
+      h('span', { className: 'lp-caption' }, '已移除：'),
       ...gone.map((item) => h('button', { key: `${item.id}|${item.title}`, type: 'button', className: 'lp-toggle', disabled: props.busy, onClick: () => props.onToggle(item.id || item.title), 'aria-label': `恢复「${item.title}」` },
         h(Icon, { name: 'plus', size: 12 }), item.title))) : null)
 }
@@ -113,12 +113,12 @@ export function DraftItems(props: { draft: PlanDraft; removed: Set<string>; onTo
 export async function setDraftItemExcluded(item: { id: string; title: string }, excluded: boolean): Promise<{ ok: true; data: PlanDraftResponse } | { ok: false; error: string }> {
   try {
     const result = await postJson<Record<string, unknown>>('/api/longpi/plan-draft/exclude', { id: item.id, title: item.title, excluded })
-    if (result.ok !== true) return { ok: false, error: String(result.error ?? '没有保存') }
+    if (result.ok !== true) return { ok: false, error: String(result.error ?? '保存失败') }
     putPlanDraft(result)
     notifyChanged()
     return { ok: true, data: result as unknown as PlanDraftResponse }
   } catch (err) {
-    return { ok: false, error: errorText(err, '没有保存') }
+    return { ok: false, error: errorText(err, '保存失败') }
   }
 }
 
@@ -143,7 +143,7 @@ export function DraftGoals(props: { goals: DraftGoal[]; dropped: number }): Reac
       ...props.goals.map((goal) => h('li', { key: goal.marker, className: 'lp-row' },
         h('span', { className: 'lp-row-main lp-row-lines' }, h('span', { className: 'lp-strong' }, goal.marker), goal.basis_zh ? h('span', { className: 'lp-caption' }, goal.basis_zh) : null),
         h('span', { className: 'lp-row-end lp-num' }, `${num(goal.value)} ${goal.unit}`)))) : null,
-    props.dropped > 0 ? h('p', { className: 'lp-caption lp-measure' }, `去掉的项目对应的 ${props.dropped} 个目标也不会保存。`) : null)
+    props.dropped > 0 ? h('p', { className: 'lp-caption lp-measure' }, `已移除项目对应的 ${props.dropped} 个目标也不会保存。`) : null)
 }
 
 /** The follow-up the adoption dialog turns on: desktop only, no health values (9b). */
@@ -176,7 +176,7 @@ export function ConfirmModal(props: {
   return h(Modal, { open: true, title: '采用这份方案', onClose: props.busy ? () => {} : props.onCancel, headless: true, className: 'lp-confirm-dialog' },
     h('div', { className: 'lp lp-confirm' },
       h('h2', { className: 'lp-h2' }, '采用这份方案？'),
-      h('p', { className: 'lp-muted lp-measure' }, `保存为你的方案「${props.draft.title || '改善方案'}」，从今天（${chineseDate(props.today)}）开始。之后按项目打卡，并按每个指标安排复测；想调整随时在对话里说。`),
+      h('p', { className: 'lp-muted lp-measure' }, `保存为你的方案「${props.draft.title || '改善方案'}」，从今天（${chineseDate(props.today)}）开始。此后按项目打卡，并按各项指标安排复测；如需调整，可随时在对话中提出。`),
       h('ul', { className: 'lp-confirm-list' },
         ...props.items.map((item) => h('li', { key: item.id },
           item.category_zh ? h('span', { className: 'lp-tag' }, item.category_zh) : null,
@@ -194,7 +194,7 @@ export function ConfirmModal(props: {
         h('span', null, `每晚 ${offer.time} 提醒我打卡（不含健康数值）`)) : null,
       props.error ? h('p', { className: 'lp-form-error', role: 'alert' }, props.error) : null,
       h('div', { className: 'lp-modal-actions' },
-        h(Btn, { variant: 'outline', onClick: props.onCancel, disabled: props.busy }, '再想想'),
+        h(Btn, { variant: 'outline', onClick: props.onCancel, disabled: props.busy }, '暂不采用'),
         h(Btn, { 'data-modal-autofocus': true, onClick: () => props.onConfirm(offer != null && remind), disabled: props.busy }, props.busy ? '保存中…' : '确认采用'))))
 }
 
@@ -220,10 +220,10 @@ export async function acceptDraft(draft: PlanDraft, kept: DraftItem[], remind: b
   if (remind) {
     try {
       const saved = await postJson<{ ok: boolean; error?: string } & Partial<FollowupResponse>>('/api/longpi/followup', REMIND_BODY)
-      if (!saved.ok) reminder = saved.error || '没有打开'
+      if (!saved.ok) reminder = saved.error || '未能开启'
       else if (saved.settings) putFollowup(saved)
     } catch (err) {
-      reminder = errorText(err, '没有打开')
+      reminder = errorText(err, '未能开启')
     }
   }
   notifyChanged()
@@ -232,7 +232,7 @@ export async function acceptDraft(draft: PlanDraft, kept: DraftItem[], remind: b
 
 function Hint(props: { onPrompt: (text: string) => void }): React.ReactElement {
   return h('span', { className: 'lp-caption lp-draft-hint' },
-    '想调整？在对话中说',
+    '如需调整，请在对话中提出',
     h('button', { type: 'button', className: 'lp-textbtn', onClick: () => props.onPrompt(DRAFT_PROMPT) }, `「${DRAFT_PROMPT}」`))
 }
 
@@ -253,8 +253,8 @@ function Draft(props: { data: PlanDraftResponse; draft: PlanDraft; journey: Jour
     setBusy(true)
     setError(null)
     void setDraftItemExcluded(target, Boolean(inDraft)).then((result) => {
-      if (!result.ok) setError(`没有保存：${result.error}`)
-      else props.onNotice(inDraft ? `已去掉「${target.title}」，之后的草稿也不会再加它。` : `已恢复「${target.title}」。`, 'good')
+      if (!result.ok) setError(`保存失败：${result.error}`)
+      else props.onNotice(inDraft ? `已移除「${target.title}」，后续草稿不会再加入此项。` : `已恢复「${target.title}」。`, 'good')
     }).finally(() => setBusy(false))
   }
 
@@ -264,13 +264,13 @@ function Draft(props: { data: PlanDraftResponse; draft: PlanDraft; journey: Jour
     try {
       const result = await acceptDraft(draft, kept, remind)
       if (!result.ok) {
-        setError(`没有保存：${result.error}`)
+        setError(`保存失败：${result.error}`)
         return
       }
       setConfirming(false)
       props.onNotice(`已保存为方案第 ${result.version} 版，共 ${result.items} 项。${result.reminder ? `打卡提醒没有打开：${result.reminder}` : remind ? '每晚会提醒你打卡。' : ''}`, result.reminder ? 'info' : 'good')
     } catch (err) {
-      setError(`没有保存：${errorText(err, '请稍后再试')}`)
+      setError(`保存失败：${errorText(err, '请稍后再试')}`)
     } finally {
       setBusy(false)
     }
@@ -300,13 +300,13 @@ function Draft(props: { data: PlanDraftResponse; draft: PlanDraft; journey: Jour
 function RestoreRow(props: { items: Array<{ id: string; title: string }>; onNotice: Notify }): React.ReactElement {
   const [busy, setBusy] = React.useState(false)
   return h('div', { className: 'lp-draft-removed' },
-    h('span', { className: 'lp-caption' }, '已去掉：'),
+    h('span', { className: 'lp-caption' }, '已移除：'),
     ...props.items.map((item) => h('button', {
       key: `${item.id}|${item.title}`, type: 'button', className: 'lp-toggle', disabled: busy, 'aria-label': `恢复「${item.title}」`,
       onClick: () => {
         setBusy(true)
         void setDraftItemExcluded(item, false).then((result) => {
-          props.onNotice(result.ok ? `已恢复「${item.title}」。` : `没有恢复：${result.error}`, result.ok ? 'good' : 'info')
+          props.onNotice(result.ok ? `已恢复「${item.title}」。` : `恢复失败：${result.error}`, result.ok ? 'good' : 'info')
         }).finally(() => setBusy(false))
       },
     }, h(Icon, { name: 'plus', size: 12 }), item.title)))
@@ -325,7 +325,7 @@ export function PlanDraftCard(props: { journey: Journey; onNotice: Notify; onPro
   if (!data) {
     return h('div', { className: 'lp-card lp-draft' },
       h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '方案草稿')),
-      h('p', { className: 'lp-small lp-muted lp-measure' }, `没能读到方案草稿：${error ?? '没有返回'}。`),
+      h('p', { className: 'lp-small lp-muted lp-measure' }, `未能读取方案草稿：${error ?? '未返回数据'}。`),
       h(Hint, { onPrompt: props.onPrompt }))
   }
   if (!data.draft) {
@@ -335,11 +335,11 @@ export function PlanDraftCard(props: { journey: Journey; onNotice: Notify; onPro
     const fine = stop ? [data.brief.boundary_zh].filter(Boolean) : [...new Set([...reasons.slice(1), ...data.brief.safety.notes_zh, data.brief.boundary_zh].filter(Boolean))]
     return h('div', { className: 'lp-card lp-draft' },
       h('div', { className: 'lp-card-head' },
-        h('h3', { className: 'lp-card-title' }, stop ? '请先去看医生，再做方案' : '现在还起草不了方案'),
+        h('h3', { className: 'lp-card-title' }, stop ? '请先去看医生，再做方案' : '暂时无法起草方案'),
         h('span', { className: 'lp-caption' }, '方案草稿')),
       stop
         ? h('div', { className: 'lp-callout lp-callout-warn' }, h(Icon, { name: 'warn', size: 14 }), h('p', { className: 'lp-callout-body' }, reasons[0]))
-        : h('p', { className: 'lp-text lp-muted' }, reasons[0] || '你的记录里还没有能对上研究证据的指标。'),
+        : h('p', { className: 'lp-text lp-muted' }, reasons[0] || '你的记录中暂无与研究证据匹配的指标。'),
       ...fine.map((text) => h('p', { key: text, className: 'lp-caption' }, text)),
       stop ? null : h(Priorities, { brief: data.brief, open: true }),
       !stop && data.removed_items.length > 0 ? h(RestoreRow, { items: data.removed_items, onNotice: props.onNotice }) : null,

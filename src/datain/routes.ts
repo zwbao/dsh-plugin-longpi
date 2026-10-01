@@ -175,32 +175,32 @@ export function registerDatainRoutes(deps: CoreDeps, open?: SocketOpener): void 
         try {
           stores[kind] = { on: true, rows: readStored(dataDir, kind).length }
         } catch (error) {
-          stores[kind] = { on: true, error: error instanceof Error ? error.message : '读不出来。' }
+          stores[kind] = { on: true, error: error instanceof Error ? error.message : '无法读取。' }
         }
       }
       return { ok: true, stores }
     }
-    if (!isStoreKind(asked)) return fail('不认识的数据类型。')
+    if (!isStoreKind(asked)) return fail('无法识别的数据类型。')
     try {
       const rows = readStored(dataDir, asked)
       const shown = rows.slice(0, 5000)
       return { ok: true, kind: asked, on: storeIsOn(dataDir, asked), count: rows.length, truncated: rows.length > shown.length, rows: shown }
     } catch (error) {
-      return fail(error instanceof Error ? error.message : '读不出来。')
+      return fail(error instanceof Error ? error.message : '无法读取。')
     }
   })
 
   deps.http.route('POST', '/api/longpi/upload', async (_req, body) => {
     // The 示例档案 is for looking: nothing is uploaded into it (it is rebuilt on every open anyway).
     if (/[\\/]people[\\/]pdemolimh01[\\/]?$/.test(deps.dataDir())) {
-      return { ok: false, status: 409, error: '这是示例档案，不能上传报告。切回「我」，在你自己的档案里上传。' }
+      return { ok: false, status: 409, error: '示例档案不能上传报告。请切换到「我」，在你自己的档案中上传。' }
     }
     const value = bodyOf(body)
     const op = typeof value.op === 'string' ? value.op : 'path'
     const fields = uploadFields(value)
     if (op === 'text') {
       const text = typeof value.text === 'string' ? value.text : ''
-      if (text.trim().length < 4) return fail('没有可以读的文字。')
+      if (text.trim().length < 4) return fail('没有可读取的文字。')
       if (text.length > 200_000) return fail('粘贴的文字太长。请改为上传文件。')
       const result = await ingestDocument(deps, { filename: typeof value.filename === 'string' ? value.filename : 'pasted.txt', text, upload: false, ...fields })
       if (result.needs_confirm) return fail(result.error || result.read_back_zh)
@@ -216,13 +216,13 @@ export function registerDatainRoutes(deps: CoreDeps, open?: SocketOpener): void 
         if (result.needs_confirm) return fail(result.error || result.read_back_zh)
         return result
       } catch (error) {
-        return fail(error instanceof Error ? '读不到这个文件。' : '读不到这个文件。')
+        return fail(error instanceof Error ? '无法读取该文件。' : '无法读取该文件。')
       }
     }
     if (op === 'start') {
       const filename = typeof value.filename === 'string' && value.filename.trim() ? value.filename.trim() : 'report'
       const size = typeof value.size === 'number' ? value.size : 0
-      if (size <= 0 || size > MAX_FILE) return fail('文件为空，或超过 32 MB。基因叙述版请发到健康对话里，不要从网页整本上传。')
+      if (size <= 0 || size > MAX_FILE) return fail('文件为空，或超过 32 MB。基因叙述版请发送到健康对话中，请勿从网页上传整份文件。')
       const id = `up-${Date.now().toString(36)}-${randomBytes(3).toString('hex')}`
       const total = Math.max(1, Math.ceil(size / CHUNK_RAW))
       pending.set(id, { filename, contentType: typeof value.content_type === 'string' ? value.content_type : 'application/octet-stream', size, chunks: new Map(), total, at: Date.now(), ...fields })
@@ -231,26 +231,26 @@ export function registerDatainRoutes(deps: CoreDeps, open?: SocketOpener): void 
     if (op === 'chunk') {
       const id = typeof value.id === 'string' ? value.id : ''
       const row = pending.get(id)
-      if (!row) return fail('上传已经过期，请重新选择文件。')
+      if (!row) return fail('上传已过期，请重新选择文件。')
       const index = typeof value.index === 'number' ? value.index : -1
       const b64 = typeof value.b64 === 'string' ? value.b64 : ''
-      if (index < 0 || index >= row.total || !b64) return fail('这一段文件不完整。')
+      if (index < 0 || index >= row.total || !b64) return fail('该文件分段不完整。')
       const buf = Buffer.from(b64, 'base64')
-      if (buf.length > CHUNK_RAW + 8) return fail('这一段太大。')
+      if (buf.length > CHUNK_RAW + 8) return fail('该分段过大。')
       row.chunks.set(index, buf)
       return { ok: true, received: row.chunks.size, total: row.total }
     }
     if (op === 'finish') {
       const id = typeof value.id === 'string' ? value.id : ''
       const row = pending.get(id)
-      if (!row) return fail('上传已经过期，请重新选择文件。')
-      if (row.chunks.size !== row.total) return fail(`还缺 ${row.total - row.chunks.size} 段。`)
+      if (!row) return fail('上传已过期，请重新选择文件。')
+      if (row.chunks.size !== row.total) return fail(`尚缺 ${row.total - row.chunks.size} 段。`)
       const bytes = Buffer.concat([...row.chunks.entries()].sort((a, b) => a[0] - b[0]).map(([, buf]) => buf))
       pending.delete(id)
       const result = await ingestDocument(deps, { filename: row.filename, bytes, open, ...fromPending(row) })
       if (result.needs_confirm) return fail(result.error || result.read_back_zh)
       return result
     }
-    return fail('不认识的上传步骤。')
+    return fail('无法识别的上传步骤。')
   })
 }

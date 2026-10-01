@@ -60,7 +60,7 @@ export function readRegistry(root: string): Registry {
 }
 
 function writeRegistry(root: string, reg: Registry): void {
-  if (loadRegistry(root).damaged) throw new Error('people.json 读不出来，没有改动它（避免丢掉家人的档案）；请检查这个文件')
+  if (loadRegistry(root).damaged) throw new Error('people.json 无法读取。为避免丢失家人档案，未作任何修改；请检查该文件。')
   mkdirSync(root, { recursive: true, mode: 0o700 })
   writeJsonAtomic(join(root, 'people.json'), { active: reg.active, people: reg.people })
 }

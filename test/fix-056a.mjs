@@ -197,7 +197,7 @@ try {
       care: [{ finding_id: 'finding-red-cell', care_status: 'booked', visit_date: '2026-10-05', outcome_zh: null, updated: '2026-09-21T00:00:00.000Z' }],
     },
   })
-  assert.ok(shown.some((row) => row.title_zh.includes('已约 2026-10-05')))
+  assert.ok(shown.some((row) => /已约 (2026 年 )?10 月 5 日/.test(row.title_zh)))
 
   // Y30: HGB 124 with sex unset asks, and does not send her to haematology.
   const y30 = mod.clinicalStop({ sex: 'unknown', diabetesKnown: true, points: [{ name: '血红蛋白', value: 124, unit: 'g/L', date: '2026-04-16' }] })

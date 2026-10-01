@@ -164,7 +164,7 @@ try {
     const started = Date.now()
     const slow = await mod.testConnection({ mcp_url: `http://127.0.0.1:${silent.address().port}/mcp` }, 400)
     assert.equal(slow.ok, false)
-    assert.match(slow.error, /秒内没有回应/)
+    assert.match(slow.error, /秒内无响应/)
     assert.ok(Date.now() - started < 3000, 'bounded by the deadline')
     silent.closeAllConnections()
     await new Promise((resolveClose) => silent.close(resolveClose))

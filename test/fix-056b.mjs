@@ -98,10 +98,10 @@ try {
     tone: 'neutral',
     source: 'template',
   }], '2026-09-21')
-  assert.doesNotMatch(beyond.headline_zh, /还没有可以对比的结果/)
-  assert.doesNotMatch(beyond.headline_zh, /多半是测量和生理波动/)
+  assert.doesNotMatch(beyond.headline_zh, /还没有可以对比的结果|尚无可对比的结果|尚缺可对比的结果/)
+  assert.doesNotMatch(beyond.headline_zh, /多半是测量和生理波动|仍在测量波动范围内|未超出测量波动/)
   assert.match(beyond.headline_zh, /超出了正常波动/)
-  assert.match(beyond.retest?.why_zh ?? '', /复测已在 2026-09-21 完成/)
+  assert.match(beyond.retest?.why_zh ?? '', /复测已在 (2026 年 )?9 月 21 日完成/)
   assert.equal(beyond.retest?.earliest, '2026-09-21')
 
   const early = retestDates('2026-07-27', { minDays: 28, earliestDays: 28, recommendedDays: 56, family: 'other', why_zh: '太早：至少隔 28 天。' }, 10, '2026-07-17', null)
@@ -111,7 +111,7 @@ try {
   assert.equal(slid.earliest, '2026-04-08', 'the window stays on the draw; it does not walk forward to November')
 
   const planSrc = readFileSync(join(root, '..', 'src', 'client', 'plan.ts'), 'utf8')
-  assert.equal(planSrc.includes('还没有方案'), false, 'YB: 还没有方案 must not sit above 采用这份方案')
+  assert.equal(['还没有方案', '暂无方案', '尚无方案'].some((text) => planSrc.includes(text)), false, 'YB: 还没有方案 (暂无方案, 尚无方案) must not sit above 采用这份方案')
 
   const seasonDir = tempDir('season')
   profile(seasonDir)
@@ -247,7 +247,7 @@ try {
   const meds = listMedications(medDir)
   assert.match(meds.lines.join('\n'), /二甲双胍/)
   assert.match(meds.lines.join('\n'), /达格列净/)
-  assert.doesNotMatch(meds.lines.join('\n'), /还没有你让 LongPi 记下的药/)
+  assert.doesNotMatch(meds.lines.join('\n'), /还没有你让 LongPi 记下的药|尚未记录用药/)
 
   const held = softHoldDraft('2026-09-21', ['你说过的目标：体重 75 公斤', '你说过的目标：脂肪肝'])
   assert.match(held.notes_zh.join('\n'), /75 公斤/)
@@ -255,7 +255,7 @@ try {
   assert.equal(JSON.stringify(held.items).includes('限时进食'), false)
   assert.doesNotMatch(JSON.stringify(held), /16:8|铁剂|大幅/)
   const asked = softHoldDraft('2026-07-27', [])
-  assert.match(asked.notes_zh.join('\n'), /还没有记下体重目标或脂肪肝/)
+  assert.match(asked.notes_zh.join('\n'), /尚未记录体重目标或脂肪肝情况/)
   const waiting = draftPlan({
     today: '2026-09-21', focus: [], priorities: [], candidates: [],
     safety: { medications: [], notes_zh: [], stop_zh: '请先去看医生。' },

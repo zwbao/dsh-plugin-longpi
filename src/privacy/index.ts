@@ -6,11 +6,11 @@ import { readProfile } from '../profile.ts'
 import { isGranted, minorView, type MinorView } from './consents.ts'
 
 export const LIVE_BLOCKERS_ZH = [
-  '还没有境内主体作为个人信息处理者',
-  '还没有生命科学和医学研究伦理审查批件',
-  '还没有 ChiCTR 注册号',
+  '尚无境内主体担任个人信息处理者',
+  '尚无生命科学和医学研究伦理审查批件',
+  '尚无 ChiCTR 注册号',
   '人类遗传资源：研究排除基因、基因组和分型数据，书面说明尚未由负责人确认',
-  '这一版还不能把数据发到研究机构',
+  '本版本暂不能向研究机构发送数据',
 ] as const
 
 /** Research statistics never include genetics. M8's manifests must keep this exclusion. */
@@ -67,7 +67,7 @@ export function liveScienceAllowed(): boolean {
 
 export function liveBlockers(): string[] {
   const rows: string[] = [...LIVE_BLOCKERS_ZH]
-  if (!consentGranted('pipl_sensitive')) rows.unshift('还没有敏感个人信息的单独同意')
-  if (bound.scienceMode() === 'live') rows.push('配置里写了 live，本模块仍拒绝把它当作已经获准')
+  if (!consentGranted('pipl_sensitive')) rows.unshift('尚未取得敏感个人信息的单独同意')
+  if (bound.scienceMode() === 'live') rows.push('配置中设为 live，本模块仍不视为已获批准')
   return rows
 }

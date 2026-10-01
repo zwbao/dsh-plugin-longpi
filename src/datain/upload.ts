@@ -204,7 +204,7 @@ export async function pushToMirobody(opts: {
           }))
           progress.push(`已上传 ${index + 1}/${total}`)
         }
-        progress.push('文件已送出，等待解析')
+        progress.push('文件已上传，等待解析')
       },
       onmessage: (data) => {
         let msg: Record<string, unknown> = {}
@@ -216,7 +216,7 @@ export async function pushToMirobody(opts: {
           finish(msg, type === 'upload_error' || type === 'error')
         }
       },
-      onerror: () => finish({ type: 'upload_error', message: '连不上你放体检报告的地方' }, true),
+      onerror: () => finish({ type: 'upload_error', message: '无法连接健康数据服务' }, true),
     })
   })
 }
@@ -294,14 +294,14 @@ export async function ingestDocument(deps: Pick<CoreDeps, 'config' | 'dataDir' |
       const stored = storeGenetics(dataDir, summary)
       const finding = storeFindings(dataDir, [{
         id: newId('find'), date: stored.generated, kind: 'genetics',
-        text_zh: stored.headlines_zh[0] || '已记下基因报告的限制和原始数据导出步骤。',
+        text_zh: stored.headlines_zh[0] || '已记录基因报告的局限及原始数据导出方法。',
       }])
       return {
         ok: true, forwarded: false, duplicate: false, wrong_person: false,
         checkup_day: stored.generated || null, indicators: null,
         findings: finding.map(publicFinding),
         read_back_zh: readBack({ forwarded: false, connected: false, indicators: null, day: stored.generated || null, findings: finding, duplicate: false, wrong: '', genetics: 'narrative' }),
-        progress: [`只读了 ${stored.pages_read} 页目录附近的文字，没有整本上传`],
+        progress: [`仅读取目录附近 ${stored.pages_read} 页的文字，未上传整份报告`],
         genetics_stored: true,
       }
     }
@@ -321,7 +321,7 @@ export async function ingestDocument(deps: Pick<CoreDeps, 'config' | 'dataDir' |
       checkup_day: prior.checkup_day, indicators: null,
       findings: existing.map(publicFinding),
       read_back_zh: readBack({ forwarded: false, connected: true, indicators: null, day: prior.checkup_day, findings: existing, duplicate: true, wrong: '', genetics: null }),
-      progress: ['这是重复的一份'],
+      progress: ['重复文件，未再次上传'],
       genetics_stored: false,
     }
   }
@@ -332,13 +332,13 @@ export async function ingestDocument(deps: Pick<CoreDeps, 'config' | 'dataDir' |
   if (isWeGeneNarrative(text)) {
     const summary = storeGenetics(dataDir, extractGeneticsText(text, 'text'))
     const uploadId = newId('up')
-    const finding = storeFindings(dataDir, [{ id: newId('find'), date: summary.generated, kind: 'genetics', text_zh: summary.headlines_zh[0] || '已记下基因报告。' }], uploadId)
+    const finding = storeFindings(dataDir, [{ id: newId('find'), date: summary.generated, kind: 'genetics', text_zh: summary.headlines_zh[0] || '已记录基因报告。' }], uploadId)
     appendJsonl(logPath(dataDir), { id: uploadId, at: new Date().toISOString(), filename, sha256: sha, fingerprint, bytes: bytes.length, checkup_day: summary.generated || null, forwarded: false, accepted: true } satisfies UploadLog)
     return {
       ok: true, forwarded: false, duplicate: false, wrong_person: false, checkup_day: summary.generated || null, indicators: null,
       findings: finding.map(publicFinding),
       read_back_zh: readBack({ forwarded: false, connected: false, indicators: null, day: summary.generated || null, findings: finding, duplicate: false, wrong: '', genetics: 'narrative' }),
-      progress: ['叙述版基因报告没有整本上传'], genetics_stored: true,
+      progress: ['叙述版基因报告未上传整份文件'], genetics_stored: true,
     }
   }
   const identity = text ? judgeIdentity(text, dataDir) : { wrong_person: false, reason_zh: '', page_note_zh: '', names: [] }
@@ -350,7 +350,7 @@ export async function ingestDocument(deps: Pick<CoreDeps, 'config' | 'dataDir' |
     return {
       ok: true, forwarded: false, duplicate: false, wrong_person: true, checkup_day: null, indicators: null,
       findings: row.map((item) => ({ id: item.id, kind: item.kind, text_zh: item.text_zh, date: item.date })),
-      read_back_zh: identity.reason_zh, progress: ['核对姓名后没有写入'], genetics_stored: false,
+      read_back_zh: identity.reason_zh, progress: ['姓名核对未通过，未写入'], genetics_stored: false,
     }
   }
   const omics = takeOmics(deps, { filename, bytes, text, sha, fingerprint, input })
@@ -387,7 +387,7 @@ function takeOmics(deps: Pick<CoreDeps, 'dataDir'>, bag: {
     panel: input.panel,
   })
   if (parsed.capped && input.type) {
-    return { stop: localOmics(false, '这份超过 32 MB，没有写入。', [], '这份超过可以记下的大小。') }
+    return { stop: localOmics(false, '文件超过 32 MB，未写入。', [], '文件超过可保存的大小上限。') }
   }
   const detected = input.type ? [input.type] : parsed.detected
   if (detected.length === 0) return {}
@@ -395,7 +395,7 @@ function takeOmics(deps: Pick<CoreDeps, 'dataDir'>, bag: {
   if (!input.confirm) {
     if (localOnly || input.type) return { stop: localOmics(false, confirmMessage(input.type ?? detected[0]), [], confirmMessage(input.type ?? detected[0]), true) }
     const name = storeLabel(detected[0] ?? 'methylation')
-    return { note: `报告里有${name}表格。确认后才会把它们记在这台电脑上。` }
+    return { note: `报告中含有${name}表格，确认后才会保存在这台电脑上。` }
   }
   const saved = saveReportText(deps.dataDir(), text, {
     type: input.type,
@@ -518,9 +518,9 @@ async function finishForward(deps: Pick<CoreDeps, 'config' | 'dataDir' | 'bus' |
       forwarded: Boolean(push && !push.failed), connected, indicators: push?.indicators ?? null, day,
       findings: shown, duplicate: false, wrong: '', genetics: input.genetics ? (input.genetics.source === 'raw' ? 'raw' : 'narrative') : null,
     }),
-    progress: push?.progress ?? (connected ? [] : ['还没有连上']),
+    progress: push?.progress ?? (connected ? [] : ['健康数据服务尚未连接']),
     genetics_stored: Boolean(input.genetics),
-    ...(push?.failed ? { error: '没有收下这份文件。' } : {}),
+    ...(push?.failed ? { error: '健康数据服务未接收该文件。' } : {}),
   }
 }
 

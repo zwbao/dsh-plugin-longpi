@@ -102,7 +102,7 @@ export function registerScienceRoutes(deps: CoreDeps): void {
     if (!study || !study.verify.ok || !study.consent_hash_ok) {
       return { ok: false, status: 400, error: study && !study.verify.ok ? study.verify.reason : '研究说明不可用' }
     }
-    if (record.bundled_with_product === true) return { ok: false, status: 400, error: '参加研究不能和开始使用绑在一起。' }
+    if (record.bundled_with_product === true) return { ok: false, status: 400, error: '参加研究不能与开始使用捆绑。' }
     const fit = eligibility(study.manifest, personOf(dir(), deps.memory))
     if (!fit.ok) return { ok: false, status: 403, error: fit.reason_zh }
     const manifest = record.plain === true

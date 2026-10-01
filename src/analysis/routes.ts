@@ -44,6 +44,6 @@ export function registerAnalysisRoutes(deps: CoreDeps): void {
   deps.http.route('POST', '/api/longpi/analysis/abandon', async (_req, body) => {
     const value = body && typeof body === 'object' ? body as Record<string, unknown> : {}
     const ok = typeof value.run_id === 'string' && abandon(deps, value.run_id)
-    return ok ? { ok: true } : { ok: false, status: 404, error: '没有这次分析。' }
+    return ok ? { ok: true } : { ok: false, status: 404, error: '未找到该次分析。' }
   })
 }

@@ -76,7 +76,7 @@ export function oddsDisclosure(table: DropTable, cards: readonly CodexCard[]): s
   return [
     `每次抽取的概率：铜 ${pct('common')}%（细胞实验），银 ${pct('rare')}%（动物实验），紫 ${pct('epic')}%（人体观察性研究），金 ${pct('legendary')}%（人体随机对照 ${rct} 张，比较生物学隐藏物种 ${species} 张；抽到之前物种卡不显示）。`,
     `连续 ${table.pity.after_draws} 次没有银或以上时，下一次至少是银。每天最多抽 ${table.daily_cap} 次。`,
-    '带着简报去看医生、加测缺的项目、或在复测窗口完成复测，保证至少一张银卡。',
+    '携带简报就诊、加测缺失项目，或在复测窗口内完成复测，可保证至少获得一张银卡。',
     '没有付费，不能交易。稀有度按研究证据固定，不由指标好坏决定。',
   ].join('')
 }

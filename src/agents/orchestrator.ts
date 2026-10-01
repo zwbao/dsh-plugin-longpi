@@ -88,7 +88,7 @@ export function snapshotText(input: SnapshotInput): string {
   if (input.care_due_zh) lines.push(`就医跟进：${input.care_due_zh}`)
   if (input.analysis_zh) lines.push(input.analysis_zh)
   if (input.memory_zh) lines.push(`你之前记下：${clip(input.memory_zh.replace(/\n/g, '；'), 500)}`)
-  if (input.noted_zh) lines.push(`刚从对话里记下（未确认）：${clip(input.noted_zh, 200)}。回答时顺带说一句「我记下了：…（不对可以说"撤销"）」。`)
+  if (input.noted_zh) lines.push(`刚从对话里记下（未确认）：${clip(input.noted_zh, 200)}。回答时顺带说一句「已记录：…（如有误，可以说「撤销」）」。`)
   if (page.suggestions_zh.length > 0) lines.push(`页面建议的问题：${page.suggestions_zh.slice(0, 3).join(' / ')}`)
   return lines.join('\n')
 }

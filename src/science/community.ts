@@ -139,7 +139,7 @@ export function buildCommunity(opts: { dataDir: string; configured: 'off' | 'loc
     reason_zh: liveRefused
       ? '研究正式开始后才会发出，现在只保存在你的设备上。'
       : mode === 'off'
-        ? '研究没有打开。可以在设置里再打开。'
+        ? '研究未开启，可在设置中开启。'
         : mode === 'local'
           ? '研究正式开始后才会发出，现在只保存在你的设备上。'
           : '模拟模式：合计只发到本机的汇总程序，原始化验留在这里。',
@@ -159,8 +159,8 @@ export function buildCommunity(opts: { dataDir: string; configured: 'off' | 'loc
       topics: TOPICS.map((topic) => ({ id: topic.id, title_zh: topic.title_zh, votes: mode === 'local' ? 0 : (votes.counts[topic.id] ?? 0) })),
       mine: mode === 'local' ? null : votes.topic_id,
       note_zh: mode === 'local'
-        ? '票先记在这台电脑上。研究正式开始前，这里不显示别人的人数。'
-        : '你的一票记在这台电脑上。凑够人数之后，这里只显示看不出是谁的合计。',
+        ? '投票暂存于这台电脑。研究正式开始前，此处不显示其他人的人数。'
+        : '你的投票已保存在这台电脑上。人数达到后，此处仅显示无法识别个人的合计。',
     },
     give_back_zh: pulseFile.detail_zh || '还没有发回的群体结果。你自己的计算会留在本机结果里。',
     cards: mode === 'off' ? [] : readCards(opts.dataDir).map(({ id, title_zh, body_zh }) => ({ id, title_zh, body_zh })),
@@ -183,7 +183,7 @@ export function scienceCandidates(mode: 'off' | 'local' | 'simulated' | 'live', 
       reason_codes: ['science.give_back'],
       fact_ids: [],
       target: { surface: 'page', tab: '研究', prompt_zh: '研究的结果怎么样了？' },
-      title_zh: '看看研究发回的结果',
+      title_zh: '查看研究发回的结果',
       detail_zh: '只讲本机算的波动和加噪合计，不讲诊断。',
     }]
   }
@@ -196,7 +196,7 @@ export function scienceCandidates(mode: 'off' | 'local' | 'simulated' | 'live', 
     reason_codes: ['science.simulated'],
     fact_ids: [],
     target: { surface: 'page', tab: '研究', prompt_zh: '有哪些研究我能参加？' },
-    title_zh: '看看本季的研究',
+    title_zh: '查看本季研究',
     detail_zh: '在这台电脑上参加。原始化验、姓名和基因不会送出。',
   }]
 }

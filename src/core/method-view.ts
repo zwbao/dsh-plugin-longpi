@@ -125,8 +125,8 @@ function replaceClaim(text: string, phrase: string, next: string): string {
 export function stripYoungerClaim(text: string): string {
   let out = replaceClaim(text, '你确实年轻了', '有变化')
   out = replaceClaim(out, '比实足年龄年轻', '比实足年龄低')
-  out = replaceClaim(out, '你变年轻了', '数字有变化')
-  out = replaceClaim(out, '更年轻了', '数字更低')
+  out = replaceClaim(out, '你变年轻了', '数值有变化')
+  out = replaceClaim(out, '更年轻了', '数值更低')
   out = out.replace(/年轻了\s*(\d+(?:\.\d+)?)/g, (match, digits: string, offset: number, whole: string) => {
     const before = whole.slice(Math.max(0, offset - 8), offset)
     return NEGATED_BEFORE.test(before) ? match : `变化了 ${digits}`
@@ -138,7 +138,7 @@ export function evidenceSentence(row: MethodResult): string {
   const species = speciesOf(row) ?? '未标明'
   const rest = row.limits_zh.replace(/物种[:：]\s*[^。；\n]+[。；]?/g, '').trim()
   const tail = rest ? (rest.endsWith('。') ? rest : `${rest}。`) : ''
-  const personal = /不是你的/.test(rest) ? '' : '这不是你的个人数字。'
+  const personal = /不是你的/.test(rest) ? '' : '这不是你的个人数值。'
   return `仅证据（物种：${species}）。${tail}${personal}`
 }
 
@@ -177,13 +177,13 @@ export function plainSource(quote: string): string {
 export function resultSentence(row: MethodResult, opts: { youngerAllowed: boolean }): string {
   if (row.label === 'evidence-only') return evidenceSentence(row)
   const out = primaryOutput(row)
-  const shown = out && out.value != null && out.value !== '' ? formatMeasure(out.value, out.unit, out.key) : '没有个人数字'
+  const shown = out && out.value != null && out.value !== '' ? formatMeasure(out.value, out.unit, out.key) : '无个人数值'
   const title = titleOf(row.skill, row.title_zh, out?.key ?? '')
   let text: string
   if (row.label === 'unverified-binding') {
     const raw = row.inputs_used.map((item) => item.quote.trim()).find(Boolean) ?? ''
     const quote = plainSource(raw)
-    text = quote ? `${title}是 ${shown}（还没对上，来源：${quote}）。` : `${title}是 ${shown}（还没对上）。`
+    text = quote ? `${title}是 ${shown}（尚未核对，来源：${quote}）。` : `${title}是 ${shown}（尚未核对）。`
   } else {
     const limits = row.limits_zh.trim()
     const boundary = limits ? (limits.endsWith('。') ? limits : `${limits}。`) : ''
@@ -204,7 +204,7 @@ export function riskBindingNote(method: MethodResult, cardPct: number | null): s
   const same = out != null && typeof out.value === 'number' && cardPct != null && Math.abs(out.value - cardPct) < 0.05
   if (same) return resultSentence(method, { youngerAllowed: false })
   const source = plainSource(method.inputs_used.map((row) => row.quote.trim()).find(Boolean) ?? '')
-  return `还有一版按体检记录自动匹配的结果${source ? `（用的是${source}）` : ''}，还没对上，先不作数。上面的数按你的档案计算。`
+  return `另有一版按体检记录自动匹配的结果${source ? `（使用${source}）` : ''}，尚未核对，暂不采用。上方数值按你的档案计算。`
 }
 
 // ---- one body-age number (INT062 fix 2) ----------------------------------------------------------------------
@@ -283,7 +283,7 @@ function years(value: number): string {
 /** 「比周岁小 3.2 岁」, 「比周岁大 1.5 岁」, 「和周岁差不多」 (the glossary wording). */
 export function versusCalendarAge(advance: number | null): string {
   if (advance == null || !Number.isFinite(advance)) return ''
-  if (Math.abs(advance) < 0.5) return '和周岁差不多'
+  if (Math.abs(advance) < 0.5) return '与周岁相近'
   return advance < 0 ? `比周岁小 ${years(advance)} 岁` : `比周岁大 ${years(advance)} 岁`
 }
 
@@ -293,7 +293,7 @@ export function versusCalendarAge(advance: number | null): string {
  */
 export function bodyAgeFactText(bio: BodyAgeFigure & { headline_zh?: string }, label: ResultLabel | null): string {
   if (bio.status !== 'ok' || bio.phenoage == null) return ''
-  const tag = label === 'verified' ? '模型估计，已核对' : label === 'unverified-binding' ? '模型估计，还没对上' : '模型估计'
+  const tag = label === 'verified' ? '模型估计，已核对' : label === 'unverified-binding' ? '模型估计，尚未核对' : '模型估计'
   const gap = versusCalendarAge(bio.advance)
   const concern = /不一定是好事/.test(bio.headline_zh ?? '') ? (bio.headline_zh ?? '').trim() : ''
   return `身体年龄 ${years(bio.phenoage)} 岁（${tag}）${gap ? `，${gap}` : ''}。${concern}`
@@ -302,7 +302,7 @@ export function bodyAgeFactText(bio: BodyAgeFigure & { headline_zh?: string }, l
 export function methodFactText(row: MethodResult): string {
   if (row.label === 'verified') {
     const out = primaryOutput(row)
-    const shown = out && out.value != null && out.value !== '' ? formatMeasure(out.value, out.unit, out.key) : '没有个人数字'
+    const shown = out && out.value != null && out.value !== '' ? formatMeasure(out.value, out.unit, out.key) : '无个人数值'
     return `${titleOf(row.skill, row.title_zh, out?.key ?? '')}是 ${shown}（已核对）。`
   }
   return resultSentence(row, { youngerAllowed: false })
@@ -338,10 +338,10 @@ export function olderThanAgeSentence(input: { phenoage: number; advance: number;
   const high = `这次身体年龄 ${formatMeasure(input.phenoage, '岁')}，比实足年龄高 ${formatMeasure(input.advance, '岁')}。`
   const names = input.drivers.map((name) => name.trim()).filter(Boolean).slice(0, 4)
   const cause = names.length >= 2
-    ? `${names.join('、')}这些红细胞指标把这个数抬高了。和贫血这类原因有关时，先请医生看清原因；原因处理之后，这个数可能会降下来。`
+    ? `${names.join('、')}等红细胞指标使该数值偏高。如与贫血等原因有关，请先由医生查明原因；原因处理后，该数值可能下降。`
     : names.length === 1
-      ? `${names[0]}把这个数抬高了。先请医生看清原因；原因处理之后，这个数可能会降下来。`
-      : '是哪几项检查把这个数抬高的，要对照化验看。先请医生看清原因；原因处理之后，这个数可能会降下来。'
+      ? `${names[0]}使该数值偏高。请先由医生查明原因；原因处理后，该数值可能下降。`
+      : '具体是哪些指标使该数值偏高，需要对照化验结果判断。请先由医生查明原因；原因处理后，该数值可能下降。'
   return `${high}${cause}`
 }
 

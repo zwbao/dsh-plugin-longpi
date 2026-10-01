@@ -148,7 +148,7 @@ function weightMedicine(current: readonly string[]): string {
 
 /** The plain attribution sentence for a draft while such a medicine is in use. */
 export function weightMedNote(name: string): string {
-  return `你在用（或这段时间会开始用）${name}：这段时间体重的变化主要会来自${name}，不是方案本身的效果，所以方案里不写试验的公斤数，也不设体重目标。`
+  return `你正在使用（或近期将开始使用）${name}：这段时间体重的变化主要来自${name}，不是方案本身的效果，因此方案中不写试验的公斤数，也不设体重目标。`
 }
 const NORMAL_DBP = 85
 const BP_KEYS = ['sbp', 'dbp']
@@ -252,11 +252,11 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
     }
   }
   if (profile.risk.smoker === false && reference.effects.some((row) => SMOKING_CESSATION.test(interventionText(row)) && priorities.some((p) => covers(row.marker_key ?? '', p.marker_key)))) {
-    notes.push('你说过不吸烟，所以没有列出戒烟。')
+    notes.push('你已说明不吸烟，因此未列出戒烟。')
   }
   const reproductive = classes.pregnant || classes.planning || classes.breastfeeding
   if (!stop.stop && !reproductive && drinks !== true && reference.effects.some((row) => ALCOHOL.test(interventionText(row)) && priorities.some((p) => covers(row.marker_key ?? '', p.marker_key)))) {
-    notes.push(drinks === false ? '你说过不喝酒，所以没有列出减少饮酒。' : '还不知道你是否喝酒，所以没有列出减少饮酒；如果你喝酒，告诉我大概多久喝一次、一次多少。')
+    notes.push(drinks === false ? '你已说明不饮酒，因此未列出减少饮酒。' : '尚不清楚你是否饮酒，因此未列出减少饮酒；如有饮酒，请告诉我饮酒频率和每次饮用量。')
   }
   if (classes.planning) {
     const line = remembered.planning || said.planning ? PLANNING_NOTE_ZH : FOLIC_PLANNING_NOTE_ZH
@@ -282,7 +282,7 @@ export async function buildPlanBrief(context: TrackingContext & { mount?: MountS
     : []
   const metrics = ['dailySteps', 'dailyTotalSleepTime'].filter((name) => indicators.some((row) => row.name === name && row.source !== 'self'))
   if (!notes.some((line) => line.startsWith('你说过的目标') && /脂肪肝|公斤|\bkg\b|体重/i.test(line))) {
-    notes.push('还没有记下体重目标或脂肪肝。如果有，直接告诉我，例如「体重目标 75 公斤」或「想管脂肪肝」。')
+    notes.push('尚未记录体重目标或脂肪肝情况。如有，请直接告诉我，例如「体重目标 75 公斤」或「想管脂肪肝」。')
   }
   return {
     today: context.today,
@@ -503,7 +503,7 @@ function safetyScreen(risk: Partial<Record<string, boolean>>, medications: reado
   }
   if (screen.onMedication) notes.push(`你的用药计划里有：${names}。饮食和补剂项目开始前，先与医生确认。`)
   if (screen.bpTreated) notes.push('你在用降压药：运动强度先与医生确认。')
-  if (screen.sglt2) notes.push(`你在用${screen.sglt2Name}（SGLT2 抑制剂）。进食明显减少、断食或极低碳饮食时，它可以引起正常血糖性酮症酸中毒（euglycaemic ketoacidosis）：血糖不高，但会恶心、呕吐、腹痛、乏力、呼吸深快，需要立即就医。所以这份草稿不安排限时进食、断食或极低碳饮食；生病或吃得明显少时，先问开药的医生要不要暂停。`)
+  if (screen.sglt2) notes.push(`你在用${screen.sglt2Name}（SGLT2 抑制剂）。进食明显减少、断食或极低碳饮食时，它可以引起正常血糖性酮症酸中毒（euglycaemic ketoacidosis）：血糖不高，但会恶心、呕吐、腹痛、乏力、呼吸深快，需要立即就医。所以这份草稿不安排限时进食、断食或极低碳饮食；生病或进食明显减少时，请先咨询开药的医生是否需要暂停。`)
   if (screen.hypoDrugs) notes.push('你在用胰岛素或磺脲类：运动、少吃和减重都有低血糖风险，先与医生确认。')
   else if (screen.glucoseRisk && !screen.sglt2) notes.push('你有糖尿病或在用降糖药：限时进食、少吃这类饮食改动有低血糖风险，先与医生确认。')
   if (screen.weightMed) notes.push(weightMedNote(screen.weightMed))
@@ -526,7 +526,7 @@ function cautionsFor(row: EffectRow, screen: Screen): string[] {
   if (screen.hypoDrugs && (row.category === 'exercise' || row.category === 'weight' || TIME_RESTRICTED.test(text) || /减重|节食|热量限制/.test(text))) out.push('你在用胰岛素或磺脲类，这项有低血糖风险，先与医生确认')
   else if (screen.glucoseRisk && TIME_RESTRICTED.test(text)) out.push('有低血糖风险，先与医生确认')
   // INT062 fix 5c: a GLP-1 already cuts appetite. The window is kept, with the prescriber told first.
-  if (screen.glp1Name && TIME_RESTRICTED.test(text)) out.push(`先告诉开药的医生：${screen.glp1Name}本身会让人吃得少、容易恶心，进食窗口里要吃够蛋白质和水；恶心、呕吐或吃不下时先停这一项`)
+  if (screen.glp1Name && TIME_RESTRICTED.test(text)) out.push(`先告诉开药的医生：${screen.glp1Name}本身会降低食欲、容易引起恶心，进食窗口里要吃够蛋白质和水；恶心、呕吐或无法进食时先停止这一项`)
   if (screen.antithrombotic && FISH_OIL.test(text)) out.push('可能增加出血风险，先与医生确认')
   if (FISH_OIL.test(text)) out.push(FISH_OIL_CAUTION)
   const taking = row.category === 'supplement' ? screen.current.find((name) => sameThing(name, row)) : undefined
@@ -752,25 +752,25 @@ function itemFor(group: Group, brief: PlanBrief, today: string): DraftItem {
 export function softHoldDraft(today: string, notes: readonly string[] = []): PlanDraft {
   const item = (id: string, category: DraftCategory, title: string, detail: string): DraftItem => ({
     id, category, category_zh: CATEGORY_ZH[category], title, detail, start: today, markers: [], target: null,
-    evidence: { effect_id: id, expected_zh: '这不是试验效应，是等医生看过之前可以做的事。', doi: '', verified: false, population: '一般成人' },
+    evidence: { effect_id: id, expected_zh: '这不是试验效应，而是就诊前可以先做的事。', doi: '', verified: false, population: '一般成人' },
     needs_doctor: false, cautions_zh: [],
   })
   const said = notes.filter((line) => line.startsWith('你说过的目标'))
   const weight = said.find((line) => /公斤|\bkg\b|体重/i.test(line))
   const liver = said.some((line) => /脂肪肝/.test(line))
-  const extra = ['请先去看医生。等看过之前，先做上面这几件。']
-  if (weight) extra.push(`${weight}。等就诊期间先不减重。`)
+  const extra = ['请先去看医生。就诊前，可以先做以上几项。']
+  if (weight) extra.push(`${weight}。就诊前暂不减重。`)
   if (liver) extra.push('饮食这一项也覆盖你说过的脂肪肝，不另设体重目标。')
   if (!weight && !liver) {
-    extra.push(notes.find((line) => line.startsWith('还没有记下体重目标')) ?? '还没有记下体重目标或脂肪肝。如果有，直接告诉我，例如「体重目标 75 公斤」或「想管脂肪肝」。')
+    extra.push(notes.find((line) => line.startsWith('尚未记录体重目标')) ?? '尚未记录体重目标或脂肪肝情况。如有，请直接告诉我，例如「体重目标 75 公斤」或「想管脂肪肝」。')
   }
   return {
-    title: `等就诊期间可以先做的事（${today}）`,
+    title: `就诊前可以先做的事（${today}）`,
     items: [
-      item('hold-walk', 'exercise', '每天走路 20 到 30 分钟', '用能说话的速度走。不代替就诊。'),
-      item('hold-diet', 'diet', '每餐有蔬菜和蛋白质，少含糖饮料', '按平时的三餐吃，把蔬菜和蛋白质备好。'),
-      item('hold-sleep', 'sleep', '尽量固定起床时间，睡大约 7 到 9 小时', '睡眠不拿来判断这次检查好了还是坏了。'),
-      item('hold-smoke', 'behavior', '如果吸烟，先把戒烟和医生说；如果喝酒，先少喝', '不吸烟、不喝酒的人不用做这一项。'),
+      item('hold-walk', 'exercise', '每天走路 20 到 30 分钟', '以能正常交谈的速度步行。不能替代就诊。'),
+      item('hold-diet', 'diet', '每餐有蔬菜和蛋白质，少喝含糖饮料', '保持平时的三餐，每餐安排蔬菜和蛋白质。'),
+      item('hold-sleep', 'sleep', '尽量固定起床时间，睡大约 7 到 9 小时', '睡眠情况不用于判断本次检查结果的好坏。'),
+      item('hold-smoke', 'behavior', '如果吸烟，请与医生讨论戒烟；如果饮酒，请先减量', '不吸烟、不饮酒者无需执行此项。'),
     ],
     goals: [],
     notes_zh: extra,
@@ -782,14 +782,14 @@ export function replyForDraft(brief: PlanBrief, draft: PlanDraft | null): string
     const lines = (draft?.items ?? []).map((item) => `${item.category_zh}：${item.title}。${item.detail}`)
     return [brief.safety.stop_zh, ...lines].join('\n')
   }
-  if (!draft) return brief.notes_zh[0] || '现在还起草不了方案。'
+  if (!draft) return brief.notes_zh[0] || '目前无法起草方案。'
   const lines = draft.items.map((item) => {
     const caution = item.cautions_zh.length > 0 ? `（${item.cautions_zh.join('；')}）` : ''
     return `${item.category_zh}：${item.title}${caution}。${item.evidence.expected_zh}`
   })
   const dated = draft.title.match(/\d{4}-\d{2}-\d{2}/)
   const repro = [...brief.notes_zh, ...brief.safety.notes_zh].filter((line) => /你在备孕|按备孕处理|你在哺乳|避免饮酒|0\.4 mg/.test(line))
-  return [`这是草稿，还没有保存。日期是 ${dated ? dated[0] : brief.today}。`, ...new Set(repro), ...lines].join('\n')
+  return [`这是草稿，尚未保存。日期：${dated ? dated[0] : brief.today}。`, ...new Set(repro), ...lines].join('\n')
 }
 
 /**

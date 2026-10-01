@@ -20,7 +20,7 @@ function ScienceToolCard(props: { block?: unknown; toolName?: string }): React.R
 function ScienceSettings(): React.ReactElement {
   return h('section', { className: 'lp-stack', 'aria-labelledby': 'lp-science-settings-title' },
     h('h3', { className: 'lp-h3', id: 'lp-science-settings-title' }, '研究'),
-    h('p', { className: 'lp-small lp-muted lp-measure' }, '研究正式开始后才会发出，现在只保存在你的设备上。'),
+    h('p', { className: 'lp-small lp-muted lp-measure' }, '研究正式开始后才会发送，目前仅保存在这台电脑上。'),
     h('a', { className: 'lp-textbtn', href: '/api/longpi/science/community?view=page' }, '打开研究页'))
 }
 

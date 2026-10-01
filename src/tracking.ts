@@ -14,6 +14,7 @@ import type { Config } from './config.ts'
 import { adherenceFor, evaluatePlan, resolveMarkers, suggestNext, wearableTargetFor, type Adherence, type ItemSummary, type LeverHint, type ResolvedMarker, type Suggestion } from './evaluate.ts'
 import { bodyAgeWording, codedRecords, missedPlanChanges, PHENOAGE_WINDOW_DAYS, siblingNames } from './honesty/comparability.ts'
 import { bodyAgeStory, panelFromMeasurements, type PhenoPanel } from './ux/body-age.ts'
+import { dateZh } from './ux/plain.ts'
 import { roundPercentPoints } from './honesty/format.ts'
 import { modelRangeNote } from './honesty/model-range.ts'
 import { readHistory, type HistoryRow } from './history.ts'
@@ -436,7 +437,7 @@ async function checkupDays(context: TrackingContext, pairs: readonly Pair[]): Pr
   // Any series that failed to read, or came back cut, makes the days unknown: a value not read is never taken
   // for a checkup without it.
   if (read.failed.length > 0) return empty(read.error || '读取失败')
-  if (read.cut.length > 0) return empty('读数太多被截断，没有读全')
+  if (read.cut.length > 0) return empty('读数过多被截断，未完整读取')
   for (const pair of pairs) {
     const rank = new Map<string, number>()
     pair.names.forEach((name, index) => {
@@ -504,32 +505,32 @@ async function ensureBioAge(context: TrackingContext, reference: Reference): Pro
     headline_zh: '', panel_span_days: null,
   })
   const card = context.catalog.cards.find((item) => item.name === PHENOAGE_SKILL)
-  if (!card || !card.script) return empty('no_skill', '技能库里没有身体年龄（表型年龄）方法。')
+  if (!card || !card.script) return empty('no_skill', '方法库中没有身体年龄（表型年龄）这项计算。')
   // A record that is configured but failed to read is not 'not connected': name the failure.
   if (context.records.record_status === 'error') return empty('error', readFailed(context.records))
-  if (!recordReadable(context.records)) return empty('no_record', '还没有读到体检，暂时算不出历次的身体年龄。')
+  if (!recordReadable(context.records)) return empty('no_record', '尚未读取到体检记录，暂时无法计算历次身体年龄。')
   // Two people's labs never make one body age (INT062 fix 1): the father's checkups with the daughter's age and sex.
   const mixed = notOnePersonReason(context.records.profile, context.records.indicators)
   if (mixed) return empty('not_one_person', mixed)
   const pairs = pairsFor(card, context.records)
   const { missing, unread } = absentInputs(pairs, context.records)
   if (missing.length > 0) {
-    const also = unread.length > 0 ? `另外${unread.map((pair) => pair.spec.label_zh).join('、')}没有读到。` : ''
-    return empty('missing_inputs', `记录里还缺${missing.map((pair) => pair.spec.label_zh).join('、')}，凑齐九项血检才能算身体年龄。${also}`, missing.map((pair) => pair.spec.label_zh))
+    const also = unread.length > 0 ? `另外${unread.map((pair) => pair.spec.label_zh).join('、')}未读取到。` : ''
+    return empty('missing_inputs', `记录中还缺${missing.map((pair) => pair.spec.label_zh).join('、')}，九项血检齐全后才能计算身体年龄。${also}`, missing.map((pair) => pair.spec.label_zh))
   }
   // Not read is not "not measured": the series may still be readable, so the checkups are read either way.
   if (unread.some((pair) => pair.names.length === 0)) {
-    return empty('error', `指标目录没有读全，${unread.map((pair) => pair.spec.label_zh).join('、')}可能在没有读到的部分，暂时算不出身体年龄。`)
+    return empty('error', `指标目录未完整读取，${unread.map((pair) => pair.spec.label_zh).join('、')}可能在未读取的部分中，暂时无法计算身体年龄。`)
   }
   const who = calculatorIdentity(context.records.profile)
   const ageNow = who.age
-  if (ageNow == null) return empty('no_age', who.subject ? '这份记录是家人的，档案里还没有他或她的年龄。' : '档案里还没有实足年龄。保存年龄后才能回算身体年龄。')
+  if (ageNow == null) return empty('no_age', who.subject ? '这份记录属于家人，档案中尚无其年龄。' : '档案中尚无实足年龄。保存年龄后才能计算身体年龄。')
 
   const days = await checkupDays(context, pairs)
   if (days.error) return empty('error', `读取历次血检失败：${days.error}`)
   // A panel is one day, or every input inside PHENOAGE_WINDOW_DAYS. Nothing is carried further than that.
   const checkups = days.complete.slice(-BIOAGE_CHECKUPS)
-  if (checkups.length === 0) return empty('no_checkup', `没有一次检查在 ${PHENOAGE_WINDOW_DAYS} 天内测齐九项血检，还不能算身体年龄。`)
+  if (checkups.length === 0) return empty('no_checkup', `没有一次检查在 ${PHENOAGE_WINDOW_DAYS} 天内测齐九项血检，暂时无法计算身体年龄。`)
   // Each checkup's inputs, its age then and the skill version; a stored result for other inputs is recomputed.
   const wanted = new Map(checkups.map((date) => {
     const measurements = latestMeasurements(pairs, days.byDate, date)
@@ -577,7 +578,7 @@ async function ensureBioAge(context: TrackingContext, reference: Reference): Pro
     : null
   const sameDayCount = checkups.filter((date) => (days.spans.get(date) ?? 0) === 0).length
   const windowNote = span > 0
-    ? `最近一次九项血检在 ${span} 天内测齐（截至 ${latest}，不超过 ${PHENOAGE_WINDOW_DAYS} 天），不是同一天抽血。`
+    ? `最近一次九项血检在 ${span} 天内测齐（截至 ${dateZh(latest, context.today)}，不超过 ${PHENOAGE_WINDOW_DAYS} 天），不是同一天抽血。`
     : `按 ${points.length} 次同一天测齐九项血检的检查回算${sameDayCount < points.length ? '（另有不在同一天、但在窗口内的检查）' : ''}。`
   const firstDate = checkups[0]
   const beforePanel = firstDate && firstDate !== latest
@@ -589,7 +590,7 @@ async function ensureBioAge(context: TrackingContext, reference: Reference): Pro
     status: current ? 'ok' : 'error',
     note_zh: current
       ? `${wording?.headline_zh ?? ''} ${windowNote}`.trim()
-      : `${latest} 这次血检的身体年龄没有算出来${lastError ? `：${lastError}` : ''}。请在对话里运行身体年龄（表型年龄）方法查看原因。`,
+      : `${dateZh(latest, context.today)}这次血检的身体年龄未能计算${lastError ? `：${lastError}` : ''}。请在对话里运行身体年龄（表型年龄）方法查看原因。`,
     headline_zh: wording?.headline_zh ?? '',
     allows_younger: wording?.allows_younger === true,
     panel_span_days: current ? span : null,
@@ -838,7 +839,7 @@ function missingLabsNote(labels: readonly string[]): string {
   const rest = labels.filter((label) => !label.includes('腰围'))
   const parts: string[] = []
   if (rest.length > 0) parts.push(`记录里还缺${rest.join('、')}。`)
-  if (waist.length > 0) parts.push(`${waist.join('、')}还没有测过，现在量一下填上就能算。`)
+  if (waist.length > 0) parts.push(`${waist.join('、')}尚未测量，测量并填写后即可计算。`)
   return parts.join('')
 }
 
@@ -998,7 +999,7 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
   base.missing_facts = missingFacts
   base.missing = [...missingLabs, ...missingFacts]
   const factsHint = missingFacts.length > 0 ? `档案里还缺${missingFacts.join('、')}（在健康页填写，或在对话里告诉我）。` : ''
-  const uncertainHint = uncertainFacts.length > 0 ? `${uncertainFacts.join('、')}记为不确定。10 年心血管风险要回答“是”或“否”才能计算。` : ''
+  const uncertainHint = uncertainFacts.length > 0 ? `${uncertainFacts.join('、')}记为不确定。10 年心血管风险需要回答「是」或「否」才能计算。` : ''
   if (context.records.record_status === 'error') {
     // Which labs the record lacks is unknown while the read fails, so none are listed as add-ons.
     base.missing_labs = []
@@ -1008,11 +1009,11 @@ async function riskCard(context: TrackingContext, reference: Reference, card: Sk
   }
   if (!recordReadable(context.records)) {
     const labsHint = missingLabs.length > 0 ? `，计算还需要${missingLabs.join('、')}` : ''
-    base.note_zh = `还没有读到体检${labsHint}。${factsHint}${uncertainHint}`
+    base.note_zh = `尚未读取到体检记录${labsHint}。${factsHint}${uncertainHint}`
     return base
   }
   if (missingLabs.length > 0 || missingFacts.length > 0 || unreadLabs.length > 0 || uncertainFacts.length > 0) {
-    const unreadHint = unreadLabs.length > 0 ? `${unreadLabs.join('、')}的最新值没有读到（读取失败），不是没有测过。` : ''
+    const unreadHint = unreadLabs.length > 0 ? `${unreadLabs.join('、')}的最新值未读取到（读取失败），并非未检测。` : ''
     base.note_zh = `${missingLabsNote(missingLabs)}${unreadHint}${factsHint}${uncertainHint}`
     return base
   }

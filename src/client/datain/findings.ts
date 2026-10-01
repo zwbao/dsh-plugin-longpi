@@ -22,7 +22,7 @@ const KIND_ZH: Record<string, string> = {
   ultrasound: '超声',
   conclusion: '结论',
   advice: '医师建议',
-  wrong_person: '不是这份档案',
+  wrong_person: '不属于本档案',
   genetics: '基因报告',
 }
 
@@ -34,13 +34,13 @@ export function FindingsList(props: { reloadKey?: number }): React.ReactElement 
     getJson<{ findings?: FindingRow[] }>('/api/longpi/findings').then((body) => {
       if (!gone) setRows(Array.isArray(body.findings) ? body.findings : [])
     }).catch((err: unknown) => {
-      if (!gone) setError(errorText(err, '没有读到报告叙述'))
+      if (!gone) setError(errorText(err, '未能读取报告叙述'))
     })
     return () => { gone = true }
   }, [props.reloadKey])
   if (error) return h('p', { className: 'lp-form-error', role: 'alert' }, error)
   if (!rows) return h('p', { className: 'lp-small lp-muted lp-measure' }, '正在读取报告叙述…')
-  if (rows.length === 0) return h('p', { className: 'lp-small lp-muted lp-measure', id: 'lp-findings-empty' }, '还没有从报告里记下超声、总检或医师建议。已经放进来的报告，打开健康页后会读到超声分级；也可以把 PDF 发到健康对话。')
+  if (rows.length === 0) return h('p', { className: 'lp-small lp-muted lp-measure', id: 'lp-findings-empty' }, '尚未从报告中读取超声、总检或医师建议。已上传的报告会在打开健康页时读取超声分级；也可以将 PDF 发送到健康对话。')
   return h('ul', { className: 'lp-rows', id: 'lp-findings' },
     ...rows.map((row) => h('li', { key: row.id, className: 'lp-row lp-row-stack' },
       row.kind === 'wrong_person'

@@ -4,6 +4,8 @@
 // glucose, LDL-C, office SBP). A known diagnosis is the person's own yes, or a
 // current glucose-lowering medicine — a lab on its own is not "the doctor knows".
 
+import { dateZh } from './ux/plain.ts'
+
 export const FISH_OIL_CAUTION = '试验用的是处方级的较高用量 EPA+DHA，鱼油可能增加出血和房颤（心房颤动）风险；这不是给你的用量，先与医生确认'
 export const HYPO_AWAKE_ZH = '先吃 15 克快速吸收的糖（葡萄糖片或一小杯含糖果汁），15 分钟后复测；仍低于 3.9 mmol/L 就再吃 15 克。'
 export const HYPO_UNCONSCIOUS_ZH = '昏迷、叫不醒或无法吞咽时不要喂东西，请立即拨打 120。'
@@ -12,7 +14,7 @@ export const HYPO_NEXT_DOSE_ZH = '这次低血糖先按上面处理。下一次�
 
 /** Tells them to skip or stop an insulin injection. "不要自行停药" is not this. */
 const INSULIN_HOLD = /(?:不要|别|勿)(?:再|继续)(?:注射|打)(?:一?针)?胰岛素|(?:不要|别|勿)再打胰岛素|(?<!自行)(?<!自己)(?:停掉|停止|停用|先停)胰岛素|把胰岛素停|别再打胰岛素/
-export const DOCTOR_ZH = '请先去看医生。等医生看过之前，可以先走路、把每餐的蔬菜和蛋白质备好、把睡眠稳住；如果吸烟或喝酒，先少一点。这份安排不含断食、大幅减重、补剂或补铁。'
+export const DOCTOR_ZH = '请先去看医生。就诊前，可以先坚持步行、每餐安排蔬菜和蛋白质、保持规律睡眠；如果吸烟或饮酒，请先减量。这份安排不含断食、大幅减重、补剂或补铁。'
 
 export const SGLT2 = /列净|gliflozin|dapagliflozin|empagliflozin|canagliflozin|ertugliflozin/i
 export const INSULIN_SU = /胰岛素|\binsulin\b|格列(?!净)|磺脲|消渴丸|glibenclamide|glimepiride|gliclazide|glipizide|glyburide/i
@@ -299,11 +301,11 @@ function progressiveFall(days: Array<{ date: string; value: number }>, minPct: n
 
 function trendText(rows: Array<{ date: string; value: number }> | null): string {
   if (!rows) return ''
-  return `，${rows.length} 次体检 ${rows.map((row) => num(row.value)).join(' → ')}（${rows[0]?.date} 到 ${rows.at(-1)?.date}）一路下降`
+  return `，${rows.length} 次体检 ${rows.map((row) => num(row.value)).join(' → ')}（${dateZh(rows[0]?.date)}至 ${dateZh(rows.at(-1)?.date)}）持续下降`
 }
 
 function dated(point: PanelPoint): string {
-  return point.date ? `（${point.date.slice(0, 10)}）` : ''
+  return point.date ? `（${dateZh(point.date.slice(0, 10))}）` : ''
 }
 
 /**
@@ -313,7 +315,7 @@ function dated(point: PanelPoint): string {
  */
 const HB_LOW = { male: 130, female: 115 } as const
 const FERRITIN_LOW = { male: 30, female: 15 } as const
-const SEX_ASK_ZH = '档案里还没有性别。这个数在男女参考范围之间，先填写性别，再判断要不要看医生。这次不转诊。'
+const SEX_ASK_ZH = '档案中尚无性别。该数值介于男女参考范围之间，请先填写性别，再判断是否需要就医。本次暂不提示转诊。'
 
 /**
  * Critical values and a red-cell pattern that need a doctor before any
@@ -335,7 +337,7 @@ export function clinicalStop(input: { sex: string; diabetesKnown: boolean; point
     return value < limitOf(table)
   }
   const lowWords = (table: { male: number; female: number }) => (
-    sex === 'unknown' ? `偏低，低于女性参考下限 ${table.female}，男女都算偏低` : `偏低，低于${sexZh}参考下限 ${limitOf(table)}`
+    sex === 'unknown' ? `偏低，低于女性参考下限 ${table.female}，男女均属偏低` : `偏低，低于${sexZh}参考下限 ${limitOf(table)}`
   )
   const hb = input.points.filter(isHb)
   const mcv = input.points.filter(isMcv)
@@ -390,7 +392,7 @@ export function clinicalStop(input: { sex: string; diabetesKnown: boolean; point
       hits.push({
         key: 'glucose', value: Number(glucoseMmol(glucose).toFixed(2)), unit: 'mmol/L', date: glucose.date.slice(0, 10), label_zh: '空腹血糖', low: false,
         short_zh: `空腹血糖 ${num(glucoseMmol(glucose))} mmol/L 偏高`,
-        text_zh: `空腹血糖 ${num(glucoseMmol(glucose))} mmol/L${dated(glucose)}偏高，达到糖尿病诊断范围（≥7.0），记录里还没有医生已经知道这件事`,
+        text_zh: `空腹血糖 ${num(glucoseMmol(glucose))} mmol/L${dated(glucose)}偏高，达到糖尿病诊断范围（≥7.0），记录中尚无医生已知悉此情况的信息`,
       })
     }
     const pct = a1c ? hba1cPct(a1c) : null
@@ -398,7 +400,7 @@ export function clinicalStop(input: { sex: string; diabetesKnown: boolean; point
       hits.push({
         key: 'hba1c', value: Number(pct.toFixed(2)), unit: '%', date: a1c.date.slice(0, 10), label_zh: '糖化血红蛋白', low: false,
         short_zh: `糖化血红蛋白 ${num(pct)}% 偏高`,
-        text_zh: `糖化血红蛋白 ${num(pct)}%${dated(a1c)}偏高，达到糖尿病诊断范围（≥6.5%），记录里还没有医生已经知道这件事`,
+        text_zh: `糖化血红蛋白 ${num(pct)}%${dated(a1c)}偏高，达到糖尿病诊断范围（≥6.5%），记录中尚无医生已知悉此情况的信息`,
       })
     }
   }
@@ -426,10 +428,10 @@ export function clinicalStop(input: { sex: string; diabetesKnown: boolean; point
   // A falling red-cell count with low ferritin or small red cells is usually iron deficiency, whose cause in an adult is
   // often in the gut: the gastroenterologist is named too, with a time frame (the season already says 血液科或消化科).
   const iron = hits.some((hit) => hit.key === 'ferritin' || (hit.key === 'mcv' && hit.low))
-  const where = redCell ? `（可以先看全科或血液科${iron ? '，缺铁的原因常要消化科一起查' : ''}，尽量在 1 到 2 周内去）` : ''
-  const urgent = hits.some((hit) => hit.key === 'sbp') ? '血压这么高请尽快就医；如果同时有胸痛、剧烈头痛、一侧无力或说话不清，立即拨打 120。' : ''
+  const where = redCell ? `（可先就诊全科或血液科${iron ? '，缺铁的原因常要消化科一起查' : ''}，尽量在 1 到 2 周内就诊）` : ''
+  const urgent = hits.some((hit) => hit.key === 'sbp') ? '血压明显偏高，请尽快就医；如果同时有胸痛、剧烈头痛、一侧无力或说话不清，立即拨打 120。' : ''
   const selfTreat = redCell ? '在医生查明原因之前，不要自己买铁剂或补剂。' : ''
-  const sentence = `请先去看医生：${hits.map((hit) => hit.text_zh).join('；')}。${urgent}请带着这几次体检报告去看医生${where}，查清原因。${selfTreat}${DOCTOR_ZH}`
+  const sentence = `请先去看医生：${hits.map((hit) => hit.text_zh).join('；')}。${urgent}请携带这几次体检报告就诊${where}，查明原因。${selfTreat}${DOCTOR_ZH}`
   return { stop: true, sentence_zh: sentence, title_zh: `请先去看医生：${hits.map((hit) => hit.short_zh).slice(0, 3).join('，')}`, hits, ...(needsSex ? { needs_sex: true } : {}) }
 }
 

@@ -20,7 +20,7 @@ async function read<T>(res: Response): Promise<T> {
 function httpText(status: number): string {
   if (status === 401) return '需要重新登录 DeepSeek Harness（HTTP 401）'
   if (status === 403) return 'DeepSeek Harness 拒绝了这个请求（HTTP 403）'
-  if (status === 503) return 'LongPi 还没有准备好，稍后再试（HTTP 503）'
+  if (status === 503) return 'LongPi 尚未就绪，请稍后再试（HTTP 503）'
   return `HTTP ${status}`
 }
 
