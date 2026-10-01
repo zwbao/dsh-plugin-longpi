@@ -1134,7 +1134,9 @@ mirobody_native_start() {
       continue
     fi
     # exec: the pid written is Mirobody's own, not a wrapper shell's
-    (cd "$dir"; set -a; . "$envfile"; set +a; exec nohup "$venv/bin/mirobody" "$name" >"$longpi_home/mirobody-$name.log" 2>&1) </dev/null &
+    # umask 077: the logs carry personal MCP links, so only this account may read them (0600).
+    (cd "$dir"; umask 077; set -a; . "$envfile"; set +a; exec nohup "$venv/bin/mirobody" "$name" >"$longpi_home/mirobody-$name.log" 2>&1) </dev/null &
+    chmod 600 "$longpi_home/mirobody-$name.log" 2>/dev/null || true
     echo $! > "$longpi_home/mirobody-$name.pid"
   done
   wait_for "$base/" 300 || fail_log "Mirobody (native) did not answer at $base within 5 minutes; see $longpi_home/mirobody-serve.log." \
@@ -1472,10 +1474,10 @@ skills_version = argv[6] if len(argv) > 6 else ""
 BEGIN = "# >>> dsh-plugin-longpi (written by install.sh; keep one value per line) >>>"
 END = "# <<< dsh-plugin-longpi <<<"
 KEYS = ["skillsHome", "skillsVersion", "mirobodyPluginHome", "pythonBin", "mirobodyHome", "mcpUrl", "mcpToken",
-        "member", "timeoutMs", "skillPython", "skillTimeoutMs", "skillRuntimes", "dataDir", "maxSkillMatches", "bootstrapWorkspace", "guardScope"]
+        "member", "timeoutMs", "skillPython", "skillTimeoutMs", "skillRuntimes", "dataDir", "maxSkillMatches", "bootstrapWorkspace"]
 DEFAULTS = {"skillsVersion": "\x27\x27", "mirobodyHome": "\x27\x27", "mcpUrl": "\x27\x27", "mcpToken": "\x27\x27",
             "member": "\x27\x27", "timeoutMs": "30000", "skillTimeoutMs": "120000", "skillRuntimes": "{}",
-            "dataDir": "\x27\x27", "maxSkillMatches": "8", "bootstrapWorkspace": "true", "guardScope": "health"}
+            "dataDir": "\x27\x27", "maxSkillMatches": "8", "bootstrapWorkspace": "true"}
 
 def quote(text):
     return "\x27" + text.replace("\x27", "\x27\x27") + "\x27"
@@ -1523,10 +1525,9 @@ if set_mcp == "1":
     values["mcpUrl"] = quote(mcp_url)
     values["mcpToken"] = quote(mcp_token)
 
-# The window corner reads LongPi: the official DeepSeek Harness wordmark row is left out of this profile, so the
-# name slot LongPi fills is the one shown. The mark stays the DeepSeek whale. Removing this block brings it back.
-BRAND = ["- id: ui-brand-official", "  disabled: true"]
-block = [BEGIN, "- id: dsh-plugin-longpi", "  config:"] + ["    %s: %s" % (key, values[key]) for key in KEYS] + BRAND + [END]
+# The LongPi block holds the LongPi row only. Up to 0.7.0 it also disabled the DeepSeek Harness wordmark row
+# (ui-brand-official); rewriting the block whole, as below, removes that line from an older install.
+block = [BEGIN, "- id: dsh-plugin-longpi", "  config:"] + ["    %s: %s" % (key, values[key]) for key in KEYS] + [END]
 if span:
     new_lines = lines[:span[0]] + block + lines[span[1]:]
 else:

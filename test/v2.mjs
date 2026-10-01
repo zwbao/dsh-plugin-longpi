@@ -204,7 +204,8 @@ try {
     const profileDir = mkdtempSync(join(tmpdir(), 'longpi-v2-install-'))
     try {
       const patch = join(profileDir, 'cordis.patch.yml')
-      writeFileSync(patch, '- id: other-plugin\n  config: {}\n', { mode: 0o600 })
+      // An install written by 0.7.0: LongPi's block also disabled DSH's own wordmark row.
+      writeFileSync(patch, '- id: other-plugin\n  config: {}\n# >>> dsh-plugin-longpi (written by install.sh; keep one value per line) >>>\n- id: dsh-plugin-longpi\n  config:\n    dataDir: \'\'\n- id: ui-brand-official\n  disabled: true\n# <<< dsh-plugin-longpi <<<\n', { mode: 0o600 })
       for (let i = 1; i <= 5; i += 1) writeFileSync(`${patch}.bak-2026010100000${i}`, 'old\n', { mode: 0o644 })
       writeFileSync(`${patch}.bak-manual`, 'mine\n', { mode: 0o644 })
       writeFileSync(`${patch}.bak-2026010100000`, 'thirteen digits\n', { mode: 0o644 })
@@ -219,10 +220,11 @@ try {
       assert.ok(own.at(-1) > 'cordis.patch.yml.bak-20260101000005', 'the new backup is kept')
       for (const name of own) assert.equal(statSync(join(profileDir, name)).mode & 0o777, 0o600, name)
       assert.equal(statSync(patch).mode & 0o777, 0o600)
-      // The corner says LongPi: the official wordmark row is disabled inside LongPi's own block.
+      // DSH keeps its own wordmark (0.8.0): the block holds LongPi's row only, and an older block's brand line is gone.
       const written = readFileSync(patch, 'utf8')
       const block = written.slice(written.indexOf('# >>> dsh-plugin-longpi'), written.indexOf('# <<< dsh-plugin-longpi'))
-      assert.match(block, /- id: ui-brand-official\n  disabled: true/)
+      assert.match(block, /- id: dsh-plugin-longpi/)
+      assert.doesNotMatch(written, /ui-brand-official/, 'the installer never disables DSH\'s brand row')
       assert.match(written, /- id: other-plugin/, 'other rows stay')
       assert.ok(existsSync(`${patch}.bak-manual`) && existsSync(`${patch}.bak-2026010100000`), 'files not named by the installer are never removed')
       assert.match(installer, /配置备份/, 'the summary says so')
