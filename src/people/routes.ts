@@ -77,7 +77,7 @@ export function registerPeopleRoutes(deps: CoreDeps): void {
       try {
         memberId = await createManagedMember(holder, { name, sex, birth_year: birthYear })
       } catch (error) {
-        return { ok: false, status: 502, error: `在健康数据服务中为${label}建档失败：${error instanceof Error ? error.message : String(error)}` }
+        return { ok: false, status: 502, error: `暂时无法为${label}建立档案，请稍后重试。如果反复出现，请确认健康数据服务正在运行。（${error instanceof Error ? error.message : String(error)}）` }
       }
       try {
         link = await mintMemberLink(holder, memberId)

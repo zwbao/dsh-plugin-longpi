@@ -224,18 +224,35 @@ try {
   assert.doesNotMatch(draft.value.reply_zh, /包某某/)
   assert.match(draft.value.reply_zh, /未满 18 岁/)
 
+  // What a 0.7 home also holds: the paired account, a personal link, reminder channels, logs, a family member.
+  writeFileSync(join(dataDir, 'connection.json'), `${JSON.stringify({ mcp_url: 'http://127.0.0.1:18060/mcp/x_PERSONALPATH', mcp_token: 'SECRETTOKENVALUE', saved_at: '2026-09-28T00:00:00.000Z' })}\n`)
+  writeFileSync(join(dataDir, 'mirobody-account.json'), `${JSON.stringify({ base: 'http://127.0.0.1:18060', email: 'longpi-holder@example.invalid', password: 'PASSWORD-SHOULD-NOT-LEAK', created_at: '2026-09-28T00:00:00.000Z' })}\n`)
+  writeFileSync(join(dataDir, 'followup.json'), `${JSON.stringify({ enabled: true, webhooks: [{ url: 'https://hooks.example.invalid/x' }] })}\n`)
+  writeFileSync(join(dataDir, 'usage.jsonl'), '{"tokens":1}\n')
+  mkdirSync(join(dataDir, 'notifier', 'LongPi.app'), { recursive: true })
+  writeFileSync(join(dataDir, 'notifier', 'LongPi.app', 'x'), 'binary')
+  mkdirSync(join(dataDir, 'people', 'pmom'), { recursive: true })
+  writeFileSync(join(dataDir, 'people', 'pmom', 'profile.json'), '{"displayName":"妈妈"}\n')
   const exported = await call(host, 'GET', '/api/longpi/privacy/export')
   assert.equal(exported.status, 200)
   assert.match(exported.headers['content-type'], /application\/zip/)
   assert.equal(exported.raw.subarray(0, 2).toString('utf8'), 'PK')
   const zipPath = join(dataDir, 'out.zip')
   writeFileSync(zipPath, exported.raw)
-  const listed = spawnSync('python3', ['-c', 'import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); print("\\n".join(z.namelist())); print("---"); print(z.read("说明.txt").decode()); print("---"); print(z.read("connection.json").decode())', zipPath], { encoding: 'utf8' })
+  // Every file in the archive, then every byte of it: only the person's records, and none of the service's secrets.
+  const dump = 'import zipfile,sys; z=zipfile.ZipFile(sys.argv[1]); print("\\n".join(z.namelist())); print("---"); [print(z.read(n).decode("utf8","replace")) for n in z.namelist()]'
+  const listed = spawnSync('python3', ['-c', dump, zipPath], { encoding: 'utf8' })
   assert.equal(listed.status, 0, listed.stderr)
-  assert.match(listed.stdout, /说明\.txt/)
-  assert.match(listed.stdout, /profile\.json/)
-  assert.doesNotMatch(listed.stdout, /SECRETTOKENVALUE/)
-  assert.match(listed.stdout, /18060/)
+  const names = listed.stdout.split('---')[0]
+  assert.match(names, /说明\.txt/)
+  assert.match(names, /profile\.json/)
+  for (const left of ['connection.json', 'mirobody-account.json', 'followup.json', 'usage.jsonl', 'notifier/', 'workspace/', 'people']) {
+    assert.ok(!names.includes(left), `${left} is not in the archive`)
+  }
+  for (const secret of ['SECRETTOKENVALUE', 'longpi-holder@example.invalid', 'PASSWORD-SHOULD-NOT-LEAK', 'x_PERSONALPATH', 'hooks.example.invalid']) {
+    assert.ok(!listed.stdout.includes(secret), `${secret} is nowhere in the archive`)
+  }
+  assert.doesNotMatch(listed.stdout, /~\/\.dsh|已移除连接令牌/, 'the note names no folder and makes no claim the archive does not keep')
 
   const refused = await call(host, 'POST', '/api/longpi/privacy/delete', { confirm: '删掉' })
   assert.equal(refused.status, 400)

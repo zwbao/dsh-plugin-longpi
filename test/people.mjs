@@ -25,10 +25,13 @@ assert.equal(eff.mcpUrl, ''); assert.equal(eff.mcpToken, '')
 
 // her link is minted with the holder's token and saved with no token
 const calls = []
+// Routes as Mirobody 1.5 serves them (H-01): managed members under /api, personal links at the root; anything else 404s.
 const fakeFetch = async (url, init) => {
   calls.push({ url, auth: init.headers.authorization, body: JSON.parse(init.body) })
-  if (url.endsWith('/user/virtual')) return new Response(JSON.stringify({ code: 0, data: { id: '42' } }))
-  return new Response(JSON.stringify({ code: 0, data: { url: `http://127.0.0.1:18060/mcp/MEMBER-${calls.length}` } }))
+  const path = new URL(url).pathname
+  if (path === '/api/user/virtual') return new Response(JSON.stringify({ code: 0, data: { id: '42' } }))
+  if (path === '/personal/mcp') return new Response(JSON.stringify({ code: 0, data: { url: `http://127.0.0.1:18060/mcp/MEMBER-${calls.length}` } }))
+  return new Response('{"detail":"Not Found"}', { status: 404 })
 }
 const auth = mod.holderAuth(root)
 assert.equal(auth.token, 'HOLDER-JWT')

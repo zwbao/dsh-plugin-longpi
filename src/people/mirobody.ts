@@ -38,7 +38,8 @@ async function post(base: string, path: string, token: string, body: unknown, fe
 }
 
 export async function createManagedMember(auth: HolderAuth, input: { name: string; sex: 'male' | 'female'; birth_year: number | null }, fetchImpl: typeof fetch = fetch): Promise<string> {
-  const json = await post(auth.base, '/user/virtual', auth.token, {
+  // Mirobody serves managed members under /api (user_router prefix); personal links stay at /personal/mcp.
+  const json = await post(auth.base, '/api/user/virtual', auth.token, {
     name: input.name, gender: input.sex, ...(input.birth_year ? { birth: `${input.birth_year}-01-01` } : {}),
   }, fetchImpl)
   const id = String(json.data?.id ?? '')

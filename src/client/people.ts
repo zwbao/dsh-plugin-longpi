@@ -84,7 +84,7 @@ function AddPersonDialog(props: { view: PeopleView; onClose: () => void }): Reac
         h('h2', { className: 'lp-h2' }, '添加家人'),
         h('button', { type: 'button', className: 'lp-iconbtn', 'aria-label': '关闭', onClick: props.onClose }, h(Icon, { name: 'close', size: 18 }))),
       h('p', { className: 'lp-muted lp-small' }, view.can_create_in_mirobody
-        ? '将在你的健康数据服务账号下为家人建立独立档案（家人无需单独注册账号）。家人的体检、方案和深度分析都和你的分开。'
+        ? '将为家人建立独立档案，家人无需单独注册。家人的体检、方案和深度分析都和你的分开。'
         : /个人链接/.test(view.create_hint_zh) ? view.create_hint_zh.trim() : `${view.create_hint_zh.trim().replace(/[。.]?$/, '。')}也可以粘贴家人自己的健康数据服务个人链接。`),
       h('div', { className: 'lp-form-grid' },
         input('label_zh', '称呼', { placeholder: '如 爸爸、妈妈', autoFocus: true }),

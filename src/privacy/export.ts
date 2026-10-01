@@ -1,11 +1,10 @@
 // One archive of the local LongPi store, without secrets, plus a pointer to the person's Mirobody.
 
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { lstatSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
 import { readConnection } from '../connection.ts'
 import { disclosureCopy } from './disclosure.ts'
 
-const SKIP_DIR = new Set(['exports'])
 const MAX_FILE = 8_000_000
 const MAX_TOTAL = 30_000_000
 
@@ -81,15 +80,21 @@ function zipStore(files: Array<{ name: string; data: Buffer }>): Buffer {
   return Buffer.concat([...parts, centralBuf, end])
 }
 
-function skip(name: string): boolean {
+// What the archive carries: the person's own records, by name. Anything else in the LongPi home (the link and
+// account for the health data service, reminder channels, logs, page state, the workspace folder, family members'
+// stores) is left out, so a file added later stays out until it is listed here.
+const KEEP_FILES = new Set([
+  'profile.json', 'plan_prefs.json', 'plan.jsonl', 'adherence.jsonl', 'self_measurements.jsonl', 'wearable.json',
+  'medication_statements.jsonl', 'memory.json', 'triage.json', 'feedback.jsonl', 'history.jsonl', 'privacy/consents.jsonl',
+])
+const KEEP_DIRS = ['briefs/', 'datain/', 'analysis/', 'science/', 'engage/']
+
+/** Whether a path (relative, with /) is outside what the archive carries. Directories on the way are walked. */
+function skip(name: string, isDir = false): boolean {
   if (!name || name.includes('..')) return true
   if (name.endsWith('.tmp') || name.includes('.tmp-') || name.includes('.damaged-')) return true
-  const base = name.split('/').pop() ?? name
-  if (SKIP_DIR.has(base) && !name.includes('/')) return true
-  if (name === 'privacy/exports' || name.startsWith('privacy/exports/')) return true
-  // Family members' stores (and their links) are theirs: a holder's export never carries them.
-  if (name === 'people' || name.startsWith('people/') || name === 'people.json' || name === 'analysis-settings.json') return true
-  return false
+  if (isDir) return !(KEEP_DIRS.some((dir) => `${name}/`.startsWith(dir)) || name === 'privacy')
+  return !(KEEP_FILES.has(name) || KEEP_DIRS.some((dir) => name.startsWith(dir)))
 }
 
 function walk(root: string, dir: string, out: string[]): void {
@@ -102,18 +107,16 @@ function walk(root: string, dir: string, out: string[]): void {
   for (const entry of entries) {
     const path = join(dir, entry)
     const rel = relative(root, path).split(sep).join('/')
-    if (skip(rel)) continue
     let st
     try {
-      st = statSync(path)
+      st = lstatSync(path)
     } catch {
       continue
     }
     if (st.isSymbolicLink()) continue
     if (st.isDirectory()) {
-      if (entry === 'exports' && rel === 'privacy/exports') continue
-      walk(root, path, out)
-    } else if (st.isFile()) out.push(rel)
+      if (!skip(rel, true)) walk(root, path, out)
+    } else if (st.isFile() && !skip(rel)) out.push(rel)
   }
 }
 
@@ -132,11 +135,28 @@ function scrub(data: Buffer, secrets: string[]): Buffer {
   return next === text ? data : Buffer.from(next, 'utf8')
 }
 
-/** Zip of dataDir. Tokens are removed. The person's name stays: this archive is for them. */
+/** The link, token, account email and password for the health data service, wherever they might be echoed. */
+function secretsOf(dataDir: string, fallbackMcpUrl: string): string[] {
+  const saved = readConnection(dataDir)
+  const out = [saved?.mcp_token ?? '', saved?.mcp_url ?? '', fallbackMcpUrl]
+  try {
+    const account = JSON.parse(readFileSync(join(dataDir, 'mirobody-account.json'), 'utf8')) as Record<string, unknown>
+    for (const key of ['password', 'email', 'token', 'jwt']) if (typeof account[key] === 'string') out.push(account[key] as string)
+  } catch {
+    // no account on this computer
+  }
+  // The personal path of an MCP link is the secret part even without the host.
+  for (const url of [saved?.mcp_url ?? '', fallbackMcpUrl]) {
+    const path = /\/mcp\/([^/?#\s]+)/.exec(url)?.[1]
+    if (path) out.push(path)
+  }
+  return out.filter((value) => value.length >= 6)
+}
+
+/** Zip of the person's own records. No link, token or account for the health data service; no family stores. */
 export function buildExport(dataDir: string, fallbackMcpUrl = ''): { zip: Buffer; filename: string; link: MirobodyLink; files: string[] } {
   const link = mirobodyExportLink(dataDir, fallbackMcpUrl)
-  const saved = readConnection(dataDir)
-  const secrets = [saved?.mcp_token ?? ''].filter((value) => value.length >= 6)
+  const secrets = secretsOf(dataDir, fallbackMcpUrl)
   const names: string[] = []
   walk(dataDir, dataDir, names)
   const files: Array<{ name: string; data: Buffer }> = []
@@ -152,15 +172,7 @@ export function buildExport(dataDir: string, fallbackMcpUrl = ''): { zip: Buffer
     } catch {
       continue
     }
-    if (name === 'connection.json') {
-      try {
-        const parsed = JSON.parse(data.toString('utf8')) as Record<string, unknown>
-        if (typeof parsed.mcp_token === 'string') parsed.mcp_token = ''
-        data = Buffer.from(`${JSON.stringify(parsed, null, 2)}\n`, 'utf8')
-      } catch {
-        data = Buffer.from('{}\n', 'utf8')
-      }
-    } else data = scrub(data, secrets)
+    data = scrub(data, secrets)
     if (total + data.length > MAX_TOTAL) continue
     files.push({ name, data })
     included.push(name)
@@ -170,7 +182,8 @@ export function buildExport(dataDir: string, fallbackMcpUrl = ''): { zip: Buffer
   const note = [
     'LongPi 本地档案',
     '',
-    '此压缩包为这台电脑上 ~/.dsh/longpi 的副本，已移除连接令牌。',
+    '此压缩包是你在这台电脑上的 LongPi 档案：基本情况、方案与打卡、自测、用药与病情、记下的事项、医生简报和深度分析结果。',
+    '不含连接健康数据服务的账号、密码和链接，不含提醒渠道设置，也不含家人的档案。',
     link.note_zh,
     '',
     copy.data_flow.name,
@@ -179,6 +192,7 @@ export function buildExport(dataDir: string, fallbackMcpUrl = ''): { zip: Buffer
     `文件 ${included.length} 个。`,
   ].join('\n')
   files.push({ name: '说明.txt', data: Buffer.from(note, 'utf8') })
-  const day = new Date().toISOString().slice(0, 10)
+  const now = new Date()
+  const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   return { zip: zipStore(files), filename: `longpi-${day}.zip`, link, files: [...included, '说明.txt'] }
 }
