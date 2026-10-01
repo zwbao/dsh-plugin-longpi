@@ -10,7 +10,7 @@ import { dateZh, datesZh, fmt, fmtAuto, LineChart, TableTwin } from './charts.ts
 import { prettyUnits } from './changes.ts'
 import { Icon } from './icons.ts'
 import { normalizeIndicatorDetail } from './normalize.ts'
-import { reload, useIndicators, type IndicatorFilter } from './store.ts'
+import { reload, requestView, useIndicators, type IndicatorFilter } from './store.ts'
 import { judgementKind, judgementText, lifeAreaOf, movementOf, scrubVisible, sourceLabel, type JudgementKey, type LifeArea } from '../ux/plain.ts'
 import type { IndicatorDetail, IndicatorRow, IndicatorsResponse, IndicatorSource } from './types.ts'
 import { Btn, Info, LoadError, Skeleton } from './ui.ts'
@@ -18,6 +18,11 @@ import { Btn, Info, LoadError, Skeleton } from './ui.ts'
 const h = React.createElement
 
 const SOURCE_ZH: Record<IndicatorSource, string> = { checkup: '体检', device: '手环', self: '自测' }
+
+/** Names as typeset Chinese: no space hugging a full-width bracket (「比（尿） UACR」 → 「比（尿）UACR」). */
+export function cleanLabel(text: string): string {
+  return text.replace(/\s+([（【「])/g, '$1').replace(/([）】」])\s+/g, '$1')
+}
 
 /** Units as printed on a lab sheet: μ for micro (uIU/mL → μIU/mL, umol/L → μmol/L). */
 function unitText(unit: string | undefined): string {
@@ -121,13 +126,14 @@ function IndicatorLine(props: { row: IndicatorRow; open: boolean; onToggle: () =
   return h('li', { className: `lp-ind-row ${props.open ? 'lp-ind-open' : ''}` },
     h('button', { type: 'button', className: 'lp-ind-btn', 'aria-expanded': props.open, 'aria-controls': `lp-ind-panel-${slug}`, onClick: props.onToggle },
       h('span', { className: 'lp-ind-name' },
-        h('span', { className: 'lp-ind-label', title: row.label_zh }, row.label_zh),
+        h('span', { className: 'lp-ind-label', title: cleanLabel(row.label_zh) }, cleanLabel(row.label_zh)),
         row.plan_marker ? h('span', { className: 'lp-tag' }, '方案') : null),
       missed
         ? h('span', { className: 'lp-ind-value' }, h('span', { className: 'lp-ind-error', title: missed }, h(Icon, { name: 'warn', size: 12 }), '没有读到'))
         : h('span', { className: 'lp-ind-value' },
-          h('span', { className: 'lp-ind-num' }, latestText(row)),
-          h('span', { className: 'lp-ind-unit' }, unit)),
+          // 「5.8%」: a percent sign belongs to the number, never a gap before it.
+          h('span', { className: 'lp-ind-num' }, unit.startsWith('%') ? `${latestText(row)}${unit}` : latestText(row)),
+          h('span', { className: 'lp-ind-unit' }, unit.startsWith('%') ? '' : unit)),
       h('span', { className: 'lp-ind-date lp-caption' }, missed || !when ? '—' : when),
       h('span', { className: 'lp-ind-spark' }, missed ? h('span', { className: 'lp-caption' }, '—') : h(Sparkline, { points: row.points, label: row.label_zh })),
       h('span', { className: 'lp-ind-judged' }, missed ? h('span', { className: 'lp-caption' }, '—') : h(JudgedChip, { row, gate: props.gate, reason: props.reason })),
@@ -221,13 +227,12 @@ function Empty(props: { data: IndicatorsResponse; area: LifeArea; onConnect?: ()
   const none = props.data.record.status === 'none'
   const action = props.onConnect ? { label: '连接记录', onClick: props.onConnect } : undefined
   if (props.area !== 'labs') return h(EmptyCard, { ...AREA_EMPTY[props.area], action: action && !none ? { ...action, label: '查看数据连接' } : action })
+  // New or empty record: one way forward, the report upload on 档案.
   return h(EmptyCard, {
     icon: 'flask',
-    title: none ? '还没有连接体检记录' : '记录里还没有指标',
-    text: none
-      ? '把体检报告放进来之后，这里会列出每一次化验和手环数据，先看变化，再看这点变化算不算数。'
-      : '已经连上了，但还没有读到体检或手环数据。放进报告后，点右上角的刷新。',
-    action: none ? action : undefined,
+    title: '还没有化验数据',
+    text: '上传体检报告后，这里会列出每一项化验，先看变化，再看这点变化算不算数。',
+    action: { label: '上传报告', onClick: () => requestView({ tab: 'profile', id: 'lp-findings-card' }) },
   })
 }
 
@@ -298,6 +303,8 @@ export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filte
   const judgedAny = groups.some((group) => group.indicators.some((row) => !row.read_error
     && (row.range_flag === 'low' || row.range_flag === 'high' || judgementKind({ ...gateOf(row), judged: row.judged }) !== 'unjudged')))
   // 化验: the last checkup; 睡眠 / 运动: the newest value of any row.
+  const sources = new Set(groups.flatMap((group) => group.indicators.map((row) => row.source)))
+  const oneSource = sources.size <= 1
   const lastDate = area === 'labs' ? lastCheckup(all) : all.reduce<string | null>((last, row) => (row.latest && (!last || row.latest.date > last) ? row.latest.date : last), null)
   const latestLine = lastDate ? `${area === 'labs' ? '最近一次体检' : '最近一次'} ${dateZh(lastDate)}` : ''
   return h('div', { className: 'lp-tab-body' },
@@ -320,9 +327,9 @@ export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filte
         judgedAny ? h(Info, { label: '和正常波动比', align: 'end' }, JUDGEMENT_HELP) : null) : null),
     groups.length === 0
       ? h(EmptyCard, { icon: 'check', title: `没有「${filter.label}」的指标`, text: '换一个筛选看看。', action: { label: '看全部', onClick: () => props.onFilter('all') } })
-      : h('div', { className: `lp-card lp-ind-card ${judgedAny ? '' : 'lp-ind-nojudge'}`.trim() },
+      : h('div', { className: `lp-card lp-ind-card ${judgedAny ? '' : 'lp-ind-nojudge'} ${oneSource ? 'lp-ind-nosource' : ''}`.replace(/\s+/g, ' ').trim() },
         h('div', { className: 'lp-ind-head', 'aria-hidden': true },
-          h('span', null, '指标'), h('span', { className: 'lp-ind-value' }, h('span', { className: 'lp-ind-num' }, '最近一次'), h('span', null)), h('span', { className: 'lp-ind-date' }, '日期'), h('span', null, '趋势'), h('span', { className: 'lp-ind-head-judged' }, '和正常波动比'), h('span', null, '来源'), h('span', null)),
+          h('span', null, '指标'), h('span', { className: 'lp-ind-value' }, h('span', { className: 'lp-ind-num' }, '最近一次'), h('span', null)), h('span', { className: 'lp-ind-date' }, '日期'), h('span', null, '趋势'), h('span', { className: 'lp-ind-head-judged' }, '和正常波动比'), h('span', { className: 'lp-ind-source' }, '来源'), h('span', null)),
         ...groups.map((group) => h('section', { key: group.key, className: 'lp-ind-group', 'aria-label': group.label_zh },
           h('h3', { className: 'lp-ind-group-title' }, group.label_zh, h('span', { className: 'lp-optional' }, `${group.indicators.length} 项`)),
           h('ul', { className: 'lp-ind-list' },
@@ -330,5 +337,5 @@ export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filte
               key: row.id, row, open: open === row.id, ...gateOf(row),
               onToggle: () => setOpen((current) => (current === row.id ? null : row.id)),
             })))))),
-    h('p', { className: 'lp-fine' }, '点任一行看历次数值、单位、来自哪份报告，以及正常波动的依据。这里只列出记录里的数值，不做诊断。'))
+    h('p', { className: 'lp-fine' }, '点任一行看历次数值、单位、来自哪份报告，以及正常波动的依据。'))
 }

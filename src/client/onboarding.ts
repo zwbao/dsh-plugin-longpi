@@ -16,7 +16,7 @@ import { useModelStatus } from './model-status.ts'
 import { recordConnected } from './normalize.ts'
 import { notifyChanged, setSettingsOpener, useJourney, useSettingsOpener } from './store.ts'
 import type { Face, Journey, Stage } from './types.ts'
-import { Btn } from './ui.ts'
+import { Btn, readPref, writePref } from './ui.ts'
 import { Icon } from './icons.ts'
 
 const h = React.createElement
@@ -45,10 +45,14 @@ export function stepOfStage(stage: Stage): number {
 }
 
 /** Steps still open, for the page banner (none once a record exists). */
+/** Set when the person finished onboarding without a report: the overview's 上传一份体检报告 card takes over. */
+const UPLOAD_SKIPPED_KEY = 'lp-onb-upload-skipped'
+
 export function stepsLeft(journey: Journey): number {
   if (!journey.consent.accepted) return 3
   if (!journey.profile.complete) return 2
-  return recordConnected(journey.records.status) && journey.records.indicator_count > 0 ? 0 : 1
+  if (recordConnected(journey.records.status) && journey.records.indicator_count > 0) return 0
+  return readPref(UPLOAD_SKIPPED_KEY) === '1' ? 0 : 1
 }
 
 function Progress(props: { step: number }): React.ReactElement {
@@ -102,7 +106,7 @@ function Welcome(props: { onDone: () => void; onLater: () => void; openSettings:
     h('label', { className: 'lp-checkrow', htmlFor: 'lp-onb-agree' },
       h('input', { id: 'lp-onb-agree', type: 'checkbox', checked: agreed, disabled: busy, onChange: (e: React.ChangeEvent<HTMLInputElement>) => setAgreed(e.target.checked) }),
       h('span', null, '我同意 LongPi 按上述方式使用我的体检、化验、血压、血糖、体重和用药等健康信息。')),
-    h('p', { className: 'lp-caption' }, '可以随时在「设置 → LongPi → 数据与隐私」中撤回。'),
+    h('p', { className: 'lp-caption' }, '可以随时在「设置 → LongPi → 隐私与数据」中撤回。'),
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
     h('div', { className: 'lp-onb-actions' },
       h(Btn, { variant: 'outline', onClick: props.onLater, disabled: busy }, '以后再说'),
@@ -162,7 +166,7 @@ function FirstData(props: { onFinish: () => void; openChat: () => void }): React
   return h('div', { className: 'lp-onb-body' },
     h('p', { className: 'lp-onb-text' }, '上传一份体检或化验报告，LongPi 会读取其中的指标，算出你的第一个结果。'),
     h(ReportUpload, { simple: true, onDone: (text: string) => { setRead(text || '已读取这份报告。'); notifyChanged() } }),
-    !read && !none ? h('div', { className: 'lp-onb-center' }, h('button', { type: 'button', className: 'lp-textbtn', onClick: () => setNone(true) }, '我现在没有报告')) : null,
+    !read && !none ? h('div', { className: 'lp-onb-center' }, h('button', { type: 'button', className: 'lp-textbtn lp-textbtn-strong', onClick: () => setNone(true) }, '我现在没有报告 →')) : null,
     none && !read ? h('div', { className: 'lp-callout lp-callout-info' },
       h(Icon, { name: 'info', size: 16 }),
       h('div', { className: 'lp-callout-body' },
@@ -173,7 +177,8 @@ function FirstData(props: { onFinish: () => void; openChat: () => void }): React
         h('p', { className: 'lp-caption' }, '以后拿到体检报告，随时在「健康」页上传。'))) : null,
     h('div', { className: 'lp-onb-actions' },
       none && !read ? h(Btn, { variant: 'outline', onClick: props.openChat }, '去健康对话') : null,
-      h(Btn, { onClick: props.onFinish }, '完成')))
+      // Before anything is uploaded or skipped, 上传报告 is the one primary action on screen.
+      h(Btn, { variant: read || none ? 'primary' : 'outline', onClick: () => { if (!read) writePref(UPLOAD_SKIPPED_KEY, '1'); props.onFinish() } }, '完成')))
 }
 
 export function Onboarding(props: OnboardingProps): React.ReactElement | null {

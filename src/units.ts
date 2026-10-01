@@ -54,7 +54,23 @@ export function nameVariants(text: string): string[] {
   add(raw)
   add(raw.replace(/[(\[（【][^)\]）】]*[)\]）】]/g, ' '))
   for (const match of raw.matchAll(/[(\[（【]([^)\]）】]*)[)\]）】]/g)) add(match[1] ?? '')
+  // A report may also write the abbreviation after a space: 肌酐 Cr, 低密度脂蛋白胆固醇 LDL-C, 白蛋白 ALB.
+  const trailing = /^(.*[\u4e00-\u9fff）)])\s+([A-Za-z][A-Za-z0-9\-+/%.]*)$/.exec(raw)
+  if (trailing) {
+    add(trailing[1] ?? '')
+    add(trailing[2] ?? '')
+  }
   return found
+}
+
+/**
+ * One name for one test, however a report spells it: the Chinese name without a bracketed or trailing
+ * abbreviation (肌酐 / 肌酐 Cr / 肌酐(Cr) → 肌酐). A name with no Chinese stays as it is.
+ */
+export function canonicalName(text: string): string {
+  const raw = String(text).normalize('NFKC').trim()
+  const bare = raw.replace(/[(\[（【][^)\]）】]*[)\]）】]/g, ' ').replace(/\s+[A-Za-z][A-Za-z0-9\-+/%.]*$/, '').trim()
+  return /[\u4e00-\u9fff]/.test(bare) ? foldName(bare) : foldName(raw)
 }
 
 export function parseNumber(raw: unknown): number | null {

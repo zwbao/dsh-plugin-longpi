@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { errorText, getJson, postJson } from './api.ts'
-import { IndicatorsTab } from './indicators.ts'
+import { cleanLabel, IndicatorsTab } from './indicators.ts'
 import { Icon } from './icons.ts'
 import { setPendingPrompt, type IndicatorFilter, type PageTab } from './store.ts'
 import type { Journey } from './types.ts'
@@ -157,9 +157,10 @@ export function Timeline(props: { journey: Journey }): React.ReactElement {
     h(React.Fragment, null,
         h('p', { className: 'lp-muted' }, '化验、手环和生活上的事放在一起，才看得出比如复查前生过病。'),
         h('ol', { className: 'lp-rows' },
-          ...items.slice(-8).map((item) => h('li', { key: `${item.kind}-${item.date}-${item.title_zh}`, className: 'lp-row lp-cal-line' },
-            h('span', { className: 'lp-cal-date' }, dateZh(item.date)),
-            h('span', { className: 'lp-row-main' }, `${item.title_zh} · ${item.detail_zh}`))))))
+          // A day's date is written once, on its first row.
+          ...items.slice(-8).map((item, index, shown) => h('li', { key: `${item.kind}-${item.date}-${item.title_zh}`, className: 'lp-row lp-cal-line' },
+            h('span', { className: 'lp-cal-date' }, index > 0 && shown[index - 1]?.date === item.date ? '' : dateZh(item.date)),
+            h('span', { className: 'lp-row-main' }, cleanLabel(`${item.title_zh} · ${item.detail_zh}`)))))))
 }
 
 export function InsightCard(props: { journey: Journey; covered?: Covered }): React.ReactElement | null {

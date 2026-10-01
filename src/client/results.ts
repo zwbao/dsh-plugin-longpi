@@ -47,7 +47,7 @@ function LabelTag(props: { label: ResultLabel }): React.ReactElement {
 
 /**
  * The title row holds the title and ⓘ only (ⓘ follows the last word when the title wraps); the tags sit on the
- * next line (#16). An unmatched result is not a tag: the card says so in one caption line (bindingCaption).
+ * next line (#16). An unmatched result is not a tag: the grid says so once above, the card keeps its source line.
  */
 function CardHead(props: { label: string; info: React.ReactNode; mark?: ResultLabel | null; estimate?: boolean }): React.ReactElement {
   const tags = [
@@ -69,12 +69,27 @@ function shownOf(result: MethodResult): string {
   return `${figure}${unit ? (unit === '%' ? '%' : ` ${unit}`) : ''}`
 }
 
-/** One caption line for a result that is not matched to the person yet: the warning, then only its source (P1-10). */
+/** The one line above the result grid when any card is not matched to the person yet (P1-6): the cards keep only their source. */
+export const UNMATCHED_NOTE_ZH = '标着「来源」的结果还没和你的记录对上，先别当成你的结果。'
+
+/** An unmatched result's caption: only its source (来源：肌酐(Cr) 84 μmol/L。), or nothing. */
 function bindingCaption(result: MethodResult): string {
   const out = primaryOutput(result)
   const rest = restOfSentence(resultSentence(result, { youngerAllowed: false }), titleOf(result.skill, result.title_zh, out?.key ?? ''), shownOf(result))
     .replace(/^还没对上[，,。]?/, '').trim()
-  return `${labelText('unverified-binding')}。${rest && rest !== '。' ? rest : ''}`
+  return rest && rest !== '。' ? rest : ''
+}
+
+/** The measured value in a source line (来源：睡眠时长 5.6 小时。 → 5.6 小时), for word results (P2-20). */
+function measuredOf(source: string): string {
+  if (!source.startsWith('来源')) return ''
+  const match = /(−?\d+(?:\.\d+)?\s*[^\s，,。；;、\d()（）]*)\s*。?$/.exec(source)
+  return match?.[1]?.trim() ?? ''
+}
+
+/** A one-character word result reads as a judgement: 短 → 偏短. */
+function judgementWord(word: string): string {
+  return /^[短长高低]$/.test(word) ? `偏${word}` : word
 }
 
 /** A method sentence without what the card already shows: its title, and the value when the figure is on the card. */
@@ -120,7 +135,10 @@ function Blocked(props: {
   label: string
   info: React.ReactNode
   blocker: string
-  needs: string[]
+  /** What the person can answer (年龄, 性别, the risk model's facts): the 回答/填写 button's items. */
+  questions: string[]
+  /** Report values still missing: the add-on list's items. */
+  labs: string[]
   action: { label: string; target: ResultTarget } | null
   selfAddon?: Addon
   onAction: (target: ResultTarget) => void
@@ -132,11 +150,14 @@ function Blocked(props: {
   const action = props.action
   const self = props.selfAddon && props.selfAddon.self_key && action?.target !== 'profile' && action?.target !== 'records' ? props.selfAddon : null
   // What is missing is said once (N23): as tags when the server lists the items, else as the server's sentence.
-  const needs = props.needs.length > 0
+  // The count names the same kinds the button acts on, questions first, as the button does (new user: 还差 9 项 vs 填写年龄).
+  const all = [...props.questions, ...props.labs]
+  const count = [props.questions.length > 0 ? `${props.questions.length} 个问题` : '', props.labs.length > 0 ? `${props.labs.length} 项指标` : ''].filter(Boolean).join('、')
+  const needs = all.length > 0
     ? h('div', { className: 'lp-tags lp-result-needs' },
-      h('span', { className: 'lp-caption' }, `还差 ${props.needs.length} 项`),
-      ...props.needs.slice(0, NEEDS_SHOWN).map((need) => h('span', { className: 'lp-tag', key: need }, need)),
-      props.needs.length > NEEDS_SHOWN ? h('span', { className: 'lp-caption' }, '…') : null)
+      h('span', { className: 'lp-caption' }, `还差 ${count}`),
+      ...all.slice(0, NEEDS_SHOWN).map((need) => h('span', { className: 'lp-tag', key: need }, need)),
+      all.length > NEEDS_SHOWN ? h('span', { className: 'lp-caption' }, '…') : null)
     : h('p', { className: 'lp-blocker' }, props.blocker ? `还缺：${props.blocker.replace(/^记录里还缺|^档案里还缺|^还缺/, '').replace(/^[：:]/, '')}` : '还缺计算需要的数据。')
   // What to do about it sits on the card's floor (#39).
   return h('div', { className: 'lp-card lp-result' },
@@ -163,7 +184,8 @@ export function BodyAgeCard(props: {
   const result = props.journey.results.bioage
   if (result.status !== 'ok') {
     return h(Blocked, {
-      journey: props.journey, label: '身体年龄', info: BIOAGE_INFO, blocker: result.blocker_zh, needs: result.missing,
+      journey: props.journey, label: '身体年龄', info: BIOAGE_INFO, blocker: result.blocker_zh,
+      questions: props.journey.profile.age == null ? ['年龄'] : [], labs: result.missing,
       action: bioageAction(props.journey), onAction: props.onAction, onNotice: props.onNotice, idPrefix: 'lp-bio',
     })
   }
@@ -239,6 +261,14 @@ function rangeCaption(age: number | null): React.ReactElement | null {
   return text ? h('p', { className: 'lp-caption', id: 'lp-risk-range' }, text) : null
 }
 
+/** The library run the risk card shows: an unmatched run only when it gives the card's own number. */
+function riskCardMethod(journey: Journey, method?: MethodResult): MethodResult | undefined {
+  const risk = journey.results.risk
+  const out = method ? primaryOutput(method) : null
+  const same = out != null && typeof out.value === 'number' && risk.risk_pct != null && Math.abs(out.value - risk.risk_pct) < 0.05
+  return method && (method.label !== 'unverified-binding' || same) ? method : undefined
+}
+
 export function RiskCard(props: {
   journey: Journey
   tracking: Tracking | null
@@ -249,9 +279,10 @@ export function RiskCard(props: {
   const result = props.journey.results.risk
   const range = rangeCaption(props.journey.profile.age)
   if (result.status !== 'ok') {
-    const needs = [...result.missing_facts, ...result.missing_labs]
+    const profile = props.journey.profile
+    const questions = [...(profile.age == null ? ['年龄'] : []), ...(profile.sex !== 'male' && profile.sex !== 'female' ? ['性别'] : []), ...result.missing_facts]
     return h(Blocked, {
-      journey: props.journey, label: '10 年心血管风险', info: RISK_INFO, blocker: result.blocker_zh, needs, note: range,
+      journey: props.journey, label: '10 年心血管风险', info: RISK_INFO, blocker: result.blocker_zh, questions, labs: result.missing_labs, note: range,
       action: riskAction(props.journey), selfAddon: riskSelfAddon(props.journey), onAction: props.onAction, onNotice: props.onNotice, idPrefix: 'lp-risk',
     })
   }
@@ -259,9 +290,7 @@ export function RiskCard(props: {
   const goal = card?.goal?.risk_pct
   // The card has its own number (INT062 fix 7). A library run that is still unmatched and gives another number is not
   // shown on the card, neither as a sentence nor as the card's label; the chat can still explain it.
-  const out = props.method ? primaryOutput(props.method) : null
-  const same = out != null && typeof out.value === 'number' && result.risk_pct != null && Math.abs(out.value - result.risk_pct) < 0.05
-  const method = props.method && (props.method.label !== 'unverified-binding' || same) ? props.method : undefined
+  const method = riskCardMethod(props.journey, props.method)
   const binding = method && method.label === 'unverified-binding' ? bindingCaption(method) : ''
   return h('div', { className: 'lp-card lp-result', ...(method ? { 'data-result-label': method.label } : {}) },
     h(CardHead, { label: '10 年心血管风险', info: h(React.Fragment, null, h('span', { className: 'lp-info-line' }, RISK_INFO), card?.note_zh ? h('span', { className: 'lp-info-line' }, card.note_zh) : null), mark: method?.label ?? null }),
@@ -298,7 +327,8 @@ function MethodCard(props: { result: MethodResult }): React.ReactElement {
       ? h('div', { className: 'lp-result-figure' },
         h('span', { className: 'lp-num-lg' }, plainUnits(figure)),
         unit ? h('span', { className: 'lp-bignum-unit' }, unit) : null)
-      : figure ? h('div', { className: 'lp-result-figure' }, h('span', { className: 'lp-num-md' }, plainUnits(figure))) : null,
+      : figure ? h('div', { className: 'lp-result-figure' }, h('span', { className: 'lp-num-md' },
+        [unmatched ? measuredOf(sentence) : '', judgementWord(plainUnits(figure))].filter(Boolean).join(' · '))) : null,
     sentence ? h('p', { className: `${unmatched ? 'lp-caption' : 'lp-muted'} lp-method-sentence` }, sentence) : null)
 }
 
@@ -340,9 +370,17 @@ export function ResultsRow(props: {
   // Record changes are on 值得注意的变化 (or 最重要的一步); 这次的变化 keeps the plan's own results, check-ins and targets.
   const feedback = h(FeedbackBlock, { key: 'feedback', journey: props.journey, tracking: props.tracking, onNotice: props.onNotice, recordChanges: false })
   const cards = riskFirst ? [risk, bio] : [bio, risk]
+  // 还没对上 is said once above the grid (P1-6); each unmatched card keeps only its source line.
+  const shownMethods = [
+    props.journey.results.bioage.status === 'ok' ? pheno : undefined,
+    props.journey.results.risk.status === 'ok' ? riskCardMethod(props.journey, riskMethod) : undefined,
+    ...extras,
+  ]
+  const unmatched = shownMethods.some((row) => row?.label === 'unverified-binding')
   // One grid of result cards (a lone last card spans the row), the evidence cards full width, then the plan's own
   // results in a grid of their own, so 这次的变化 is never a half-width card on its own (#17).
   return h('div', { className: 'lp-stack', id: 'lp-results' },
+    unmatched ? h('p', { className: 'lp-caption' }, UNMATCHED_NOTE_ZH) : null,
     h('div', { className: 'lp-grid-2 lp-results' }, ...cards, ...values),
     evidence.length > 0 ? h('div', { className: 'lp-stack', id: 'lp-methods' }, ...evidence) : null,
     h('div', { className: 'lp-grid-2 lp-results lp-results-plan' }, feedback))

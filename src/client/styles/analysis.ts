@@ -14,11 +14,12 @@ export const ANALYSIS = `
 
 /* organ table: value first, the estimate's range on a 12px line under it */
 .lp-an-organs .lp-an-organ { white-space: nowrap; }
-/* measurements .9 : age 7em : risks 1.1 — the risk column is the widest so disease names stay on one line */
-.lp-an-organs th:nth-child(2) { width: 38%; }
+/* measurements 42% : age 7em : risks 40% — wide enough that the longest disease name stays on one line */
+.lp-an-organs th:nth-child(2) { width: 42%; }
 .lp-an-organs th:nth-child(3) { width: 7em; }
-.lp-an-organs th:nth-child(4) { width: 44%; white-space: normal; }
+.lp-an-organs th:nth-child(4) { width: 40%; white-space: normal; }
 .lp-an-valtext { color: var(--lp-ink); }
+.lp-an-note { display: block; }
 .lp-an-narrow-note { display: none; }
 .lp-card > .lp-an-narrow-note + .lp-table-wrap { margin-top: 0; }
 .lp-an-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }

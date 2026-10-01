@@ -32,6 +32,7 @@ const t = (v: unknown): string => (typeof v === 'string' ? tidy(v) : typeof v ==
 function tidy(text: string): string {
   return text
     .replace(/岁\s*岁/g, '岁')
+    .replace(/\.{3,}|。{3,}/g, '…')
     .replace(/(\d)\s*\/\s*(\d)/g, '$1/$2')
     .replace(/(^|[\s（(：:，,；;=≈<>])-(?=\d)/g, '$1−')
     .replace(/[“"]([^“”"]*)[”"]/g, '「$1」')
@@ -80,6 +81,20 @@ function fmt(r: Readout | null | undefined): string {
 
 /** Labels written by the pipeline repeat「（10 年，AI 估计）」; the column header says it once. */
 const cleanLabel = (label: string) => label.replace(/\s*[（(][^（）()]*(?:AI 估计|年)[^（）()]*[）)]\s*$/, '').trim() || label
+
+/** A measured value; a worded one keeps its short verdict on the line and its explanation on a caption line below. */
+function measureValue(r: Readout): React.ReactNode[] {
+  if (typeof r.value === 'number') return [h('span', { key: 'v', className: 'lp-num lp-an-val' }, valueText(r))]
+  const text = valueText(r)
+  const m = /^([^（(]+?)\s*[（(](.+)[）)]$/.exec(text)
+  if (!m) return [h('span', { key: 'v', className: 'lp-an-valtext' }, text)]
+  return [h('span', { key: 'v', className: 'lp-an-val' }, m[1]), h('span', { key: 'n', className: 'lp-caption lp-an-note' }, m[2])]
+}
+
+/** The report's boundary note minus what the page footer already says (reference only, not a diagnosis). */
+function pageBoundary(text: string): string {
+  return text.split(/[；;]/).map((x) => x.trim().replace(/。$/, '')).filter((x) => x && !/不是诊断|不做诊断|健康管理参考/.test(x)).join('；')
+}
 
 /** 「9 月 30 日」, with the year when it is not this year. */
 function dateZh(iso: string): string {
@@ -167,7 +182,7 @@ export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone
                 h('td', { className: 'lp-an-organ' }, t(o.label_zh)),
                 h('td', { className: measures.length ? undefined : 'lp-an-none', 'data-label': '测量和公式' }, measures.length
                   ? h('ul', { className: 'lp-an-list' }, ...measures.map((r, i) => h('li', { key: `${t(r.id)}-${i}` },
-                    h('span', { className: 'lp-muted' }, t(r.label_zh)), ' ', h('span', { className: typeof r.value === 'number' ? 'lp-num lp-an-val' : 'lp-an-valtext' }, valueText(r)))))
+                    h('span', { className: 'lp-muted' }, t(r.label_zh)), ' ', ...measureValue(r))))
                   : '—'),
                 h('td', { className: o.ai_age ? undefined : 'lp-an-none', 'data-label': '年龄' }, o.ai_age
                   ? h('div', { className: 'lp-an-est' }, h('span', { className: 'lp-num lp-an-val' }, valueText(o.ai_age)),
@@ -229,7 +244,8 @@ function StatusCard(props: {
     return h('div', { className: 'lp-card lp-an-prose' },
       h('div', { className: 'lp-card-head' },
         h('h3', { className: 'lp-h3' }, running ? '分析进行中' : '上次分析没有完成'),
-        h('span', { className: 'lp-caption lp-num', role: 'status', 'aria-label': `已完成 ${run.done} 步，共 ${total} 步` }, `${run.done}/${total}`)),
+        // folded, the line below already says where it stands
+        folded ? null : h('span', { className: 'lp-caption lp-num', role: 'status', 'aria-label': `已完成 ${run.done} 步，共 ${total} 步` }, `${run.done}/${total}`)),
       h('div', { className: 'lp-bar', role: 'progressbar', 'aria-label': '分析进度', 'aria-valuemin': 0, 'aria-valuemax': total, 'aria-valuenow': run.done },
         h('span', { style: { width: `${total ? Math.round((run.done / total) * 100) : 0}%` } })),
       folded ? h('div', { className: 'lp-an-fold' },
@@ -292,7 +308,7 @@ function ReportCard(props: { cur: Current; planItems: number }): React.ReactElem
       h('dt', { className: 'lp-caption' }, label), h('dd', { className: 'lp-an-fact-value' }, h('span', { className: 'lp-num-md' }, String(value)), h('span', { className: 'lp-unit' }, unit))))),
     headline.length ? h('dl', { className: 'lp-kv' }, ...headline.flatMap((r, i) => [
       h('dt', { key: `k${i}` }, t(r.label_zh)), h('dd', { key: `v${i}`, className: 'lp-num' }, fmt(r))])) : null,
-    cur.boundary_zh ? h('p', { className: 'lp-caption' }, t(cur.boundary_zh)) : null,
+    pageBoundary(t(cur.boundary_zh)) ? h('p', { className: 'lp-caption' }, pageBoundary(t(cur.boundary_zh))) : null,
     h('div', { className: 'lp-card-foot' },
       h('span', { className: 'lp-caption' }, '完整报告在新标签页打开'),
       h('a', { className: 'lp-linkbtn lp-btn-primary', href, target: '_blank', rel: 'noopener noreferrer' }, '打开完整报告', h(Icon, { name: 'chevron', size: 14 }))))

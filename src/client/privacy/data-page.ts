@@ -31,8 +31,10 @@ function List(props: { title: string; lines: string[] }): React.ReactElement | n
 /**
  * embedded: inside the settings page's 隐私与数据 block, which has its own
  * title; the whole disclosure then waits behind one 展开 line.
+ * hideExport: the host already offers the export (the 档案 tab's 导出 card), so
+ * the 导出 part is left out here; settings keeps it.
  */
-export function DataPage(props: { onDecided?: (decision: 'granted' | 'declined') => void; embedded?: boolean } & Record<string, unknown>): React.ReactElement {
+export function DataPage(props: { onDecided?: (decision: 'granted' | 'declined') => void; embedded?: boolean; hideExport?: boolean } & Record<string, unknown>): React.ReactElement {
   const [status, setStatus] = React.useState<Status | null>(null)
   const [phrase, setPhrase] = React.useState('')
   const [error, setError] = React.useState<string | null>(null)
@@ -85,7 +87,7 @@ export function DataPage(props: { onDecided?: (decision: 'granted' | 'declined')
       h(Switch, { checked: sessionOn, busy, disabled: busy || !status, label: '上传会话日志', onChange: (next) => act({ scope: 'session_log_upload', decision: next ? 'granted' : 'declined' }) }),
       h('p', { className: 'lp-caption' }, flow?.session_log || '健康对话默认不上传会话日志。')),
     minorLine ? h('p', { className: 'lp-caption' }, minorLine) : null,
-    h('div', { className: 'lp-data-group' },
+    props.hideExport ? null : h('div', { className: 'lp-data-group' },
       h('div', { className: 'lp-field-label' }, '导出'),
       status?.export?.href ? h(LinkButton, { href: status.export.href, icon: 'download' }, '下载这台电脑上的 LongPi 档案') : null,
       status?.export?.mirobody_note_zh ? h('p', { className: 'lp-caption' }, status.export.mirobody_note_zh) : null),
@@ -101,7 +103,7 @@ export function DataPage(props: { onDecided?: (decision: 'granted' | 'declined')
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
     note ? h('p', { className: 'lp-conn-ok', role: 'status' }, note) : null)
   if (props.embedded) {
-    return h('details', { className: 'lp-data-fold', id: 'lp-privacy-data' }, h('summary', null, `${title}、导出和删除`), body)
+    return h('details', { className: 'lp-data-fold', id: 'lp-privacy-data' }, h("summary", null, props.hideExport ? `${title}和删除` : `${title}、导出和删除`), body)
   }
   return h('section', { className: 'lp lp-data-page', id: 'lp-privacy-data' },
     h('h3', { className: 'lp-h3' }, title),

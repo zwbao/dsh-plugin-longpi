@@ -64,7 +64,7 @@ export function SeasonPanel(props: {
     return h('section', { className: 'lp-card', 'aria-label': '开始一个赛季' },
       h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '开始一个赛季')),
       h('p', { className: 'lp-text' }, props.view.invite.body_zh),
-      props.view.invite.title_zh ? h('p', { className: 'lp-caption' }, `这一季：${props.view.invite.title_zh}`) : null,
+      h('p', { className: 'lp-caption lp-measure' }, '长寿图鉴是一组长寿研究的知识卡；抽卡次数只从测量、记录、就诊或复测来。'),
       props.view.subject_zh ? h('p', { className: 'lp-caption lp-measure' }, `这个赛季用的是${props.view.subject_zh}的年龄和性别。`) : null,
       h('a', { className: 'lp-textbtn', href: props.view.invite.odds_path }, '概率说明 →'),
       h('div', { className: 'lp-actions' },

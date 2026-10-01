@@ -5,7 +5,7 @@
 // draft. A tracking read that fails shows as such, with a retry.
 
 import React from 'react'
-import { AdherenceStrip, datesZh, fmt, fmtAuto, LineChart, Ring, TableTwin, Timeline } from './charts.ts'
+import { AdherenceStrip, datesZh, fmt, fmtAuto, LineChart, Ring, Timeline } from './charts.ts'
 import { CheckChoices, todayCounts, useCheckIns } from './checkin.ts'
 import { chineseDate, daysBetween, pct } from './format.ts'
 import { Goals, minus, NextSteps } from './goals.ts'
@@ -34,10 +34,10 @@ export function TodayList(props: { journey: Journey; stateOf: (id: string) => Ch
 }
 
 /** Today's progress only: the check-in buttons live once, in the item list below. */
-function TodayTile(props: { journey: Journey }): React.ReactElement {
+function TodayTile(props: { journey: Journey; className?: string }): React.ReactElement {
   const counts = todayCounts(props.journey)
   const share = counts.total > 0 ? counts.done / counts.total : 0
-  return h('div', { className: 'lp-card' },
+  return h('div', { className: `lp-card ${props.className ?? ''}`.trim() },
     h('div', { className: 'lp-card-head' },
       h('h3', { className: 'lp-card-title' }, '今天')),
     counts.total > 0
@@ -171,7 +171,6 @@ function ItemRow(props: { item: Item; raw?: PlanItemRaw; today: string; onAnswer
       h('div', { className: 'lp-tags' },
         item.category_zh ? h('span', { className: 'lp-tag' }, item.category_zh) : null,
         item.headline && !(props.young && item.headline === '无法判断') ? h(VerdictChip, { verdict: item.headline }) : null,
-        h('span', { className: 'lp-caption' }, `${chineseDate(item.start)}起 · 第 ${item.days ?? 0} 天`),
         known ? h('span', { className: 'lp-caption lp-num' }, `近 12 周执行 ${Math.round((rate as number) * 100)}%`) : null),
       known && (adherence.calendar ?? []).length > 0 ? h(AdherenceStrip, { calendar: adherence.calendar ?? [], label: item.title }) : null,
       !known && !props.young ? h('p', { className: 'lp-caption lp-measure' }, `近 12 周执行：记录不足${adherence.note_zh ? `。${adherence.note_zh}` : ''}`) : null,
@@ -229,16 +228,12 @@ export function PlanSection(props: {
   const days = props.journey.plan.days ?? (items.length > 0 ? Math.max(...items.map((item) => item.days ?? 0)) : null)
   const young = days != null && days < YOUNG_DAYS
   const firstRetest = retestDates(tracking ?? null).find((row) => row.date > today)?.date ?? null
-  const meta = [
-    `第 ${plan?.version ?? props.journey.plan.version ?? 1} 版`,
-    `${items.length || props.journey.plan.items} 项`,
-    props.journey.plan.started ? `${chineseDate(props.journey.plan.started)}起` : '',
-    days != null ? `第 ${days} 天` : '',
-  ].filter(Boolean).join(' · ')
+  // Start date and day count already sit in the timeline line and the 方案项目 caption: the head keeps the version only.
+  const meta = `第 ${plan?.version ?? props.journey.plan.version ?? 1} 版`
   return h('div', { className: 'lp-stack', id: 'lp-plan' },
     failed ? h(LoadError, { what: '方案的执行记录和评判', error: props.error, onRetry: () => reload('tracking') }) : null,
     h('div', { className: 'lp-plan-tiles' },
-      h(TodayTile, { journey: props.journey }),
+      h(TodayTile, { journey: props.journey, className: 'lp-plan-tile-today' }),
       h(AdherenceTile, { journey: props.journey, tracking }),
       h(RetestTile, { tracking, today, failed })),
     h(Wins, { tracking }),
@@ -286,27 +281,48 @@ export function Markers(props: { tracking: Tracking | null }): React.ReactElemen
   if (charts.length === 0) return null
   const verdictOf = (indicator: string): Verdict | undefined => (props.tracking?.items ?? []).flatMap((item) => item.verdicts ?? [])
     .find((row) => row.indicator === indicator && row.verdict !== '无法判断')
+  const dateOf = (chart: (typeof charts)[number], iso: string) => (chart.weekly ? `${chineseDate(iso)}起一周` : chineseDate(iso))
+  // What applies to several cards is said once, under the section title.
+  const notes = [
+    charts.some((chart) => chart.points.length < 2) ? '只有一次数值的指标，还需一次复测才能画趋势。' : '',
+    charts.some((chart) => !chart.band) ? '没有浅色带的指标缺少个体变异数据，分不清真实变化和波动。' : '',
+  ].filter(Boolean).join('')
   return h(Section, {
     id: 'lp-markers', title: '方案相关的指标',
     aside: h(Info, { label: '图上的浅色带', align: 'end' }, '浅色带是以基线为中心的平常起伏。落在带外才值得注意；带里的起伏多半不算数。'),
   },
-    h('div', { className: 'lp-grid-2' },
+    notes ? h('p', { className: 'lp-caption lp-measure' }, notes) : null,
+    h('div', { className: 'lp-grid-2 lp-grid-top' },
       ...charts.map((chart) => {
         const verdict = verdictOf(chart.indicator)
         const digits = Math.max(...chart.points.map((point) => (String(point.value).split('.')[1] ?? '').length), 0) > 1 ? 2 : 1
+        const only = chart.points.length === 1 ? chart.points[0] : null
         return h('figure', { className: 'lp-card lp-plan-chart', key: chart.indicator },
-          h('div', { className: 'lp-card-head' },
-            h('figcaption', { className: 'lp-card-title' }, chart.label, chart.unit ? h('span', { className: 'lp-caption' }, chart.unit) : null)),
+          h('div', { className: 'lp-card-head' }, h('figcaption', { className: 'lp-card-title' }, chart.label)),
           verdict ? h('div', { className: 'lp-tags' }, h(VerdictChip, { verdict: verdict.verdict })) : null,
-          h(LineChart, {
-            points: chart.points, unit: chart.unit, label: chart.label, height: 150, digits,
-            band: chart.band ? { low: chart.band.low, high: chart.band.high, from: chart.band.base_date } : null,
-            goal: chart.goal ?? null,
-            weekly: chart.weekly === true,
-          }),
-          h('p', { className: 'lp-caption lp-measure' }, chart.band
-            ? `浅色带：以 ${chineseDate(chart.band.base_date)}的 ${fmt(chart.band.base, 2)} 为基线的正常波动${chart.band.verified === false ? '（变异数据待核对）' : ''}。`
-            : '缺少这项的个体变异数据，分不清真实变化和波动。'),
-          h(TableTwin, { caption: `${chart.label}（${chart.unit}）`, head: ['日期', '数值'], rows: chart.points.map((point) => [chart.weekly ? `${chineseDate(point.date)}起一周` : chineseDate(point.date), fmt(point.value, digits)]) }))
+          only
+            ? h('div', { className: 'lp-plan-model-figure' },
+              h('div', null, h('span', { className: 'lp-num-md' }, fmt(only.value, digits)), chart.unit ? h('span', { className: 'lp-unit' }, ` ${chart.unit}`) : null),
+              h('div', { className: 'lp-caption' }, dateOf(chart, only.date)))
+            : h(LineChart, {
+              points: chart.points, unit: chart.unit, label: chart.label, height: 150, digits,
+              band: chart.band ? { low: chart.band.low, high: chart.band.high, from: chart.band.base_date } : null,
+              goal: chart.goal ?? null,
+              weekly: chart.weekly === true,
+            }),
+          chart.band
+            ? h('p', { className: 'lp-caption lp-measure' }, `浅色带：以 ${chineseDate(chart.band.base_date)}的 ${fmt(chart.band.base, 2)} 为基线的正常波动${chart.band.verified === false ? '（变异数据待核对）' : ''}。`)
+            : null,
+          chart.points.length > 1
+            ? h('details', null,
+              h('summary', null, '历次数值'),
+              h('div', { className: 'lp-table-wrap' },
+                h('table', { className: 'lp-table' },
+                  h('caption', { className: 'lp-sr' }, `${chart.label}（${chart.unit}）`),
+                  h('thead', null, h('tr', null, h('th', { scope: 'col' }, '日期'), h('th', { scope: 'col', className: 'lp-td-num' }, chart.unit ? `数值（${chart.unit}）` : '数值'))),
+                  h('tbody', null, ...chart.points.map((point) => h('tr', { key: point.date },
+                    h('td', null, dateOf(chart, point.date)),
+                    h('td', { className: 'lp-td-num' }, fmt(point.value, digits))))))))
+            : null)
       })))
 }

@@ -646,7 +646,7 @@ export function suggestNext(summaries: readonly ItemSummary[], context: { today:
         seenRetest.add(`${row.marker}:${row.next_retest}`)
         out.push({
           kind: 'retest', priority: row.next_retest <= context.today ? 2 : 5, marker: row.marker, date: row.next_retest,
-          text_zh: row.next_retest <= context.today ? `现在可以复测${row.marker}了。` : `${row.next_retest} 之后复测${row.marker}。`,
+          text_zh: row.next_retest <= context.today ? `现在可以复测${row.marker}了。` : `${dayZh(row.next_retest, context.today)}之后复测${row.marker}。`,
         })
       }
       if (row.verdict === '反向') {
@@ -674,7 +674,24 @@ export function suggestNext(summaries: readonly ItemSummary[], context: { today:
       text_zh: `按身体年龄模型，${lever.label}从 ${lever.from} 到 ${lever.to}，身体年龄约 ${lever.years.toFixed(1)} 岁（模型估计）。它是你当前最大的杠杆。`,
     })
   }
+  // Retests due after the same day read as one line: 「10 月 28 日之后复测：LDL-C、总胆固醇、收缩压。」
+  const later = out.filter((row) => row.kind === 'retest' && row.date && row.date > context.today)
+  const byDate = new Map<string, Suggestion[]>()
+  for (const row of later) byDate.set(row.date as string, [...(byDate.get(row.date as string) ?? []), row])
+  const merged = out.filter((row) => !(row.kind === 'retest' && row.date && row.date > context.today && (byDate.get(row.date)?.length ?? 0) > 1))
+  for (const [date, rows] of byDate) {
+    if (rows.length < 2) continue
+    merged.push({ ...rows[0], marker: undefined, text_zh: `${dayZh(date, context.today)}之后复测：${rows.map((row) => row.marker).join('、')}。` } as Suggestion)
+  }
   const unique = new Map<string, Suggestion>()
-  for (const row of out) if (!unique.has(row.text_zh)) unique.set(row.text_zh, row)
+  for (const row of merged) if (!unique.has(row.text_zh)) unique.set(row.text_zh, row)
   return [...unique.values()].sort((a, b) => a.priority - b.priority).slice(0, 10)
+}
+
+/** 「10 月 28 日」, with the year when it is not this year (docs/design-system.md). */
+function dayZh(iso: string, today: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (!m) return iso
+  const md = `${Number(m[2])} 月 ${Number(m[3])} 日`
+  return m[1] === today.slice(0, 4) ? md : `${m[1]} 年 ${md}`
 }

@@ -17,7 +17,8 @@ export const PLAN = `
 .lp-today-done .lp-today-title, .lp-today-missed .lp-today-title { color: var(--lp-ink-2); }
 
 /* --- 方案 -------------------------------------------------------------------------------------- */
-.lp-plan-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.lp-plan-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.lp-plan-tile-today { grid-column: 1 / -1; }
 @container lp-root (max-width: 720px) { .lp-plan-tiles { grid-template-columns: minmax(0, 1fr); } }
 /* cards are top-aligned and keep their own height; the grow wrapper only spaces the body */
 .lp-plan-grow { display: grid; gap: 12px; align-content: start; min-width: 0; }
@@ -44,7 +45,6 @@ export const PLAN = `
 .lp-plan-model-figures { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
 .lp-plan-model-figures > .lp-icon { margin-bottom: 8px; color: var(--lp-ink-3); }
 .lp-plan-model-figure { display: grid; gap: 4px; justify-items: start; }
-.lp-plan-step-icon { width: 28px; height: 28px; flex: none; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; background: var(--lp-well); color: var(--lp-ink-2); }
 .lp-plan-step .lp-row-main { color: var(--lp-ink); }
 
 /* --- 方案草稿 and the adoption dialog (page and chat card) ------------------------------------------- */
@@ -82,11 +82,13 @@ export const PLAN = `
 .lp-profile { container: lp-form / inline-size; display: grid; gap: 20px; }
 .lp-profile > .lp-form-actions { margin-top: 0; }
 .lp-profile > .lp-modal-actions { margin-top: 4px; }
+.lp-profile-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.lp-profile-side > .lp-card:last-child { flex: 1 1 auto; }
 .lp-profile-group { display: grid; gap: 8px; }
 .lp-profile-basics { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 24px; }
 .lp-profile-age { width: 160px; }
 /* the sex segment matches the 36px age input next to it */
-.lp-profile-basics .lp-seg-opt span { height: 32px; }
+.lp .lp-profile-basics .lp-seg-opt span { height: 32px; }
 .lp-unlock { display: flex; align-items: center; gap: 4px; font-size: 12px; line-height: 18px; color: var(--lp-ink-3); }
 .lp-facts { border: 0; margin: 0; padding: 0; min-width: 0; }
 .lp-facts-legend { display: grid; gap: 2px; padding: 0; margin-bottom: 4px; }
@@ -115,6 +117,9 @@ export const PLAN = `
 .lp-season-card { display: grid; gap: 4px; }
 .lp-season-quests { display: grid; gap: 8px; }
 .lp-season-quests .lp-row-btn:disabled { cursor: progress; opacity: .6; }
+
+/* --- 这次的变化 (feedback card): one size, colour and measure; the first line is only a little heavier */
+.lp-fb-lead { font-weight: 500; }
 
 /* --- 研究 ------------------------------------------------------------------------------------------- */
 .lp-sci-q { border: 0; margin: 0; padding: 0; min-width: 0; }

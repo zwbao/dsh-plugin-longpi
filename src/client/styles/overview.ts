@@ -8,7 +8,8 @@ export const OVERVIEW = `
 .lp-results-plan:empty { display: none; }
 /* 这次的变化 (feedback/feedback-card.ts): the first row starts under the title, every line at the same measure. */
 .lp-results-plan .lp-rows > .lp-row:first-child { padding-top: 0; }
-.lp-results-plan .lp-row-stack > p { max-width: 40em; }
+.lp-results-plan .lp-row-stack > p { max-width: 40em; overflow-wrap: break-word; }
+.lp-results-plan .lp-row-stack > p:not(.lp-caption) { font-size: 14px; line-height: 22px; }
 /* Rows with a leading icon: add-ons, and what can be done now in onboarding. */
 .lp-row-wrap { flex-wrap: wrap; justify-content: flex-start; }
 .lp-row-icon { color: var(--lp-ink-3); }
@@ -18,7 +19,7 @@ export const OVERVIEW = `
 .lp-result-figure .lp-badge { align-self: center; }
 .lp-result-wait { font-size: 17px; line-height: 24px; font-weight: 600; }
 .lp-result-goal { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 12px; border-radius: var(--lp-radius-ctl); background: var(--lp-well); }
-.lp-result-foot { display: grid; gap: 12px; justify-items: start; padding-top: 4px; }
+.lp-result-foot { display: grid; gap: 12px; justify-items: start; padding-top: 12px; }
 .lp-result-action { padding-top: 4px; }
 /* Pinned to the card's floor, so side-by-side cards end on one line; .lp beats base's card spacing. */
 .lp .lp-card > .lp-result-foot, .lp .lp-card > .lp-result-action, .lp .lp-card > .lp-result-note { margin-top: auto; }

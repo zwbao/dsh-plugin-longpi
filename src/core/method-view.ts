@@ -360,6 +360,15 @@ function hasPersonalOutput(row: MethodResult): boolean {
   return row.outputs.some((item) => item.value != null && item.value !== '')
 }
 
+/**
+ * A result computed only from the profile's own age and sex (an age band from the age the person typed) tells them
+ * nothing new: not a card. Scores computed from their answers or conditions do say something, and stay.
+ */
+function echoesProfile(row: MethodResult): boolean {
+  const used = row.inputs_used ?? []
+  return used.length > 0 && used.every((input) => input.provenance === 'profile')
+}
+
 export interface OverviewSlice {
   value: MethodResult[]
   evidence: MethodResult[]
@@ -367,7 +376,7 @@ export interface OverviewSlice {
 
 /** Personal results first (PhenoAge and China-PAR stay in the slice), then evidence rows. */
 export function overviewSlice(results: readonly MethodResult[]): OverviewSlice {
-  const value = results.filter((row) => row.label !== 'evidence-only' && hasPersonalOutput(row)).sort(byLabel)
+  const value = results.filter((row) => row.label !== 'evidence-only' && hasPersonalOutput(row) && (row.skill === RISK_SKILL || !echoesProfile(row))).sort(byLabel)
   const evidence = results.filter((row) => row.label === 'evidence-only').sort(byLabel)
   const pinned = value.filter((row) => row.skill === PHENO_SKILL || row.skill === RISK_SKILL)
   const rest = value.filter((row) => row.skill !== PHENO_SKILL && row.skill !== RISK_SKILL)

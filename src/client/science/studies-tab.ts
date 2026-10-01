@@ -1,10 +1,10 @@
 // The 研究 tab: studies, consent, the community season and the transparency log.
 
 import React from 'react'
-import { errorText, getJson } from '../api.ts'
+import { errorText, getJson, postJson } from '../api.ts'
 import { Icon } from '../icons.ts'
 import { CommunityPanel } from './community.ts'
-import { ConsentPanel, type StudyRow } from './consent.ts'
+import { ConsentPanel, localText, type StudyRow } from './consent.ts'
 import { TranslogPanel, type LogRow } from './translog.ts'
 import type { ScienceCard, VoteTopic } from './community.ts'
 
@@ -32,6 +32,9 @@ export function StudiesTab(): React.ReactElement {
     void getJson<Payload>('/api/longpi/science/community').then(setData).catch((reason: unknown) => setError(errorText(reason, '没有读到研究')))
   }, [])
   React.useEffect(() => { load() }, [load])
+  const startPersonal = () => {
+    void postJson('/api/longpi/science/n-of-1', { confirm: true, design: 'abab' }).then(() => load()).catch((reason: unknown) => setError(errorText(reason, '没有排好')))
+  }
   if (!data) {
     return h('div', { className: 'lp-tab-body' },
       error
@@ -46,9 +49,10 @@ export function StudiesTab(): React.ReactElement {
           h('div', { className: 'lp-empty-title' }, '研究没有打开'),
           h('p', { className: 'lp-empty-text' }, data.reason_zh || '可以在设置里再打开。不满 18 岁不参加研究。'))))
   }
+  const personalId = ((data.studies ?? []).find((study) => study.kind === 'community_season') ?? (data.studies ?? [])[0])?.id
   return h('div', { className: 'lp-tab-body' },
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
-    data.reason_zh ? h('div', { className: 'lp-callout lp-callout-info' }, h(Icon, { name: 'info', size: 14 }), h('p', { className: 'lp-callout-body' }, data.reason_zh)) : null,
+    data.reason_zh ? h('div', { className: 'lp-callout lp-callout-info' }, h(Icon, { name: 'info', size: 14 }), h('p', { className: 'lp-callout-body' }, localText(data.reason_zh))) : null,
     data.progress && data.voting ? h(CommunityPanel, {
       progress: data.progress,
       pulse: data.pulse ?? null,
@@ -61,6 +65,10 @@ export function StudiesTab(): React.ReactElement {
       onChange: load,
       onError: setError,
     }) : null,
-    ...(data.studies ?? []).map((study) => h(ConsentPanel, { key: study.id, study, threshold: data.thresholds?.find((row) => row.study_id === study.id)?.line_zh, onChange: load, onError: setError })),
+    ...(data.studies ?? []).map((study) => h(ConsentPanel, {
+      key: study.id, study, threshold: data.thresholds?.find((row) => row.study_id === study.id)?.line_zh, onChange: load, onError: setError,
+      // The personal trial belongs to the community-season study; its note keeps only the first sentence of the server text.
+      personal: study.id === personalId ? { note: `${data.early_zh ? `${localText(data.early_zh).split('。')[0]}。` : ''}可以先在这台电脑上做个人对照。`, onStart: startPersonal } : null,
+    })),
     h(TranslogPanel, { rows: data.translog ?? [] }))
 }

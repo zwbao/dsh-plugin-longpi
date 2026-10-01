@@ -4,6 +4,7 @@ import React from 'react'
 import { postJson } from '../api.ts'
 import { Icon } from '../icons.ts'
 import { Btn } from '../ui.ts'
+import { localText } from './consent.ts'
 
 const h = React.createElement
 
@@ -37,26 +38,18 @@ export function CommunityPanel(props: {
         className: 'lp-bar', role: 'progressbar', 'aria-label': `研究进度：${props.progress.label_zh}`,
         'aria-valuemin': 0, 'aria-valuenow': props.progress.contributed, 'aria-valuemax': props.progress.min_cohort,
       }, h('span', { style: { width: `${width}%` } })),
-      props.early_zh ? h('p', { className: 'lp-small lp-measure' }, props.early_zh) : null,
       h('p', { className: 'lp-small lp-muted lp-measure' }, recruiting
         ? '每项研究下面写的是想凑齐的人数，正在招募。现在不显示已经有多少人，也不把人数当成你的结果。'
-        : `本机参加了 ${props.progress.studies} 项研究。发布合计至少 ${props.progress.min_cohort} 人。`),
-      h('div', { className: 'lp-actions' },
-        h(Btn, {
-          variant: 'outline',
-          onClick: () => {
-            void postJson('/api/longpi/science/n-of-1', { confirm: true, design: 'abab' }).then(() => props.onChange()).catch((error: unknown) => props.onError(error instanceof Error ? error.message : '没有排好'))
-          },
-        }, '开始个人对照'))),
+        : `本机参加了 ${props.progress.studies} 项研究。发布合计至少 ${props.progress.min_cohort} 人。`)),
     h('section', { className: 'lp-card', id: 'lp-science-pulse', 'aria-label': '大家的结果' },
       h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '大家的结果')),
       props.pulse
         ? h(React.Fragment, null,
           h('p', { className: 'lp-text lp-strong' }, props.pulse.headline_zh),
-          props.pulse.detail_zh ? h('p', { className: 'lp-small lp-muted lp-measure' }, props.pulse.detail_zh) : null)
+          props.pulse.detail_zh ? h('p', { className: 'lp-small lp-muted lp-measure' }, localText(props.pulse.detail_zh)) : null)
         : h('div', { className: 'lp-empty' },
           h(Icon, { name: 'pulse', size: 20 }),
-          h('p', { className: 'lp-empty-text lp-measure' }, props.give_back_zh || '还没有发回的群体结果。'))),
+          h('p', { className: 'lp-empty-text lp-measure' }, localText(props.give_back_zh) || '还没有发回的群体结果。'))),
     h('section', { className: 'lp-card', id: 'lp-science-vote', 'aria-labelledby': 'lp-science-vote-title' },
       h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title', id: 'lp-science-vote-title' }, '下个赛季想先看哪一件')),
       h('div', { className: 'lp-sci-options', role: 'radiogroup', 'aria-labelledby': 'lp-science-vote-title' },
@@ -66,7 +59,7 @@ export function CommunityPanel(props: {
           h('span', { className: 'lp-sci-count', 'aria-label': `${item.votes} 票` }, String(item.votes))))),
       h('div', { className: 'lp-actions' },
         h(Btn, { variant: 'outline', onClick: vote, disabled: !topic }, '记下我的一票'),
-        props.voting.note_zh ? h('span', { className: 'lp-caption' }, props.voting.note_zh) : null)),
+        props.voting.note_zh ? h('span', { className: 'lp-caption' }, localText(props.voting.note_zh)) : null)),
     h('section', { className: 'lp-card', id: 'lp-science-cards', 'aria-label': '贡献卡' },
       h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '贡献卡')),
       props.cards.length === 0

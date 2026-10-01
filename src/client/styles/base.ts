@@ -70,6 +70,7 @@ export const BASE = `
 }
 .lp-textbtn:hover:not(:disabled) { color: var(--lp-ink); text-decoration: underline; text-underline-offset: 3px; }
 .lp-textbtn:disabled { color: var(--lp-ink-3); cursor: default; }
+.lp-textbtn-strong { color: var(--lp-ink); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--lp-line-strong); }
 .lp-iconbtn, .lp-notice-x {
   width: 32px; height: 32px; flex: none; display: inline-flex; align-items: center; justify-content: center; padding: 0;
   border: 0; border-radius: var(--lp-radius-ctl); background: transparent; color: var(--lp-ink-2); cursor: pointer;
@@ -275,7 +276,7 @@ body[data-ds-dark-theme] .lp .lp-seg-on span, body[data-ds-dark-theme] .lp .lp-s
 .lp-stepper-dot { width: 20px; height: 20px; flex: none; border-radius: 50%; border: 1px solid var(--lp-line-strong); display: inline-flex; align-items: center; justify-content: center; font-size: 12px; line-height: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .lp-stepper-item.is-now { color: var(--lp-ink); font-weight: 500; }
 .lp-stepper-item.is-now .lp-stepper-dot { background: var(--lp-accent); border-color: var(--lp-accent); color: var(--lp-on-accent); }
-.lp-stepper-item.is-done .lp-stepper-dot { background: var(--lp-good-wash); border-color: transparent; color: var(--lp-good-ink); }
+.lp-stepper-item.is-done .lp-stepper-dot { background: var(--lp-accent); border-color: var(--lp-accent); color: var(--lp-on-accent); }
 .lp-upload-simple { display: grid; justify-items: center; gap: 8px; padding: 24px; border: 1px dashed var(--lp-line-strong); border-radius: var(--lp-radius-card); text-align: center; }
 .lp-upload-simple .lp-upload-status { max-width: 36em; }
 .lp-upload-simple .lp-form-error { max-width: 36em; }

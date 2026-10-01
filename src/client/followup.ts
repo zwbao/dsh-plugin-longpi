@@ -11,7 +11,7 @@ import React from 'react'
 import { errorText, getJson, postJson } from './api.ts'
 import { chineseDate, localToday } from './format.ts'
 import { Icon } from './icons.ts'
-import { notifyChanged, putFollowup, reload, useFollowup } from './store.ts'
+import { notifyChanged, putFollowup, reload, useFollowup, useJourney } from './store.ts'
 import type { FollowupKind, FollowupLogRow, FollowupResponse, FollowupSettings, FollowupTestResponse, FollowupUpdate, WebhookKind, Weekday } from './types.ts'
 import { Btn, LoadError, Segmented, Skeleton, Switch } from './ui.ts'
 
@@ -419,7 +419,9 @@ const SEASON_DEFAULT = '没有方案时，有待补的检查或本赛季的小�
  * The season's weekly reminder, said against the real state of the switch above (the same read as the
  * engage module's note): with no consent yet, only the season part waits, not the check-in reminder.
  */
-function SeasonNote(props: { enabled: boolean }): React.ReactElement {
+function SeasonNote(props: { enabled: boolean }): React.ReactElement | null {
+  // The journey the rest of LongPi already holds: whether a plan exists decides if the no-plan line applies.
+  const { journey } = useJourney()
   const [view, setView] = React.useState<{ reminder_zh?: string | null; needs_consent?: boolean } | null>(null)
   React.useEffect(() => {
     let live = true
@@ -430,7 +432,9 @@ function SeasonNote(props: { enabled: boolean }): React.ReactElement {
     ? view.reminder_zh
     : view?.needs_consent
       ? props.enabled ? '打卡提醒已开启。赛季的每周提醒要等你同意使用说明后才开始。' : '还没有同意使用说明，赛季的每周提醒还没开始。'
-      : SEASON_DEFAULT
+      // 「没有方案时…」 only says something when there is no plan (and only once we know).
+      : journey && !journey.plan.exists ? SEASON_DEFAULT : null
+  if (!line) return null
   return h('div', { className: 'lp-callout lp-callout-info' },
     h(Icon, { name: 'info', size: 14 }),
     h('div', { className: 'lp-callout-body' }, h('p', null, line)))

@@ -23,7 +23,7 @@ import { checkupMarkerFor, expandMarkerNames, loadReference, markerFor, rcvBand,
 import { readSelf, selfSeries, SELF_DEVICE_NAMES, SELF_KEYS, SELF_SPEC, SELF_SUFFIX, type SelfKey, type SelfRow } from './selfmeasure.ts'
 import { currentMedications, GLUCOSE_LOWERING, type IndicatorRow } from './situation.ts'
 import { trackingGeneration } from './tracking.ts'
-import { foldName, normalizeUnit, parseNumber } from './units.ts'
+import { foldName, canonicalName, normalizeUnit, parseNumber } from './units.ts'
 
 export type { GroupKey } from './groups.ts'
 export type IndicatorSource = 'checkup' | 'device' | 'self'
@@ -121,7 +121,7 @@ const DEVICE_ZH: Record<string, { label: string; unit?: string }> = {
   steps: { label: '步数', unit: '步' },
   sleepDuration: { label: '每晚睡眠', unit: '小时' },
   deepSleepDuration: { label: '深睡时长', unit: '小时' },
-  restingHeartRate: { label: '静息心率', unit: '次/分' },
+  restingHeartRate: { label: '静息心率（手环）', unit: '次/分' },
   heartRates: { label: '心率', unit: '次/分' },
   hrvRmssd: { label: '心率变异性（睡眠）', unit: '毫秒' },
   hrv: { label: '心率变异性（睡眠）', unit: '毫秒' },
@@ -225,7 +225,7 @@ export function specsOf(records: RecordSnapshot, selfRows: readonly SelfRow[], m
         marker: markers.find((item) => (item.device_codes ?? []).includes(deviceKey)) ?? null,
       }
     } else {
-      const id = `name:${foldName(row.label || row.name)}`
+      const id = `name:${canonicalName(row.label || row.name)}`
       spec = byId.get(id) ?? { id, source: 'checkup', group: groupOf(row), label: '', unit: '', names: [], snapshot: null, marker: markerFor(biovar, row) }
     }
     if (!spec.names.includes(row.name)) spec.names.push(row.name)
@@ -238,7 +238,8 @@ export function specsOf(records: RecordSnapshot, selfRows: readonly SelfRow[], m
       const raw = snapshot?.unit ?? ''
       spec.unit = spec.unit || (DEVICE_ZH[spec.names[0] ?? '']?.unit ?? UNIT_ZH[raw] ?? raw)
     } else {
-      spec.label = snapshot?.label || spec.marker?.label_zh || snapshot?.name || spec.id
+      // No space hugging a full-width bracket: 「尿微量白蛋白/肌酐比（尿） UACR」→「尿微量白蛋白/肌酐比（尿）UACR」
+      spec.label = (snapshot?.label || spec.marker?.label_zh || snapshot?.name || spec.id).replace(/\s*([（）【】])\s*/g, '$1')
       spec.unit = snapshot?.unit || spec.marker?.unit || ''
     }
   }

@@ -64,6 +64,10 @@ export const INDICATORS = `
 /* no row in view has a judgement: the 「和正常波动比」 column is left out */
 .lp-ind-nojudge { --lp-ind-cols: minmax(0, 1.6fr) 136px 112px 88px 32px 16px; }
 .lp-ind-nojudge .lp-ind-judged, .lp-ind-nojudge .lp-ind-head-judged { display: none; }
+/* every row in view has the same source: the 「来源」 column is left out */
+.lp-ind-nosource { --lp-ind-cols: minmax(0, 1.6fr) 136px 112px 88px minmax(104px, 1fr) 16px; }
+.lp-ind-nojudge.lp-ind-nosource { --lp-ind-cols: minmax(0, 1.6fr) 136px 112px 88px 16px; }
+.lp-ind-nosource .lp-ind-source { display: none; }
 .lp-ind-head { display: grid; grid-template-columns: var(--lp-ind-cols); align-items: center; column-gap: 12px; padding: 8px; font-size: 12px; line-height: 18px; color: var(--lp-ink-3); border-bottom: 1px solid var(--lp-line); }
 .lp-ind-card > .lp-ind-group { margin-top: 4px; }
 .lp-ind-group-title { margin: 0; padding: 12px 8px 4px; font-size: 12px; line-height: 18px; font-weight: 500; color: var(--lp-ink-3); }
@@ -90,9 +94,8 @@ export const INDICATORS = `
 .lp-ind-chevron { color: var(--lp-ink-3); transition: transform .15s ease; }
 .lp-ind-open .lp-ind-chevron { transform: rotate(90deg); }
 @container lp-root (max-width: 760px) {
-  .lp-ind-card, .lp-ind-nojudge { --lp-ind-cols: auto minmax(0, 1fr) auto 16px; }
   .lp-ind-head, .lp-ind-spark { display: none; }
-  .lp-ind-btn { grid-template-areas: "name name judged chev" "value date judged chev"; row-gap: 4px; }
+  .lp-ind-btn { grid-template-columns: auto minmax(0, 1fr) auto 16px; grid-template-areas: "name name judged chev" "value date judged chev"; row-gap: 4px; }
   .lp-ind-name { grid-area: name; }
   .lp-ind-judged { grid-area: judged; justify-content: flex-end; align-self: center; }
   .lp-ind-value { grid-area: value; display: flex; gap: 4px; }

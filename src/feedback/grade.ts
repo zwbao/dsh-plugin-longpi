@@ -298,7 +298,7 @@ export function gradeMarker(marker: LabMarkerInput, today: string): FeedbackMess
     headline = `${movePhrase(marker)}。血糖下降不一定是好事，先对照参考范围，不把它说成进步。`
   } else if (grade === 'too_early') {
     const dates = schedule(marker, advice, today, grade)
-    headline = `${marker.label_zh}还不到能下结论的时间。${advice.why_zh}最早 ${dates?.earliest} 再测。`
+    headline = `${marker.label_zh}还不到能下结论的时间。${advice.why_zh}最早 ${dayZhG(dates?.earliest)}再测。`
     body = '这次先不下结论。'
   } else if (grade === 'not_comparable') {
     headline = `${marker.label_zh}这两次不能直接比（单位或实验室对不上）。先复查一次再下结论。`
@@ -310,7 +310,7 @@ export function gradeMarker(marker: LabMarkerInput, today: string): FeedbackMess
     body = extra
   } else if (grade === 'within_band_improving') {
     const dates = schedule(marker, advice, today, grade)
-    headline = `${movePhrase(marker)}，方向是对的，但还在测量波动里。${dates?.why_zh ?? ''}最早 ${dates?.earliest} 再测，才能确定是不是真实变化。`
+    headline = `${movePhrase(marker)}，方向是对的，但还在测量波动里。${dates?.why_zh ?? ''}最早 ${dayZhG(dates?.earliest)}再测，才能确定是不是真实变化。`
     body = extra
   } else if (grade === 'within_band_worse') {
     const dates = schedule(marker, advice, today, grade)
@@ -318,7 +318,7 @@ export function gradeMarker(marker: LabMarkerInput, today: string): FeedbackMess
     body = extra
   } else if (grade === 'within_band_flat') {
     const dates = schedule(marker, advice, today, grade)
-    headline = `${marker.label_zh}几乎没动，还在测量波动里。${dates?.why_zh ?? ''}最早 ${dates?.earliest} 再测。`
+    headline = `${marker.label_zh}几乎没动，还在测量波动里。${dates?.why_zh ?? ''}最早 ${dayZhG(dates?.earliest)}再测。`
     body = extra
   } else {
     headline = marker.from == null
@@ -386,7 +386,7 @@ export function gradeBioAge(input: BioAgeInput, today: string): FeedbackMessage 
           : `这次算出 ${showNum(pheno)} 岁，和实足年龄相当。`)
       : pheno != null ? `这次算出 ${showNum(pheno)} 岁。` : ''
     const dates = retestDates(today, advice, 0, today)
-    const headline = `${low}这是第一次身体年龄，一次检查不能说明你变年轻了。${advice.why_zh}最早 ${dates.earliest} 再测。`
+    const headline = `${low}这是第一次身体年龄，一次检查不能说明你变年轻了。${advice.why_zh}最早 ${dayZhG(dates.earliest)}再测。`
     return {
       ...base,
       grade: 'first_draw',
@@ -428,7 +428,7 @@ export function gradeBioAge(input: BioAgeInput, today: string): FeedbackMessage 
     return {
       ...base, numbers, grade: 'too_early', allowed_claims: ['retest_when', 'progress_story'], delta,
       retest: { earliest: early.earliest, recommended: early.recommended, why_zh: advice.why_zh },
-      headline_zh: `${moved}但只隔了 ${span} 天，不到 3 个月，还不能说变年轻。最早 ${early.earliest} 再测。`,
+      headline_zh: `${moved}但只隔了 ${span} 天，不到 3 个月，还不能说变年轻。最早 ${dayZhG(early.earliest)}再测。`,
       tone: 'neutral',
     }
   }
@@ -775,3 +775,11 @@ export function markerFromGroundTruth(row: {
 }
 
 export type { RetestAdvice, IsoDay }
+
+/** 「12 月 30 日」, with the year when it is not this year (docs/design-system.md). */
+function dayZhG(iso: string | undefined | null): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
+  if (!m) return iso ?? ''
+  const md = `${Number(m[2])} 月 ${Number(m[3])} 日`
+  return Number(m[1]) === new Date().getFullYear() ? md : `${m[1]} 年 ${md}`
+}

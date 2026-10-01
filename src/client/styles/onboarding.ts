@@ -3,6 +3,9 @@
 // here. See docs/design-system.md.
 
 export const ONBOARDING = `
+/* in the form, the segmented control is as tall as the inputs (36px), and the form-wide hint sits apart from the age field */
+.lp-onb .lp-seg .lp-seg-item { height: 32px; }
+.lp-onb .lp-form-grid + .lp-caption { margin-top: 12px; }
 /* --- the dialog (inside DSH's Modal card) ------------------------------------------------------ */
 /* The Modal card is sized by className, and by what it directly holds in case the host ignores className. */
 .lp-onb-dialog.lp-onb-dialog, div:has(> .lp-onb.lp-onb) { width: min(560px, calc(100vw - 32px)); max-width: none; padding: 0; gap: 0; }

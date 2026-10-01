@@ -112,7 +112,7 @@ function ConditionsForm(): React.ReactElement {
 
 export function DataInSection(): React.ReactElement {
   const [tick, setTick] = React.useState(0)
-  return h('div', { className: 'lp-grid-2 lp-grid-top', id: 'lp-datain' },
+  return h('div', { className: 'lp-grid-2', id: 'lp-datain' },
     h('div', { className: 'lp-card', id: 'lp-findings-card' },
       h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '报告里的叙述')),
       h(FindingsList, { reloadKey: tick }),

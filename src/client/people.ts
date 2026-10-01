@@ -82,10 +82,10 @@ function AddPersonDialog(props: { view: PeopleView; onClose: () => void }): Reac
     },
       h('div', { className: 'lp-people-dialog-head' },
         h('h2', { className: 'lp-h2' }, '添加家人'),
-        h('button', { type: 'button', className: 'lp-iconbtn', 'aria-label': '关闭', onClick: props.onClose }, h(Icon, { name: 'close', size: 14 }))),
+        h('button', { type: 'button', className: 'lp-iconbtn', 'aria-label': '关闭', onClick: props.onClose }, h(Icon, { name: 'close', size: 18 }))),
       h('p', { className: 'lp-muted lp-small' }, view.can_create_in_mirobody
         ? '会在你的 Mirobody 账号下为家人建一份独立的档案（家人不需要自己的账号）。家人的体检、方案和深度分析都和你的分开。'
-        : `${view.create_hint_zh.trim().replace(/[。.]?$/, '。')}或者粘贴家人自己的 Mirobody 个人链接。`),
+        : /个人链接/.test(view.create_hint_zh) ? view.create_hint_zh.trim() : `${view.create_hint_zh.trim().replace(/[。.]?$/, '。')}或者粘贴家人自己的 Mirobody 个人链接。`),
       h('div', { className: 'lp-form-grid' },
         input('label_zh', '称呼', { placeholder: '如 爸爸、妈妈', autoFocus: true }),
         input('birth_year', '出生年份', { inputMode: 'numeric', placeholder: '例如 1960' }),

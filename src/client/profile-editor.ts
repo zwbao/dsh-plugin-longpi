@@ -148,7 +148,7 @@ export function ProfileEditor(props: {
             h('span', { className: 'lp-unit' }, '岁'))),
         h(Segmented<'female' | 'male'>, {
           name: `${props.idPrefix}-sex`, label: '性别',
-          options: [{ value: 'female', label: '女' }, { value: 'male', label: '男' }],
+          options: [{ value: 'male', label: '男' }, { value: 'female', label: '女' }],
           value: draft.sex === 'female' || draft.sex === 'male' ? draft.sex : '',
           onChange: (value) => edit({ sex: value }),
         })),
