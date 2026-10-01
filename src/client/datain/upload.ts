@@ -32,6 +32,7 @@ export function ReportUpload(props: { onDone?: (readBack: string) => void; simpl
   const [error, setError] = React.useState('')
   const [kind, setKind] = React.useState<StoreKind>('')
   const [confirmStore, setConfirmStore] = React.useState(false)
+  const [chosen, setChosen] = React.useState('')
 
   async function send(file: File): Promise<void> {
     if (file.size > 32 * 1024 * 1024) {
@@ -73,13 +74,14 @@ export function ReportUpload(props: { onDone?: (readBack: string) => void; simpl
     }
   }
 
-  const fileInput = (hidden: boolean) => h('input', {
-    id: 'lp-report-file', type: 'file', ref: fileRef, className: hidden ? 'lp-sr' : 'lp-input', tabIndex: hidden ? -1 : undefined,
-    accept: hidden ? 'application/pdf,image/jpeg,image/png,image/webp' : 'application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv,.csv,.tsv,.txt,.json',
+  // The native picker stays hidden; a DSH button opens it (the file name and progress show in a caption).
+  const fileInput = (reportOnly: boolean) => h('input', {
+    id: 'lp-report-file', type: 'file', ref: fileRef, className: 'lp-sr', tabIndex: -1, 'aria-hidden': true,
+    accept: reportOnly ? 'application/pdf,image/jpeg,image/png,image/webp' : 'application/pdf,image/jpeg,image/png,image/webp,text/plain,text/csv,.csv,.tsv,.txt,.json',
     disabled: busy,
     onChange: (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0]
-      if (file) void send(file)
+      if (file) { setChosen(file.name); void send(file) }
       event.target.value = ''
     },
   })
@@ -111,9 +113,12 @@ export function ReportUpload(props: { onDone?: (readBack: string) => void; simpl
       }),
       h('span', null, '确认后记在这台电脑上，不送进体检记录')) : null,
     h('div', { className: 'lp-field' },
-      h('label', { className: 'lp-field-label', htmlFor: 'lp-report-file' }, '选择文件'),
-      fileInput(false)),
-    status ? h('p', { className: 'lp-upload-status', role: 'status', id: 'lp-upload-status' }, status) : null,
+      h('span', { className: 'lp-field-label' }, '文件'),
+      fileInput(false),
+      h('div', { className: 'lp-upload-pick' },
+        h(Btn, { variant: 'outline', onClick: () => fileRef.current?.click(), disabled: busy }, busy ? '正在读取…' : '选择文件'),
+        h('span', { className: 'lp-caption lp-upload-chosen', role: 'status', id: 'lp-upload-status' },
+          status ? (chosen ? `${chosen} · ${status}` : status) : chosen || 'PDF、照片，或 CSV、TXT 表格'))),
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
     h('p', { className: 'lp-caption' }, '也可以直接把 PDF 或照片发到健康对话。'))
 }

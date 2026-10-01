@@ -21,6 +21,7 @@ export const INDICATORS = `
 .lp-end { fill: var(--lp-ink); font-size: 12px; font-weight: 500; }
 .lp-cbar { fill: var(--lp-data); }
 .lp-cbar-muted { fill: var(--lp-line-strong); }
+.lp-cbar-ahead { fill: var(--lp-data-wash); }
 .lp-hit { fill: transparent; }
 .lp-row-label { fill: var(--lp-ink); font-size: 13px; }
 .lp-checkup { stroke: var(--lp-line); stroke-width: 1; }
@@ -29,6 +30,7 @@ export const INDICATORS = `
 .lp-timeline { display: grid; gap: 8px; }
 .lp-legend-inline { display: flex; align-items: center; gap: 8px; font-size: 12px; line-height: 18px; color: var(--lp-ink-3); }
 .lp-key-bar { width: 16px; height: 6px; border-radius: 3px; background: var(--lp-data); display: inline-block; }
+.lp-key-ahead { width: 16px; height: 6px; margin-left: 8px; border-radius: 3px; background: var(--lp-data-wash); display: inline-block; }
 .lp-key-dot { width: 8px; height: 8px; margin-left: 8px; border-radius: 50%; background: var(--lp-ink-3); display: inline-block; }
 .lp-tip {
   position: absolute; z-index: 5; min-width: 120px; max-width: 220px; padding: 8px 12px; border-radius: 8px; background: var(--lp-layer-2);
@@ -58,6 +60,9 @@ export const INDICATORS = `
   --lp-ind-cols: minmax(0, 1.6fr) minmax(0, 1.3fr) 88px minmax(112px, 1fr) 40px 16px;
   padding-top: 8px; padding-bottom: 8px;
 }
+/* no row in view has a judgement: the 「和正常波动比」 column is left out */
+.lp-ind-nojudge { --lp-ind-cols: minmax(0, 1.6fr) minmax(0, 1.3fr) 88px 40px 16px; }
+.lp-ind-nojudge .lp-ind-judged, .lp-ind-nojudge .lp-ind-head-judged { display: none; }
 .lp-ind-head { display: grid; grid-template-columns: var(--lp-ind-cols); align-items: center; column-gap: 12px; padding: 8px; font-size: 12px; line-height: 18px; color: var(--lp-ink-3); border-bottom: 1px solid var(--lp-line); }
 .lp-ind-card > .lp-ind-group { margin-top: 4px; }
 .lp-ind-group-title { margin: 0; padding: 12px 8px 4px; font-size: 12px; line-height: 18px; font-weight: 500; color: var(--lp-ink-3); }
@@ -80,8 +85,8 @@ export const INDICATORS = `
 .lp-ind-source { color: var(--lp-ink-2); white-space: nowrap; }
 .lp-ind-chevron { color: var(--lp-ink-3); transition: transform .15s ease; }
 .lp-ind-open .lp-ind-chevron { transform: rotate(90deg); }
-@container lp-root (max-width: 700px) {
-  .lp-ind-card { --lp-ind-cols: minmax(0, 1fr) auto 16px; }
+@container lp-root (max-width: 760px) {
+  .lp-ind-card, .lp-ind-nojudge { --lp-ind-cols: minmax(0, 1fr) auto 16px; }
   .lp-ind-head, .lp-ind-spark { display: none; }
   .lp-ind-btn { grid-template-areas: "name judged chev" "value value chev"; row-gap: 4px; }
   .lp-ind-name { grid-area: name; }
@@ -98,7 +103,7 @@ export const INDICATORS = `
 /* --- 日程 / 问 LongPi ------------------------------------------------------------------------- */
 .lp-ask-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .lp-cal-row { flex-wrap: wrap; }
-.lp-cal-date { flex: none; align-self: flex-start; width: 96px; color: var(--lp-ink-3); font-variant-numeric: tabular-nums; }
+.lp-cal-date { flex: none; align-self: flex-start; width: 128px; color: var(--lp-ink-3); font-variant-numeric: tabular-nums; }
 .lp-cal-actions { display: flex; align-items: center; gap: 8px; flex: none; }
 
 /* --- shared with engage/season-tab.ts and results.ts (look of .lp-row-btn) -------------------- */

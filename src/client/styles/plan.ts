@@ -4,19 +4,7 @@
 // See docs/design-system.md.
 
 export const PLAN = `
-/* --- shared with other screens (icons.ts VerdictChip, charts.ts Ring, toolviews.ts, triage care card) --- */
-.lp-chip-v {
-  display: inline-flex; align-items: center; gap: 4px; height: 22px; padding: 0 8px; border-radius: 6px;
-  font-size: 12px; line-height: 18px; font-weight: 500; white-space: nowrap; vertical-align: middle;
-}
-.lp-v-good { background: var(--lp-good-wash); color: var(--lp-good-ink); }
-.lp-v-within { background: var(--lp-well); color: var(--lp-ink-2); }
-.lp-v-worse { background: var(--lp-warn-wash); color: var(--lp-warn-ink); }
-.lp-v-unknown { background: var(--lp-well); color: var(--lp-ink-3); }
-.lp-cat {
-  display: inline-flex; align-items: center; height: 20px; padding: 0 6px; border-radius: 4px; background: var(--lp-well);
-  color: var(--lp-ink-2); font-size: 12px; line-height: 18px; font-weight: 400; white-space: nowrap; vertical-align: middle;
-}
+/* --- shared with other screens (icons.ts VerdictChip, charts.ts Ring, triage care card) --- */
 .lp-ring { flex: none; }
 .lp-ring-track { fill: none; stroke: var(--lp-line); }
 .lp-ring-fill { fill: none; stroke: var(--lp-accent); stroke-linecap: round; transition: stroke-dasharray .8s ease; }
@@ -29,12 +17,11 @@ export const PLAN = `
 .lp-today-done .lp-today-title, .lp-today-missed .lp-today-title { color: var(--lp-ink-2); }
 
 /* --- 方案 -------------------------------------------------------------------------------------- */
-.lp-plan-tiles { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
-@container lp-root (max-width: 860px) { .lp-plan-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } .lp-plan-tile-today { grid-column: 1 / -1; } }
-@container lp-root (max-width: 560px) { .lp-plan-tiles { grid-template-columns: minmax(0, 1fr); } }
-.lp-plan-tile, .lp-plan-item { display: flex; flex-direction: column; }
-/* the body grows so the foot sits on the card's bottom edge when cards in a row differ in height */
-.lp-plan-grow { flex: 1 1 auto; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.lp-plan-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.lp-plan-tile-today { grid-column: 1 / -1; }
+@container lp-root (max-width: 720px) { .lp-plan-tiles { grid-template-columns: minmax(0, 1fr); } }
+/* cards are top-aligned and keep their own height; the grow wrapper only spaces the body */
+.lp-plan-grow { display: grid; gap: 12px; align-content: start; min-width: 0; }
 .lp-plan-figure-row { display: flex; align-items: center; gap: 16px; }
 .lp-plan-streak { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; line-height: 20px; font-weight: 500; }
 .lp-plan-streak .lp-icon { color: var(--lp-warn-ink); }
@@ -48,6 +35,8 @@ export const PLAN = `
 .lp-plan-verdict details > summary { font-size: 12px; line-height: 18px; color: var(--lp-ink-3); }
 .lp-plan-verdict details[open] > summary { margin-bottom: 4px; }
 .lp-plan-chart { margin: 0; }
+/* one reading measure for body text in these cards (spec: 40em at 14px) */
+.lp-measure { max-width: 560px; }
 .lp-plan-aside { display: inline-flex; align-items: center; gap: 4px; }
 .lp-plan-model-figures { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
 .lp-plan-model-figures > .lp-icon { margin-bottom: 8px; color: var(--lp-ink-3); }
@@ -75,7 +64,7 @@ export const PLAN = `
 .lp-draft-priorities { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
 .lp-draft-priority { display: grid; gap: 4px; padding: 12px; border-radius: var(--lp-radius-ctl); background: var(--lp-well); min-width: 0; }
 .lp-draft-priority-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; font-size: 13px; line-height: 20px; }
-.lp-draft-goal { display: grid; gap: 2px; }
+.lp-row-lines { display: grid; gap: 2px; }
 .lp-draft-hint { display: inline-flex; align-items: baseline; gap: 4px; flex-wrap: wrap; }
 .lp-draft-hint .lp-textbtn { font-size: 12px; line-height: 18px; }
 .lp-draft-actions { gap: 16px; }
@@ -93,6 +82,8 @@ export const PLAN = `
 .lp-profile-group { display: grid; gap: 8px; }
 .lp-profile-basics { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px 24px; }
 .lp-profile-age { width: 160px; }
+/* the sex segment matches the 36px age input next to it */
+.lp-profile-basics .lp-seg-opt span { height: 32px; }
 .lp-unlock { display: flex; align-items: center; gap: 4px; font-size: 12px; line-height: 18px; color: var(--lp-ink-3); }
 .lp-facts { border: 0; margin: 0; padding: 0; min-width: 0; }
 .lp-facts-legend { display: grid; gap: 2px; padding: 0; margin-bottom: 4px; }
@@ -123,8 +114,11 @@ export const PLAN = `
 .lp-season-quests .lp-row-btn:disabled { cursor: progress; opacity: .6; }
 
 /* --- 研究 ------------------------------------------------------------------------------------------- */
-.lp-sci-q { border: 0; margin: 0; padding: 0; min-width: 0; display: grid; gap: 8px; }
+.lp-sci-q { border: 0; margin: 0; padding: 0; min-width: 0; }
 .lp-sci-q legend { padding: 0; margin-bottom: 8px; }
+/* question groups read as separate blocks: 24px between groups and above the first one */
+.lp .lp-card > .lp-sci-q { margin-top: 24px; }
+.lp .lp-card > .lp-sci-q + .lp-actions { margin-top: 24px; }
 .lp-sci-options { display: grid; gap: 8px; }
 .lp-sci-options .lp-check { align-items: center; }
 .lp-sci-options .lp-check input { margin-top: 0; }

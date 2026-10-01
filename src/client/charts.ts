@@ -17,14 +17,35 @@ function dayNumber(iso: string): number {
   return Math.round(Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) / 86_400_000)
 }
 
-export function shortDate(iso: string): string {
-  const [, month, day] = iso.slice(0, 10).split('-')
-  return `${Number(month)}/${Number(day)}`
+function thisYear(): number {
+  return new Date().getFullYear()
 }
 
+/** 「9 月 30 日」, with the year only when it is not this year (「2025 年 9 月 12 日」). Not a date: returned as is. */
+export function dateZh(iso: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (!match) return iso
+  const [, year, month, day] = match
+  const text = `${Number(month)} 月 ${Number(day)} 日`
+  return Number(year) === thisYear() ? text : `${year} 年 ${text}`
+}
+
+/** Same as dateZh (kept for callers that want a short axis/tooltip date). */
+export function shortDate(iso: string): string {
+  return dateZh(iso)
+}
+
+/** 「10 月」, with the year when it is not this year (「2027 年 1 月」). */
 export function monthLabel(iso: string): string {
-  const [year, month] = iso.slice(0, 10).split('-')
-  return `${year?.slice(2)}/${month}`
+  const match = /^(\d{4})-(\d{2})/.exec(iso)
+  if (!match) return iso
+  const month = `${Number(match[2])} 月`
+  return Number(match[1]) === thisYear() ? month : `${match[1]} 年 ${month}`
+}
+
+/** Every ISO date inside a sentence written as dateZh (「2025-09-12–2026-09-10」 → 「2025 年 9 月 12 日–9 月 10 日」). */
+export function datesZh(text: string): string {
+  return text.replace(/\d{4}-\d{2}-\d{2}/g, (iso) => dateZh(iso))
 }
 
 /**
@@ -157,13 +178,13 @@ export function LineChart(props: LineChartProps): React.ReactElement {
   const show = (index: number) => {
     const point = points[index] as Point
     setFocus(index)
-    setTip({ x: x(days[index] as number), y: y(point.value), title: point.date, rows: [{ label: props.label, value: `${fmt(point.value, digits)} ${props.unit}`.trim() }] })
+    setTip({ x: x(days[index] as number), y: y(point.value), title: dateZh(point.date), rows: [{ label: props.label, value: `${fmt(point.value, digits)} ${props.unit}`.trim() }] })
   }
   const bandFrom = props.band ? Math.max(pad.left, x(dayNumber(props.band.from))) : 0
   return h('div', { ref, className: 'lp-chart', style: { height } },
     h('svg', {
       width, height, role: 'img',
-      'aria-label': `${props.label}：${points.map((point) => `${point.date} ${fmt(point.value, digits)}${props.unit}`).join('，')}`,
+      'aria-label': `${props.label}：${points.map((point) => `${dateZh(point.date)} ${fmt(point.value, digits)}${props.unit}`).join('，')}`,
       onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => show(nearest(event.clientX, event.currentTarget.getBoundingClientRect())),
       onPointerLeave: () => { setTip(null); setFocus(null) },
       tabIndex: 0,
@@ -194,8 +215,8 @@ export function LineChart(props: LineChartProps): React.ReactElement {
       key: `p${index}`, cx: x(days[index] as number), cy: y(point.value), r: focus === index ? 5.5 : 4, className: 'lp-dot',
     })),
     props.compact ? null : h('text', { x: x(days.at(-1) as number) + 8, y: y(last.value) + 4, className: 'lp-end' }, `${fmt(last.value, digits)}`),
-    props.compact ? null : h('text', { x: pad.left, y: height - 6, className: 'lp-axis' }, monthLabel(points[0]?.date ?? '')),
-    props.compact || points.length < 2 ? null : h('text', { x: width - pad.right, y: height - 6, className: 'lp-axis', textAnchor: 'end' }, monthLabel(last.date))),
+    props.compact ? null : h('text', { x: pad.left, y: height - 6, className: 'lp-axis' }, dateZh(points[0]?.date ?? '')),
+    props.compact || points.length < 2 ? null : h('text', { x: width - pad.right, y: height - 6, className: 'lp-axis', textAnchor: 'end' }, dateZh(last.date))),
     h(Tooltip, { tip, width }))
 }
 
@@ -210,52 +231,82 @@ export interface TimelineItem {
   headline: string
 }
 
+/** Rough width of a label at 13px: CJK characters are square, Latin about half. */
+function textWidth(text: string): number {
+  let width = 0
+  for (const char of text) width += char.charCodeAt(0) > 255 ? 13 : 7.5
+  return width
+}
+
+/** Cut a label to fit `max` px, ending with 「…」. */
+function fitText(text: string, max: number): string {
+  if (textWidth(text) <= max) return text
+  let out = ''
+  for (const char of text) {
+    if (textWidth(`${out}${char}…`) > max) break
+    out += char
+  }
+  return `${out}…`
+}
+
+/**
+ * The plan on a time axis that starts at today (or at the earliest item, if one began before) and runs at least
+ * 12 weeks ahead: the elapsed part of each item solid, the part still ahead as a wash, checkups inside the window as dots.
+ */
 export function Timeline(props: { items: TimelineItem[]; checkups: string[]; today: string }): React.ReactElement {
   const [ref, width] = useWidth(560)
   const [tip, setTip] = React.useState<TipState | null>(null)
-  const labelWidth = Math.min(168, Math.max(96, width * 0.24))
+  const labelWidth = Math.round(Math.min(220, Math.max(96, width * 0.3)))
   const row = 34
-  const top = 26
+  const top = 28
   const height = top + props.items.length * row + 8
-  const starts = props.items.map((item) => dayNumber(item.start))
   const today = dayNumber(props.today)
-  const d0 = Math.min(...starts, ...props.checkups.map(dayNumber)) - 10
-  const d1 = today + 10
+  const starts = props.items.map((item) => dayNumber(item.start))
+  const ends = props.items.map((item) => (item.end ? dayNumber(item.end) : today))
+  const d0 = Math.min(today, ...starts)
+  const inWindow = props.checkups.map(dayNumber).filter((day) => day >= d0)
+  const d1 = Math.max(today + 84, ...ends, ...inWindow) + 4
   const x = linear(d0, d1, labelWidth, width - 12)
+  const todayX = x(today)
   const months: string[] = []
-  for (let day = d0; day <= d1; day += 1) {
+  for (let day = d0 + 1; day <= d1; day += 1) {
     const iso = new Date(day * 86_400_000).toISOString().slice(0, 10)
     if (iso.endsWith('-01')) months.push(iso)
   }
-  const step = Math.max(1, Math.ceil(months.length / Math.max(2, Math.floor((width - labelWidth) / 64))))
+  const step = Math.max(1, Math.ceil(months.length / Math.max(2, Math.floor((width - labelWidth) / 72))))
+  // A month tick never sits on top of 「今天」.
+  const ticks = months.filter((_, index) => index % step === 0).filter((iso) => Math.abs(x(dayNumber(iso)) - todayX) > 44)
   return h('div', { className: 'lp-timeline' }, h('div', { ref, className: 'lp-chart', style: { height } },
-    h('svg', { width, height, role: 'img', 'aria-label': `方案时间线：${props.items.map((item) => `${item.title} ${item.start} 起`).join('，')}` },
-      ...months.filter((_, index) => index % step === 0).map((iso) => h('g', { key: iso },
-        h('line', { x1: x(dayNumber(iso)), x2: x(dayNumber(iso)), y1: top - 6, y2: height - 6, className: 'lp-grid' }),
-        h('text', { x: x(dayNumber(iso)) + 3, y: 12, className: 'lp-axis' }, monthLabel(iso)))),
-      ...props.checkups.map((iso) => h('g', { key: `c${iso}` },
-        h('line', { x1: x(dayNumber(iso)), x2: x(dayNumber(iso)), y1: top - 4, y2: height - 6, className: 'lp-checkup' }),
-        h('circle', { cx: x(dayNumber(iso)), cy: top - 4, r: 3, className: 'lp-checkup-dot' }))),
-      h('line', { x1: x(today), x2: x(today), y1: 16, y2: height - 6, className: 'lp-today' }),
-      h('text', { x: x(today) - 3, y: 24, className: 'lp-axis', textAnchor: 'end' }, '今天'),
+    h('svg', { width, height, role: 'img', 'aria-label': `方案时间线：${props.items.map((item) => `${item.title} ${dateZh(item.start)} 起`).join('，')}` },
+      ...ticks.map((iso) => h('g', { key: iso },
+        h('line', { x1: x(dayNumber(iso)), x2: x(dayNumber(iso)), y1: top - 8, y2: height - 6, className: 'lp-grid' }),
+        h('text', { x: x(dayNumber(iso)) + 4, y: 12, className: 'lp-axis' }, monthLabel(iso)))),
+      ...inWindow.map((day) => h('g', { key: `c${day}` },
+        h('line', { x1: x(day), x2: x(day), y1: top - 4, y2: height - 6, className: 'lp-checkup' }),
+        h('circle', { cx: x(day), cy: top - 4, r: 3, className: 'lp-checkup-dot' }))),
+      h('line', { x1: todayX, x2: todayX, y1: top - 8, y2: height - 6, className: 'lp-today' }),
+      h('text', { x: todayX + 4, y: 12, className: 'lp-axis' }, '今天'),
       ...props.items.map((item, index) => {
         const y0 = top + index * row + row / 2
         const x0 = x(dayNumber(item.start))
-        const x1 = x(item.end ? Math.min(dayNumber(item.end), today) : today)
-        const done = Boolean(item.end && dayNumber(item.end) < today)
+        const endDay = item.end ? dayNumber(item.end) : d1
+        const done = endDay < today
+        const x1 = x(Math.min(endDay, today))
+        const ahead = done ? 0 : x(endDay) - Math.max(x0, x1)
         return h('g', {
           key: item.id,
-          onPointerEnter: () => setTip({ x: (x0 + x1) / 2, y: y0 - 8, title: item.title, rows: [{ label: item.subtitle, value: item.headline }] }),
+          onPointerEnter: () => setTip({ x: Math.max(x0, todayX), y: y0 - 8, title: item.title, rows: [{ label: item.subtitle, value: item.headline }] }),
           onPointerLeave: () => setTip(null),
         },
-        h('text', { x: 0, y: y0 + 4, className: 'lp-row-label' }, item.title.length > 12 ? `${item.title.slice(0, 11)}…` : item.title),
+        h('text', { x: 0, y: y0 + 4, className: 'lp-row-label' }, h('title', null, item.title), fitText(item.title, labelWidth - 16)),
         h('rect', { x: labelWidth, y: y0 - 12, width: width - labelWidth, height: 24, className: 'lp-hit' }),
-        h('rect', { x: x0, y: y0 - 5, width: Math.max(6, x1 - x0), height: 10, rx: 5, className: done ? 'lp-cbar-muted' : 'lp-cbar' }))
+        ahead > 0 ? h('rect', { x: Math.max(x0, x1), y: y0 - 5, width: ahead, height: 10, rx: 5, className: 'lp-cbar-ahead' }) : null,
+        h('rect', { x: x0, y: y0 - 5, width: Math.max(10, x1 - x0), height: 10, rx: 5, className: done ? 'lp-cbar-muted' : 'lp-cbar' }))
       })),
     h(Tooltip, { tip, width })),
   // Outside the fixed-height chart box, so the legend never spills over the card's edge.
   h('div', { className: 'lp-legend-inline' },
-    h('span', { className: 'lp-key-bar' }), '执行中', h('span', { className: 'lp-key-dot' }), '体检日'))
+    h('span', { className: 'lp-key-bar' }), '已进行', h('span', { className: 'lp-key-ahead' }), '接下来', h('span', { className: 'lp-key-dot' }), '体检日'))
 }
 
 // --- 12-week adherence strip --------------------------------------------------------
@@ -276,7 +327,7 @@ export function AdherenceStrip(props: { calendar: Array<{ date: string; status: 
         y: (index % 7) * (cell + gap),
         width: cell, height: cell, rx: 2,
         className: `lp-cell-${day.status}`,
-        onPointerEnter: () => setTip({ x: Math.floor(index / 7) * (cell + gap), y: (index % 7) * (cell + gap), title: day.date, rows: [{ label: props.label, value: statusZh[day.status] ?? day.status }] }),
+        onPointerEnter: () => setTip({ x: Math.floor(index / 7) * (cell + gap), y: (index % 7) * (cell + gap), title: dateZh(day.date), rows: [{ label: props.label, value: statusZh[day.status] ?? day.status }] }),
         onPointerLeave: () => setTip(null),
       }))),
     h(Tooltip, { tip, width: Math.max(width, 180) }))
@@ -312,13 +363,15 @@ function roundedBar(x: number, y: number, length: number, thickness: number): st
 
 // --- ring meter ---------------------------------------------------------------------
 
-export function Ring(props: { value: number | null; size?: number; label: string }): React.ReactElement {
+/** A 0–1 meter. With no value it renders nothing (null): an empty ring says nothing, so the caller shows .lp-empty instead. */
+export function Ring(props: { value: number | null; size?: number; label: string }): React.ReactElement | null {
+  if (props.value == null || !Number.isFinite(props.value)) return null
   const size = props.size ?? 64
   const stroke = 7
   const radius = (size - stroke) / 2
   const length = 2 * Math.PI * radius
-  const share = props.value == null ? 0 : Math.max(0, Math.min(1, props.value))
-  return h('svg', { width: size, height: size, role: 'img', 'aria-label': `${props.label} ${props.value == null ? '未知' : `${Math.round(share * 100)}%`}`, className: 'lp-ring' },
+  const share = Math.max(0, Math.min(1, props.value))
+  return h('svg', { width: size, height: size, role: 'img', 'aria-label': `${props.label} ${Math.round(share * 100)}%`, className: 'lp-ring' },
     h('circle', { cx: size / 2, cy: size / 2, r: radius, className: 'lp-ring-track', strokeWidth: stroke }),
     h('circle', {
       cx: size / 2, cy: size / 2, r: radius, className: 'lp-ring-fill', strokeWidth: stroke,

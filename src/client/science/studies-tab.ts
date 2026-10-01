@@ -37,7 +37,7 @@ export function StudiesTab(): React.ReactElement {
       error
         ? h('div', { className: 'lp-callout lp-callout-warn', role: 'alert' }, h(Icon, { name: 'warn', size: 14 }), h('p', { className: 'lp-callout-body' }, error),
           h('button', { type: 'button', className: 'lp-textbtn', onClick: () => { setError(''); load() } }, '重试'))
-        : h('p', { className: 'lp-small lp-muted' }, '正在读取研究…'))
+        : h('p', { className: 'lp-small lp-muted lp-measure' }, '正在读取研究…'))
   }
   if (data.mode === 'off') {
     return h('div', { className: 'lp-tab-body' },

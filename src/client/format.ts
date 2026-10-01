@@ -23,7 +23,9 @@ export function chineseDate(iso: string | null | undefined): string {
   const month = Number(match[2])
   const day = Number(match[3])
   if (!Number.isInteger(month) || !Number.isInteger(day) || month < 1 || month > 12 || day < 1 || day > 31) return ''
-  return `${month} 月 ${day} 日`
+  // Another year says which (docs/design-system.md: 跨年加年份).
+  const year = Number(match[1])
+  return year !== new Date().getFullYear() ? `${year} 年 ${month} 月 ${day} 日` : `${month} 月 ${day} 日`
 }
 
 export function chineseMonth(iso: string | null | undefined): string {

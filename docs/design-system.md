@@ -7,7 +7,7 @@
 
 - 颜色只用 `--lp-*` 变量（全部映射到 DSH `--dsw-*`），组件样式里禁止写十六进制色值。
 - 字号只用 12 / 13 / 14 / 15 / 17 / 24 / 36（大数字）；字重只用 400 / 500 / 600。禁止 10、11px。
-- 间距只用 4 / 8 / 12 / 16 / 20 / 24 / 32 / 48。
+- 间距只用 4 / 8 / 12 / 16 / 20 / 24 / 32 / 48；组件内部（标签与控件、图标与文字、提示条内边距）另允许 6 / 10 / 14。
 - 每个组件里用到的 `lp-*` 类名都必须在样式里有定义（`test/css-classes.mjs` 构建期检查）。
 - 同一个类只定义一次；禁止用后写的规则覆盖前面的定义。
 - 不再使用：虚线边框（上传拖放区除外）、胶囊形按钮、`lp-rise` 切换动画、界面控件上的蓝色。
@@ -52,7 +52,7 @@
 
 - **卡片 `.lp-card`**：layer 底，1px line 描边，圆角 12px，内边距 20px（窄屏 16px），无阴影。`.lp-card-head`：flex 两端对齐，底部 12px；左 h3（+ⓘ），右 caption 或文字按钮；标签放在卡片头下一行。
 - **区块 `.lp-section`**：grid gap 12px；`.lp-section-head` = h2 + 右侧动作。
-- **按钮**：DSH `Btn`（primary 黑 / outline）作为唯一按钮；尺寸 md 32px、sm 28px；圆角 8px。`.lp-linkbtn` 统一成 outline 32px 圆角 8px。`.lp-textbtn`：纯文字 13px ink-2，hover 下划线。`.lp-iconbtn`：32×32 ghost。
+- **按钮**：DSH `Btn`（primary 黑 / outline，渲染时自动带 `.lp-btn`）作为唯一按钮；在 LongPi 内统一为 md 32px、sm 28px、圆角 8px、13/12px（DSH 原生是胶囊形，这里统一覆盖）。`.lp-linkbtn` 统一成 outline 32px 圆角 8px。`.lp-textbtn`：纯文字 13px ink-2，hover 下划线。`.lp-iconbtn`：32×32 ghost。
 - **标签**：`.lp-tag`（元数据：20px 高、圆角 4px、12px、ink-2、well 底）；`.lp-status`-类状态标签 `.lp-badge` + `-good/-warn/-bad/-neutral`（22px、圆角 6px、12/500、浅底深字）。
 - **表格 `.lp-table`**：表头 12px ink-3 左对齐，单元格 13/20 内边距 10px 12px，顶部对齐，行线 1px line；首列 nowrap；数字列右对齐。
 - **列表行 `.lp-row`**：最小 44px，行线 1px line；可点击时右侧 chevron + hover 底色。
@@ -64,6 +64,9 @@
 - **步骤进度 `.lp-progress-steps`**（深度分析）：纵向，每步 32px，16px 状态点（完成 accent 实心 ✓ / 进行中 2px 描边转圈 / 未开始 1px 空心），点间 1px 竖线。
 - **步骤条 `.lp-stepper`**（引导）：横向，20px 圆点 + 13px 标签，连接线 24px。
 - **上传区 `.lp-upload-simple`**：1px 虚线 line-strong、圆角 12px、内边距 24px、居中。
+
+- **数字格式**：小于 10 保留两位、10 以上保留一位；% 前不加空格；日期一律「9 月 30 日」（跨年加年份），不用 ISO 或「26/09」。
+- **标题**：卡片标题允许换两行；截断必须带「…」。
 
 ## 5. 页面级
 

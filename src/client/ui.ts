@@ -21,7 +21,8 @@ export function Skeleton(props: { height: number; width?: number | string; class
 
 /** DSH's own button; LongPi adds nothing but the variant it wants by default. */
 export function Btn(props: ButtonProps): React.ReactElement {
-  return h(Button, { variant: 'primary', size: 'md', ...props })
+  // lp-btn: one button shape across LongPi (32/28 px, 8 px radius), DSH's own buttons included.
+  return h(Button, { variant: 'primary', size: 'md', ...props, className: `lp-btn ${props.size === 'sm' ? 'lp-btn-sm' : ''} ${(props as { className?: string }).className ?? ''}`.trim() })
 }
 
 /** A download link dressed as a DSH outline button (a real <a>, so the browser saves it). */

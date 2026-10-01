@@ -101,6 +101,7 @@ export const CHAT = `
 .lp-care-title { display: inline-flex; align-items: center; gap: 8px; }
 .lp-care-title .lp-icon { color: var(--lp-warn-ink); }
 .lp-care-text { display: grid; gap: 4px; min-width: 0; }
+.lp-care-box p, .lp-tool-body p { max-width: 40em; }
 .lp-care-visit { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--lp-line); }
 .lp-care-visit-form { display: grid; gap: 12px; max-width: 480px; }
 .lp-care-date { max-width: 200px; }

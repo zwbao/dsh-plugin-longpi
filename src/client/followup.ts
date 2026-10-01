@@ -8,10 +8,9 @@
 // names on this machine.
 
 import React from 'react'
-import { errorText, postJson } from './api.ts'
+import { errorText, getJson, postJson } from './api.ts'
 import { chineseDate, localToday } from './format.ts'
 import { Icon } from './icons.ts'
-import { EngageSettingsNote } from './engage/index.ts'
 import { notifyChanged, putFollowup, reload, useFollowup } from './store.ts'
 import type { FollowupKind, FollowupLogRow, FollowupResponse, FollowupSettings, FollowupTestResponse, FollowupUpdate, WebhookKind, Weekday } from './types.ts'
 import { Btn, LoadError, Segmented, Skeleton, Switch } from './ui.ts'
@@ -414,6 +413,29 @@ function ReminderSwitch(props: { data: FollowupResponse; onNotice: Notify }): Re
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null)
 }
 
+const SEASON_DEFAULT = '没有方案时，有待补的检查或本赛季的小目标，才会每周提醒一次；都没有就不发。'
+
+/**
+ * The season's weekly reminder, said against the real state of the switch above (the same read as the
+ * engage module's note): with no consent yet, only the season part waits, not the check-in reminder.
+ */
+function SeasonNote(props: { enabled: boolean }): React.ReactElement {
+  const [view, setView] = React.useState<{ reminder_zh?: string | null; needs_consent?: boolean } | null>(null)
+  React.useEffect(() => {
+    let live = true
+    void getJson<{ reminder_zh?: string | null; needs_consent?: boolean }>('/api/longpi/season').then((row) => { if (live) setView(row) }).catch(() => { /* the default line stays */ })
+    return () => { live = false }
+  }, [])
+  const line = view?.reminder_zh
+    ? view.reminder_zh
+    : view?.needs_consent
+      ? props.enabled ? '打卡提醒已开启。赛季的每周提醒要等你同意使用说明后才开始。' : '还没有同意使用说明，赛季的每周提醒还没开始。'
+      : SEASON_DEFAULT
+  return h('div', { className: 'lp-callout lp-callout-info' },
+    h(Icon, { name: 'info', size: 14 }),
+    h('div', { className: 'lp-callout-body' }, h('p', null, line)))
+}
+
 /** 随访提醒 on the settings page: the switch, then 更多设置 with the whole form and the log. */
 export function FollowupPanel(props: { onNotice: Notify }): React.ReactElement {
   const { data, loading, error } = useFollowup()
@@ -421,9 +443,7 @@ export function FollowupPanel(props: { onNotice: Notify }): React.ReactElement {
   if (!data) return h(LoadError, { what: '随访设置', error, onRetry: () => reload('followup') })
   return h('div', { className: 'lp-followup-box' },
     h(ReminderSwitch, { data, onNotice: props.onNotice }),
-    h('div', { className: 'lp-callout lp-callout-info lp-followup-note' },
-      h(Icon, { name: 'info', size: 14 }),
-      h('div', { className: 'lp-callout-body' }, h(EngageSettingsNote))),
+    h(SeasonNote, { enabled: data.settings.enabled }),
     h('details', null,
       h('summary', null, '更多设置', h('span', { className: 'lp-optional' }, '复测提醒、每周小结、免打扰、发到飞书或手机、内容详略')),
       h(Settings, { data, onNotice: props.onNotice, hideSwitch: true })))

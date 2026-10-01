@@ -2,12 +2,13 @@
 
 import React from 'react'
 import type { FeedbackMessage } from '../../contracts/feedback.ts'
+import { dateZh, datesZh } from '../charts.ts'
 
 const h = React.createElement
 
 function retestLine(retest: NonNullable<FeedbackMessage['retest']>): string {
-  if (retest.why_zh.includes('复测已在')) return retest.why_zh
-  return `建议复测：${retest.earliest} 至 ${retest.recommended}。${retest.why_zh}`
+  if (retest.why_zh.includes('复测已在')) return datesZh(retest.why_zh)
+  return `建议复测：${dateZh(retest.earliest)} 至 ${dateZh(retest.recommended)}。${datesZh(retest.why_zh)}`
 }
 
 export function FeedbackCard(props: { messages: FeedbackMessage[] }): React.ReactElement | null {
@@ -17,6 +18,6 @@ export function FeedbackCard(props: { messages: FeedbackMessage[] }): React.Reac
     h('ul', { className: 'lp-rows' },
       ...props.messages.map((row) => h('li', { key: row.id, className: 'lp-row lp-row-stack' },
         h('p', { className: row.tone === 'celebrate' ? 'lp-text lp-strong' : 'lp-text' }, row.headline_zh),
-        row.body_zh ? h('p', { className: 'lp-muted' }, row.body_zh) : null,
-        row.retest ? h('p', { className: 'lp-caption' }, retestLine(row.retest)) : null))))
+        row.body_zh ? h('p', { className: 'lp-muted lp-measure' }, datesZh(row.body_zh)) : null,
+        row.retest ? h('p', { className: 'lp-caption lp-measure' }, retestLine(row.retest)) : null))))
 }

@@ -118,6 +118,17 @@ const TIMEOUT_ZH = '读取超时，请稍后刷新。'
 // Wearable series Mirobody names in camelCase; the ones LongPi knows get a Chinese label and unit.
 const DEVICE_ZH: Record<string, { label: string; unit?: string }> = {
   dailySteps: { label: '每日步数', unit: '步' },
+  steps: { label: '步数', unit: '步' },
+  sleepDuration: { label: '每晚睡眠', unit: '小时' },
+  deepSleepDuration: { label: '深睡时长', unit: '小时' },
+  restingHeartRate: { label: '静息心率', unit: '次/分' },
+  heartRates: { label: '心率', unit: '次/分' },
+  hrvRmssd: { label: '心率变异性（睡眠）', unit: '毫秒' },
+  hrv: { label: '心率变异性（睡眠）', unit: '毫秒' },
+  spo2Min: { label: '夜间最低血氧', unit: '%' },
+  spo2: { label: '血氧', unit: '%' },
+  activeEnergy: { label: '活动消耗', unit: '千卡' },
+  vo2Max: { label: '最大摄氧量', unit: 'mL/kg/min' },
   dailyTotalSleepTime: { label: '每晚睡眠', unit: '小时' },
   dailyRestingHeartRates: { label: '静息心率', unit: '次/分' },
   systolicPressures: { label: '收缩压' },
@@ -125,7 +136,7 @@ const DEVICE_ZH: Record<string, { label: string; unit?: string }> = {
   bodyMasss: { label: '体重' },
   bodyMass: { label: '体重' },
 }
-const UNIT_ZH: Record<string, string> = { hours: '小时', 'count/min': '次/分' }
+const UNIT_ZH: Record<string, string> = { hours: '小时', h: '小时', 'count/min': '次/分', bpm: '次/分', ms: '毫秒', count: '次', kcal: '千卡' }
 
 interface Spec {
   id: string
@@ -178,7 +189,13 @@ function isDeviceName(name: string, biovar: readonly BiovarMarker[]): boolean {
   if (Object.values(SELF_DEVICE_NAMES).some((names) => names?.includes(name))) return true
   if (biovar.some((row) => (row.device_codes ?? []).includes(name))) return true
   // Mirobody's device series are camelCase (dailySteps, heartRates); report names never are.
-  return /^[a-z]+(?:[A-Z][a-z0-9]*)+$/.test(name)
+  return /^[a-z]+[0-9]*(?:[A-Z][a-z0-9]*)+$/.test(name)
+}
+
+/** A wearable series with no Chinese name of its own: never the raw field name on the page. */
+function deviceLabel(label: string | undefined, name: string): string {
+  if (label && /[\u4e00-\u9fff]/.test(label)) return label
+  return `手环数据（${name.replace(/([a-z0-9])([A-Z])/g, '$1 $2').toLowerCase()}）`
 }
 
 function newer(a: IndicatorRow | null, b: IndicatorRow): IndicatorRow {
@@ -193,7 +210,8 @@ function specsOf(records: RecordSnapshot, selfRows: readonly SelfRow[], markers:
   for (const row of records.indicators) {
     if (row.source === 'self' || !row.name) continue
     let spec: Spec
-    if (row.loinc) {
+    // A wearable series is a wearable series even when the service attached a LOINC code to it (dailySteps).
+    if (row.loinc && !isDeviceName(row.name, markers)) {
       const marker = checkupMarkerFor(biovar, row)
       spec = byId.get(`loinc:${row.loinc}`) ?? {
         id: `loinc:${row.loinc}`, source: 'checkup', group: groupOf(row), label: '', unit: '', names: [], loinc: row.loinc, snapshot: null, marker,
@@ -201,7 +219,7 @@ function specsOf(records: RecordSnapshot, selfRows: readonly SelfRow[], markers:
     } else if (isDeviceName(row.name, markers)) {
       const known = DEVICE_ZH[row.name]
       spec = byId.get(`device:${row.name}`) ?? {
-        id: `device:${row.name}`, source: 'device', group: 'wearable', label: known?.label ?? row.label ?? row.name, unit: '', names: [], snapshot: null,
+        id: `device:${row.name}`, source: 'device', group: 'wearable', label: known?.label ?? deviceLabel(row.label, row.name), unit: '', names: [], snapshot: null,
         marker: markers.find((item) => (item.device_codes ?? []).includes(row.name)) ?? null,
       }
     } else {

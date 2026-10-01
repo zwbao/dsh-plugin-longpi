@@ -22,6 +22,8 @@ import { Icon } from './icons.ts'
 const h = React.createElement
 
 export const ONBOARDING_TITLES = ['欢迎使用 LongPi', '填写基本信息', '添加第一份资料'] as const
+/** Short names for the stepper, so step 1 does not repeat the dialog title. */
+const STEP_NAMES = ['开始', '基本信息', '第一份资料'] as const
 /** A journey that has not arrived by then is shown as not read, with a retry. */
 const GIVE_UP_MS = 45_000
 
@@ -51,7 +53,7 @@ export function stepsLeft(journey: Journey): number {
 
 function Progress(props: { step: number }): React.ReactElement {
   return h('div', { className: 'lp-stepper', 'aria-label': `第 ${props.step + 1} 步，共 ${ONBOARDING_TITLES.length} 步` },
-    ...ONBOARDING_TITLES.map((title, index) => h('div', {
+    ...STEP_NAMES.map((title, index) => h('div', {
       key: index,
       className: `lp-stepper-item${index === props.step ? ' is-now' : index < props.step ? ' is-done' : ''}`,
     },

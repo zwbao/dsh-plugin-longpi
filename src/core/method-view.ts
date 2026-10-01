@@ -26,6 +26,8 @@ const TITLES: Record<string, string> = {
   'aging-biomarker-framework': '甲基化时钟偏差',
   'epigenetic-frailty-risk-score': '表观衰弱分数',
   'testis-transcriptomic-atlas-lifespan': '年龄分段',
+  'ckd-epi-2021-egfr': '肾功能 eGFR',
+  'navy-circumference-body-fat': '体脂率与腰围',
 }
 
 const RED_KEY = /^(hb|hgb|mcv|mch|rdw|rdwcv|rdw_cv)$/i
@@ -52,13 +54,22 @@ export function facingUnit(unit: string, key = ''): string {
 const TITLE_BY_OUTPUT: Record<string, string> = {
   blood_phenoage_age_deviation: '血检身体年龄减周岁',
   phenoage_gap: '身体年龄减周岁',
+  waist_height_ratio: '腰围身高比',
+  waist_hip_ratio: '腰臀比',
+  body_fat_pct: '体脂率',
+  egfr: '肾功能 eGFR',
 }
 
 export function titleOf(skill: string, titleZh = '', outputKey = ''): string {
   if (skill !== PHENO_SKILL && skill !== RISK_SKILL && TITLE_BY_OUTPUT[outputKey]) return TITLE_BY_OUTPUT[outputKey]
   if (TITLES[skill]) return TITLES[skill]
   const named = titleZh.trim().replace(/。$/, '')
-  if (named && /[\u4e00-\u9fff]/.test(named) && !/[A-Za-z]{4,}/.test(named)) return named.length > 22 ? named.slice(0, 22) : named
+  // A long name is cut at a clause boundary when there is one, and always marked with …
+  if (named && /[\u4e00-\u9fff]/.test(named) && !/[A-Za-z]{4,}/.test(named)) {
+    if (named.length <= 22) return named
+    const cut = Math.max(...['，', '、', '（', '：'].map((p) => named.lastIndexOf(p, 22)))
+    return `${named.slice(0, cut >= 8 ? cut : 21)}…`
+  }
   return '这项检查'
 }
 

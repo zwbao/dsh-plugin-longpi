@@ -44,8 +44,8 @@ export function ConsentPanel(props: { study: StudyRow; onChange: () => void; onE
       h('span', { className: `lp-badge ${props.study.consented === 'granted' ? 'lp-badge-good' : 'lp-badge-neutral'}` }, state),
       h('span', { className: 'lp-tag' }, props.study.kind === 'community_season' ? '社区赛季' : '研究')),
     h('p', { className: 'lp-text' }, props.study.summary_zh),
-    h('p', { className: 'lp-small lp-muted' }, '加入之后，研究正式开始才会把合计发出去。现在只保存在你的设备上。基因和姓名不参加。'),
-    h('details', null, h('summary', null, '完整同意书'), h('p', { className: 'lp-small lp-muted' }, props.study.text_zh)),
+    h('p', { className: 'lp-small lp-muted lp-measure' }, '加入之后，研究正式开始才会把合计发出去。现在只保存在你的设备上。基因和姓名不参加。'),
+    h('details', null, h('summary', null, '完整同意书'), h('p', { className: 'lp-small lp-muted lp-measure' }, props.study.text_zh)),
     ...questions.map((question) => {
       const plain = PLAIN[question.id]
       const title = plain?.question_zh ?? question.question_zh
@@ -61,6 +61,6 @@ export function ConsentPanel(props: { study: StudyRow; onChange: () => void; onE
       h(Btn, { size: 'sm', disabled: !ready, onClick: submit }, '加入'),
       h(Btn, { size: 'sm', variant: 'outline', onClick: () => { void postJson('/api/longpi/science/invite', { decision: 'later' }).then(() => setNote('以后再说。本机上的功能还在。')).catch(() => setNote('以后再说。')) } }, '以后再说'),
       props.study.consented === 'granted' ? h(Btn, { size: 'sm', variant: 'outline', onClick: withdraw }, '退出这项研究') : null),
-    h('p', { className: 'lp-caption' }, '已经发出的合计不会收回。'),
-    note ? h('p', { className: 'lp-small', role: 'status' }, note) : null)
+    h('p', { className: 'lp-caption lp-measure' }, '已经发出的合计不会收回。'),
+    note ? h('p', { className: 'lp-small lp-measure', role: 'status' }, note) : null)
 }

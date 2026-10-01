@@ -17,7 +17,7 @@ import { LinkButton, Switch, useNotice } from './ui.ts'
 
 const h = React.createElement
 
-/** Registered settings sections this page already places itself (the note sits under 提醒; 研究 is the 一起研究 block). */
+/** Registered settings sections this page covers itself (提醒 shows its own season note; 研究 is the 一起研究 block). */
 const PLACED = new Set(['season-reminder', 'science'])
 
 function Block(props: { id: string; title: string; hint?: string; children?: React.ReactNode }): React.ReactElement {

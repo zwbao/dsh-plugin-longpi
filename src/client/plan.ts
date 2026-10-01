@@ -5,7 +5,7 @@
 // draft. A tracking read that fails shows as such, with a retry.
 
 import React from 'react'
-import { AdherenceStrip, fmt, fmtAuto, LineChart, Ring, TableTwin, Timeline } from './charts.ts'
+import { AdherenceStrip, datesZh, fmt, fmtAuto, LineChart, Ring, TableTwin, Timeline } from './charts.ts'
 import { CheckChoices, todayCounts, useCheckIns } from './checkin.ts'
 import { chineseDate, daysBetween, pct } from './format.ts'
 import { Goals, NextSteps } from './goals.ts'
@@ -23,7 +23,7 @@ type Answer = (id: string, title: string, state: CheckState) => void
 /** Today's items with their three answers; also the 概览 tab's today card. */
 export function TodayList(props: { journey: Journey; stateOf: (id: string) => CheckState; busy: string | null; onAnswer: Answer }): React.ReactElement {
   const items = props.journey.plan.checkin_items
-  if (items.length === 0) return h('p', { className: 'lp-small lp-muted' }, '今天没有需要亲手记的项目。手环和已经记下的服药会自动算进去。')
+  if (items.length === 0) return h('p', { className: 'lp-small lp-muted lp-measure' }, '今天没有需要亲手记的项目。手环和已经记下的服药会自动算进去。')
   return h('ul', { className: 'lp-today-list' },
     ...items.map((row) => {
       const state = props.stateOf(row.id)
@@ -35,12 +35,12 @@ export function TodayList(props: { journey: Journey; stateOf: (id: string) => Ch
 
 function TodayTile(props: { journey: Journey; stateOf: (id: string) => CheckState; busy: string | null; onAnswer: Answer }): React.ReactElement {
   const counts = todayCounts(props.journey)
-  return h('div', { className: 'lp-card lp-plan-tile lp-plan-tile-today' },
+  return h('div', { className: 'lp-card lp-plan-tile-today' },
     h('div', { className: 'lp-card-head' },
       h('h3', { className: 'lp-card-title' }, '今天'),
-      counts.total > 0 ? h('span', { className: 'lp-caption' }, `${counts.done}/${counts.total} 完成`) : null),
+      counts.total > 0 ? h('span', { className: 'lp-caption lp-num' }, `${counts.done}/${counts.total}`) : null),
     h('div', { className: 'lp-plan-grow' }, h(TodayList, props)),
-    h('p', { className: 'lp-caption' }, '点错了可以撤销；没做到也记一下，执行率才真实。'))
+    h('p', { className: 'lp-caption lp-measure' }, '点错了可以撤销；没做到也记一下，执行率才真实。'))
 }
 
 function AdherenceTile(props: { journey: Journey; tracking: Tracking | null }): React.ReactElement {
@@ -49,17 +49,25 @@ function AdherenceTile(props: { journey: Journey; tracking: Tracking | null }): 
   const fallback = known.length > 0 ? known.reduce((sum, item) => sum + (item.adherence?.rate ?? 0), 0) / known.length : null
   const rate = props.journey.plan.adherence_pct != null ? props.journey.plan.adherence_pct / 100 : fallback
   const streak = props.journey.plan.streak || Math.max(0, ...items.map((item) => item.adherence?.streak ?? 0))
-  return h('div', { className: 'lp-card lp-plan-tile' },
+  // No record yet: an empty state, not an empty ring and a dash.
+  if (rate == null || !Number.isFinite(rate)) {
+    return h('div', { className: 'lp-card' },
+      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '方案执行')),
+      h('div', { className: 'lp-empty' },
+        h('div', { className: 'lp-empty-title' }, '还没有执行记录'),
+        h('p', { className: 'lp-empty-text' }, '在「今天」里打卡后，这里显示近 12 周的执行率。')))
+  }
+  return h('div', { className: 'lp-card' },
     h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '方案执行')),
     h('div', { className: 'lp-plan-grow' },
       h('div', { className: 'lp-plan-figure-row' },
         h(Ring, { value: rate, label: '方案平均执行率', size: 56 }),
         h('div', null,
-          h('div', { className: 'lp-num-md' }, rate == null ? '—' : `${Math.round(rate * 100)}%`),
-          h('div', { className: 'lp-caption' }, rate == null ? '还没有执行记录' : '近 12 周平均')))),
+          h('div', { className: 'lp-num-md' }, `${Math.round(rate * 100)}%`),
+          h('div', { className: 'lp-caption' }, '近 12 周平均')))),
     streak > 1
       ? h('div', { className: 'lp-plan-streak' }, h(Icon, { name: 'flame', size: 14 }), `连续 ${streak} 天`)
-      : h('p', { className: 'lp-caption' }, '连续完成两天以上会在这里显示'))
+      : h('p', { className: 'lp-caption lp-measure' }, '连续完成两天以上会在这里显示'))
 }
 
 /** Retest dates as the reminders see them: the earliest date each verdict gives per marker. */
@@ -84,7 +92,7 @@ function RetestTile(props: { tracking: Tracking | null; today: string; failed: b
   const upcoming = retests.filter((row) => row.date > props.today)
   const now = retests.filter((row) => row.date <= props.today)
   const first = upcoming[0]
-  return h('div', { className: 'lp-card lp-plan-tile' },
+  return h('div', { className: 'lp-card' },
     h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '下次复测')),
     h('div', { className: 'lp-plan-grow' },
       now.length > 0
@@ -95,7 +103,7 @@ function RetestTile(props: { tracking: Tracking | null; today: string; failed: b
             h('div', { className: 'lp-caption' }, `${chineseDate(first.date)}之后 · ${first.marker}`))
           : h('div', null, h('div', { className: 'lp-h2 lp-muted' }, '—'),
             h('div', { className: 'lp-caption' }, props.failed ? '复测日期没有读到' : '方案里的指标还没有排出复测日'))),
-    h('p', { className: 'lp-caption' }, '复测太早，变化多半只是波动。'))
+    h('p', { className: 'lp-caption lp-measure' }, '复测太早，变化多半只是波动。'))
 }
 
 /**
@@ -113,7 +121,7 @@ export function Wins(props: { tracking: Tracking | null }): React.ReactElement |
         h('span', { className: 'lp-plan-win-icon lp-plan-win-icon-quiet' }, h(Icon, { name: 'spark', size: 14 })),
         h('div', { className: 'lp-plan-win-text' },
           h('div', { className: 'lp-strong' }, '还没有超出正常波动的变化'),
-          h('p', { className: 'lp-small lp-muted' }, '血脂、血糖、炎症指标通常要 1–3 个月才会动。坚持执行、按时复测，就是在积累证据。'))))
+          h('p', { className: 'lp-small lp-muted lp-measure' }, '血脂、血糖、炎症指标通常要 1–3 个月才会动。坚持执行、按时复测，就是在积累证据。'))))
   }
   return h('div', { className: 'lp-card' },
     h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '朝目标方向、超出正常波动的变化')),
@@ -122,7 +130,7 @@ export function Wins(props: { tracking: Tracking | null }): React.ReactElement |
         h('span', { className: 'lp-plan-win-icon' }, h(Icon, { name: 'check', size: 14 })),
         h('div', { className: 'lp-plan-win-text lp-row-main' },
           h('div', { className: 'lp-strong lp-num' }, `${row.marker} ${fmtAuto(row.baseline?.value)} → ${fmtAuto(row.followup?.value)} ${row.unit ?? ''}`),
-          h('p', { className: 'lp-muted' },
+          h('p', { className: 'lp-muted lp-measure' },
           [`执行「${item.title}」期间`, row.change ? pct(row.change.pct) : '', '超出个体正常波动'].filter(Boolean).join(' · '),
           (row.combined_with ?? []).length > 0 ? `；同期还在执行${(row.combined_with ?? []).map((name) => `「${name}」`).join('')}，无法区分各自的作用` : ''))))))
 }
@@ -140,26 +148,29 @@ function ItemCard(props: { item: Item; raw?: PlanItemRaw; today: string; onAnswe
   const source = props.raw?.mirobody ? 'mirobody' : props.raw?.target ? 'wearable' : 'checkin'
   const idle = source === 'checkin' ? checkinFoot(item, props.today) : null
   const rate = adherence.rate
-  return h('article', { className: 'lp-card lp-plan-item' },
+  return h('article', { className: 'lp-card' },
     h('div', { className: 'lp-card-head' },
       h('h3', { className: 'lp-card-title' }, item.title)),
     h('div', { className: 'lp-plan-grow' },
       h('div', { className: 'lp-tags' },
         item.category_zh ? h('span', { className: 'lp-tag' }, item.category_zh) : null,
         item.headline ? h(VerdictChip, { verdict: item.headline }) : null,
-        h('span', { className: 'lp-caption' }, `${item.start} 起 · 第 ${item.days ?? 0} 天`)),
-      h('div', { className: 'lp-plan-adherence' },
-        h('div', null,
-          h('div', { className: 'lp-caption' }, '近 12 周执行'),
-          rate == null || adherence.level === 'unknown' ? h('div', { className: 'lp-h2 lp-muted' }, '记录不足') : h('div', { className: 'lp-num-md' }, `${Math.round(rate * 100)}%`),
-          adherence.note_zh ? h('div', { className: 'lp-caption' }, adherence.note_zh) : null),
-        (adherence.calendar ?? []).length > 0 ? h(AdherenceStrip, { calendar: adherence.calendar ?? [], label: item.title }) : null),
+        h('span', { className: 'lp-caption' }, `${chineseDate(item.start)}起 · 第 ${item.days ?? 0} 天`)),
+      // Too few records: one line, no empty heat map.
+      rate == null || adherence.level === 'unknown'
+        ? h('p', { className: 'lp-small lp-muted lp-measure' }, `近 12 周执行：记录不足${adherence.note_zh ? `。${adherence.note_zh}` : ''}`)
+        : h('div', { className: 'lp-plan-adherence' },
+          h('div', null,
+            h('div', { className: 'lp-caption' }, '近 12 周执行'),
+            h('div', { className: 'lp-num-md' }, `${Math.round(rate * 100)}%`),
+            adherence.note_zh ? h('div', { className: 'lp-caption' }, adherence.note_zh) : null),
+          (adherence.calendar ?? []).length > 0 ? h(AdherenceStrip, { calendar: adherence.calendar ?? [], label: item.title }) : null),
       ...(item.verdicts ?? []).map((row, index) => h('div', { className: 'lp-plan-verdict', key: index },
         h('div', { className: 'lp-plan-verdict-head' },
           h(VerdictChip, { verdict: row.verdict }),
           h('span', { className: 'lp-strong' }, row.marker),
           row.baseline && row.followup ? h('span', { className: 'lp-num' }, `${fmtAuto(row.baseline.value)} → ${fmtAuto(row.followup.value)} ${row.unit ?? ''}${row.change ? `（${pct(row.change.pct)}）` : ''}`) : null),
-        row.reason_zh ? h('p', { className: 'lp-small lp-muted' }, row.reason_zh) : null,
+        row.reason_zh ? h('p', { className: 'lp-small lp-muted lp-measure' }, datesZh(row.reason_zh)) : null,
         (row.expected ?? []).length > 0 ? h('details', null,
           h('summary', null, '试验里平均能改变多少'),
           ...(row.expected ?? []).map((line) => h('p', { key: line.id, className: 'lp-caption' },
@@ -184,7 +195,7 @@ function PlanStart(props: { journey: Journey; onPrompt: (text: string) => void }
     props.journey.suggestions.length > 0 ? h('div', { className: 'lp-stack' },
       ...props.journey.suggestions.map((row) => h('button', { key: row.id, type: 'button', className: 'lp-row-btn', onClick: () => props.onPrompt(row.text_zh) },
         h('span', { className: 'lp-row-main' }, row.text_zh), h(Icon, { name: 'chevron', size: 14 })))) : null,
-    h('p', { className: 'lp-caption' }, 'LongPi 只起草生活方式方案；不会开始、停止或调整任何处方药，也不给药物或补剂的剂量。'))
+    h('p', { className: 'lp-caption lp-measure' }, 'LongPi 只起草生活方式方案；不会开始、停止或调整任何处方药，也不给药物或补剂的剂量。'))
 }
 
 export function PlanSection(props: {
@@ -233,11 +244,11 @@ export function PlanSection(props: {
         h('span', { className: 'lp-caption' }, meta)),
       items.length > 0
         ? h(Timeline, {
-          items: items.map((item) => ({ id: item.id, title: item.title, start: item.start, end: item.end ?? null, subtitle: `${item.start} 起，第 ${item.days ?? 0} 天`, headline: item.headline ?? '' })),
+          items: items.map((item) => ({ id: item.id, title: item.title, start: item.start, end: item.end ?? null, subtitle: `${chineseDate(item.start)}起，第 ${item.days ?? 0} 天`, headline: item.headline ?? '' })),
           checkups, today,
         })
-        : h('p', { className: 'lp-small lp-muted' }, failed ? '方案的项目没有读到。' : '方案里还没有项目。')),
-    items.length > 0 ? h('div', { className: 'lp-grid-2' },
+        : h('p', { className: 'lp-small lp-muted lp-measure' }, failed ? '方案的项目没有读到。' : '方案里还没有项目。')),
+    items.length > 0 ? h('div', { className: 'lp-grid-2 lp-grid-top' },
       ...items.map((item) => h(ItemCard, {
         key: item.id, item, raw: plan?.items.find((raw) => raw.id === item.id), today, onAnswer: answer, busy: busy === item.id,
         state: stateOf(item.id), checkable: todayIds.has(item.id),
@@ -283,8 +294,8 @@ export function Markers(props: { tracking: Tracking | null }): React.ReactElemen
             band: chart.band ? { low: chart.band.low, high: chart.band.high, from: chart.band.base_date } : null,
             goal: chart.goal ?? null,
           }),
-          h('p', { className: 'lp-caption' }, chart.band
-            ? `浅色带：以 ${chart.band.base_date} 的 ${fmt(chart.band.base, 2)} 为基线的正常波动${chart.band.verified === false ? '（变异数据待核对）' : ''}。`
+          h('p', { className: 'lp-caption lp-measure' }, chart.band
+            ? `浅色带：以 ${chineseDate(chart.band.base_date)}的 ${fmt(chart.band.base, 2)} 为基线的正常波动${chart.band.verified === false ? '（变异数据待核对）' : ''}。`
             : '缺少这项的个体变异数据，分不清真实变化和波动。'),
           h(TableTwin, { caption: `${chart.label}（${chart.unit}）`, head: ['日期', '数值'], rows: chart.points.map((point) => [point.date, fmt(point.value, digits)]) }))
       })))

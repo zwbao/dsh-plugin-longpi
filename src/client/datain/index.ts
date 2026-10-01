@@ -27,7 +27,7 @@ function GeneticsCard(): React.ReactElement {
     }).catch(() => { if (!gone) setRow(null) })
     return () => { gone = true }
   }, [])
-  if (!row) return h('p', { className: 'lp-small lp-muted', id: 'lp-genetics-empty' }, '还没有基因摘要。叙述版 PDF 请发到健康对话。普通体检不要选基因文件。')
+  if (!row) return h('p', { className: 'lp-small lp-muted lp-measure', id: 'lp-genetics-empty' }, '还没有基因摘要。叙述版 PDF 请发到健康对话。普通体检不要选基因文件。')
   return h('div', { className: 'lp-stack', id: 'lp-genetics' },
     h('p', null, (row.headlines_zh ?? []).join('；') || '已记下基因报告。'),
     (row.variants ?? []).length > 0
@@ -36,8 +36,8 @@ function GeneticsCard(): React.ReactElement {
         h('span', { className: 'lp-row-end lp-num' }, item.note_zh ? `${item.rsid} ${item.genotype}` : item.genotype))))
       : null,
     (row.caveats_zh ?? []).length > 0 ? h('ul', { className: 'lp-bullets' }, ...(row.caveats_zh ?? []).map((line) => h('li', { key: line }, line))) : null,
-    row.raw_export_zh ? h('p', { className: 'lp-caption' }, row.raw_export_zh) : null,
-    row.sample_id ? h('p', { className: 'lp-caption' }, `样本号存在这台电脑上，不会发给模型。`) : null)
+    row.raw_export_zh ? h('p', { className: 'lp-caption lp-measure' }, row.raw_export_zh) : null,
+    row.sample_id ? h('p', { className: 'lp-caption lp-measure' }, `样本号存在这台电脑上，不会发给模型。`) : null)
 }
 
 function MedsForm(): React.ReactElement {
@@ -63,7 +63,7 @@ function MedsForm(): React.ReactElement {
   return h('div', { className: 'lp-stack', id: 'lp-meds' },
     lines.length > 0
       ? h('ul', { className: 'lp-rows' }, ...lines.map((line) => h('li', { key: line, className: 'lp-row' }, h('span', { className: 'lp-row-main' }, line))))
-      : h('p', { className: 'lp-small lp-muted' }, '还没有你让 LongPi 记下的药。'),
+      : h('p', { className: 'lp-small lp-muted lp-measure' }, '还没有你让 LongPi 记下的药。'),
     h('div', { className: 'lp-form-grid' },
       h('div', { className: 'lp-field lp-field-full' },
         h('label', { className: 'lp-field-label', htmlFor: 'lp-med-name' }, '药名'),
@@ -100,14 +100,14 @@ function ConditionsForm(): React.ReactElement {
   return h('div', { className: 'lp-stack', id: 'lp-conditions' },
     rows.length > 0
       ? h('ul', { className: 'lp-rows' }, ...rows.map((row) => h('li', { key: row.id, className: 'lp-row' }, h('span', { className: 'lp-row-main' }, row.text_zh))))
-      : h('p', { className: 'lp-small lp-muted' }, '还没有记下病情。'),
+      : h('p', { className: 'lp-small lp-muted lp-measure' }, '还没有记下病情。'),
     h('div', { className: 'lp-field' },
       h('label', { className: 'lp-field-label', htmlFor: 'lp-cond-name' }, '病情或诊断'),
       h('input', { id: 'lp-cond-name', className: 'lp-input', value: name, placeholder: '脂肪肝', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setName(event.target.value) })),
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
     h('div', { className: 'lp-actions' },
       h(Btn, { type: 'button', size: 'sm', disabled: !name.trim(), onClick: () => { void save() } }, '记下')),
-    h('p', { className: 'lp-caption' }, '诊断记在这台电脑上。体检原件那边不接收病情。'))
+    h('p', { className: 'lp-caption lp-measure' }, '诊断记在这台电脑上。体检原件那边不接收病情。'))
 }
 
 export function DataInSection(): React.ReactElement {

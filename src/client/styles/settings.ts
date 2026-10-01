@@ -13,9 +13,10 @@ export const SETTINGS = `
 .lp-set-title { margin: 0; font-size: 15px; line-height: 22px; font-weight: 600; color: var(--lp-ink); }
 .lp-set-body { display: grid; gap: 12px; min-width: 0; justify-items: start; }
 .lp-set-body > .lp-kv, .lp-set-body > details, .lp-set-body > .lp-conn-status { justify-self: stretch; }
-.lp-set-text { max-width: 40em; font-size: 13px; line-height: 20px; }
+.lp-set-text { font-size: 13px; line-height: 20px; }
+.lp-settings :is(p, dd, .lp-bullets), .lp-data :is(p, dd, .lp-bullets) { max-width: 40em; }
 .lp-set-kv { gap: 8px 16px; }
-.lp-set-kv dd { color: var(--lp-ink-2); max-width: 40em; }
+.lp-set-kv dd { color: var(--lp-ink-2); }
 .lp-set-extra { min-width: 0; }
 .lp-set-version { margin: 0; padding-top: 16px; border-top: 1px solid var(--lp-line); }
 
@@ -24,7 +25,7 @@ export const SETTINGS = `
 .lp-reminder { display: grid; gap: 8px; min-width: 0; }
 .lp-reminder-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .lp-reminder .lp-kv { margin-top: 4px; }
-.lp-followup-note .lp-callout-body > p { margin-top: 0 !important; font-size: 13px; line-height: 20px; color: var(--lp-ink); }
+.lp-settings .lp-switch { font-size: 13px; line-height: 20px; font-weight: 500; }
 .lp-input-time { width: 128px; flex: none; font-variant-numeric: tabular-nums; }
 .lp-select-wide { width: auto; min-width: 128px; }
 

@@ -97,7 +97,7 @@ export function CheckChoices(props: { title: string; state: CheckState; busy: bo
       h('button', { type: 'button', className: 'lp-choice', disabled: busy, onClick: () => props.onAnswer(false) }, '没做到'))
   }
   return h('span', { className: 'lp-choices', role: 'group', 'aria-label': `${props.title}：今天` },
-    h('span', { className: `lp-choice-state ${state ? 'lp-choice-state-done' : 'lp-choice-state-missed'}` },
+    h('span', { className: `lp-badge ${state ? 'lp-badge-good' : 'lp-badge-neutral'}` },
       h(Icon, { name: state ? 'check' : 'close', size: 12, strokeWidth: 2 }), state ? '已完成' : '没做到'),
     h('button', { type: 'button', className: 'lp-choice lp-choice-undo', disabled: busy, onClick: () => props.onAnswer(null), 'aria-label': `撤销「${props.title}」今天的记录` },
       busy ? '撤销中' : '撤销'))

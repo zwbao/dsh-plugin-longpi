@@ -5,6 +5,7 @@ import React from 'react'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { errorText, postJson } from '../api.ts'
 import { Icon } from '../icons.ts'
+import { chineseDate } from '../format.ts'
 import { notifyChanged } from '../store.ts'
 import type { Journey } from '../types.ts'
 import { Btn, LinkButton } from '../ui.ts'
@@ -61,7 +62,7 @@ function VisitForm(props: { journey: Journey; onNotice: Notify }): React.ReactEl
     try {
       const result = await postJson<{ ok: boolean; error?: string }>('/api/longpi/care-visit', { status, ...(status !== 'declined' ? { visit_date: date } : {}), ...(status === 'visited' && outcome.trim() ? { outcome_zh: outcome.trim() } : {}) })
       if (!result.ok) throw new Error(result.error || '没有保存')
-      props.onNotice(status === 'visited' ? '记下了医生的结论。下一步和方案会跟着调整。' : status === 'booked' ? `记下了：${date} 看医生。去之前可以打印简报。` : '记下了。想去的时候，简报随时可以打印。', 'good')
+      props.onNotice(status === 'visited' ? '记下了医生的结论。下一步和方案会跟着调整。' : status === 'booked' ? `记下了：${chineseDate(date)}看医生。去之前可以打印简报。` : '记下了。想去的时候，简报随时可以打印。', 'good')
       setStep('none')
       notifyChanged()
     } catch (err) {
@@ -70,7 +71,7 @@ function VisitForm(props: { journey: Journey; onNotice: Notify }): React.ReactEl
       setBusy(false)
     }
   }
-  const lastText = last ? (last.care_status === 'booked' ? `已约 ${last.visit_date ?? ''}` : last.care_status === 'declined' ? '你说暂时不去' : last.care_status === 'visited' ? `已看过 ${last.visit_date ?? ''}` : '') : ''
+  const lastText = last ? (last.care_status === 'booked' ? `已约 ${chineseDate(last.visit_date)}`.trim() : last.care_status === 'declined' ? '你说暂时不去' : last.care_status === 'visited' ? `已看过 ${chineseDate(last.visit_date)}`.trim() : '') : ''
   return h('div', { className: 'lp-care-visit' },
     h('p', { className: 'lp-small lp-muted' }, lastText ? `约了吗？医生怎么说？（上次：${lastText}）` : '约了吗？医生怎么说？'),
     step === 'none' ? h('div', { className: 'lp-actions' },
@@ -113,7 +114,7 @@ export function CareCard(props: { journey: Journey; onNotice: Notify; onIndicato
       h('h3', { className: 'lp-h3 lp-care-title' }, h(Icon, { name: 'warn', size: 16 }), '最重要的一步')),
     h('div', { className: 'lp-care-text' },
       h('p', { className: 'lp-strong' }, journey.next.title_zh),
-      detail ? h('p', { className: 'lp-muted lp-text' }, detail) : null),
+      detail ? h('p', { className: 'lp-muted' }, detail) : null),
     h('div', { className: 'lp-actions' },
       h(Btn, { size: 'sm', disabled: busy, onClick: () => { void openBrief() } }, busy ? '正在整理…' : '医生简报（可打印）'),
       h(Btn, { size: 'sm', variant: 'outline', onClick: props.onIndicators }, '看这些指标'),

@@ -76,7 +76,7 @@ export function EngageDock(props: { variant?: 'dock' | 'page' } = {}): React.Rea
           h('p', { className: 'lp-callout-body' }, failed),
           h('button', { type: 'button', className: 'lp-textbtn', onClick: () => { void load() } }, '重试'))
         : null,
-      panel ?? (failed ? null : h('p', { className: 'lp-small lp-muted' }, '赛季正在读取。')),
+      panel ?? (failed ? null : h('p', { className: 'lp-small lp-muted lp-measure' }, '赛季正在读取。')),
       view?.nudge?.offer ? h(NudgeOffer, {
         offer: true,
         onAccept: () => { void run('/api/longpi/nudges', { nudge_in_workflow: true, offer_seen: true }) },
@@ -114,7 +114,7 @@ export function EngageSettingsNote(_props?: Record<string, unknown>): React.Reac
       else if (view.needs_consent) setLine('还没有同意使用说明，所以赛季和提醒都还没开始。')
     }).catch(() => { /* the static line stays */ })
   }, [])
-  return h('p', { className: 'lp-caption' }, line)
+  return h('p', { className: 'lp-caption lp-measure' }, line)
 }
 
 function SeasonPage(_props: Record<string, unknown>): React.ReactElement | null {

@@ -57,10 +57,10 @@ function EvidenceMore(props: { item: DraftItem }): React.ReactElement | null {
   if (!evidence.population && !evidence.doi && !target) return null
   return h('details', null,
     h('summary', null, '证据'),
-    evidence.population ? h('p', { className: 'lp-caption' }, `试验人群：${evidence.population}`) : null,
-    evidence.doi ? h('p', { className: 'lp-caption' }, '文献：', h('a', { href: `https://doi.org/${evidence.doi}`, target: '_blank', rel: 'noreferrer' }, `doi:${evidence.doi}`), evidence.verified ? '' : '（数据待核对）') : null,
-    target ? h('p', { className: 'lp-caption' }, targetText(target)) : null,
-    h('p', { className: 'lp-caption' }, '这是试验里的平均效果，个人结果会不同。'))
+    evidence.population ? h('p', { className: 'lp-caption lp-measure' }, `试验人群：${evidence.population}`) : null,
+    evidence.doi ? h('p', { className: 'lp-caption lp-measure' }, '文献：', h('a', { href: `https://doi.org/${evidence.doi}`, target: '_blank', rel: 'noreferrer' }, `doi:${evidence.doi}`), evidence.verified ? '' : '（数据待核对）') : null,
+    target ? h('p', { className: 'lp-caption lp-measure' }, targetText(target)) : null,
+    h('p', { className: 'lp-caption lp-measure' }, '这是试验里的平均效果，个人结果会不同。'))
 }
 
 /** One line: what the trials found on average. */
@@ -99,7 +99,7 @@ export function DraftItems(props: { draft: PlanDraft; removed: Set<string>; onTo
   return h('div', { className: 'lp-draft-block' },
     kept.length > 0
       ? h('ul', { className: 'lp-draft-items' }, ...kept.map((item) => h(DraftItemCard, { key: item.id, item, compact: props.compact, onRemove: () => props.onToggle(item.id) })))
-      : h('p', { className: 'lp-small lp-muted' }, '所有项目都去掉了。恢复一项，或在对话里说说你想怎么调整。'),
+      : h('p', { className: 'lp-small lp-muted lp-measure' }, '所有项目都去掉了。恢复一项，或在对话里说说你想怎么调整。'),
     gone.length > 0 ? h('div', { className: 'lp-draft-removed' },
       h('span', { className: 'lp-caption' }, '已去掉：'),
       ...gone.map((item) => h('button', { key: `${item.id}|${item.title}`, type: 'button', className: 'lp-toggle', disabled: props.busy, onClick: () => props.onToggle(item.id || item.title), 'aria-label': `恢复「${item.title}」` },
@@ -141,9 +141,9 @@ export function DraftGoals(props: { goals: DraftGoal[]; dropped: number }): Reac
     h('summary', null, `目标（${props.goals.length} 个，按试验平均效应估算）`),
     props.goals.length > 0 ? h('ul', { className: 'lp-rows' },
       ...props.goals.map((goal) => h('li', { key: goal.marker, className: 'lp-row' },
-        h('span', { className: 'lp-row-main lp-draft-goal' }, h('span', { className: 'lp-strong' }, goal.marker), goal.basis_zh ? h('span', { className: 'lp-caption' }, goal.basis_zh) : null),
+        h('span', { className: 'lp-row-main lp-row-lines' }, h('span', { className: 'lp-strong' }, goal.marker), goal.basis_zh ? h('span', { className: 'lp-caption' }, goal.basis_zh) : null),
         h('span', { className: 'lp-row-end lp-num' }, `${num(goal.value)} ${goal.unit}`)))) : null,
-    props.dropped > 0 ? h('p', { className: 'lp-caption' }, `去掉的项目对应的 ${props.dropped} 个目标也不会保存。`) : null)
+    props.dropped > 0 ? h('p', { className: 'lp-caption lp-measure' }, `去掉的项目对应的 ${props.dropped} 个目标也不会保存。`) : null)
 }
 
 /** The follow-up the adoption dialog turns on: desktop only, no health values (9b). */
@@ -176,14 +176,14 @@ export function ConfirmModal(props: {
   return h(Modal, { open: true, title: '采用这份方案', onClose: props.busy ? () => {} : props.onCancel, headless: true, className: 'lp-confirm-dialog' },
     h('div', { className: 'lp lp-confirm' },
       h('h2', { className: 'lp-h2' }, '采用这份方案？'),
-      h('p', { className: 'lp-muted' }, `保存为你的方案「${props.draft.title || '改善方案'}」，从今天（${chineseDate(props.today)}）开始。之后按项目打卡，并按每个指标安排复测；想调整随时在对话里说。`),
+      h('p', { className: 'lp-muted lp-measure' }, `保存为你的方案「${props.draft.title || '改善方案'}」，从今天（${chineseDate(props.today)}）开始。之后按项目打卡，并按每个指标安排复测；想调整随时在对话里说。`),
       h('ul', { className: 'lp-confirm-list' },
         ...props.items.map((item) => h('li', { key: item.id },
           item.category_zh ? h('span', { className: 'lp-tag' }, item.category_zh) : null,
           h('span', null, item.title),
           item.needs_doctor ? h('span', { className: 'lp-badge lp-badge-warn' }, '需先与医生确认') : null))),
       props.goals.length > 0
-        ? h('p', { className: 'lp-caption' }, `目标：${props.goals.map((goal) => `${goal.marker} ${num(goal.value)} ${goal.unit}`).join('、')}（按试验平均效应估算，不是个人预测）`)
+        ? h('p', { className: 'lp-caption lp-measure' }, `目标：${props.goals.map((goal) => `${goal.marker} ${num(goal.value)} ${goal.unit}`).join('、')}（按试验平均效应估算，不是个人预测）`)
         : null,
       doctor.length > 0
         ? h('div', { className: 'lp-callout lp-callout-warn' }, h(Icon, { name: 'warn', size: 14 }),
@@ -289,7 +289,7 @@ function Draft(props: { data: PlanDraftResponse; draft: PlanDraft; journey: Jour
     h('div', { className: 'lp-actions lp-draft-actions' },
       h(Btn, { onClick: () => { setError(null); setConfirming(true) }, disabled: kept.length === 0 }, '采用这份方案'),
       h(Hint, { onPrompt: props.onPrompt })),
-    h('p', { className: 'lp-caption' }, data.brief.boundary_zh || '只起草生活方式；补剂只作为需先与医生确认的选项，不给剂量；不涉及任何处方药。'),
+    h('p', { className: 'lp-caption lp-measure' }, data.brief.boundary_zh || '只起草生活方式；补剂只作为需先与医生确认的选项，不给剂量；不涉及任何处方药。'),
     confirming ? h(ConfirmModal, {
       draft, items: kept, goals, today: props.journey.today, busy, error,
       onCancel: () => setConfirming(false), onConfirm: (remind) => { void accept(remind) },
@@ -325,7 +325,7 @@ export function PlanDraftCard(props: { journey: Journey; onNotice: Notify; onPro
   if (!data) {
     return h('div', { className: 'lp-card lp-draft' },
       h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '方案草稿')),
-      h('p', { className: 'lp-small lp-muted' }, `没能读到方案草稿：${error ?? '没有返回'}。`),
+      h('p', { className: 'lp-small lp-muted lp-measure' }, `没能读到方案草稿：${error ?? '没有返回'}。`),
       h(Hint, { onPrompt: props.onPrompt }))
   }
   if (!data.draft) {

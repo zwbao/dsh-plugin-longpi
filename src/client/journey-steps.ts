@@ -6,7 +6,7 @@ import React from 'react'
 import { postJson } from './api.ts'
 import { fmt } from './charts.ts'
 import { CONSENT_SENTENCES } from './constants.ts'
-import { chineseDate, riskText, versusAge } from './format.ts'
+import { chineseDate, chineseMonth, riskText, versusAge } from './format.ts'
 import { Icon } from './icons.ts'
 import { recordConnected } from './normalize.ts'
 import { InlineSelf } from './self-measure.ts'
@@ -54,8 +54,9 @@ export function RecordsStatusLine(props: { journey: Journey; inline?: boolean })
     recordConnected(records.status) ? '还没有体检记录' : '正在连接健康数据服务…')
 }
 
+/** 2025 年 3 月, never 2025-03 (P1-9). */
 function month(iso: string | null): string {
-  return iso ? `${iso.slice(0, 4)}-${iso.slice(5, 7)}` : ''
+  return chineseMonth(iso)
 }
 
 /** Three tiles: checkups and their date range, lab categories, wearable days. Only counts the server gave. */
@@ -90,7 +91,7 @@ function ChangesLine(props: { journey: Journey; onOpenChanges?: () => void }): R
   if (rows.length === 0) return null
   const names = rows.slice(0, 3).map((row) => row.label_zh).join('、')
   const doctor = rows.some((row) => row.ask_doctor)
-  return h('p', { className: `lp-found-changes ${doctor ? 'lp-found-changes-warn' : ''}` },
+  return h('div', { className: `lp-callout ${doctor ? 'lp-callout-warn' : 'lp-callout-info'}` },
     h(Icon, { name: doctor ? 'warn' : 'info', size: 14 }),
     h('span', null,
       h('span', { className: 'lp-strong' }, `值得注意：${rows.length} 项指标的变化超出正常波动`),
@@ -154,30 +155,30 @@ function NowList(props: { journey: Journey; onNotice: Notify; actions: NowAction
   const lab = journey.addons.filter((row) => !row.self_measurable)
   const rows: React.ReactNode[] = []
   if (waist?.self_key) {
-    rows.push(h('li', { key: 'self', className: 'lp-now' },
-      h('span', { className: 'lp-now-icon', 'aria-hidden': true }, h(Icon, { name: 'ruler', size: 15 })),
-      h('div', { className: 'lp-now-text' },
+    rows.push(h('li', { key: 'self', className: 'lp-row lp-row-wrap' },
+      h(Icon, { name: 'ruler', size: 16, className: 'lp-row-icon' }),
+      h('div', { className: 'lp-row-main lp-now-main' },
         h('div', { className: 'lp-strong' }, `量一下${waist.item_zh}`),
         h('div', { className: 'lp-caption' }, `填上就能算出${waist.unlocks_zh}`),
         h(InlineSelf, { journey, selfKey: waist.self_key, idPrefix: 'lp-onb-now', onNotice: props.onNotice }))))
   }
-  rows.push(h('li', { key: 'plan', className: 'lp-now' },
-    h('span', { className: 'lp-now-icon', 'aria-hidden': true }, h(Icon, { name: 'spark', size: 15 })),
-    h('div', { className: 'lp-now-text' },
+  rows.push(h('li', { key: 'plan', className: 'lp-row lp-row-wrap' },
+    h(Icon, { name: 'spark', size: 16, className: 'lp-row-icon' }),
+    h('div', { className: 'lp-row-main' },
       h('div', { className: 'lp-strong' }, '先制定一份改善方案'),
       h('div', { className: 'lp-caption' }, '按你关心的方面，从收录的试验证据里起草；你确认后才保存。')),
     h(Btn, { size: 'sm', variant: 'outline', onClick: props.actions.onDraft }, '起草方案')))
   if (lab.length > 0) {
-    rows.push(h('li', { key: 'lab', className: 'lp-now' },
-      h('span', { className: 'lp-now-icon', 'aria-hidden': true }, h(Icon, { name: 'flask', size: 15 })),
-      h('div', { className: 'lp-now-text' },
+    rows.push(h('li', { key: 'lab', className: 'lp-row lp-row-wrap' },
+      h(Icon, { name: 'flask', size: 16, className: 'lp-row-icon' }),
+      h('div', { className: 'lp-row-main' },
         h('div', { className: 'lp-strong' }, `下次体检加测${lab.slice(0, 2).map((row) => row.item_zh).join('、')}${lab.length > 2 ? ' 等' : ''}`),
         h('div', { className: 'lp-caption' }, `加上就能算${[...new Set(lab.map((row) => row.unlocks_zh))].join('、')}`)),
       h(Btn, { size: 'sm', variant: 'outline', onClick: props.actions.onAddons }, '加测清单')))
   }
   return h('div', { className: 'lp-now-block' },
     h('div', { className: 'lp-subhead' }, '现在就能做的事'),
-    h('ul', { className: 'lp-nows' }, ...rows))
+    h('ul', { className: 'lp-rows' }, ...rows))
 }
 
 /** Step 4: the results; when one is blocked, what can be done now instead of an empty card. */

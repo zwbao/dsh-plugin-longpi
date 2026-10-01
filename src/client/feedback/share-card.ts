@@ -23,13 +23,13 @@ export function ShareCard(props: { card: ShareCardModel; onNotice?: Notify; comp
   if (props.compact) {
     return h('section', { className: 'lp-card', id: 'lp-share', 'aria-label': props.card.title_zh },
       h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, props.card.title_zh)),
-      h('p', { className: 'lp-small lp-muted' }, '上面身体年龄卡里的那句话，可以复制下来发给家人或朋友。'),
+      h('p', { className: 'lp-small lp-muted lp-measure' }, '上面身体年龄卡里的那句话，可以复制下来发给家人或朋友。'),
       action)
   }
   return h('section', { className: 'lp-card', id: 'lp-share', 'aria-label': props.card.title_zh },
     h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, props.card.title_zh)),
     h('p', { className: 'lp-text lp-strong' }, props.card.headline_zh),
     ...props.card.lines_zh.map((line) => h('p', { key: line, className: 'lp-small lp-muted' }, line)),
-    props.card.footnote_zh ? h('p', { className: 'lp-caption' }, props.card.footnote_zh) : null,
+    props.card.footnote_zh ? h('p', { className: 'lp-caption lp-measure' }, props.card.footnote_zh) : null,
     action)
 }

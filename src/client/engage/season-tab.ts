@@ -4,6 +4,7 @@ import React from 'react'
 import { CodexPanel, type CodexView } from './codex.ts'
 import { StreakLine, type StreakView } from './streak.ts'
 import { SEASON_INTRO } from '../../ux/plain.ts'
+import { chineseDate } from '../format.ts'
 import { Icon } from '../icons.ts'
 import { Btn } from '../ui.ts'
 
@@ -57,12 +58,12 @@ export function SeasonPanel(props: {
   onRun?: (cardId: string) => void
 }): React.ReactElement {
   const season = props.view.season
-  const note = props.note ? h('p', { className: 'lp-small', role: 'status' }, props.note) : null
+  const note = props.note ? h('p', { className: 'lp-small lp-measure', role: 'status' }, props.note) : null
   if (props.view.invite?.show) {
     return h('section', { className: 'lp-card', 'aria-label': props.view.invite.title_zh },
       h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, props.view.invite.title_zh)),
       h('p', { className: 'lp-text' }, props.view.invite.body_zh),
-      props.view.subject_zh ? h('p', { className: 'lp-caption' }, `这个赛季用的是${props.view.subject_zh}的年龄和性别。`) : null,
+      props.view.subject_zh ? h('p', { className: 'lp-caption lp-measure' }, `这个赛季用的是${props.view.subject_zh}的年龄和性别。`) : null,
       h('a', { className: 'lp-textbtn', href: props.view.invite.odds_path }, '概率说明'),
       h('div', { className: 'lp-actions' },
         h(Btn, { disabled: props.busy, onClick: () => props.onAction({ action: 'opt_in' }) }, '开始这个赛季'),
@@ -71,7 +72,8 @@ export function SeasonPanel(props: {
   }
   if (props.view.pressure !== true) {
     return h('section', { className: 'lp-card', 'aria-label': '赛季' },
-      h('p', { className: 'lp-small lp-muted' }, '这个赛季先不推。想开始时点下面。'),
+      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '这个赛季还没开始')),
+      h('p', { className: 'lp-small lp-muted lp-measure' }, '这个赛季先不推。想开始时点下面。'),
       h('div', { className: 'lp-actions' },
         h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onAction({ action: 'opt_in' }) }, '开始这个赛季')),
       props.view.streak.frozen.length > 0 ? h(StreakLine, { streak: props.view.streak, onFreeze: props.onFreeze, busy: props.busy }) : null,
@@ -92,13 +94,13 @@ export function SeasonPanel(props: {
             h('h3', { className: 'lp-card-title' }, season.title_zh),
             h('span', { className: 'lp-caption' }, `本赛季 · 第 ${season.week} 周 / 共 ${season.weeks} 周`)),
           h('p', { className: 'lp-text lp-muted' }, SEASON_INTRO),
-          props.view.subject_zh ? h('p', { className: 'lp-caption' }, `按${props.view.subject_zh}的记录`) : null,
+          props.view.subject_zh ? h('p', { className: 'lp-caption lp-measure' }, `按${props.view.subject_zh}的记录`) : null,
           h('div', {
             className: 'lp-bar', role: 'progressbar', 'aria-label': '本赛季进度',
             'aria-valuemin': 0, 'aria-valuemax': season.weeks, 'aria-valuenow': season.week, 'aria-valuetext': `第 ${season.week} 周 / 共 ${season.weeks} 周`,
           }, h('span', { style: { width: `${Math.round(ratio * 100)}%` } })),
-          h('p', { className: 'lp-caption' }, season.retest_day ? `复查 ${season.retest_day}` : `${season.start} → ${season.end}`))
-        : h('p', { className: 'lp-small lp-muted' }, '这一赛季还没有开始。'),
+          h('p', { className: 'lp-caption lp-measure' }, season.retest_day ? `复查 ${chineseDate(season.retest_day)}` : `${chineseDate(season.start)} → ${chineseDate(season.end)}`))
+        : h('p', { className: 'lp-small lp-muted lp-measure' }, '这一赛季还没有开始。'),
       season?.status === 'closed' || family
         ? h('div', { className: 'lp-actions' },
           season?.status === 'closed' ? h(Btn, { size: 'sm', disabled: props.busy, onClick: () => props.onAction({ action: 'next_season' }) }, '开始下一个赛季') : null,

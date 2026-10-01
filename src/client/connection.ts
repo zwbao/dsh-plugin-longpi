@@ -6,7 +6,7 @@
 
 import React from 'react'
 import { deleteJson, errorText, postJson } from './api.ts'
-import { chineseDate } from './format.ts'
+import { chineseDate, chineseMonth } from './format.ts'
 import { Icon } from './icons.ts'
 import { normalizeConnectionResult } from './normalize.ts'
 import { notifyChanged, putConnection, reload, useConnection } from './store.ts'
@@ -33,10 +33,10 @@ export function addressProblem(text: string): string | null {
 }
 
 function month(iso: string | null): string {
-  return iso ? iso.slice(0, 7) : ''
+  return chineseMonth(iso)
 }
 
-/** "4 次体检 · 2025-10 → 2026-08 · 血脂、血糖等 · 手环 355 天": only what the server counted. */
+/** "4 次体检 · 2025 年 10 月 → 2026 年 8 月 · 血脂、血糖等 · 手环 355 天": only what the server counted. */
 export function summaryParts(summary: RecordsSummary): string[] {
   const range = summary.first_date && summary.last_date
     ? summary.first_date.slice(0, 7) === summary.last_date.slice(0, 7) ? month(summary.last_date) : `${month(summary.first_date)} → ${month(summary.last_date)}`

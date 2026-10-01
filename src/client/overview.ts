@@ -16,6 +16,7 @@ import { Btn } from './ui.ts'
 import { CareCard } from './triage/care-card.ts'
 import { InsightCard, ScienceIntro } from './life.ts'
 import { coveredByCare } from './overview-facts.ts'
+import { stepsLeft } from './onboarding.ts'
 
 const h = React.createElement
 
@@ -62,10 +63,10 @@ function WeekStrip(props: { tracking: Tracking | null; today: string }): React.R
 function TodayCard(props: { journey: Journey; tracking: Tracking | null; onNotice: Notify }): React.ReactElement {
   const { stateOf, busy, answer } = useCheckIns(props.journey, props.onNotice)
   const counts = todayCounts(props.journey)
-  return h('section', { className: 'lp-card lp-today-card', id: 'lp-today', 'aria-labelledby': 'lp-today-title' },
+  return h('section', { className: 'lp-card', id: 'lp-today', 'aria-labelledby': 'lp-today-title' },
     h('div', { className: 'lp-card-head' },
-      h('h3', { className: 'lp-card-title', id: 'lp-today-title' }, '今天', counts.total > 0 ? h('span', { className: 'lp-caption lp-num' }, `${counts.done} / ${counts.total}`) : null),
-      props.journey.plan.days != null ? h('span', { className: 'lp-caption' }, `方案第 ${props.journey.plan.days} 天`) : null),
+      // 方案第 N 天 is on the page header already (P2-13); the count is written 0/7 everywhere.
+      h('h3', { className: 'lp-card-title', id: 'lp-today-title' }, '今天', counts.total > 0 ? h('span', { className: 'lp-caption lp-num' }, `${counts.done}/${counts.total}`) : null)),
     h(TodayList, { journey: props.journey, stateOf, busy, onAnswer: answer }),
     h(WeekStrip, { tracking: props.tracking, today: props.journey.today }))
 }
@@ -96,9 +97,13 @@ function ctaOf(action: NextAction, props: OverviewProps): Cta | null {
   }
 }
 
+/** Next steps that are the unfinished setup, which the banner above the tabs already offers (P2-3). */
+const SETUP_ACTIONS: readonly NextAction[] = ['consent', 'profile', 'records']
+
 function NextCard(props: OverviewProps): React.ReactElement | null {
   const next = props.journey.next
   if (!next.title_zh && !next.detail_zh) return null
+  if (SETUP_ACTIONS.includes(next.action) && stepsLeft(props.journey) > 0) return null
   const cta = ctaOf(next.action, props)
   return h('section', { className: 'lp-card lp-next-card', 'aria-label': '下一步' },
     h('div', { className: 'lp-next-text' },

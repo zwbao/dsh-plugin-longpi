@@ -29,19 +29,53 @@ const CONF_ZH: Record<string, string> = { low: '低', moderate: '中' }
 const t = (v: unknown): string => (typeof v === 'string' ? v : typeof v === 'number' && Number.isFinite(v) ? String(v) : '')
 const errText = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback)
 
-function pct(v: unknown): string {
-  return typeof v === 'number' && Number.isFinite(v) ? `${Math.round(v * 1000) / 10}%` : '—'
+/** Numbers by the spec rule: whole numbers as they are, below 10 two decimals, 10 and above one decimal. */
+function num(v: unknown): string {
+  if (typeof v !== 'number' || !Number.isFinite(v)) return t(v) || '—'
+  if (Number.isInteger(v)) return String(v)
+  return String(Number(v.toFixed(Math.abs(v) < 10 ? 2 : 1)))   // 4.5 not 4.50
 }
 
+const isProb = (r: Readout) => r.unit === '概率'
+/** A number with its unit: 岁 for years, % glued to the number, other units after a space. */
+function withUnit(r: Readout, v: unknown): string {
+  if (isProb(r)) return typeof v === 'number' && Number.isFinite(v) ? `${num(Math.round(v * 10000) / 100)}%` : '—'
+  const n = num(v)
+  if (r.unit === 'a' || (r.kind === 'llm_estimate' && !r.unit)) return `${n} 岁`
+  if (r.unit === '%') return `${n}%`
+  return r.unit ? `${n} ${t(r.unit)}` : n
+}
+
+/** The value alone (the table header says what kind of estimate it is). */
+function valueText(r: Readout | null | undefined): string {
+  return r ? withUnit(r, r.value) : '—'
+}
+
+/** An estimate's range, with its horizon when it is not the 10 years the column header states. */
+function rangeText(r: Readout): string {
+  if (typeof r.low !== 'number' || typeof r.high !== 'number') return ''
+  const lo = isProb(r) ? withUnit(r, r.low).replace(/%$/, '') : num(r.low)
+  const hi = withUnit(r, r.high)
+  return `${lo}–${hi}${r.horizon_years && r.horizon_years !== 10 ? `，${t(r.horizon_years)} 年` : ''}`
+}
+
+/** Full text for places without a column header. */
 function fmt(r: Readout | null | undefined): string {
   if (!r) return '—'
-  const v = typeof r.value === 'number' ? String(Number(r.value.toPrecision(4))) : t(r.value)
-  if (r.kind === 'llm_estimate') {
-    if (r.unit === '概率') return `${pct(r.value)}（AI 估计，${pct(r.low)}–${pct(r.high)}${r.horizon_years ? `，${t(r.horizon_years)} 年` : ''}）`
-    return `${v} 岁（AI 估计，${t(r.low)}–${t(r.high)} 岁）`
-  }
-  const unit = r.unit === 'a' ? ' 岁' : r.unit ? ` ${t(r.unit)}` : ''
-  return `${v}${unit}`
+  if (r.kind !== 'llm_estimate') return valueText(r)
+  const range = rangeText(r)
+  return `${valueText(r)}（AI 估计${range ? `，${range}` : ''}${isProb(r) && r.horizon_years === 10 ? '，10 年' : ''}）`
+}
+
+/** Labels written by the pipeline repeat「（10 年，AI 估计）」; the column header says it once. */
+const cleanLabel = (label: string) => label.replace(/\s*[（(][^（）()]*(?:AI 估计|年)[^（）()]*[）)]\s*$/, '').trim() || label
+
+/** 「9 月 30 日」, with the year when it is not this year. */
+function dateZh(iso: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
+  if (!m) return ''
+  const md = `${Number(m[2])} 月 ${Number(m[3])} 日`
+  return Number(m[1]) === new Date().getFullYear() ? md : `${m[1]} 年 ${md}`
 }
 
 export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone) => void }): React.ReactElement {
@@ -98,8 +132,8 @@ export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone
 
   return h('div', { className: 'lp-tab-body' },
     error ? h('div', { className: 'lp-callout lp-callout-bad', role: 'alert' }, h(Icon, { name: 'warn', size: 16 }), h('div', { className: 'lp-callout-body' }, error)) : null,
-    h('div', { className: 'lp-stack' },
-      h('div', { className: 'lp-card' },
+    h('section', { className: 'lp-section', 'aria-label': '深度分析状态' },
+      h('div', { className: 'lp-card lp-an-prose' },
         h('p', { className: 'lp-text lp-muted' }, '用全基因组、甲基化、肠道菌、蛋白组和体检数据，算生物学年龄、各器官状况和以后的疾病风险，提出针对性的问题并逐一查证，最后给一份能照着做的方案。分析在对话里进行；也可以随时在对话里直接要求做一次。'),
         h(Switch, { checked: Boolean(status.readiness?.auto_on), onChange: (on: boolean) => { void toggle(on) }, label: '自动深度分析', disabled, busy: busy === 'auto', describedBy: 'lp-auto-cost' }),
         h('div', { className: 'lp-callout lp-callout-warn', id: 'lp-auto-cost', role: 'note' },
@@ -107,27 +141,34 @@ export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone
           h('div', { className: 'lp-callout-body' }, `注意：${t(status.cost_zh)}，会消耗大量 token。打开后，有新的体检、化验或检测文件时，LongPi 会自己判断并开始分析（每个人两次自动分析至少间隔 30 天）；关闭时（默认），只在关键时间点问你要不要做，你同意才开始。这个开关对你和家人都生效。`))),
       h(StatusCard, { status, running, stopped, ready, disabled, onAbandon: (id: string) => { void abandon(id) }, onImport: (id: string) => { void doImport(id) } })),
 
-    cur ? h(Section, { title: '报告', aside: cur.imported_at ? h('span', { className: 'lp-caption' }, `导入于 ${t(cur.imported_at).slice(0, 10)}`) : undefined }, h(ReportCard, { cur, planItems: back?.items.length ?? 0 })) : null,
+    cur ? h(Section, { title: '报告', aside: cur.imported_at ? h('span', { className: 'lp-caption' }, `导入于 ${dateZh(t(cur.imported_at))}`) : undefined }, h(ReportCard, { cur, planItems: back?.items.length ?? 0 })) : null,
 
     cur && cur.organs.length ? h(Section, { title: '器官体检表' },
       h('div', { className: 'lp-card' },
         h('div', { className: 'lp-table-wrap' },
           h('table', { className: 'lp-table lp-an-organs' },
-            h('thead', null, h('tr', null, ...['器官', '测量和公式', '年龄（AI 估计）', '疾病风险'].map((x) => h('th', { key: x, scope: 'col' }, x)))),
-            h('tbody', null, ...cur.organs.map((o) => h('tr', { key: t(o.organ) },
-              h('td', null, t(o.label_zh)),
-              h('td', null, o.measured.length || o.indices.length
-                ? h('ul', { className: 'lp-an-list' }, ...[...o.measured, ...o.indices].map((r, i) => h('li', { key: `${t(r.id)}-${i}` },
-                  h('span', { className: 'lp-muted' }, t(r.label_zh)), ' ', h('span', { className: 'lp-num' }, fmt(r)))))
-                : '—'),
-              h('td', null, fmt(o.ai_age)),
-              h('td', null, o.ai_risks.length || o.overrides.length
-                ? h('div', { className: 'lp-an-risks' },
-                  o.ai_risks.length ? h('ul', { className: 'lp-an-list' }, ...o.ai_risks.map((r, i) => h('li', { key: `${t(r.id)}-${i}` },
-                    h('span', { className: 'lp-badge lp-badge-neutral' }, t(r.label_zh)), ' ', h('span', { className: 'lp-num' }, fmt(r))))) : null,
-                  ...o.overrides.map((x, i) => h('p', { key: `o-${i}`, className: 'lp-small' },
-                    h('span', { className: 'lp-badge lp-badge-warn' }, t(x.disease)), ' ', t(x.message_zh))))
-                : '—')))))))) : null,
+            h('thead', null, h('tr', null, ...['器官', '测量和公式', '年龄 · AI 估计', '疾病风险 · 10 年 · AI 估计'].map((x) => h('th', { key: x, scope: 'col' }, x)))),
+            h('tbody', null, ...cur.organs.map((o) => {
+              const measures = [...o.measured, ...o.indices]
+              return h('tr', { key: t(o.organ) },
+                h('td', { className: 'lp-an-organ' }, t(o.label_zh)),
+                h('td', { className: measures.length ? undefined : 'lp-an-none', 'data-label': '测量和公式' }, measures.length
+                  ? h('ul', { className: 'lp-an-list' }, ...measures.map((r, i) => h('li', { key: `${t(r.id)}-${i}` },
+                    h('span', { className: 'lp-muted' }, t(r.label_zh)), ' ', h('span', { className: 'lp-num lp-an-val' }, valueText(r)))))
+                  : '—'),
+                h('td', { className: o.ai_age ? undefined : 'lp-an-none', 'data-label': '年龄 · AI 估计' }, o.ai_age
+                  ? h('div', { className: 'lp-an-est' }, h('span', { className: 'lp-num lp-an-val' }, valueText(o.ai_age)),
+                    rangeText(o.ai_age) ? h('span', { className: 'lp-caption lp-num' }, rangeText(o.ai_age)) : null)
+                  : '—'),
+                h('td', { className: o.ai_risks.length || o.overrides.length ? undefined : 'lp-an-none', 'data-label': '疾病风险 · 10 年 · AI 估计' }, o.ai_risks.length || o.overrides.length
+                  ? h('ul', { className: 'lp-an-list' },
+                    ...o.ai_risks.map((r, i) => h('li', { key: `${t(r.id)}-${i}`, className: 'lp-an-est' },
+                      h('span', null, cleanLabel(t(r.label_zh)), ' ', h('span', { className: 'lp-num lp-an-val' }, valueText(r))),
+                      rangeText(r) ? h('span', { className: 'lp-caption lp-num' }, rangeText(r)) : null)),
+                    ...o.overrides.map((x, i) => h('li', { key: `o-${i}`, className: 'lp-an-est' },
+                      h('span', { className: 'lp-strong' }, t(x.disease)), h('span', { className: 'lp-caption lp-warn-ink' }, t(x.message_zh)))))
+                  : '—'))
+            })))))) : null,
 
     cur && cur.board.length ? h(Section, { title: '问题看板', aside: h('span', { className: 'lp-caption' }, '每个问题由一位独立 AI 研究员查证') },
       h('div', { className: 'lp-stack' }, ...cur.board.map((b) => h(QuestionCard, { key: t(b.id), row: b })))) : null,
@@ -163,7 +204,7 @@ function StatusCard(props: {
   if (run) {
     const total = run.stages.length
     const now = running ? run.stages.findIndex((s) => !s.done) : -1
-    return h('div', { className: 'lp-card' },
+    return h('div', { className: 'lp-card lp-an-prose' },
       h('div', { className: 'lp-card-head' },
         h('h3', { className: 'lp-h3' }, running ? '分析进行中' : '上次分析没有完成'),
         h('span', { className: 'lp-caption lp-num', role: 'status', 'aria-label': `已完成 ${run.done} 步，共 ${total} 步` }, `${run.done}/${total}`)),
@@ -185,7 +226,7 @@ function StatusCard(props: {
   }
 
   if (ready) {
-    return h('div', { className: 'lp-card', role: 'status' },
+    return h('div', { className: 'lp-card lp-an-prose', role: 'status' },
       h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-h3' }, '有一份新的分析已完成')),
       h('p', { className: 'lp-text lp-muted' }, '导入后就能在这里看到报告、器官体检表和方案。'),
       h('div', { className: 'lp-card-foot' },
@@ -195,14 +236,14 @@ function StatusCard(props: {
 
   const blocked = status.blockers
   if (blocked) {
-    return h('div', { className: 'lp-card', role: 'status' },
+    return h('div', { className: 'lp-card lp-an-prose', role: 'status' },
       h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-h3' }, '现在还不能做')),
       h('div', { className: 'lp-callout lp-callout-warn' }, h(Icon, { name: 'info', size: 16 }), h('div', { className: 'lp-callout-body' }, t(blocked.reply_zh))))
   }
 
   const readiness = status.readiness
   if (!readiness) return null
-  return h('div', { className: 'lp-card', role: 'status' },
+  return h('div', { className: 'lp-card lp-an-prose', role: 'status' },
     h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-h3' }, readiness.auto_on ? 'LongPi 的判断' : '现在的情况')),
     h('p', { className: 'lp-text' }, t(readiness.why_zh) || '现在没有进行中的分析。'),
     readiness.folder ? h('p', { className: 'lp-caption' }, `检测文件夹：${t(readiness.folder)}（只读）`) : null)
@@ -215,15 +256,15 @@ function ReportCard(props: { cur: Current; planItems: number }): React.ReactElem
   // Headline readouts first: ages, then AI estimates, then the rest; at most four.
   const rank = (r: Readout) => (r.unit === 'a' ? 0 : r.kind === 'llm_estimate' ? 1 : 2)
   const headline = cur.readouts.map((r, i) => ({ r, i })).sort((a, b) => rank(a.r) - rank(b.r) || a.i - b.i).slice(0, 4).map((x) => x.r)
-  const facts: Array<[string, string]> = [
-    ['器官', `${cur.organs.length} 个`],
-    ['问题', `${cur.board.length} 个`],
-    ['方案', `${props.planItems} 项`],
-    ['复测', `${cur.retests.length} 项`],
+  const facts: Array<[string, number, string]> = [
+    ['器官', cur.organs.length, '个'],
+    ['问题', cur.board.length, '个'],
+    ['方案', props.planItems, '项'],
+    ['复测', cur.retests.length, '项'],
   ]
   return h('div', { className: 'lp-card' },
-    h('dl', { className: 'lp-an-facts' }, ...facts.map(([label, value]) => h('div', { key: label, className: 'lp-an-fact' },
-      h('dt', { className: 'lp-caption' }, label), h('dd', { className: 'lp-an-fact-value lp-num' }, value)))),
+    h('dl', { className: 'lp-an-facts' }, ...facts.map(([label, value, unit]) => h('div', { key: label, className: 'lp-an-fact' },
+      h('dt', { className: 'lp-caption' }, label), h('dd', { className: 'lp-an-fact-value' }, h('span', { className: 'lp-num-md' }, String(value)), h('span', { className: 'lp-unit' }, unit))))),
     headline.length ? h('dl', { className: 'lp-kv' }, ...headline.flatMap((r, i) => [
       h('dt', { key: `k${i}` }, t(r.label_zh)), h('dd', { key: `v${i}`, className: 'lp-num' }, fmt(r))])) : null,
     cur.boundary_zh ? h('p', { className: 'lp-caption' }, t(cur.boundary_zh)) : null,
@@ -232,10 +273,15 @@ function ReportCard(props: { cur: Current; planItems: number }): React.ReactElem
       h('a', { className: 'lp-linkbtn lp-btn-primary', href, target: '_blank', rel: 'noopener noreferrer' }, '打开完整报告', h(Icon, { name: 'arrow', size: 14 }))))
 }
 
-/** First sentence of a conclusion; the rest goes under 证据与局限. */
+/** First sentence of a conclusion, cut to about two lines at a clause break; the whole text then goes under the fold. */
+const LEAD_MAX = 80
 function splitFirst(text: string): [string, string] {
   const m = /^[\s\S]*?[。！？!?](?=\s*\S)/.exec(text)
-  return m ? [m[0], text.slice(m[0].length).trim()] : [text, '']
+  const [first, rest] = m ? [m[0], text.slice(m[0].length).trim()] : [text, '']
+  if (first.length <= LEAD_MAX) return [first, rest]
+  const head = first.slice(0, LEAD_MAX)
+  const cut = Math.max(head.lastIndexOf('；'), head.lastIndexOf('，'), head.lastIndexOf('：'))
+  return [`${cut > 20 ? head.slice(0, cut) : head}…`, text]
 }
 
 function QuestionCard(props: { row: BoardRow }): React.ReactElement {
@@ -246,7 +292,7 @@ function QuestionCard(props: { row: BoardRow }): React.ReactElement {
   const [lead, more] = splitFirst(verdict && summary ? `${verdict}：${summary}` : verdict || summary)
   const limits = t(b.limitations_zh)
   const next = t(b.next_step_zh)
-  return h('article', { className: 'lp-card' },
+  return h('article', { className: 'lp-card lp-an-prose' },
     h('div', { className: 'lp-card-head' },
       h('h3', { className: 'lp-h3' }, `${t(b.id)} ${t(b.title_zh)}`.trim()),
       conf ? h('span', { className: `lp-badge ${conf === '低' ? 'lp-badge-warn' : 'lp-badge-neutral'}` }, `把握：${conf}`) : null),

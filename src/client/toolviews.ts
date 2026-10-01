@@ -18,7 +18,7 @@ import { errorText } from './api.ts'
 import { fmt } from './charts.ts'
 import { adoptedVersion, isUndone, setAdopted, setUndone, useCallState } from './call-state.ts'
 import { postCheckIn } from './checkin.ts'
-import { localToday, riskText, versusAge } from './format.ts'
+import { chineseDate, localToday, riskText, versusAge } from './format.ts'
 import { Icon } from './icons.ts'
 import { normalizePlanDraft } from './normalize.ts'
 import { acceptDraft, ConfirmModal, DraftItems, keptGoals, type DraftSource } from './plan-draft.ts'
@@ -286,7 +286,7 @@ export function CheckinToolView(props: ToolViewProps): React.ReactElement {
   // The tool names each item; an older result only has the id, which today's items may still name.
   const titleOf = (row: LoggedEntry) => row.title || journey?.plan.checkin_items.find((item) => item.id === row.item)?.title || row.item
   const today = journey?.today ?? localToday()
-  const nameOf = (row: LoggedEntry, withState: boolean) => `${titleOf(row)}${withState && row.done === false ? '（没做到）' : ''}${row.date && row.date !== today ? `（${row.date.slice(5)}）` : ''}`
+  const nameOf = (row: LoggedEntry, withState: boolean) => `${titleOf(row)}${withState && row.done === false ? '（没做到）' : ''}${row.date && row.date !== today ? `（${chineseDate(row.date) || row.date}）` : ''}`
   // Only a 完成 or 没做到 recorded for today can be taken back here; an undo or a note alone cannot.
   const answered = entries.filter((row) => !row.undo && row.done !== null)
   const undoable = answered.filter((row) => row.date === today)
@@ -380,7 +380,7 @@ export function SkillToolView(props: ToolViewProps): React.ReactElement {
     const advance = numberOf(outputValue(result, 'phenoage_advance'))
     const band = journey?.results.bioage.band_years
     if (phenoage != null) {
-      return h(Shell, { call, icon: 'play', title: BIOAGE_LABEL, summary: typeof result.measured_at === 'string' ? `按 ${result.measured_at} 的血检` : undefined },
+      return h(Shell, { call, icon: 'play', title: BIOAGE_LABEL, summary: typeof result.measured_at === 'string' ? `按 ${chineseDate(result.measured_at) || result.measured_at}的血检` : undefined },
         h(ResultFigure, { figure: fmt(phenoage), unit: '岁', lines: [journey?.results.bioage.headline_zh ? journey.results.bioage.headline_zh : (journey?.results.bioage.allows_younger ? versusAge(advance, journey.results.bioage.checkups) : ''), band != null ? `正常波动 ±${fmt(band)} 岁` : ''], label: BIOAGE_LABEL, info: BIOAGE_INFO }))
     }
   }
@@ -388,7 +388,7 @@ export function SkillToolView(props: ToolViewProps): React.ReactElement {
     const risk = numberOf(outputValue(result, 'risk_10y_pct'))
     const category = outputValue(result, 'risk_category')
     if (risk != null) {
-      return h(Shell, { call, icon: 'play', title: RISK_LABEL, summary: typeof result.measured_at === 'string' ? `按 ${result.measured_at} 的记录` : undefined },
+      return h(Shell, { call, icon: 'play', title: RISK_LABEL, summary: typeof result.measured_at === 'string' ? `按 ${chineseDate(result.measured_at) || result.measured_at}的记录` : undefined },
         h(ResultFigure, { figure: riskText(risk), unit: '%', lines: [typeof category === 'string' ? category : '', '同类人群的平均风险'], label: RISK_LABEL, info: RISK_INFO }))
     }
   }

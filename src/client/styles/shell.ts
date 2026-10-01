@@ -27,6 +27,10 @@ export const SHELL = `
 .lp-people-dialog { display: grid; gap: 16px; max-height: calc(100vh - 48px); overflow-y: auto; padding: 24px; }
 .lp-people-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .lp-people-dialog .lp-modal-actions { margin-top: 8px; }
+/* 性别 as a full-width control the height of the inputs, so it reads as a choice even with nothing picked (P2-10). */
+.lp-people-dialog .lp-seg { display: flex; width: 100%; padding: 4px; }
+.lp-people-dialog .lp-seg-opt { flex: 1; }
+.lp-people-dialog .lp-seg-opt span { width: 100%; }
 @media (max-width: 480px) { .lp-people-dialog { padding: 20px; } .lp-people-dialog .lp-form-grid { grid-template-columns: minmax(0, 1fr); } }
 
 /* --- banners under the header: well, 40px, 12px radius ------------------------------------------- */
@@ -51,6 +55,9 @@ export const SHELL = `
 .lp-tab:hover { color: var(--lp-ink); }
 .lp-tab-on { color: var(--lp-ink); font-weight: 600; }
 .lp-tab-on::after { content: ""; position: absolute; left: 12px; right: 12px; bottom: 0; height: 2px; border-radius: 1px; background: var(--lp-accent); }
+/* the first tab's text lines up with the page's left edge */
+.lp-tab:first-child { padding-left: 0; }
+.lp-tab:first-child.lp-tab-on::after { left: 0; }
 .lp-tab-badge { min-width: 18px; height: 18px; padding: 0 4px; border-radius: 4px; background: var(--lp-well); color: var(--lp-ink-2); font-size: 12px; line-height: 18px; font-weight: 400; text-align: center; }
 .lp-tab-close { width: 24px; height: 24px; margin: 0 0 8px -8px; }
 .lp-more { position: relative; margin: 0 0 4px auto; flex: none; }

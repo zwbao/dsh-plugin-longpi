@@ -164,7 +164,7 @@ export function SelfRecent(props: { onNotice: Notify }): React.ReactElement | nu
   if (loading && !data) return null
   // A first read that failed is not an empty log.
   if (!data && error) return h(LoadError, { what: '自测记录', error, compact: true, onRetry: () => reload('self') })
-  if (rows.length === 0) return h('p', { className: 'lp-caption' }, '还没有自测记录。')
+  if (rows.length === 0) return h('p', { className: 'lp-caption lp-measure' }, '还没有自测记录。')
   async function remove(row: SelfRow): Promise<void> {
     setBusy(row.id)
     try {

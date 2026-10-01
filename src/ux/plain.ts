@@ -134,8 +134,8 @@ export function concreteNext(addons: readonly AddonLike[]): { title_zh: string; 
 export type LifeArea = 'labs' | 'sleep' | 'training'
 
 export function lifeAreaOf(label: string): LifeArea {
-  if (/睡眠|入睡|深睡|清醒时间|心率变异/.test(label)) return 'sleep'
-  if (/步数|运动|活动量|锻炼|卡路里|训练负荷|步行/.test(label)) return 'training'
+  if (/睡眠|入睡|深睡|清醒时间|心率变异|夜间最低血氧/.test(label)) return 'sleep'
+  if (/步数|运动|活动量|活动消耗|锻炼|卡路里|训练负荷|步行|静息心率|最大摄氧量/.test(label)) return 'training'
   return 'labs'
 }
 

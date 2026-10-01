@@ -85,19 +85,21 @@ function AddPersonDialog(props: { view: PeopleView; onClose: () => void }): Reac
         h('button', { type: 'button', className: 'lp-iconbtn', 'aria-label': '关闭', onClick: props.onClose }, h(Icon, { name: 'close', size: 14 }))),
       h('p', { className: 'lp-muted lp-small' }, view.can_create_in_mirobody
         ? '会在你的 Mirobody 账号下为家人建一份独立的档案（家人不需要自己的账号）。家人的体检、方案和深度分析都和你的分开。'
-        : `${view.create_hint_zh} 或者粘贴家人自己的 Mirobody 个人链接。`),
+        : `${view.create_hint_zh.trim().replace(/[。.]?$/, '。')}或者粘贴家人自己的 Mirobody 个人链接。`),
       h('div', { className: 'lp-form-grid' },
         input('label_zh', '称呼', { placeholder: '如 爸爸、妈妈', autoFocus: true }),
-        input('name', '姓名', { autoComplete: 'off' }, '报告上的真实名字，用来核对上传的报告是不是本人的'),
-        h('div', { className: 'lp-field', key: 'sex' },
+        input('birth_year', '出生年份', { inputMode: 'numeric', placeholder: '例如 1960' }),
+        // Full width, so the hint under it does not break into a one-character line (P2-10).
+        input('name', '姓名', { autoComplete: 'off' }, '报告上的真实名字，用来核对上传的报告是不是本人的', true),
+        h('div', { className: 'lp-field lp-field-full', key: 'sex' },
           h(Segmented<SexValue>, {
             name: 'lp-person-sex', label: '生理性别', value: form.sex, disabled: busy,
             options: [{ value: 'male', label: '男' }, { value: 'female', label: '女' }],
             onChange: (sex) => setForm({ ...form, sex }),
           })),
-        input('birth_year', '出生年份', { inputMode: 'numeric', placeholder: '例如 1960' }),
         view.can_create_in_mirobody ? null : input('mcp_url', '家人的 Mirobody 个人链接（可选）', {}, '', true)),
-      error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
+      error ? h('div', { className: 'lp-callout lp-callout-warn', role: 'alert' },
+        h(Icon, { name: 'warn', size: 14 }), h('span', { className: 'lp-callout-body' }, error)) : null,
       h('div', { className: 'lp-modal-actions' },
         h(Btn, { type: 'button', variant: 'outline', onClick: props.onClose, disabled: busy }, '取消'),
         h(Btn, { type: 'submit', disabled: busy || !ready }, busy ? '添加中' : '添加'))))

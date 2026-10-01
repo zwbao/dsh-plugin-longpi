@@ -45,16 +45,36 @@ function LabelTag(props: { label: ResultLabel }): React.ReactElement {
   return h('span', { className: 'lp-tag', 'data-result-label': props.label }, labelText(props.label))
 }
 
-/** The title row holds the title and ⓘ only; the tags always sit on the next line (#16). */
+/**
+ * The title row holds the title and ⓘ only (ⓘ follows the last word when the title wraps); the tags sit on the
+ * next line (#16). An unmatched result is not a tag: the card says so in one caption line (bindingCaption).
+ */
 function CardHead(props: { label: string; info: React.ReactNode; mark?: ResultLabel | null; estimate?: boolean }): React.ReactElement {
   const tags = [
     props.estimate === false ? null : h(EstimateTag, { key: 'estimate' }),
-    props.mark ? h(LabelTag, { key: 'mark', label: props.mark }) : null,
+    props.mark && props.mark !== 'unverified-binding' ? h(LabelTag, { key: 'mark', label: props.mark }) : null,
   ].filter(Boolean)
   return h(React.Fragment, null,
     h('div', { className: 'lp-card-head' },
-      h('h3', { className: 'lp-card-title' }, props.label, h(Info, { label: props.label }, props.info))),
+      h('h3', { className: 'lp-card-title lp-result-title' }, props.label, ' ', h(Info, { label: props.label }, props.info))),
     tags.length > 0 ? h('div', { className: 'lp-tags' }, ...tags) : null)
+}
+
+/** A result's number as the method sentence prints it (formatMeasure's rounding) with its unit. */
+function shownOf(result: MethodResult): string {
+  const out = primaryOutput(result)
+  if (!out || out.value == null || out.value === '') return ''
+  const figure = typeof out.value === 'number' ? String(Number(out.value.toFixed(2))) : String(out.value).trim()
+  const unit = out.unit ? plainUnits(facingUnit(out.unit, out.key)) : ''
+  return `${figure}${unit ? (unit === '%' ? '%' : ` ${unit}`) : ''}`
+}
+
+/** One caption line for a result that is not matched to the person yet: the warning, then only its source (P1-10). */
+function bindingCaption(result: MethodResult): string {
+  const out = primaryOutput(result)
+  const rest = restOfSentence(resultSentence(result, { youngerAllowed: false }), titleOf(result.skill, result.title_zh, out?.key ?? ''), shownOf(result))
+    .replace(/^还没对上[，,。]?/, '').trim()
+  return `${labelText('unverified-binding')}。${rest && rest !== '。' ? rest : ''}`
 }
 
 /** A method sentence without what the card already shows: its title, and the value when the figure is on the card. */
@@ -162,9 +182,7 @@ export function BodyAgeCard(props: {
   const older = phenoage != null && (latest?.advance ?? result.advance) != null
     ? olderThanAgeSentence({ phenoage, advance: (latest?.advance ?? result.advance) as number, drivers })
     : null
-  const binding = props.method && props.method.label === 'unverified-binding'
-    ? resultSentence(props.method, { youngerAllowed: false })
-    : ''
+  const binding = props.method && props.method.label === 'unverified-binding' ? bindingCaption(props.method) : ''
   const gradedText = concernLine
     ? (result.headline_zh || graded?.headline_zh || '')
     : graded ? (younger ? graded.headline_zh : stripYoungerClaim(graded.headline_zh)) : ''
@@ -186,7 +204,7 @@ export function BodyAgeCard(props: {
     // the page's own gap, never a second big number. One draw has no gap (advance is null).
     !older && versusCalendarAge(result.advance) ? h('p', { className: 'lp-caption lp-bioage-gap' }, versusCalendarAge(result.advance)) : null,
     // Set by the server when an input of this model changed beyond normal fluctuation.
-    result.caveat_zh && !concernLine ? h('p', { className: 'lp-caveat', role: 'note' }, h(Icon, { name: 'warn', size: 14 }), h('span', null, plainUnits(result.caveat_zh))) : null,
+    result.caveat_zh && !concernLine ? h('div', { className: 'lp-callout lp-callout-warn', role: 'note' }, h(Icon, { name: 'warn', size: 14 }), h('span', null, plainUnits(result.caveat_zh))) : null,
     points.length > 1 ? h(LineChart, {
       points: points.filter((row) => row.advance != null).map((row) => ({ date: row.date, value: row.advance as number })),
       unit: '岁', label: '身体年龄减周岁', height: 96, compact: true,
@@ -242,7 +260,7 @@ export function RiskCard(props: {
   const out = props.method ? primaryOutput(props.method) : null
   const same = out != null && typeof out.value === 'number' && result.risk_pct != null && Math.abs(out.value - result.risk_pct) < 0.05
   const method = props.method && (props.method.label !== 'unverified-binding' || same) ? props.method : undefined
-  const binding = method && method.label === 'unverified-binding' ? resultSentence(method, { youngerAllowed: false }) : ''
+  const binding = method && method.label === 'unverified-binding' ? bindingCaption(method) : ''
   return h('div', { className: 'lp-card lp-result', ...(method ? { 'data-result-label': method.label } : {}) },
     h(CardHead, { label: '10 年心血管风险', info: h(React.Fragment, null, h('span', { className: 'lp-info-line' }, RISK_INFO), card?.note_zh ? h('span', { className: 'lp-info-line' }, card.note_zh) : null), mark: method?.label ?? null }),
     h('div', { className: 'lp-result-figure' },
@@ -256,7 +274,7 @@ export function RiskCard(props: {
         h('span', { className: 'lp-strong' }, `${riskText(goal)}%`),
         card?.category_zh?.goal ? h('span', { className: 'lp-badge lp-badge-good' }, card.category_zh.goal) : null)
       : null,
-    binding ? h('p', { className: 'lp-method-sentence' }, plainUnits(binding)) : null,
+    binding ? h('p', { className: 'lp-caption lp-method-sentence' }, binding) : null,
     h('p', { className: 'lp-caption lp-result-note' }, [result.date ? `按 ${chineseDate(result.date)}的记录和你的档案计算` : '', '未来 10 年发生心梗、脑卒中等的估计概率'].filter(Boolean).join(' · ')))
 }
 
@@ -264,19 +282,22 @@ function MethodCard(props: { result: MethodResult }): React.ReactElement {
   const out = primaryOutput(props.result)
   const numeric = out != null && typeof out.value === 'number'
   const title = titleOf(props.result.skill, props.result.title_zh, out?.key ?? '')
-  // The figure keeps the sentence's precision (0.56, not 0.6: the same rounding as formatMeasure); the sentence then drops the title and value the card shows.
+  // The figure keeps the sentence's precision (0.56, not 0.6: the same rounding as formatMeasure); the sentence then
+  // drops the title and value the card shows. A word result (短, 50 多岁) is the medium size, not the big number.
   const figure = numeric ? String(Number((out.value as number).toFixed(2))) : out && typeof out.value === 'string' ? out.value.trim() : ''
   const unit = out?.unit ? plainUnits(facingUnit(out.unit, out.key)) : ''
-  const shown = figure ? `${figure}${unit ? (unit === '%' ? '%' : ` ${unit}`) : ''}` : ''
-  const sentence = figure ? restOfSentence(resultSentence(props.result, { youngerAllowed: false }), title, shown) : plainUnits(resultSentence(props.result, { youngerAllowed: false }))
+  const unmatched = props.result.label === 'unverified-binding'
+  const sentence = unmatched ? bindingCaption(props.result)
+    : figure ? restOfSentence(resultSentence(props.result, { youngerAllowed: false }), title, shownOf(props.result))
+      : plainUnits(resultSentence(props.result, { youngerAllowed: false }))
   return h('div', { className: 'lp-card lp-result', 'data-result-label': props.result.label },
     h(CardHead, { label: title, info: h('span', { className: 'lp-info-line' }, props.result.limits_zh || '模型估计，不是诊断。'), mark: props.result.label }),
     numeric
       ? h('div', { className: 'lp-result-figure' },
         h('span', { className: 'lp-num-lg' }, figure),
         unit ? h('span', { className: 'lp-bignum-unit' }, unit) : null)
-      : figure ? h('div', { className: 'lp-result-value' }, plainUnits(figure)) : null,
-    sentence ? h('p', { className: 'lp-muted lp-method-sentence' }, sentence) : null)
+      : figure ? h('div', { className: 'lp-result-figure' }, h('span', { className: 'lp-num-md' }, plainUnits(figure))) : null,
+    sentence ? h('p', { className: `${unmatched ? 'lp-caption' : 'lp-muted'} lp-method-sentence` }, sentence) : null)
 }
 
 function EvidenceCard(props: { result: MethodResult }): React.ReactElement {
@@ -331,14 +352,13 @@ export function AddonList(props: { journey: Journey; onNotice: Notify; idPrefix:
   if (addons.length === 0) {
     return h('p', { className: 'lp-muted' }, '没有需要加测的项目。')
   }
-  return h('ul', { className: 'lp-addons', id: `${props.idPrefix}-addons` },
-    ...addons.map((row) => h('li', { key: row.item_zh, className: 'lp-addon' },
-      h('span', { className: 'lp-addon-box', 'aria-hidden': true }, h(Icon, { name: row.self_measurable ? 'ruler' : 'flask', size: 14 })),
-      h('div', { className: 'lp-addon-text' },
+  return h('ul', { className: 'lp-rows', id: `${props.idPrefix}-addons` },
+    ...addons.map((row) => h('li', { key: row.item_zh, className: 'lp-row lp-row-wrap' },
+      h(Icon, { name: row.self_measurable ? 'ruler' : 'flask', size: 16, className: 'lp-row-icon' }),
+      h('div', { className: 'lp-row-main' },
         h('div', { className: 'lp-strong' }, row.item_zh),
         h('div', { className: 'lp-caption' }, `解锁：${row.unlocks_zh}${row.self_measurable ? ' · 可以自己在家量' : ' · 下次体检加测'}`)),
       row.self_measurable && row.self_key
         ? h(InlineSelf, { journey: props.journey, selfKey: row.self_key, idPrefix: `${props.idPrefix}-${row.self_key}`, onNotice: props.onNotice })
         : null)))
 }
-

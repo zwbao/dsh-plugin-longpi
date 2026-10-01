@@ -26,7 +26,7 @@ export function CodexPanel(props: { codex: CodexView | null; onDraw: () => void;
       h('div', { className: 'lp-card-head' },
         h('h3', { className: 'lp-card-title' }, '长寿图鉴'),
         closed ? h(Switch, { checked: false, label: '显示图鉴', disabled: props.busy, onChange: () => props.onOpt(true) }) : null),
-      h('p', { className: 'lp-small lp-muted' }, codex.reason_zh || '图鉴没有打开。'))
+      h('p', { className: 'lp-small lp-muted lp-measure' }, codex.reason_zh || '图鉴没有打开。'))
   }
   return h('section', { className: 'lp-card', 'aria-label': '长寿图鉴' },
     h('div', { className: 'lp-card-head' },
@@ -46,15 +46,15 @@ export function CodexPanel(props: { codex: CodexView | null; onDraw: () => void;
     h('div', { className: 'lp-actions' },
       h(Btn, { size: 'sm', onClick: props.onDraw, disabled: props.busy || codex.draws_available < 1 }, '抽一张'),
       h('span', { className: 'lp-caption' }, `可抽 ${codex.draws_available} 次 · 今天已抽 ${codex.draws_today} / ${codex.daily_cap}`)),
-    props.note ? h('p', { className: 'lp-small', role: 'status' }, props.note) : null,
+    props.note ? h('p', { className: 'lp-small lp-measure', role: 'status' }, props.note) : null,
     codex.owned.length === 0
-      ? h('p', { className: 'lp-caption' }, '还没有抽到卡。次数只从测量、记录、就诊或复测来。')
+      ? h('p', { className: 'lp-caption lp-measure' }, '还没有抽到卡。次数只从测量、记录、就诊或复测来。')
       : h('ul', { className: 'lp-rows' }, codex.owned.slice(0, 12).map((card) =>
         h('li', { key: card.id, className: 'lp-row' },
           h('div', { className: 'lp-row-main lp-season-card' },
             h('div', { className: 'lp-tags' }, h('span', { className: 'lp-tag' }, card.rarity_zh), h('span', { className: 'lp-strong' }, card.title_zh)),
-            card.family === 'insight' ? h('p', { className: 'lp-muted' }, card.body_zh) : null,
-            card.offer ? h('p', { className: 'lp-muted' }, card.offer.text_zh) : null),
+            card.family === 'insight' ? h('p', { className: 'lp-muted lp-measure' }, card.body_zh) : null,
+            card.offer ? h('p', { className: 'lp-muted lp-measure' }, card.offer.text_zh) : null),
           card.offer?.kind === 'run' && props.onRun
             ? h(Btn, { size: 'sm', variant: 'outline', disabled: props.busy, onClick: () => props.onRun?.(card.id) }, '用我的记录算')
             : null))))

@@ -59,7 +59,8 @@ export function DataPage(props: { onDecided?: (decision: 'granted' | 'declined')
   const decision = status?.consents?.data_flow_deepseek?.decision
   const sessionOn = status?.session_log?.upload === true
   const phraseText = copy?.delete?.phrase ?? '删除全部'
-  const minorLine = status?.minor?.ask_age ? (copy?.minor?.ask ?? '请填写年龄') : status?.minor?.minor ? (copy?.minor?.under_18 ?? '未满 18 岁') : `图鉴抽卡：${status?.minor?.codex_allowed ? '可以开' : '关闭'}`
+  // Only an age question or the under-18 limits are worth a line here; an adult sees nothing about the codex.
+  const minorLine = status?.minor?.ask_age ? (copy?.minor?.ask ?? '请填写年龄') : status?.minor?.minor ? (copy?.minor?.under_18 ?? '未满 18 岁') : ''
   const title = flow?.title ?? '数据去哪里'
   const body = h('div', { className: 'lp-data' },
     flow ? h('div', { className: 'lp-data-lists' },
@@ -69,14 +70,20 @@ export function DataPage(props: { onDecided?: (decision: 'granted' | 'declined')
       flow.name ? h('p', { className: 'lp-muted' }, flow.name) : null) : null,
     h('div', { className: 'lp-data-group' },
       h('div', { className: 'lp-field-label' }, '健康对话发给 DeepSeek'),
-      h('p', { className: 'lp-caption' }, decision === 'granted' ? '现在：已同意' : decision === 'declined' ? '现在：不发送' : '现在：还没有选择'),
-      h('div', { className: 'lp-actions' },
-        h(Btn, { size: 'sm', disabled: busy, onClick: () => act({ scope: 'data_flow_deepseek', decision: 'granted' }) }, copy?.buttons?.flow_grant ?? '同意把健康对话发给 DeepSeek'),
-        h(Btn, { size: 'sm', variant: 'outline', disabled: busy, onClick: () => act({ scope: 'data_flow_deepseek', decision: 'declined' }) }, copy?.buttons?.flow_decline ?? '先不发送'))),
+      // Decided: the state and one quiet way to change it. Undecided: the two choices.
+      decision === 'granted' || decision === 'declined'
+        ? h('div', { className: 'lp-actions' },
+          h('span', { className: `lp-badge ${decision === 'granted' ? 'lp-badge-good' : 'lp-badge-neutral'}` }, decision === 'granted' ? '已同意' : '不发送'),
+          h(Btn, { size: 'sm', variant: 'outline', disabled: busy, onClick: () => act({ scope: 'data_flow_deepseek', decision: decision === 'granted' ? 'declined' : 'granted' }) }, decision === 'granted' ? '撤回' : '同意'))
+        : h(React.Fragment, null,
+          h('p', { className: 'lp-caption' }, '还没有选择。'),
+          h('div', { className: 'lp-actions' },
+            h(Btn, { size: 'sm', disabled: busy, onClick: () => act({ scope: 'data_flow_deepseek', decision: 'granted' }) }, copy?.buttons?.flow_grant ?? '同意把健康对话发给 DeepSeek'),
+            h(Btn, { size: 'sm', variant: 'outline', disabled: busy, onClick: () => act({ scope: 'data_flow_deepseek', decision: 'declined' }) }, copy?.buttons?.flow_decline ?? '先不发送')))),
     h('div', { className: 'lp-data-group' },
       h(Switch, { checked: sessionOn, busy, disabled: busy || !status, label: '上传会话日志', onChange: (next) => act({ scope: 'session_log_upload', decision: next ? 'granted' : 'declined' }) }),
       h('p', { className: 'lp-caption' }, flow?.session_log || '健康对话默认不上传会话日志。')),
-    h('p', { className: 'lp-caption' }, minorLine),
+    minorLine ? h('p', { className: 'lp-caption' }, minorLine) : null,
     h('div', { className: 'lp-data-group' },
       h('div', { className: 'lp-field-label' }, '导出'),
       status?.export?.href ? h(LinkButton, { href: status.export.href, icon: 'download' }, '下载这台电脑上的 LongPi 档案') : null,

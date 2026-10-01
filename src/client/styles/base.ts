@@ -33,8 +33,10 @@ export const BASE = `
   background: var(--lp-layer); border: 1px solid var(--lp-line);
 }
 @container lp-root (max-width: 560px) { .lp-card { padding: 16px; } }
-.lp-card > * + * { margin-top: 12px; }
-.lp-card > .lp-card-head + * { margin-top: 0; }
+/* content spacing inside a card: stronger than .lp p / list resets, weaker than an explicit page rule with .lp */
+.lp .lp-card > * + * { margin-top: 12px; }
+.lp .lp-card > .lp-card-head + * { margin-top: 0; }
+.lp .lp-card > .lp-card-foot { margin-top: 16px; }
 .lp-card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; min-height: 22px; }
 .lp-card-title, .lp-label { display: inline-flex; align-items: center; gap: 6px; margin: 0; font-size: 15px; line-height: 22px; font-weight: 600; color: var(--lp-ink); }
 .lp-card-title .lp-caption, .lp-label .lp-caption, .lp-label .lp-optional { font-weight: 400; }
@@ -44,7 +46,9 @@ export const BASE = `
 .lp-card-skeleton { border-radius: var(--lp-radius-card); }
 .lp-divider { height: 1px; border: 0; margin: 16px 0; background: var(--lp-line); }
 
-/* --- buttons (DSH Btn is the primary/outline button; these match it) -------------------- */
+/* --- buttons: DSH Btn (with .lp-btn) and .lp-linkbtn share one shape -------------------- */
+.lp .lp-btn.lp-btn { height: 32px; padding: 0 12px; border-radius: var(--lp-radius-ctl); font-size: 13px; line-height: 20px; font-weight: 500; gap: 6px; }
+.lp .lp-btn.lp-btn-sm { height: 28px; padding: 0 10px; font-size: 12px; }
 .lp-linkbtn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px;
   border-radius: var(--lp-radius-ctl); border: 1px solid var(--lp-line-strong); background: transparent; color: var(--lp-ink);
@@ -141,8 +145,7 @@ export const BASE = `
 }
 .lp-select, select.lp-input {
   appearance: none; -webkit-appearance: none; padding-right: 32px; cursor: pointer;
-  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
-  background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%; background-size: 5px 5px; background-repeat: no-repeat;
+  background-image: var(--lp-chevron-down); background-position: calc(100% - 10px) 50%; background-size: 14px 14px; background-repeat: no-repeat;
 }
 .lp-select-sm { height: 32px; font-size: 13px; width: auto; }
 .lp-input::placeholder { color: var(--lp-ink-4); }
@@ -278,7 +281,6 @@ textarea.lp-input { height: auto; min-height: 80px; padding: 8px 12px; resize: v
 @keyframes lp-pop { 0% { transform: scale(.94); } 60% { transform: scale(1.04); } 100% { transform: scale(1); } }
 @keyframes lp-pulse { 50% { opacity: .45; } }
 @keyframes lp-spin { to { transform: rotate(360deg); } }
-@keyframes lp-rise { from { opacity: 0; } to { opacity: 1; } }
 .lp-card p, .lp-muted, .lp-caption, .lp-callout, .lp-row-main { overflow-wrap: anywhere; }
 @media (prefers-reduced-motion: reduce) {
   .lp *, .lp *::before, .lp *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

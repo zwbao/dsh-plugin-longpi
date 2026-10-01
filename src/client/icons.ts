@@ -45,15 +45,15 @@ export function Mark(props: { size?: number }): React.ReactElement {
 }
 
 const VERDICT_STYLE: Record<string, { icon: string; className: string }> = {
-  有效: { icon: 'check', className: 'lp-v-good' },
-  波动内: { icon: 'within', className: 'lp-v-within' },
-  反向: { icon: 'worse', className: 'lp-v-worse' },
-  无法判断: { icon: 'unknown', className: 'lp-v-unknown' },
+  有效: { icon: 'check', className: 'lp-badge-good' },
+  波动内: { icon: 'within', className: 'lp-badge-neutral' },
+  反向: { icon: 'worse', className: 'lp-badge-warn' },
+  无法判断: { icon: 'unknown', className: 'lp-badge-neutral' },
 }
 
 /** Verdicts always travel with an icon and a label, never color alone. */
 export function VerdictChip(props: { verdict: string }): React.ReactElement {
   const label = VERDICT_STYLE[props.verdict] ? props.verdict : '无法判断'
   const style = VERDICT_STYLE[label] as { icon: string; className: string }
-  return h('span', { className: `lp-chip-v ${style.className}` }, h(Icon, { name: style.icon, size: 14 }), label)
+  return h('span', { className: `lp-badge ${style.className}` }, h(Icon, { name: style.icon, size: 12 }), label)
 }

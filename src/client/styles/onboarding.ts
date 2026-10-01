@@ -1,5 +1,5 @@
-// onboarding dialog (onboarding.ts, datain/upload.ts), plus the first-result blocks journey-steps.ts and
-// datain/findings.ts still render. Page-specific layout only; base components (styles/base.ts) are never redefined
+// onboarding dialog (onboarding.ts, datain/upload.ts), plus the first-result blocks journey-steps.ts still
+// renders. Page-specific layout only; base components (styles/base.ts) are never redefined
 // here. See docs/design-system.md.
 
 export const ONBOARDING = `
@@ -32,18 +32,12 @@ export const ONBOARDING = `
 .lp-upload-simple > .lp-upload-icon { margin-bottom: 4px; }
 .lp-upload-status { margin: 0; font-size: 13px; line-height: 20px; color: var(--lp-ink-2); }
 .lp-upload-form { display: grid; gap: 16px; max-width: 480px; }
+.lp-upload-pick { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.lp-upload-chosen { min-width: 0; overflow-wrap: anywhere; }
 
-/* --- first-result blocks (journey-steps.ts, datain/findings.ts) --------------------------------- */
+/* --- first-result blocks (journey-steps.ts) --------------------------------- */
 .lp-found { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
 .lp-found-tile { display: grid; gap: 4px; padding: 12px 16px; border-radius: var(--lp-radius-card); background: var(--lp-well); min-width: 0; }
 .lp-found-figure { font-size: 24px; line-height: 32px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.lp-found-changes { display: flex; gap: 8px; align-items: flex-start; margin: 0; padding: 12px; border-radius: var(--lp-radius-card); background: var(--lp-well); font-size: 13px; line-height: 20px; color: var(--lp-ink-2); }
-.lp-found-changes .lp-icon { margin-top: 2px; color: var(--lp-ink-3); }
-.lp-found-changes-warn { background: var(--lp-warn-wash); }
-.lp-found-changes-warn .lp-icon { color: var(--lp-warn-ink); }
 .lp-now-block .lp-subhead { margin-top: 4px; }
-.lp-nows { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.lp-now { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-radius: var(--lp-radius-card); background: var(--lp-well); }
-.lp-now-icon { width: 32px; height: 32px; flex: none; border-radius: var(--lp-radius-ctl); display: inline-flex; align-items: center; justify-content: center; background: var(--lp-layer); color: var(--lp-ink-2); border: 1px solid var(--lp-line); }
-.lp-now-text { flex: 1; min-width: 180px; display: grid; gap: 4px; }
 `

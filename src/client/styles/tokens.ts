@@ -44,6 +44,7 @@ export const TOKENS = `
   --lp-shadow-hover: var(--dsw-shadow-lv2, 0 4px 12px rgba(0, 0, 0, .04), 0 2px 8px rgba(0, 0, 0, .04));
   --lp-radius-card: 12px;
   --lp-radius-ctl: 8px;
+  --lp-chevron-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2381858c' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   color-scheme: light;
   color: var(--lp-ink);
   font-size: 14px;
@@ -63,6 +64,7 @@ body[data-ds-dark-theme] .lp {
   --lp-bad-ink: #f47272;
   --lp-bad-wash: rgba(242, 90, 90, .14);
   --lp-field: rgba(255, 255, 255, .03);
+  --lp-chevron-down: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23a3a8ad' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   color-scheme: dark;
 }
 .lp *, .lp *::before, .lp *::after { box-sizing: border-box; }
