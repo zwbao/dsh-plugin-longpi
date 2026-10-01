@@ -136,7 +136,7 @@ try {
   const failed = await ingestDocument(deps, { filename: '2023.pdf', text, upload: true })
   assert.equal(failed.duplicate, false)
   assert.equal(failed.forwarded, false)
-  assert.match(failed.read_back_zh, /没有送出|没有连上/)
+  assert.match(failed.read_back_zh, /未上传|尚未连接/)
   const retry = await ingestDocument(deps, { filename: '2023.pdf', text, upload: true })
   assert.equal(retry.duplicate, false, 'YB: 这份和已经保存的一份相同 must not follow a failed first send')
 
