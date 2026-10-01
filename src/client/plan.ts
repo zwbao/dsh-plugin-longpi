@@ -124,7 +124,7 @@ export function Wins(props: { tracking: Tracking | null }): React.ReactElement |
   const wins = items.flatMap((item) => (item.verdicts ?? []).filter((row) => row.verdict === '有效').map((row) => ({ item, row })))
   if (wins.length === 0) {
     return h('div', { className: 'lp-card' },
-      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '还没有超出正常波动的变化')),
+      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '方案相关指标还没有超出正常波动')),
       h('p', { className: 'lp-small lp-muted lp-measure' }, '血脂、血糖、炎症指标通常要 1–3 个月才会动。坚持执行、按时复测，就是在积累证据。'))
   }
   return h('div', { className: 'lp-card' },

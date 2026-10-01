@@ -13,7 +13,7 @@ import type { CheckIn, PlanItem, PlanVersion } from './interventions.ts'
 import { addDays, CATEGORY_ZH, checkinStatus, daysBetween, TAG_ZH } from './interventions.ts'
 import type { CourseRow, DoseRow, SeriesPoint } from './records.ts'
 import { preferSelf } from './measurements.ts'
-import { foldName, nameVariants } from './units.ts'
+import { canonicalName, foldName, nameVariants } from './units.ts'
 import { effectsFor, markerFor, rcvBand, type Biovar, type BiovarMarker, type EffectRow } from './reference.ts'
 import { labToken } from './honesty/comparability.ts'
 
@@ -129,10 +129,14 @@ export function resolveMarkers(
       // A marker with no variation row (腰围) is still found under its report name, as candidatesFor finds it.
       ?? rows.find((row) => [row.name, row.label].some((text) => Boolean(text) && nameVariants(text as string).includes(foldName(asked))))
     const row = direct ?? (record ? markerFor(biovar, record) : null)
+    // The same test printed differently by another report (肌酐 / 肌酐 Cr / 肌酐(Cr)) is the same series.
+    const canon = record ? canonicalName(record.label || record.name) : ''
+    const also = record ? [...new Set(rows.filter((other) => other.name !== record.name && other.source !== 'self' && canonicalName(other.label || other.name) === canon).map((other) => other.name))] : []
     return {
       asked,
       label: row?.label_zh ?? record?.label ?? asked,
       indicator: record?.name ?? null,
+      ...(also.length ? { also } : {}),
       ...(record?.loinc ? { loinc: record.loinc } : {}),
       unit: record?.unit || row?.unit || '',
       biovar: row,

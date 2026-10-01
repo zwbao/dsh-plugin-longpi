@@ -3,6 +3,7 @@
 // own name and method are behind ⓘ.
 
 import React from 'react'
+import { plainUnits } from './format.ts'
 import { projectionSentence } from '../feedback/grade.ts'
 import { fmt, LeverBars } from './charts.ts'
 import { chineseDate } from './format.ts'
@@ -23,8 +24,8 @@ export function Goals(props: { tracking: Tracking | null }): React.ReactElement 
   if (!props.tracking?.plan || models.length === 0) return null
   const pheno = models.find((card) => card.model === 'phenoage')
   const risk = models.find((card) => card.model === 'china-par')
-  const leverRows = (pheno?.levers ?? []).map((row) => ({ label: row.label, detail: `${row.from} → ${row.to}`, value: row.years, unit: '岁' }))
-  const sensitivityRows = (pheno?.sensitivity ?? []).map((row) => ({ label: row.label, detail: `一次真实变化约 ${row.step}`, value: -Math.abs(row.years_per_step), unit: '岁' }))
+  const leverRows = (pheno?.levers ?? []).map((row) => ({ label: row.label, detail: plainUnits(`${row.from} → ${row.to}`), value: row.years, unit: '岁' }))
+  const sensitivityRows = (pheno?.sensitivity ?? []).map((row) => ({ label: row.label, detail: plainUnits(`一次真实变化约 ${row.step}`), value: -Math.abs(row.years_per_step), unit: '岁' }))
   const estimate = h('div', { className: 'lp-tags' }, h('span', { className: 'lp-tag' }, '模型估计'))
   return h(Section, { id: 'lp-goals', title: '如果达到目标' },
     h('div', { className: 'lp-grid-2 lp-grid-top' },

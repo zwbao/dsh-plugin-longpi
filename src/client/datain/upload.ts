@@ -25,7 +25,7 @@ function fileToBuffer(file: File): Promise<ArrayBuffer> {
 type StoreKind = '' | 'methylation' | 'taxa' | 'proteins' | 'conditions'
 
 /** `simple`: one 上传报告 button for a checkup report only (onboarding); otherwise the full form (档案 tab). */
-export function ReportUpload(props: { onDone?: (readBack: string) => void; simple?: boolean }): React.ReactElement {
+export function ReportUpload(props: { onDone?: (readBack: string) => void; simple?: boolean; quiet?: boolean }): React.ReactElement {
   const fileRef = React.useRef<HTMLInputElement>(null)
   const [busy, setBusy] = React.useState(false)
   const [status, setStatus] = React.useState('')
@@ -89,7 +89,7 @@ export function ReportUpload(props: { onDone?: (readBack: string) => void; simpl
     return h('div', { className: 'lp-upload-simple' },
       fileInput(true),
       h('span', { className: 'lp-upload-icon', 'aria-hidden': true }, h(UploadGlyph)),
-      h(Btn, { onClick: () => fileRef.current?.click(), disabled: busy }, busy ? '正在读取…' : '上传报告'),
+      h(Btn, { variant: props.quiet ? 'outline' : 'primary', onClick: () => fileRef.current?.click(), disabled: busy }, busy ? '正在读取…' : '上传报告'),
       h('span', { className: 'lp-caption' }, '照片或 PDF'),
       busy ? h('p', { className: 'lp-caption lp-upload-status', role: 'status' }, `${status} 通常需要 1–2 分钟。`) : status ? h('p', { className: 'lp-upload-status', role: 'status' }, status) : null,
       error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null)

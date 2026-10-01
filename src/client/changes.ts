@@ -28,11 +28,11 @@ function Spark(props: { row: RecordChange }): React.ReactElement | null {
     }))
 }
 
-const SUPERSCRIPT: Record<string, string> = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' }
 
 /** Units as labs print them: 10^12/L → ×10¹²/L, umol/L → μmol/L, kg/m2 → kg/m². */
+/** Kept for its callers: the same as plainUnits (format.ts), the single formatter. */
 export function prettyUnits(text: string): string {
-  return plainUnits(text).replace(/(×)?10\^(\d+)\/L/g, (_, _times: string | undefined, power: string) => `×10${[...power].map((digit) => SUPERSCRIPT[digit] ?? digit).join('')}/L`)
+  return plainUnits(text)
 }
 
 function toneOf(row: RecordChange): 'warn' | 'good' | 'neutral' {
@@ -89,7 +89,7 @@ function NotableRow(props: { row: RecordChange }): React.ReactElement {
   return h('li', { className: 'lp-notable-row' },
     h(ChangeChip, { verdict: row.verdict, askDoctor: row.ask_doctor }),
     h('span', { className: 'lp-strong' }, row.label_zh),
-    h('span', { className: 'lp-num lp-notable-values' }, `${row.compare.from === row.compare.to ? `${plainUnits(String(row.compare.to))} ${prettyUnits(row.unit)}`.trim() : `${pairText(row.compare.from, row.compare.to)} ${prettyUnits(row.unit)}`.trim()}`),
+    h('span', { className: 'lp-num lp-notable-values' }, plainUnits(row.compare.from === row.compare.to ? `${row.compare.to} ${row.unit}`.trim() : `${pairText(row.compare.from, row.compare.to)} ${row.unit}`.trim())),
     h(Spark, { row }))
 }
 

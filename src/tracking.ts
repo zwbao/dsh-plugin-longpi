@@ -232,7 +232,7 @@ async function compute(context: TrackingContext, plan: PlanVersion | null, check
   const resolvedList = resolveMarkers(names, context.records.indicators, reference.biovar)
   for (const marker of resolvedList) {
     const extra = siblingNames(context.records.indicators, reference.biovar, marker.biovar, marker.indicator)
-    if (extra.length > 0) marker.also = extra
+    if (extra.length > 0) marker.also = [...new Set([...(marker.also ?? []), ...extra])]
     if (!marker.indicator && extra[0]) marker.indicator = extra[0]
   }
   const markers: Record<string, ResolvedMarker> = Object.fromEntries(resolvedList.map((row) => [row.asked, row]))
@@ -336,7 +336,13 @@ function chartsFor(plan: PlanVersion, markers: ResolvedMarker[], series: Record<
   for (const marker of markers) {
     if (!marker.indicator || seen.has(marker.indicator)) continue
     seen.add(marker.indicator)
-    const raw = (series[marker.indicator] ?? []).map((point) => ({ date: point.date, value: point.value }))
+    // The marker's own series plus the same test under another printed name; a reading already merged into the
+    // marker's series (a self row carries its record counterpart) is drawn once.
+    const seenPoint = new Set<string>()
+    const raw = [marker.indicator, ...(marker.also ?? [])].flatMap((name) => series[name] ?? [])
+      .map((point) => ({ date: point.date, value: point.value }))
+      .filter((point) => { const key = `${point.date}|${point.value}`; if (seenPoint.has(key)) return false; seenPoint.add(key); return true })
+      .sort((a, b) => a.date.localeCompare(b.date))
     // Markers judged on weekly means (home blood pressure) are drawn as weekly means too.
     const points = marker.biovar?.average_days ? weeklyMeans(raw) : raw
     if (points.length === 0) continue

@@ -112,10 +112,19 @@ const FIELD_ZH: Record<string, string> = {
  * Units and field names as a lab report prints them (#19): umol/L → μmol/L, kg/m2 → kg/m², 1.73m2 → 1.73m²,
  * a bare "5.6 h" → 5.6 小时, and camelCase field names in plain Chinese. Anything unknown is left as it is.
  */
+const SUPERSCRIPT: Record<string, string> = { 0: '⁰', 1: '¹', 2: '²', 3: '³', 4: '⁴', 5: '⁵', 6: '⁶', 7: '⁷', 8: '⁸', 9: '⁹' }
+
+/** The one place units, field names and number signs are made readable; every page goes through it. */
 export function plainUnits(text: string): string {
   return text
     .replace(/\b[a-z]+(?:[A-Z][a-z0-9]*)+\b|\b(?:steps|hrv|spo2|waist|weight|systolic|diastolic|vo2max)\b/g, (word) => FIELD_ZH[word] ?? word)
-    .replace(/\bu(mol|g|L)\b/g, 'μ$1')
+    .replace(/(^|[^A-Za-z])u(IU|mol|g|L)\b/g, '$1μ$2')
+    // 10^3/uL, ×10^9/L → ×10³/μL, ×10⁹/L
+    .replace(/(×)?10\^(\d+)\//g, (_, _times: string | undefined, power: string) => `×10${[...power].map((digit) => SUPERSCRIPT[digit] ?? digit).join('')}/`)
+    // 5.8 % → 5.8%
+    .replace(/(\d)\s+%/g, '$1%')
+    // no space hugging a full-width bracket: （尿） UACR → （尿）UACR
+    .replace(/\s+([（【「])/g, '$1').replace(/([）】」])\s+(?=[\w\u4e00-\u9fff])/g, '$1')
     .replace(/(\d|\/)m2\b/g, '$1m²')
     .replace(/\bm2\b/g, 'm²')
     .replace(/(\d)\s*h\b(?![\w/])/g, '$1 小时')

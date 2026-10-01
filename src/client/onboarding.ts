@@ -165,7 +165,7 @@ function FirstData(props: { onFinish: () => void; openChat: () => void }): React
   const [read, setRead] = React.useState('')
   return h('div', { className: 'lp-onb-body' },
     h('p', { className: 'lp-onb-text' }, '上传一份体检或化验报告，LongPi 会读取其中的指标，算出你的第一个结果。'),
-    h(ReportUpload, { simple: true, onDone: (text: string) => { setRead(text || '已读取这份报告。'); notifyChanged() } }),
+    h(ReportUpload, { simple: true, quiet: none, onDone: (text: string) => { setRead(text || '已读取这份报告。'); notifyChanged() } }),
     !read && !none ? h('div', { className: 'lp-onb-center' }, h('button', { type: 'button', className: 'lp-textbtn lp-textbtn-strong', onClick: () => setNone(true) }, '我现在没有报告 →')) : null,
     none && !read ? h('div', { className: 'lp-callout lp-callout-info' },
       h(Icon, { name: 'info', size: 16 }),

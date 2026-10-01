@@ -70,6 +70,11 @@ function shownOf(result: MethodResult): string {
 }
 
 /** The one line above the result grid when any card is not matched to the person yet (P1-6): the cards keep only their source. */
+/** The model's own age and sex facts are the profile's 年龄 / 性别 questions: never listed twice. */
+function riskFacts(facts: readonly string[]): string[] {
+  return facts.filter((fact) => !/^(实足)?年龄$|^性别/.test(fact.trim()))
+}
+
 export const UNMATCHED_NOTE_ZH = '标着「来源」的结果还没和你的记录对上，先别当成你的结果。'
 
 /** An unmatched result's caption: only its source (来源：肌酐(Cr) 84 μmol/L。), or nothing. */
@@ -118,7 +123,7 @@ function riskAction(journey: Journey): { label: string; target: ResultTarget } |
   const risk = journey.results.risk
   const profileMissing = journey.profile.age == null || (journey.profile.sex !== 'male' && journey.profile.sex !== 'female') || risk.missing_facts.length > 0
   if (profileMissing) {
-    const count = Math.max(1, risk.missing_facts.length + (journey.profile.age == null ? 1 : 0) + (journey.profile.sex !== 'male' && journey.profile.sex !== 'female' ? 1 : 0))
+    const count = Math.max(1, riskFacts(risk.missing_facts).length + (journey.profile.age == null ? 1 : 0) + (journey.profile.sex !== 'male' && journey.profile.sex !== 'female' ? 1 : 0))
     return { label: `回答 ${count} 个问题`, target: 'profile' }
   }
   if (!recordConnected(journey.records.status)) return { label: '连接记录', target: 'records' }
@@ -221,7 +226,8 @@ export function BodyAgeCard(props: {
   return h('div', { className: 'lp-card lp-result', ...(props.method ? { 'data-result-label': props.method.label } : {}) },
     h(CardHead, { label: '身体年龄', info, mark: props.method?.label ?? null }),
     h('div', { className: 'lp-result-figure' },
-      h('span', { className: 'lp-num-lg' }, plainUnits(fmt(phenoage))),
+      // Not yet matched to the record: a medium figure, not the headline size of a confirmed result.
+      h('span', { className: props.method?.label === 'unverified-binding' ? 'lp-num-md' : 'lp-num-lg' }, plainUnits(fmt(phenoage))),
       h('span', { className: 'lp-bignum-unit' }, '岁'),
       younger ? h('span', { className: 'lp-badge lp-badge-good' }, '真实的变化') : null),
     // The method results that measure body age are folded in here as one line in glossary words (INT062 fix 7):
@@ -280,7 +286,7 @@ export function RiskCard(props: {
   const range = rangeCaption(props.journey.profile.age)
   if (result.status !== 'ok') {
     const profile = props.journey.profile
-    const questions = [...(profile.age == null ? ['年龄'] : []), ...(profile.sex !== 'male' && profile.sex !== 'female' ? ['性别'] : []), ...result.missing_facts]
+    const questions = [...(profile.age == null ? ['年龄'] : []), ...(profile.sex !== 'male' && profile.sex !== 'female' ? ['性别'] : []), ...riskFacts(result.missing_facts)]
     return h(Blocked, {
       journey: props.journey, label: '10 年心血管风险', info: RISK_INFO, blocker: result.blocker_zh, questions, labs: result.missing_labs, note: range,
       action: riskAction(props.journey), selfAddon: riskSelfAddon(props.journey), onAction: props.onAction, onNotice: props.onNotice, idPrefix: 'lp-risk',
@@ -325,7 +331,7 @@ function MethodCard(props: { result: MethodResult }): React.ReactElement {
     h(CardHead, { label: title, info: h('span', { className: 'lp-info-line' }, props.result.limits_zh || '模型估计，不是诊断。'), mark: props.result.label }),
     numeric
       ? h('div', { className: 'lp-result-figure' },
-        h('span', { className: 'lp-num-lg' }, plainUnits(figure)),
+        h('span', { className: unmatched ? 'lp-num-md' : 'lp-num-lg' }, plainUnits(figure)),
         unit ? h('span', { className: 'lp-bignum-unit' }, unit) : null)
       : figure ? h('div', { className: 'lp-result-figure' }, h('span', { className: 'lp-num-md' },
         [unmatched ? measuredOf(sentence) : '', judgementWord(plainUnits(figure))].filter(Boolean).join(' · '))) : null,
@@ -376,11 +382,14 @@ export function ResultsRow(props: {
     props.journey.results.risk.status === 'ok' ? riskCardMethod(props.journey, riskMethod) : undefined,
     ...extras,
   ]
-  const unmatched = shownMethods.some((row) => row?.label === 'unverified-binding')
+  const unmatchedCount = shownMethods.filter((row) => row?.label === 'unverified-binding').length
+  const unmatched = unmatchedCount > 0
   // One grid of result cards (a lone last card spans the row), the evidence cards full width, then the plan's own
   // results in a grid of their own, so 这次的变化 is never a half-width card on its own (#17).
   return h('div', { className: 'lp-stack', id: 'lp-results' },
-    unmatched ? h('p', { className: 'lp-caption' }, UNMATCHED_NOTE_ZH) : null,
+    unmatched ? h('p', { className: 'lp-caption' }, unmatchedCount === shownMethods.filter(Boolean).length
+      ? '下面的结果都还没和你的记录逐项对上（各卡写了用的是哪个数值），先别当成你的结果。'
+      : `其中 ${unmatchedCount} 项结果还没和你的记录逐项对上（卡里写了用的是哪个数值），先别当成你的结果。`) : null,
     h('div', { className: 'lp-grid-2 lp-results' }, ...cards, ...values),
     evidence.length > 0 ? h('div', { className: 'lp-stack', id: 'lp-methods' }, ...evidence) : null,
     h('div', { className: 'lp-grid-2 lp-results lp-results-plan' }, feedback))
