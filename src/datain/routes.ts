@@ -204,6 +204,8 @@ export function registerDatainRoutes(deps: CoreDeps, open?: SocketOpener): void 
       if (text.length > 200_000) return fail('粘贴的文字太长。请改为上传文件。')
       const result = await ingestDocument(deps, { filename: typeof value.filename === 'string' ? value.filename : 'pasted.txt', text, upload: false, ...fields })
       if (result.needs_confirm) return fail(result.error || result.read_back_zh)
+      // Received but not read: shown as an error with its cause and what to do, never as a quiet「0 项」.
+      if (result.ok === false && result.forwarded && result.error) return fail(result.error, 422)
       return result
     }
     if (op === 'path') {

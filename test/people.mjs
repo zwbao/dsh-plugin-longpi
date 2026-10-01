@@ -62,6 +62,18 @@ const opener = (_url, handlers) => {
 await mod.pushToMirobody({ origin: 'http://127.0.0.1:18060', token: 'HOLDER-JWT', filename: 'a.pdf', bytes: Buffer.from('x'), contentType: 'application/pdf', open: opener, queryUserId: '42' })
 assert.equal(sent.find((m) => m.type === 'upload_start').query_user_id, '42')
 
+// the service received the file but could not read it (no model configured): flagged, never a quiet 0
+const unread = (_url, handlers) => {
+  setTimeout(() => { handlers.onopen(); handlers.onmessage(JSON.stringify({ type: 'extraction_completed', indicators_count: 0, failed: true })) }, 5)
+  return { send: () => {}, close: () => {} }
+}
+const pushUnread = await mod.pushToMirobody({ origin: 'http://127.0.0.1:18060', token: 'T', filename: 'b.pdf', bytes: Buffer.from('y'), contentType: 'application/pdf', open: unread })
+assert.equal(pushUnread.extraction_failed, true, 'a failed extraction is reported as such')
+assert.equal(pushUnread.failed, false, 'the file itself was received')
+const read3 = await mod.pushToMirobody({ origin: 'http://127.0.0.1:18060', token: 'T', filename: 'c.pdf', bytes: Buffer.from('z'), contentType: 'application/pdf', open: opener })
+assert.equal(read3.extraction_failed, false)
+assert.equal(read3.indicators, 3)
+
 // switching back: the holder's own store and link
 assert.ok(mod.setActive(root, mod.SELF))
 assert.equal(mod.resolveDataDir(root), root)

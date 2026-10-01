@@ -5932,6 +5932,8 @@ interface MirobodyPush {
   indicators: number | null;
   checkup_day: string | null;
   failed: boolean;
+  /** The file arrived but reading it did not: no model is configured in the service, or its call failed. */
+  extraction_failed: boolean;
 }
 /** The upload socket Mirobody's file router speaks. `open` is injectable for tests. */
 declare function pushToMirobody(opts: {

@@ -53,10 +53,14 @@ interface UploadLog {
   accepted?: boolean
   duplicate_of?: string
   wrong_person?: boolean
+  /** How many lab values the service read from it (absent in logs written before 0.7.1). */
+  indicators?: number | null
 }
 
 function keptUpload(row: UploadLog): boolean {
   if (row.wrong_person) return false
+  // A file the service received but could not read (or read as nothing) can be sent again: not a duplicate.
+  if (row.forwarded === true && !((row.indicators ?? 0) > 0)) return false
   return row.forwarded === true || row.accepted === true
 }
 
@@ -126,6 +130,8 @@ export interface MirobodyPush {
   indicators: number | null
   checkup_day: string | null
   failed: boolean
+  /** The file arrived but reading it did not: no model is configured in the service, or its call failed. */
+  extraction_failed: boolean
 }
 
 /** The upload socket Mirobody's file router speaks. `open` is injectable for tests. */
@@ -162,6 +168,8 @@ export async function pushToMirobody(opts: {
       const count = typeof last.indicators_count === 'number' ? last.indicators_count : null
       resolve({
         events, progress, last, failed,
+        // Mirobody says so on extraction_completed (failed: true): never shown as「0 项」.
+        extraction_failed: last.type === 'extraction_completed' && last.failed === true,
         indicators: count,
         checkup_day: report && /^\d{4}-\d{2}-\d{2}$/.test(report) ? report : null,
       })
@@ -223,17 +231,29 @@ function originOf(mcpUrl: string): string | null {
   }
 }
 
+/** 「9 月 10 日」, with the year when it is not this year. */
+function dayZhU(iso: string | null): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
+  if (!m) return iso ?? ''
+  const md = `${Number(m[2])} 月 ${Number(m[3])} 日`
+  return Number(m[1]) === new Date().getFullYear() ? md : `${m[1]} 年 ${md}`
+}
+
 function readBack(parts: { forwarded: boolean; connected: boolean; indicators: number | null; day: string | null; findings: NarrativeFinding[]; duplicate: boolean; wrong: string; genetics: 'narrative' | 'raw' | null }): string {
   if (parts.wrong) return parts.wrong
-  if (parts.duplicate) return `这份和已经保存的一份相同${parts.day ? `（${parts.day}）` : ''}，没有重复写入。`
+  if (parts.duplicate) return `该报告此前已上传${parts.day ? `（检查日期：${dayZhU(parts.day)}）` : ''}，未重复保存。`
   const lines: string[] = []
-  if (parts.genetics === 'raw' && parts.forwarded) lines.push('微基因原始数据已交到你放体检报告的地方。位点以那里保存的为准；叙述版 PDF 不必再传。')
-  else if (parts.genetics) lines.push('基因叙述报告没有整本送进体检解析。关键位点记在这台电脑上，并附了消费级报告的限制。要把位点交出去，请用微基因原始数据导出。')
-  else if (!parts.connected) lines.push('报告里的叙述已经记下。还没有连上你放体检报告的地方，文件本身没有送出。')
-  else if (parts.forwarded) lines.push(`已交到你放体检报告的地方。${parts.indicators != null ? `解析到 ${parts.indicators} 项` : '解析结果还没返回'}${parts.day ? `，日期 ${parts.day}` : ''}。`)
-  else lines.push('文件没有送出。')
+  if (parts.genetics === 'raw' && parts.forwarded) lines.push('基因原始数据已上传，位点以健康数据服务中保存的数据为准，无需再上传叙述版 PDF。')
+  else if (parts.genetics) lines.push('基因叙述报告未进入体检解析；关键位点已保存在本机，并标注了消费级检测的局限。如需完整位点，请上传基因原始数据文件。')
+  else if (!parts.connected) lines.push('报告中的文字内容已保存。健康数据服务尚未连接，文件本身未上传。')
+  else if (parts.forwarded) lines.push(parts.indicators == null
+    ? '报告已上传，正在识别指标。'
+    : parts.indicators === 0
+      ? '报告已上传，但未识别出化验指标。请确认上传的是体检或化验报告；如为照片，请确保清晰、完整后重新上传。'
+      : `报告已上传，识别出 ${parts.indicators} 项指标${parts.day ? `（检查日期：${dayZhU(parts.day)}）` : ''}。`)
+  else lines.push('文件未上传。')
   const narrative = parts.findings.filter((row) => row.kind !== 'wrong_person').slice(0, 4).map((row) => row.text_zh)
-  if (narrative.length > 0) lines.push(`报告里写着：${narrative.join(' ')}`)
+  if (narrative.length > 0) lines.push(`报告摘要：${narrative.join(' ')}`)
   return lines.join('')
 }
 
@@ -451,13 +471,14 @@ async function finishForward(deps: Pick<CoreDeps, 'config' | 'dataDir' | 'bus' |
   const uploadId = newId('up')
   const stored = storeFindings(dataDir, input.findings.map((row) => ({ ...row, date: row.date || day || '' })), uploadId)
   if (input.genetics) storeGenetics(dataDir, input.genetics)
+  const extractionFailed = Boolean(push && !push.failed && push.extraction_failed)
   const forwarded = Boolean(push && !push.failed)
   // A failed push, or Mirobody not connected, must not mark the file seen. The next send is a retry, not a duplicate.
   const accepted = forwarded || Boolean(input.genetics) || (!input.upload && stored.length > 0)
   if (accepted) {
     appendJsonl(logPath(dataDir), {
       id: uploadId, at: new Date().toISOString(), filename: input.filename, sha256: input.sha, fingerprint: input.fingerprint,
-      bytes: input.bytes.length, checkup_day: day, forwarded, accepted: true,
+      bytes: input.bytes.length, checkup_day: day, forwarded, accepted: true, indicators: extractionFailed ? 0 : push?.indicators ?? null,
     } satisfies UploadLog)
   }
   if (push && !push.failed) {
@@ -474,6 +495,17 @@ async function finishForward(deps: Pick<CoreDeps, 'config' | 'dataDir' | 'bus' |
     } catch { /* the upload still stands */ }
   }
   const shown = stored.length > 0 ? stored : input.findings
+  if (extractionFailed) {
+    // The service has the file but no reading of it: an error the person can act on, not「识别出 0 项」.
+    return {
+      ok: false, forwarded: true, duplicate: false, wrong_person: false, checkup_day: day, indicators: null,
+      findings: shown.map(publicFinding),
+      read_back_zh: '',
+      progress: push?.progress ?? [],
+      genetics_stored: Boolean(input.genetics),
+      error: '报告已上传，但未能识别其中的指标：健康数据服务尚未配置可用的解析模型，或模型调用失败。请在健康数据服务中配置模型 API Key（例如 DeepSeek）后，重新上传这份报告。',
+    }
+  }
   return {
     ok: push ? !push.failed : true,
     forwarded: Boolean(push && !push.failed),

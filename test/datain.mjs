@@ -119,7 +119,7 @@ try {
   const again = await call(host, 'POST', '/api/longpi/upload', { op: 'text', text: Y27, filename: 'y27-again.txt' })
   assert.equal(again.json.duplicate, true)
   assert.equal(again.json.forwarded, false)
-  assert.match(again.json.read_back_zh, /没有重复写入/)
+  assert.match(again.json.read_back_zh, /未重复保存/)
 
   mod.writeProfile(dataDir, { displayName: '林澄', birthYear: 1982, age: 44, sex: 'female', risk: {}, focus: [], consent: null })
   const foreign = await call(host, 'POST', '/api/longpi/upload', { op: 'text', text: HUSBAND, filename: 'labcorp.txt' })
