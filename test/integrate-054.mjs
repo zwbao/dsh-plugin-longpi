@@ -1,11 +1,15 @@
 // 0.5.4 integrator checks: subject age, the safe-while-you-wait draft, and gate fields on the page.
 import assert from 'node:assert/strict'
 import { normalizeIndicators } from '../src/client/normalize.ts'
-import { steerNeed } from '../src/advice/playbook.ts'
 import { softHoldDraft } from '../src/planner.ts'
 import { minorView } from '../src/privacy/consents.ts'
 import { stripWeightLoss } from '../src/privacy/disclosure.ts'
 import { calculatorIdentity, subjectFromText } from '../src/subject.ts'
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { rememberFromWords } from '../src/core/remember-rules.ts'
+import { readProfile, writeProfile } from '../src/profile.ts'
 
 const father = subjectFromText('这是我爸的体检，他今年68岁')
 assert.equal(father?.relationship_zh, '父亲')
@@ -20,6 +24,21 @@ const self = calculatorIdentity({ age: 33, sex: 'female', displayName: '', birth
 assert.equal(self.age, 33)
 assert.equal(self.subject, false)
 
+// 0.8.0 (H-03): mentioning 我妈 / 我爸 never changes whose record this is
+{
+  const dir = mkdtempSync(join(tmpdir(), 'longpi-054-subject-'))
+  try {
+    writeProfile(dir, { ...readProfile(dir), age: 35, sex: 'male' })
+    rememberFromWords(dir, '我妈的血压怎么样？这是我妈的体检，她今年62岁')
+    const after = readProfile(dir)
+    assert.equal(after.subject ?? null, null, 'no record subject written from words')
+    assert.equal(after.sex, 'male')
+    assert.equal(calculatorIdentity(after).sex, 'male', 'the calculators keep the holder')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
 const draft = softHoldDraft('2026-09-22')
 assert.ok(draft.items.some((item) => item.title.includes('走路')))
 assert.equal(JSON.stringify(draft).includes('限时进食'), false)
@@ -33,12 +52,6 @@ const stripped = stripWeightLoss({ draft: { items: [{ category: 'weight', title:
 assert.equal(stripped.draft.items.length, 1)
 assert.match(stripped.draft.items[0].title, /走路/)
 
-const fasting = steerNeed('45岁女，只吃二甲双胍，糖化6.9，想做16:8，给我排一下。', '这次没法给你排 16:8 的方案。血红蛋白偏低，先跟医生确认。')
-assert.ok(fasting, 'echoing 16:8 next to 血红蛋白 is not a finished window')
-assert.match(fasting.say, /8 点/)
-assert.match(fasting.say, /低血糖风险低/)
-const yam = steerNeed('吃山药能补铁吗？', '山药不是补铁的办法，先看医生。')
-assert.match(yam.say, /红肉/)
 
 const rows = normalizeIndicators({
   record: { status: 'ok' },

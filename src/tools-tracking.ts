@@ -19,7 +19,7 @@ import { planDraftHeld, sessionKey } from './plan-hold.ts'
 import { HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH } from './plan-safety.ts'
 import { briefOptionsOf, buildPlanBrief, replyForDraft, settleDraft } from './planner.ts'
 import { FOCUS } from './profile.ts'
-import { retestDue, retestSentence } from './advice/complete.ts'
+import { retestDue, retestSentence } from './retest.ts'
 
 function jsonText(value: unknown): [{ type: 'text'; text: string }] {
   return [{ type: 'text', text: JSON.stringify(value, null, 2) }]

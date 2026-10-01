@@ -1,5 +1,4 @@
 import Schema from '@deepseek-ai/schemastery'
-import type { GuardScope } from './guard-scope.ts'
 
 export interface Config {
   skillsHome: string
@@ -21,7 +20,8 @@ export interface Config {
   /** On a DSH with no workspace, register <dataDir>/workspace as 「健康对话」 once, so a session can open. */
   bootstrapWorkspace: boolean
   /** Where the safety classifier asks the model: LongPi's workspace and health talk ('health'), or every message ('all'). */
-  guardScope: GuardScope
+  /** Accepted for older profiles; the safety guard it scoped was removed in 0.8.0. */
+  guardScope: 'health' | 'all'
   /** Per agent profile (AA §2.3): enabled (false = always the deterministic fallback), route and deadline. */
   agents: Record<string, AgentConfig>
   /** Daily caps on LongPi's own model calls (D8); over a cap every profile falls back silently. */
@@ -59,7 +59,6 @@ export const AGENT_DEFAULTS: Readonly<Record<string, AgentConfig>> = {
   triage: { enabled: true, provider: '', model: 'deepseek-v4-pro', reasoningEffort: 'low', maxTokens: 1500, deadlineMs: 30000 },
   retest_reviewer: { enabled: true, provider: '', model: '', reasoningEffort: 'off', maxTokens: 600, deadlineMs: 15000 },
   plan_codesigner: { enabled: true, provider: '', model: '', reasoningEffort: 'low', maxTokens: 2000, deadlineMs: 60000 },
-  evidence_explainer: { enabled: true, provider: '', model: '', reasoningEffort: 'high', maxTokens: 2000, deadlineMs: 45000 },
   report_reader: { enabled: true, provider: '', model: '', reasoningEffort: 'low', maxTokens: 2000, deadlineMs: 60000 },
   research_coordinator: { enabled: true, provider: '', model: '', reasoningEffort: 'high', maxTokens: 2000, deadlineMs: 60000 },
 }
@@ -98,7 +97,6 @@ export const Config: Schema<Config> = Schema.object({
     triage: agent('low', 1500, 30000, 'deepseek-v4-pro'),
     retest_reviewer: agent('off', 600, 15000),
     plan_codesigner: agent('low', 2000, 60000),
-    evidence_explainer: agent('high', 2000, 45000),
     report_reader: agent('low', 2000, 60000),
     research_coordinator: agent('high', 2000, 60000),
   }) as unknown as Schema<Record<string, AgentConfig>>,

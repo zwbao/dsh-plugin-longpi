@@ -325,8 +325,13 @@ try {
   assert.equal(later.messages.filter((message) => message.source?.form === 'snapshot').length, 0, 'only at step 1')
   const coding = await ownStep(codingAgent, '帮我重构这个函数')
   assert.equal(coding.messages.filter((message) => message.source?.kind === 'plugin' && message.source?.plugin === 'dsh-plugin-longpi').length, 0, 'nothing in a coding session')
-  const codingHealth = await ownStep({ ...codingAgent, session: { ...codingAgent.session, id: 'code-2' } }, '我的血红蛋白偏低要紧吗')
-  assert.ok(codingHealth.messages.some((message) => message.source?.form === 'instructions'), 'health talk elsewhere gets the rules once')
+  // 0.8.0 (C-08): health words in another workspace bring no LongPi rules and no page snapshot
+  const codingHealth = await ownStep({ ...codingAgent, session: { ...codingAgent.session, id: 'code-2' } }, '我的血红蛋白偏低要紧吗？顺便帮我诊断一下这个 bug')
+  assert.equal(codingHealth.messages.filter((message) => message.source?.kind === 'plugin' && message.source?.plugin === 'dsh-plugin-longpi').length, 0, 'health talk elsewhere gets nothing from LongPi')
+  // nor does a sub-agent inside the health workspace: its task comes from its parent
+  const subAgent = { ...healthAgent, session: { ...healthAgent.session, id: 'health-sub', header: { ...healthAgent.session.header, parentSession: healthAgent.session.id } } }
+  const sub = await ownStep(subAgent, '我最近睡得不好')
+  assert.equal(sub.messages.filter((message) => message.source?.form === 'snapshot').length, 0, 'no snapshot for a sub-agent')
 
   // --- 5. M1: brief, visit follow-up, the plan adapts --------------------------------------------------
   const briefTool = await host.tools.get('prepare_doctor_brief').execute({})
@@ -428,16 +433,6 @@ try {
   mod.setDrinking(bpDir, false)
   const nonDrinker = await mod.buildPlanBrief(await contextOf(bpConfig), { focus: ['cardio'] })
   assert.ok(nonDrinker.notes_zh.includes('你已说明不饮酒，因此未列出减少饮酒。'))
-  // the guard hears it in chat too
-  const guardDir = tempDir('guard-drink')
-  const guard = mod.createGuard({}, { dataDir: () => guardDir, timeoutMs: 50, scope: () => 'all' })
-  await guard.preStep({ agent: { session: { id: 'g1', requestHeader: () => undefined }, options: {} }, messages: [userMessage('我周末应酬喝酒比较多')], signal: new AbortController().signal }, async () => ({ kind: 'enter', messages: [] }))
-  assert.equal(mod.readPlanPrefs(guardDir).drinks, true)
-  // outside health talk (a coding session, health scope) nothing is kept
-  const codeDir = tempDir('guard-code')
-  const codeGuard = mod.createGuard({}, { dataDir: () => codeDir, timeoutMs: 50, scope: () => 'health', healthWorkspaces: () => ['/nonexistent/health'] })
-  await codeGuard.preStep({ agent: { session: { id: 'c1', header: { cwd: '/tmp/project' }, requestHeader: () => undefined }, options: {} }, messages: [userMessage('帮我把这个函数改成异步的')], signal: new AbortController().signal }, async () => ({ kind: 'enter', messages: [] }))
-  assert.equal(mod.memoryFor(codeDir).read().items.length, 0)
 
   // --- 7. fold-in: the page's 去掉 is saved on the server and survives a reload ---------------------------
   const pageHost = fakeHost()

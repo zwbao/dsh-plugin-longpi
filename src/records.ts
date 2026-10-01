@@ -3,7 +3,6 @@ import type { Config } from './config.ts'
 import { discoverPython, runBridgeStatus, type BridgeStatus } from './bridge.ts'
 import { callMcpTool, mcpHost, redact, type McpCallResult } from './mcp.ts'
 import { readProfile, estimatedAge, type Profile } from './profile.ts'
-import { rememberMedications } from './guardrails.ts'
 import { presentMedications, readStatements } from './meds-stated.ts'
 import { loincCode, summarizeIndicators, summarizeMedications, type IndicatorRow, type MedicationRow } from './situation.ts'
 import { isDiagnosisName } from './ux/plain.ts'
@@ -707,7 +706,6 @@ async function loadRemote(config: Config, pluginHome: string): Promise<Remote> {
     snapshot.read_errors.push(`用药计划读取失败：${medsProblem}`)
   } else {
     snapshot.medications = summarizeMedications(meds.payload)
-    rememberMedications(snapshot.medications.map((item) => item.name))
   }
   if (snapshot.read_errors.length > 0) {
     snapshot.record_status = 'partial'

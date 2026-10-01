@@ -1,4 +1,5 @@
 // 0.5.5: quiet home for low engagement, insulin wording after a low, inline consent for a home blood pressure.
+// 0.8.0: the guard's notes and corrections are gone; the consent offer and the insulin wording check remain.
 
 import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -8,10 +9,8 @@ import { candidateSeeds, prefsEngage, syncEngage } from '../src/engage/engine.ts
 import { chapterList } from '../src/engage/seasons.ts'
 import { DAILY_WORDING, QUIET_TITLE, quietenSurfaces, readQuiet, rememberAvoidance, statedAvoidance } from '../src/engage/quiet.ts'
 import { followupTick, writeFollowup } from '../src/followup.ts'
-import { guidanceNote, insulinHoldCorrection, replyRuleCheck } from '../src/guardrails.ts'
-import { ensureHomeBp, replyConfirmsHomeBp, statedHomePressure, withConsentOffer } from '../src/home-bp.ts'
+import { withConsentOffer } from '../src/home-bp.ts'
 import { HYPO_NEXT_DOSE_ZH, holdsInsulin } from '../src/plan-safety.ts'
-import { readSelf } from '../src/selfmeasure.ts'
 
 const dirs = []
 function tempDir() {
@@ -20,7 +19,6 @@ function tempDir() {
   return dir
 }
 const at = (day, time = '10:00') => new Date(`${day}T${time}:00+08:00`)
-const labels = { acute_emergency: false, self_harm: false, med_change_request: false, personal_dose_request: false, research_question: false, reason: '' }
 
 function profile(dir) {
   writeFileSync(join(dir, 'profile.json'), `${JSON.stringify({
@@ -119,42 +117,18 @@ try {
   })
   assert.deepEqual(rows, [])
 
-  const said = '我今天在试断食，打了胰岛素，现在心慌手抖，血糖3.3'
-  const note = guidanceNote(labels, { hypoglycaemia: true, text: said })
-  assert.match(note.text, /先吃 15 克快速吸收的糖/)
-  assert.match(note.text, /下一次胰岛素或磺脲类的剂量，联系开药的医生/)
-  assert.match(note.text, /120/)
-  assert.doesNotMatch(note.text, /不要再注射/)
-  assert.doesNotMatch(note.text, /停掉胰岛素/)
   assert.equal(holdsInsulin('也不要再注射胰岛素，补打的事交给开药的医生。'), true)
   assert.equal(holdsInsulin('今天不要再注射胰岛素'), true)
   assert.equal(holdsInsulin('把胰岛素停了'), true)
   assert.equal(holdsInsulin('不要自行停用胰岛素，请遵医嘱'), false)
   assert.equal(holdsInsulin(`先处理。${HYPO_NEXT_DOSE_ZH}`), false)
-  const correction = insulinHoldCorrection()
-  assert.match(correction.text, /15 克/)
-  assert.match(correction.text, /开药的医生/)
-  assert.match(correction.text, /120/)
-  assert.doesNotMatch(correction.text, /不要再注射/)
-  const safe = replyRuleCheck(`先吃 15 克快速吸收的糖（葡萄糖片或一小杯含糖果汁），15 分钟后复测。${HYPO_NEXT_DOSE_ZH}`)
-  assert.equal(safe.med_change_advice, false)
-  assert.equal(safe.personal_dose, false)
 
-  const bp = statedHomePressure('帮我记录：今天早上血压 128/82')
-  assert.deepEqual(bp, { sbp: 128, dbp: 82 })
-  assert.equal(statedHomePressure('血压 128/82 正常吗'), null)
-  assert.equal(replyConfirmsHomeBp('没能存下来：还没有单独同意。128/82', bp), false)
-  assert.equal(replyConfirmsHomeBp('已记下收缩压 128 mmHg、舒张压 82 mmHg。', bp), true)
   const offered = withConsentOffer({ ok: true, saved: [{ key: 'sbp', value: 128, unit: 'mmHg' }, { key: 'dbp', value: 82, unit: 'mmHg' }], problems: [] })
   const parsed = JSON.parse(offered[0].text)
   assert.equal(parsed.saved[0].value, 128)
-  assert.match(parsed.consent_offer_zh, /我单独同意处理我的健康信息/)
+  assert.match(parsed.consent_offer_zh, /请在健康页完成同意/)
+  assert.doesNotMatch(parsed.consent_offer_zh, /回复/, 'consent is given on the page, not by replying (the guard that read replies is gone)')
   assert.match(parsed.note, /不要说没存下来/)
-  const bpDir = tempDir()
-  assert.equal(ensureHomeBp(bpDir, bp, '2026-09-22'), true)
-  assert.equal(ensureHomeBp(bpDir, bp, '2026-09-22'), false)
-  const saved = readSelf(bpDir)
-  assert.deepEqual(saved.map((row) => [row.key, row.value, row.date]), [['sbp', 128, '2026-09-22'], ['dbp', 82, '2026-09-22']])
 
   console.log('fix-055 ok')
 } finally {

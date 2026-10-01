@@ -73,7 +73,6 @@ try {
   assert.equal(checkin.saved.length, 2)
   assert.ok(checkin.problems.some((line) => line.includes('用药计划')))
   assert.ok(checkin.problems.some((line) => line.includes('不存在的项目')))
-  assert.equal(mod.preGuard('帮我记录今天快走40分钟，鱼油也吃了'), null, 'a check-in is not a medication question')
 
   // 3. judge the plan against the record
   const catalog = mod.loadCatalog(home)

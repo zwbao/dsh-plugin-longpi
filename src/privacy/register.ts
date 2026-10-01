@@ -9,7 +9,7 @@ import type { ConsentRecord } from '../contracts/science.ts'
 import { healthWorkspacePaths, insideWorkspace, type WorkspaceLike } from '../guard-scope.ts'
 import { readProfile } from '../profile.ts'
 import { MINOR_PREFERENCE_ZH, isGranted, minorView } from './consents.ts'
-import { CONSENT_HOLD_ZH, heldStream, localAidText, modelEgress, payloadText, personTextOf } from './egress.ts'
+import { CONSENT_HOLD_ZH, heldStream, modelEgress, payloadText, personTextOf } from './egress.ts'
 import { setFamilyNames, redactOutbound, redactText, stripWeightLoss, wordingRule } from './disclosure.ts'
 import { withConsentOffer } from '../home-bp.ts'
 import { bindPrivacy } from './index.ts'
@@ -249,7 +249,6 @@ export function register(ctx: Context, deps: CoreDeps): void {
         const granted = isGranted(consentDir(), 'data_flow_deepseek')
         const person = personTextOf(next)
         const decision = modelEgress(granted, payloadText(next), person)
-        if (decision === 'local_aid') return heldStream(localAidText(person))
         if (decision === 'hold') return heldStream(CONSENT_HOLD_ZH)
         return original(next)
       }

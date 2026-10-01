@@ -74,11 +74,12 @@ assert.equal(parsed.agents.coach.reasoningEffort, 'off')
 assert.equal(parsed.agents.memory_distiller.maxTokens, 400)
 assert.equal(parsed.surfaces.chapterTokens, 150000)
 assert.equal(parsed.engage.nudgesInWorkflow, false)
-assert.equal(mod.AGENT_PROFILE_IDS.length, 8)
+assert.equal(mod.AGENT_PROFILE_IDS.length, 7)
+assert.ok(!mod.AGENT_PROFILE_IDS.includes('evidence_explainer'), 'the answer-card explainer left with the guard (0.8.0)')
 for (const id of mod.AGENT_PROFILE_IDS) assert.ok(mod.AGENT_DEFAULTS[id], id)
 
 // Modules register in the §3.7 order and a failing one is logged, not fatal.
-assert.deepEqual(mod.MODULES.map(([id]) => id), ['M9', 'M2', 'M1', 'M3', 'M7', 'M4', 'M5', 'M6', 'M11', 'M8', 'M12', 'M13'])
+assert.deepEqual(mod.MODULES.map(([id]) => id), ['M9', 'M1', 'M3', 'M7', 'M4', 'M5', 'M6', 'M11', 'M8', 'M12', 'M13'])
 
 // R7: no custom durable session events.
 function walk(dir) {

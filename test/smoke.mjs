@@ -30,10 +30,10 @@ assert.match(pkg.scripts.test, /node test\/run-all\.mjs/, 'npm test runs every t
 assert.equal(require('../package-lock.json').version, '0.7.0')
 assert.deepEqual(mod.HARNESS_SKILLS, ['longpi-dispatch', 'longpi-board', 'longpi-boundary', 'longpi-interventions'])
 
-assert.equal(mod.preGuard('我胸痛喘不上气').code, 'emergency')
-assert.equal(mod.preGuard('我想把药停了').code, 'no_medication_change')
-assert.equal(mod.preGuard('我现在在吃什么药'), null)
-assert.match(mod.wrapGuardMessage('胸痛', mod.preGuard('胸痛')), /120/)
+// 0.8.0: the safety guard (message labels, rule layer, emergency scripts, answer cards, reply corrections) is gone.
+for (const name of ['preGuard', 'wrapGuardMessage', 'createGuard', 'emergencyScript', 'steerNeed', 'replyRuleCheck', 'ruleLabels', 'touchesHealth', 'localAidText', 'hasDoseAmount']) {
+  assert.equal(mod[name], undefined, `${name} is no longer exported`)
+}
 
 const folded = mod.parseFrontmatter(`---\nname: accelerated-biological-aging-risk\ndescription: >-\n  Computes phenotypic age.\n  Use when PhenoAge.\n---\n\n# Title\n`)
 assert.match(folded.description, /PhenoAge/)

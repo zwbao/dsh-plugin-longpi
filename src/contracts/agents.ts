@@ -4,9 +4,9 @@ import type { Id, IsoTime, ModuleId, TokenUsage } from './common.ts'
 import type { FactPack } from './factpack.ts'
 import type { SurfaceKind } from './surfaces.ts'
 
-export type AgentProfileId = 'coach' | 'triage' | 'report_reader' | 'plan_codesigner' | 'evidence_explainer'
+export type AgentProfileId = 'coach' | 'triage' | 'report_reader' | 'plan_codesigner'
   | 'retest_reviewer' | 'research_coordinator' | 'memory_distiller'
-export const AGENT_PROFILE_IDS: readonly AgentProfileId[] = ['coach', 'triage', 'report_reader', 'plan_codesigner', 'evidence_explainer', 'retest_reviewer', 'research_coordinator', 'memory_distiller']
+export const AGENT_PROFILE_IDS: readonly AgentProfileId[] = ['coach', 'triage', 'report_reader', 'plan_codesigner', 'retest_reviewer', 'research_coordinator', 'memory_distiller']
 export interface ObjectJsonSchema { type: 'object'; properties: Record<string, unknown>; required?: string[]; additionalProperties?: boolean }
 export interface AgentRoute { provider?: string; model?: string; reasoningEffort: 'off' | 'low' | 'high' | 'max'; maxTokens: number }
 export interface AgentProfile<I, O> {

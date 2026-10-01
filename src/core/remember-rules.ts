@@ -1,9 +1,8 @@
-// A few things said in the first person are kept at once by rule, before any model: pregnancy or planning
-// one, and a close relative's breast cancer. They only add caution (plan safety) and a screening topic.
+// A few things written into a plan request's constraints are kept by rule: pregnancy or planning one,
+// breastfeeding, and a close relative's breast cancer. They only add caution (plan safety) and a screening topic.
+// A mention of 我妈 / 我爸 never changes whose record this is: each family member has a record of their own.
 
 import type { NewMemoryItem } from '../contracts/memory.ts'
-import { readProfile, writeProfile } from '../profile.ts'
-import { subjectFromText } from '../subject.ts'
 import { memoryFor } from './memory.ts'
 
 const OTHER_PERSON = /老婆|妻子|太太|女朋友|老公|丈夫|男朋友|女儿|儿子|朋友|同事|她(?:在|正在|怀)|他(?:在|正在)/
@@ -40,14 +39,6 @@ export function rememberFromWords(dataDir: string, text: string, session = ''): 
   const family = raw.match(/(?:我妈妈?|我母亲|母亲|我姐姐?|我妹妹?|我外婆|我奶奶)[^。？?！!]{0,14}(?:乳腺癌|乳癌)[^。？?！!]{0,8}/)
   if (family) {
     ops.push({ kind: 'family_history', relative: /姐|妹/.test(family[0]) ? (/姐/.test(family[0]) ? 'sister' : 'sister') : /外婆|奶奶/.test(family[0]) ? 'grandparent' : 'mother', condition_zh: '乳腺癌', flags: [], text_zh: family[0].trim(), confirmed: true, provenance: provenance(family[0]) } as NewMemoryItem)
-  }
-  const subject = subjectFromText(raw)
-  if (subject) {
-    try {
-      writeProfile(dataDir, { ...readProfile(dataDir), subject })
-    } catch {
-      // a damaged profile is left alone; the sentence is still in the chat
-    }
   }
   if (ops.length === 0) return []
   return memoryFor(dataDir).apply(ops.map((item) => ({ op: 'add' as const, item })), 'M0').applied

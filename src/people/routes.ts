@@ -15,14 +15,13 @@ const holderAuthOk = (root: string) => !('error_zh' in holderAuth(root))
 import { invalidateRecords } from '../records.ts'
 import { invalidateTracking } from '../tracking.ts'
 import { invalidateIndicators } from '../indicators.ts'
-import { forgetMedications } from '../guardrails.ts'
 import { forgetLastBuilt } from '../journey.ts'
 import { forgetLastPage } from '../surfaces/service.ts'
 import { SELF, activePerson, addPerson, personDir, readRegistry, removePerson, setActive } from './store.ts'
 
 /** Everything held in memory about the person shown before a switch. */
 function forgetPersonCaches(): void {
-  invalidateRecords(); invalidateTracking(); invalidateIndicators(); forgetMedications(); forgetLastBuilt(); forgetLastPage()
+  invalidateRecords(); invalidateTracking(); invalidateIndicators(); forgetLastBuilt(); forgetLastPage()
 }
 
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '')

@@ -1,5 +1,4 @@
-// Approval for saving a plan from chat (claim 8d), and no skill runs in a turn flagged as an emergency.
-// A session that ran a LongPi tool is a health session: the guard's model labels the rest of it.
+// Approval for saving a plan from chat (claim 8d) and for starting a deep analysis.
 // save_intervention_plan with confirm=true now waits for the person to approve in DSH, and only after the
 // same plan was read back (confirm=false) in this process within the last 30 minutes. The tool body is
 // unchanged: these are tools/pre-execute and tools/post-execute listeners, in the same shape as the
@@ -8,8 +7,6 @@
 import { createHash } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { CATEGORY_ZH, isoDay, normalizePlan, type Category } from './interventions.ts'
-import type { Guard } from './guard-llm.ts'
-import { TOOL_NAMES } from './version.ts'
 import { COST_ZH } from './analysis/service.ts'
 
 export const READ_BACK_MS = 30 * 60_000
@@ -66,40 +63,24 @@ export function resetReadBacks(): void {
   readBacks.clear()
 }
 
-const EMERGENCY_BLOCK = new Set(['run_longevity_skill', 'query_longevity_evidence', 'read_longevity_skill', 'match_longevity_skills', 'read_personal_situation', 'draft_intervention_plan'])
-
-export function registerApprovals(ctx: Context, guard: Pick<Guard, 'inEmergency' | 'count'> & Partial<Pick<Guard, 'markHealth' | 'inAdvice'>>): void {
+export function registerApprovals(ctx: Context): void {
   // After every other listener allowed it: a confirmed save needs a fresh read-back and then the person's yes.
   ctx.on('tools/pre-execute', async (exec, next) => {
     const decision = await next()
     if (decision.kind !== 'allow') return decision
-    if (EMERGENCY_BLOCK.has(exec.name) && guard.inEmergency(exec.agent)) {
-      guard.count({ skill_blocked: 1 })
-      return { kind: 'deny', reason: '对方可能正处在紧急情况：先说急救步骤并拨打 120，这一轮不运行技能、不查记录。' }
-    }
-    if ((exec.name === 'query_longevity_evidence' || exec.name === 'draft_intervention_plan') && guard.inAdvice?.(exec.agent)) {
-      guard.count({ skill_blocked: 1 })
-      return { kind: 'deny', reason: '这一轮不要查证据库，也不要起草方案。按安全提示里的人体常用范围、上限、试验方案或风险说明直接回答。动物、细胞、蟋蟀或小鼠的结果不是这个人的证据。不要只说不能回答。' }
-    }
     // A deep analysis the person asks for costs about half a million tokens: DSH asks them, so "member" is their yes,
     // never only the model's word. An automatic start ("ai") is allowed only with the page switch on (checked in M12).
     if (exec.name === 'run_deep_analysis' && record(exec.arguments).trigger !== 'ai') {
-      guard.count({ approval_asked: 1 })
       return { kind: 'ask', reason: `开始一次深度分析？${COST_ZH}。` }
     }
     if (exec.name !== SAVE_TOOL || record(exec.arguments).confirm !== true) return decision
-    if (!hasReadBack(planKey(exec.arguments))) {
-      guard.count({ approval_no_readback: 1 })
-      return { kind: 'deny', reason: NO_READ_BACK }
-    }
-    guard.count({ approval_asked: 1 })
+    if (!hasReadBack(planKey(exec.arguments))) return { kind: 'deny', reason: NO_READ_BACK }
     return { kind: 'ask', reason: planApprovalReason(exec.arguments) }
   })
 
   // A read-back that went through (confirm=false, no errors) is what a later confirm=true must match.
   ctx.on('tools/post-execute', async (exec, result, next) => {
     const decision = await next()
-    if ((TOOL_NAMES as readonly string[]).includes(exec.name)) guard.markHealth?.(exec.agent)
     if (exec.name !== SAVE_TOOL || result.isError) return decision
     const value = record(result.value)
     const args = record(exec.arguments)

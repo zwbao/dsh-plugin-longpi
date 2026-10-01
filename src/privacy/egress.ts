@@ -1,42 +1,18 @@
 // Whether a model call may carry health data. Without the DeepSeek consent, record text
-// does not leave this computer. A present emergency is answered locally instead.
-
-import { emergencyScript, renderSay } from '../advice/playbook.ts'
-import { EMERGENCY_LINE_ZH, ruleLabels, SELF_HARM_LINE_ZH } from '../guardrails.ts'
-import { HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH, hypoglycaemiaNow } from '../plan-safety.ts'
+// does not leave this computer.
 
 const HEALTH = /血红蛋白|血糖|铁蛋白|胸痛|心梗|胸闷|体检|表型年龄|血压|mmol|g\/L|用药|怀孕|中风|头晕|过敏|自杀|不想活|心口|喘/
 
 export const CONSENT_HOLD_ZH = '你尚未同意把健康对话发给 DeepSeek，因此本次不发送健康信息。请在开始页或档案中选择「我知道了，同意把健康对话发给 DeepSeek」。'
 
-function acuteNow(text: string): boolean {
-  if (!text.trim()) return false
-  const labels = ruleLabels(text)
-  return labels.acute_emergency || labels.self_harm || hypoglycaemiaNow(text).now || emergencyScript(text) != null
-}
-
-/**
- * `blob` is the whole call (system prompt included). `personText` is only what the person typed.
- * A symptom in the persona or a safety note does not count as their emergency.
- */
-export function modelEgress(granted: boolean, blob: string, personText = blob): 'send' | 'hold' | 'local_aid' {
+/** `blob` is the whole call (system prompt included). `personText` is only what the person typed. */
+export function modelEgress(granted: boolean, blob: string, personText = blob): 'send' | 'hold' {
   if (granted) return 'send'
-  if (acuteNow(personText)) return 'local_aid'
   if (!HEALTH.test(`${blob}\n${personText}`)) return 'send'
   return 'hold'
 }
 
-/** First aid from the local scripts. Nothing in `text` is sent to the model. */
-export function localAidText(text: string): string {
-  const hypo = hypoglycaemiaNow(text)
-  if (hypo.now) return hypo.unconscious ? HYPO_UNCONSCIOUS_ZH : HYPO_AWAKE_ZH
-  const script = emergencyScript(text)
-  if (script) return renderSay(script, text)
-  if (ruleLabels(text).self_harm) return SELF_HARM_LINE_ZH
-  return `${EMERGENCY_LINE_ZH}停止活动，坐下或半卧，不要自己开车。`
-}
-
-/** The person's own messages, not a plugin safety note. */
+/** The person's own messages, not a plugin note. */
 export function personTextOf(options: { messages?: unknown }): string {
   const messages = Array.isArray(options.messages) ? options.messages : []
   const lines: string[] = []

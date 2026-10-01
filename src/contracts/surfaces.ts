@@ -16,7 +16,7 @@ export interface NextBestAction {
   provider: ModuleId
   /** 0–100, deterministic. */
   priority: number
-  /** Only M1 (triage) and M2 (emergency) may set true. */
+  /** Only M1 (triage) may set true. */
   mandatory: boolean
   /** e.g. see_doctor(anaemia) blocks draft_plan for bioage levers. */
   blocks?: ActionKind[]
@@ -80,4 +80,4 @@ export interface PageState {
 }
 export type CandidateProvider = (pack: Omit<FactPack, 'candidates' | 'fp'>) => NextBestAction[]
 /** Providers registered as these modules may propose a mandatory action. */
-export const MANDATORY_PROVIDERS: readonly ModuleId[] = ['M1', 'M2']
+export const MANDATORY_PROVIDERS: readonly ModuleId[] = ['M1']

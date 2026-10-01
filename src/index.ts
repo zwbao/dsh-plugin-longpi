@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import { WORKSPACE_MARKER } from './workspace.ts'
 import { Config } from './config.ts'
 import { registerCommands } from './commands.ts'
-import { createGuard } from './guard-llm.ts'
 import { registerApprovals } from './tools-approval.ts'
 import { registerHarnessSkills } from './harness-skills.ts'
 import { mountMirobody } from './mirobody.ts'
@@ -59,14 +58,9 @@ export const name = 'dsh-plugin-longpi'
 export const inject = ['tools']
 export { asJson } from './json.ts'
 export { Config }
-export { preGuard, wrapGuardMessage, rememberMedications, rememberedMedications, ruleLabels, replyRuleCheck, guidanceNote, correctionNote, hypoCorrectionNote, isMedicationRecordRequest, mentionsMedicine, LABEL_KEYS, SELF_HARM_LINE_ZH, EMERGENCY_LINE_ZH } from './guardrails.ts'
-export type { GuardHit, GuardLabels, ReplyVerdict } from './guardrails.ts'
-export { createGuard, classifyMessage, checkReply, parseLabels, parseVerdict, runtimeCall, routeFor, personText, turnText, countGuard, readGuardStats, CLASSIFIER_SYSTEM, JUDGE_SYSTEM, GUARD_TIMEOUT_MS, GUARD_COUNTERS } from './guard-llm.ts'
-export type { Guard, GuardCall, LlmLike } from './guard-llm.ts'
 export { registerApprovals, planKey, planApprovalReason, resetReadBacks, NO_READ_BACK, READ_BACK_MS } from './tools-approval.ts'
-export { touchesHealth, healthWorkspacePaths, insideWorkspace, HealthSessions, GUARD_SCOPES } from './guard-scope.ts'
-export type { GuardScope, WorkspaceLike } from './guard-scope.ts'
-export { hasDoseAmount } from './guard-dose.ts'
+export { healthWorkspacePaths, insideWorkspace } from './guard-scope.ts'
+export type { WorkspaceLike } from './guard-scope.ts'
 export { PRODUCT_VERSION, TOOL_NAMES, HARNESS_SKILLS } from './version.ts'
 export { parseFrontmatter, loadCatalog, parseReadme, commandExcerpt, supplementFieldInputs } from './catalog.ts'
 export { matchSkills, domainSummary, organismsAsked, organismOf } from './match.ts'
@@ -105,10 +99,9 @@ export type { FollowupSettings, FollowupState, FollowupLogRow, FollowupDeps, Sen
 export { followupTextProblem, followupApprovalReason } from './tools-followup.ts'
 export { briefOptionsOf, buildPlanBrief, draftPlan, softHoldDraft, settleDraft, replyForDraft, acceptedPlan, expectedText, DRAFT_CATEGORIES } from './planner.ts'
 export { clinicalStop, hypoglycaemiaNow, leadsWithHypoFirstStep, exclusionsFromText, medicationClasses, HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH, FISH_OIL_CAUTION, type StopResult, type StopHit } from './plan-safety.ts'
-export { emergencyScript, steerNeed, keepsValidatedComputation } from './advice/playbook.ts'
 export { affirmsBooking, deniesBooking, dateSaid } from './triage/care.ts'
 export { deepseekConsentPending } from './privacy/pending.ts'
-export { modelEgress, localAidText, CONSENT_HOLD_ZH } from './privacy/egress.ts'
+export { modelEgress, CONSENT_HOLD_ZH } from './privacy/egress.ts'
 export { buildDoctorFirst } from './doctor-first.ts'
 export { planDraftHeld, holdPlanDraft, releasePlanDraft } from './plan-hold.ts'
 export { readPlanPrefs, setPlanExclusion, rememberExclusions } from './plan-prefs.ts'
@@ -187,15 +180,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       return []
     }
   }
-  // The safety guard: the host model labels each new message in LongPi's workspace, and elsewhere each one that
-  // touches health (rules otherwise, and when it fails); it checks the reply before a turn closes; plan saves
-  // from chat wait for the person's approval.
-  const guard = createGuard(ctx, {
-    dataDir: () => resolveDataDir(config.dataDir),
-    scope: () => (config.guardScope === 'all' ? 'all' : 'health'),
-    healthWorkspaces: () => healthWorkspacePaths(resolveRootDir(config.dataDir), workspaces()),
-  })
-  registerApprovals(ctx, guard)
+  // Saving a plan, starting a deep analysis: DSH asks the person first.
+  registerApprovals(ctx)
   // Reminders follow the person selected on the page (their store holds their plan and settings); a family member's say whose.
   startFollowup(ctx, () => {
     const who = activePerson(resolveRootDir(config.dataDir))
@@ -400,15 +386,6 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     }
   })
 
-  // One guidance note after the person's words for what the guard flagged; their message is never replaced.
-  // Outermost, so it runs on every step even when a listener registered earlier ends the waterfall.
-  // The mounted dsh-plugin-mirobody (0.1.1 and later) has its own rule guard that appends a notice and never
-  // rewrites the message. LongPi's listener runs outermost: when the host model labelled the message, it drops
-  // that notice and adds its own; when the model call failed, both rule notes stay.
-  ctx.on('agent/pre-step', (payload, next) => guard.preStep(payload, next), { prepend: true })
-
-  // Before a turn closes: one correction when the reply gave a dose or advised a medicine change.
-  ctx.on('agent/turn-stopping', (payload) => guard.turnStopping(payload))
 }
 // C0 contracts (AA §3): reserved names, registries and invariants shared by the modules.
 export { RESERVED_TOOL_NAMES, RESERVED_ROUTES, RESERVED_SKILLS, PROMPT_SECTIONS } from './version.ts'

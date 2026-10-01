@@ -68,7 +68,6 @@ export const HARNESS_SKILLS = [
 export const RESERVED_TOOL_NAMES = {
   M0: ['read_person_memory', 'remember_for_me', 'note_page_issue', 'consult_longpi_specialist'],
   M1: ['read_care_navigation', 'prepare_doctor_brief', 'log_care_visit'],
-  M2: ['advise_on_substance'],
   M4: ['read_progress_feedback'],
   M6: ['log_life_event', 'read_season', 'propose_personal_season', 'run_drawn_method'],
   M7: ['forward_report', 'record_condition', 'read_narrative_findings'],
@@ -79,7 +78,6 @@ export const RESERVED_TOOL_NAMES = {
 export const RESERVED_ROUTES = {
   M0: ['GET /api/longpi/memory', 'POST /api/longpi/memory', 'GET /api/longpi/events', 'GET /api/longpi/usage'],
   M1: ['GET /api/longpi/triage', 'GET /api/longpi/brief', 'POST /api/longpi/brief', 'POST /api/longpi/care-visit'],
-  M2: ['GET /api/longpi/advice'],
   M4: ['GET /api/longpi/feedback'],
   M5: ['GET /api/longpi/surfaces'],
   M6: ['GET /api/longpi/season', 'POST /api/longpi/season', 'POST /api/longpi/streak-freeze', 'GET /api/longpi/schedule', 'POST /api/longpi/schedule', 'GET /api/longpi/codex', 'GET /api/longpi/codex/odds', 'POST /api/longpi/codex/draw', 'POST /api/longpi/codex/run', 'GET /api/longpi/weekly', 'POST /api/longpi/nudges'],

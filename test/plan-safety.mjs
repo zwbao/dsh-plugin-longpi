@@ -309,44 +309,12 @@ try {
   assert.equal(mod.leadsWithHypoFirstStep(`${firstAid}\n昏迷时拨打 120。`), true)
   assert.equal(mod.leadsWithHypoFirstStep('**先吃 15g 糖**（3–4 片葡萄糖片），15 分钟后复测。'), true)
   assert.equal(mod.leadsWithHypoFirstStep('这个读数偏低，建议联系医生调整用药。\n如果需要可以吃点糖，15 克左右。'.padEnd(200, '。')), false, 'a doctor line first is not the first step')
-  assert.equal(mod.replyRuleCheck(`${firstAid}昏迷时不要喂东西，立即拨打 120。`).personal_dose, false, 'the 15 g step is not a dose')
-
-  const guardDir = tempDir('guard')
-  const guard = mod.createGuard({}, { dataDir: () => guardDir, timeoutMs: 50 })
-  const out = await guard.preStep({ agent: fakeAgent(), messages: [userMessage('我午饭前测了血糖 3.7，手在抖')], signal: new AbortController().signal }, async () => ({ kind: 'enter', messages: [] }))
-  assert.equal(out.messages.length, 1)
-  assert.match(out.messages[0].content[0].text, new RegExp(`The first sentence of the reply must be 「${firstAid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}」`))
-  assert.match(out.messages[0].content[0].text, /Do not draft a plan/)
-  assert.match(out.messages[0].content[0].text, /eat the next meal or a snack/)
-  assert.equal(mod.planDraftHeld('s'), true, 'the session the low reading came in is held')
-  assert.equal(mod.planDraftHeld('other-session'), false, 'another session is not held (0.5.3: per session, not process-wide)')
-  assert.equal(mod.planDraftHeld(), false, 'nor is a caller without a session')
-  const heldHost = fakeHost()
-  await mod.apply(heldHost.ctx, configFor(tempDir('held'), plain.url))
-  const held = await heldHost.tools.get('draft_intervention_plan').execute({}, { agent: fakeAgent() })
-  assert.equal(held.draft, null)
-  assert.ok(held.reply_zh.startsWith(firstAid), 'a draft asked for in that turn answers with the first step')
-  const elsewhere = await heldHost.tools.get('draft_intervention_plan').execute({}, { agent: { ...fakeAgent(), session: { id: 'other-session', requestHeader: () => undefined } } })
-  assert.ok(!String(elsewhere.reply_zh ?? '').startsWith(firstAid), 'a draft in another session is not answered with the hypoglycaemia step')
-  heldHost.dispose()
-  await guard.preStep({ agent: fakeAgent(), messages: [userMessage('好了，谢谢')], signal: new AbortController().signal }, async () => ({ kind: 'enter', messages: [] }))
-  assert.equal(mod.planDraftHeld('s'), false, 'the next message releases the hold')
   mod.holdPlanDraft('a', 60_000)
   mod.holdPlanDraft('b', 60_000)
   mod.releasePlanDraft('a')
   assert.equal(mod.planDraftHeld('a'), false)
   assert.equal(mod.planDraftHeld('b'), true, 'releasing one session leaves the other held')
   mod.releasePlanDraft('b')
-
-  // the reply check: a reply that does not open with the step gets it sent first
-  const signal = new AbortController().signal
-  let run = turnAgent(1, '我午饭前测了血糖 3.7，手在抖', '血糖 3.7 偏低，建议你联系开药的医生，看看达格列净要不要调整。也可以先吃点东西。')
-  await guard.turnStopping({ agent: run.agent, turn: 1, signal })
-  assert.equal(run.steered.length, 1)
-  assert.match(run.steered[0].content[0].text, /whose first sentence is exactly 「先吃 15 克快速吸收的糖/)
-  run = turnAgent(2, '我午饭前测了血糖 3.7，手在抖', `${firstAid}\n昏迷、叫不醒或无法吞咽时不要喂东西，请立即拨打 120。\n缓过来后正常吃午饭，并把这次读数告诉开药的医生。`)
-  await guard.turnStopping({ agent: run.agent, turn: 2, signal })
-  assert.equal(run.steered.length, 0, 'a reply that leads with the step passes')
 
   // --- 5. exclusions the person states hold for every later draft ----------------------------------
   const exDir = tempDir('exclusions')
@@ -364,10 +332,6 @@ try {
   const page = (await call(exHost, 'GET', '/api/longpi/plan-draft')).json()
   assert.ok(page.draft.items.every((item) => !TRE.test(`${item.title} ${item.detail}`)), 'the page draft too')
   exHost.dispose()
-  // said in chat without the model passing it on: the guard remembers it
-  const chatDir = tempDir('chat-exclusion')
-  await mod.createGuard({}, { dataDir: () => chatDir, timeoutMs: 50 }).preStep({ agent: fakeAgent(), messages: [userMessage('说过很多次了，不要限时进食')], signal }, async () => ({ kind: 'enter', messages: [] }))
-  assert.deepEqual(mod.readPlanPrefs(chatDir).excluded_phrases, ['限时进食'])
   // the draft keeps its date on a new day while the record is the same
   const draftedOn = later.draft.title.match(/\d{4}-\d{2}-\d{2}/)[0]
   const dated = mod.settleDraft(exDir, later.brief, '2099-01-01', { maxItems: 5 })
@@ -383,8 +347,6 @@ try {
   ])
   assert.deepEqual(presented.lines, ['当前：二甲双胍缓释片 0.5g 每天 3 次，2020-04-08 起', '较早：二甲双胍片 0.5g 每天 2 次，2019-05-20 起至 2020-04-08', '当前：达格列净片 10 mg，每天 1 次，2023-08-14 起'])
   assert.ok(presented.lines.every((line) => !/0x\/day/.test(line)))
-  assert.equal(mod.isMedicationRecordRequest('请记一下：医生把达格列净改成每天早上 10 mg'), true)
-  assert.equal(mod.isMedicationRecordRequest('帮我记录今天的打卡：鱼油吃了，快走40分钟'), false)
   const medDir = tempDir('meds')
   const medHost = fakeHost()
   await mod.apply(medHost.ctx, configFor(medDir, plain.url))
@@ -393,7 +355,7 @@ try {
   assert.equal(mod.readStatements(medDir)[0].name, '达格列净片')
   medHost.dispose()
 
-  console.log(`plan-safety ok (doctor-first: ${stop.hits.map((hit) => hit.key).join('/')}; SGLT2 ${sglt2Brief.candidates.length} candidates without TRE; hypo first step enforced; exclusions persist)`)
+  console.log(`plan-safety ok (doctor-first: ${stop.hits.map((hit) => hit.key).join('/')}; SGLT2 ${sglt2Brief.candidates.length} candidates without TRE; hypo first step defined; exclusions persist)`)
 } finally {
   for (const server of servers) await server.close?.()
   for (const dir of temp) rmSync(dir, { recursive: true, force: true })

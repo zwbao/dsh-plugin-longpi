@@ -1,15 +1,15 @@
-// The chat side of AA §2.2: LongPi's persona and orchestrator rules only for agents in a health session
-// (the 健康对话 workspace, D5), LongPi's write tools hidden from every other agent, a one-time instruction when
-// health comes up elsewhere, and at the first step of each health turn a snapshot of what the LongPi page
-// shows now, so the chat and the page tell the same story.
+// The chat side of AA §2.2: LongPi's persona and orchestrator rules only for agents in LongPi's own workspace
+// (健康对话, D5), LongPi's write tools hidden from every other agent, and at the first step of each turn there a
+// snapshot of what the LongPi page shows now, so the chat and the page tell the same story. Sessions in other
+// workspaces get nothing from LongPi, whatever they talk about; neither do sub-agents.
 
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import type { PageState } from '../contracts/surfaces.ts'
 import type { MountState } from '../mirobody.ts'
-import { insideWorkspace, touchesHealth } from '../guard-scope.ts'
+import { insideWorkspace } from '../guard-scope.ts'
 import { personaLines } from '../prompt.ts'
-import { PROMPT_SECTIONS, PRODUCT_VERSION } from '../version.ts'
+import { PROMPT_SECTIONS } from '../version.ts'
 
 export const PLUGIN_SOURCE = 'dsh-plugin-longpi'
 /** Write tools a non-health agent does not see (D5). Read tools stay global. */
@@ -37,7 +37,7 @@ export function orchestratorPrompt(mount: MountState): string {
 
 interface AgentLike {
   ctx?: unknown
-  session?: { id?: unknown; header?: { cwd?: unknown } }
+  session?: { id?: unknown; header?: { cwd?: unknown; parentSession?: unknown } }
 }
 
 function freeze<T>(value: T): T {
@@ -111,18 +111,9 @@ function sessionId(agent: AgentLike | undefined): string {
   return typeof agent?.session?.id === 'string' ? agent.session.id : ''
 }
 
-function personText(messages: readonly unknown[]): string {
-  return messages.map((message) => {
-    const row = message as { role?: string; source?: { kind?: string }; content?: Array<{ type?: string; text?: string }> }
-    if (row.role !== 'user' || (row.source && row.source.kind && row.source.kind !== 'user')) return ''
-    return (row.content ?? []).filter((part) => part.type === 'text').map((part) => part.text ?? '').join('')
-  }).join('\n')
-}
-
 export function registerOrchestrator(ctx: Context, options: OrchestratorOptions): Orchestrator {
   const healthAgents = new WeakSet<object>()
   const healthSessions = new Set<string>()
-  const instructed = new Set<string>()
   const injected = new Map<string, string>()
   const inHealthWorkspace = (agent: AgentLike | undefined) => {
     const cwd = typeof agent?.session?.header?.cwd === 'string' ? agent.session.header.cwd : ''
@@ -174,16 +165,9 @@ export function registerOrchestrator(ctx: Context, options: OrchestratorOptions)
       if (decision.kind !== 'enter' || payload.signal?.aborted || payload.step !== 1) return decision
       const agent = payload.agent
       const id = sessionId(agent)
+      // Only LongPi's own workspace, and only the person's session there: a sub-agent gets its task from its parent.
+      if (!id || !isHealth(agent) || agent?.session?.header?.parentSession) return decision
       const extra: never[] = []
-      if (!isHealth(agent)) {
-        const text = personText(payload.messages)
-        if (!id || !text || !touchesHealth(text)) return decision
-        healthSessions.add(id)
-        if (!instructed.has(id)) {
-          instructed.add(id)
-          extra.push(pluginMessage(`【LongPi ${PRODUCT_VERSION} 说明】这个会话谈到了健康。下面是 LongPi 的做法，只用于健康话题（保存记录、方案和就医记录请到「健康对话」工作区）：\n${orchestratorPrompt(options.mount)}`, 'instructions', 'longpi'))
-        }
-      }
       const snap = await options.snapshot(8_000).catch(() => null)
       if (snap && id && injected.get(id) !== snap.page.inputs_fp) {
         injected.set(id, snap.page.inputs_fp)
