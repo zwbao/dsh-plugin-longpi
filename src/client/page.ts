@@ -22,7 +22,7 @@ import { ProfileTab } from './profile-tab.ts'
 import { SeasonBar } from './engage/index.ts'
 import { AskTab, CalendarTab, SleepTab, TrainingTab } from './life.ts'
 import { AnalysisTab } from './analysis.ts'
-import { PeoplePicker, PersonNotice } from './people.ts'
+import { DemoInvite, PeoplePicker, PersonNotice } from './people.ts'
 import { pageTabs } from './registry.ts'
 import type { ResultTarget } from './results.ts'
 import {
@@ -303,6 +303,7 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
     h('div', { className: 'lp-page' },
       h(Header, { journey, failed: !journey && !loading, refreshing, onRefresh: () => { void doRefresh() } }),
       h(PersonNotice),
+      h(DemoInvite, { empty: Boolean(journey) && (journey?.records.indicator_count ?? 0) === 0 }),
       notice ? h('div', { className: 'lp-notice-slot' }, notice) : null,
       journey ? h(SeasonBar, { onOpen: () => setTab('season') }) : null,
       body,

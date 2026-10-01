@@ -52,7 +52,9 @@ export function stepsLeft(journey: Journey): number {
   if (!journey.consent.accepted) return 3
   if (!journey.profile.complete) return 2
   if (recordConnected(journey.records.status) && journey.records.indicator_count > 0) return 0
-  return readPref(UPLOAD_SKIPPED_KEY) === '1' ? 0 : 1
+  // The flag names the consent it was set under: a wiped or new store (a new consent) asks for the report again.
+  const skipped = readPref(UPLOAD_SKIPPED_KEY)
+  return skipped && skipped === (journey.consent.accepted_at ?? '') ? 0 : 1
 }
 
 function Progress(props: { step: number }): React.ReactElement {
@@ -160,7 +162,7 @@ function BasicInfo(props: { journey: Journey; onDone: () => void; onSkip: () => 
       }, busy ? '正在保存…' : '下一步')))
 }
 
-function FirstData(props: { onFinish: () => void; openChat: () => void }): React.ReactElement {
+function FirstData(props: { onFinish: () => void; openChat: () => void; consentAt: string }): React.ReactElement {
   const [none, setNone] = React.useState(false)
   const [read, setRead] = React.useState('')
   return h('div', { className: 'lp-onb-body' },
@@ -178,7 +180,7 @@ function FirstData(props: { onFinish: () => void; openChat: () => void }): React
     h('div', { className: 'lp-onb-actions' },
       none && !read ? h(Btn, { variant: 'outline', onClick: props.openChat }, '去健康对话') : null,
       // Before anything is uploaded or skipped, 上传报告 is the one primary action on screen.
-      h(Btn, { variant: read || none ? 'primary' : 'outline', onClick: () => { if (!read) writePref(UPLOAD_SKIPPED_KEY, '1'); props.onFinish() } }, '完成')))
+      h(Btn, { variant: read || none ? 'primary' : 'outline', onClick: () => { if (!read && props.consentAt) writePref(UPLOAD_SKIPPED_KEY, props.consentAt); props.onFinish() } }, '完成')))
 }
 
 export function Onboarding(props: OnboardingProps): React.ReactElement | null {
@@ -236,7 +238,7 @@ export function Onboarding(props: OnboardingProps): React.ReactElement | null {
       h('h2', { className: 'lp-onb-title', tabIndex: -1 }, ONBOARDING_TITLES[step]),
       step === 0 ? h(Welcome, { onDone: () => setStep(1), onLater: finish, openSettings }) : null,
       step === 1 ? h(BasicInfo, { journey, onDone: () => setStep(2), onSkip: () => setStep(2) }) : null,
-      step === 2 ? h(FirstData, { onFinish: finish, openChat }) : null))
+      step === 2 ? h(FirstData, { onFinish: finish, openChat, consentAt: journey.consent.accepted_at ?? '' }) : null))
 }
 
 function OnboardingModal(props: { title: string; onClose: () => void; children?: React.ReactNode }): React.ReactElement {

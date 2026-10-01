@@ -50,6 +50,9 @@ export function analystSkillVersion(): { version: string | null; ok: boolean } {
 
 /** Everything that must hold before a run is prepared. Returns the first thing missing, in the person's words. */
 export function startBlockers(dataDir: string, config: { member?: string } = {}): { reply_zh: string; missing: string } | null {
+  if (/[\\/]people[\\/]pdemolimh01[\\/]?$/.test(dataDir)) {
+    return { missing: 'demo', reply_zh: '这是示例档案，只用来看完整档案的效果，不能开始新的深度分析。切回「我」，用你自己的档案。' }
+  }
   const skill = analystSkillVersion()
   if (!skill.version) {
     return { missing: 'skill', reply_zh: '这台电脑上还没有安装深度分析（longevity-analyst）。用 LongPi 安装器加 --with-analyst 装好后再来。' }

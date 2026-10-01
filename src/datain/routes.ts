@@ -191,6 +191,10 @@ export function registerDatainRoutes(deps: CoreDeps, open?: SocketOpener): void 
   })
 
   deps.http.route('POST', '/api/longpi/upload', async (_req, body) => {
+    // The 示例档案 is for looking: nothing is uploaded into it (it is rebuilt on every open anyway).
+    if (/[\\/]people[\\/]pdemolimh01[\\/]?$/.test(deps.dataDir())) {
+      return { ok: false, status: 409, error: '这是示例档案，不能上传报告。切回「我」，在你自己的档案里上传。' }
+    }
     const value = bodyOf(body)
     const op = typeof value.op === 'string' ? value.op : 'path'
     const fields = uploadFields(value)

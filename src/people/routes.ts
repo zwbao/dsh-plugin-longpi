@@ -9,6 +9,7 @@ import { EMPTY_PROFILE, mergeProfile, normalizeProfile, writeProfile } from '../
 import { createManagedMember, ensureMemberLink, holderAuth, mintMemberLink, saveMemberLink } from './mirobody.ts'
 import { deleteLocalStore } from '../privacy/delete.ts'
 import { ensureLocalPairing } from '../mirobody-account.ts'
+import { ensureDemoPerson, isDemo, openDemo } from '../demo/index.ts'
 
 const holderAuthOk = (root: string) => !('error_zh' in holderAuth(root))
 import { invalidateRecords } from '../records.ts'
@@ -28,6 +29,7 @@ const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slic
 
 export function peopleView(deps: CoreDeps) {
   const root = resolveRootDir(deps.config().dataDir)
+  try { ensureDemoPerson(root) } catch { /* a damaged registry is reported elsewhere; the demo just stays out */ }
   const reg = readRegistry(root)
   const holder = holderAuth(root)
   return {
@@ -37,7 +39,7 @@ export function peopleView(deps: CoreDeps) {
       { id: SELF, label_zh: '我', name: '', connected: Boolean(readConnection(root)?.mcp_url || deps.config().mcpUrl?.trim()), managed: false, link_error_zh: '' },
       ...reg.people.map((p) => ({ id: p.id, label_zh: p.label_zh, name: p.name, sex: p.sex, birth_year: p.birth_year,
         connected: Boolean(readConnection(personDir(root, p.id))?.mcp_url) && !p.link_error, managed: Boolean(p.mirobody_user_id),
-        link_error_zh: p.link_error ?? '' })),
+        link_error_zh: p.link_error ?? '', ...(p.demo ? { demo: true } : {}) })),
     ],
     can_create_in_mirobody: !('error_zh' in holder),
     // A link set in the installer's config (no saved connection) also reads records but cannot create accounts.
@@ -106,6 +108,10 @@ export function registerPeopleRoutes(deps: CoreDeps): void {
     const v = body && typeof body === 'object' ? body as Record<string, unknown> : {}
     const id = text(v.id, 60)
     const root = resolveRootDir(deps.config().dataDir)
+    // The demo is rebuilt from its bundled assets on every open: a clean, dated-to-today copy.
+    if (isDemo(id)) {
+      try { ensureDemoPerson(root); await openDemo(root) } catch (error) { return { ok: false, status: 500, error: `示例档案没有打开：${error instanceof Error ? error.message : String(error)}` } }
+    }
     let switched = false
     try { switched = setActive(root, id) } catch (error) { return { ok: false, status: 500, error: error instanceof Error ? error.message : String(error) } }
     if (!switched) return { ok: false, status: 404, error: '没有这个人。' }
@@ -121,6 +127,7 @@ export function registerPeopleRoutes(deps: CoreDeps): void {
     const v = body && typeof body === 'object' ? body as Record<string, unknown> : {}
     const id = text(v.id, 60)
     if (id === SELF) return { ok: false, status: 400, error: '不能移除你自己。' }
+    if (isDemo(id)) return { ok: false, status: 400, error: '示例档案是内置的，不能移除。' }
     const root = resolveRootDir(deps.config().dataDir)
     if (!readRegistry(root).people.some((p) => p.id === id)) return { ok: false, status: 404, error: '没有这个人。' }
     const dir = personDir(root, id)

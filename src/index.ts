@@ -41,6 +41,7 @@ import { markAsked, readiness, readinessLine } from './analysis/service.ts'
 import { activePerson, readRegistry } from './people/store.ts'
 import { renewActiveMember } from './people/mirobody.ts'
 import { ensureLocalPairing } from './mirobody-account.ts'
+import { isDemo, keepDemoReachable } from './demo/index.ts'
 import { resolveRootDir } from './paths.ts'
 import { startFollowup, type FollowupState } from './followup.ts'
 import { buildJourneyFull, followupStateOf, within } from './journey.ts'
@@ -227,6 +228,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     // Paired with the Mirobody on this computer without the person doing anything (first use, and token renewal).
     await ensureLocalPairing(resolveRootDir(config.dataDir), { base: config.mirobodyUrl ?? '', configuredUrl: config.mcpUrl }).catch(() => undefined)
     await renewActiveMember(resolveRootDir(source().dataDir)).catch(() => '')
+    // The 示例档案 reads a local stand-in that a restart or a new day replaces: keep its address current.
+    if (isDemo(activePerson(resolveRootDir(source().dataDir)).id)) await keepDemoReachable(resolveRootDir(source().dataDir)).catch(() => undefined)
     const current = source()
     const dataDir = resolveDataDir(current.dataDir)
     const skillsHome = resolveSkillsHome(current.skillsHome)
@@ -471,3 +474,4 @@ export { redactText, setFamilyNames } from './privacy/disclosure.ts'
 export { markAsked } from './analysis/service.ts'
 export { specsOf as indicatorSpecsForTest } from './indicators.ts'
 export { lifeAreaOf } from './ux/plain.ts'
+export { DEMO_ID, demoRecord, ensureDemoPerson, openDemo, isDemo } from './demo/index.ts'

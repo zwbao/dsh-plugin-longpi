@@ -22,6 +22,8 @@ export interface Person {
   link_minted_at?: string
   /** The last renewal problem, shown on the page until a renewal succeeds. */
   link_error?: string
+  /** The bundled 示例档案 (src/demo): rebuilt on every open, never paired, never removed. */
+  demo?: boolean
   created_at: string
 }
 

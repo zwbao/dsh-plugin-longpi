@@ -9,7 +9,7 @@ import { Btn, Segmented } from './ui.ts'
 
 const h = React.createElement
 
-interface PersonRow { id: string; label_zh: string; name: string; connected: boolean; managed: boolean; link_error_zh?: string }
+interface PersonRow { id: string; label_zh: string; name: string; connected: boolean; managed: boolean; link_error_zh?: string; demo?: boolean }
 interface PeopleView { ok: boolean; active: string; people: PersonRow[]; can_create_in_mirobody: boolean; create_hint_zh: string; warning_zh?: string }
 
 const errText = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback)
@@ -132,7 +132,11 @@ export function PeoplePicker(props: { children?: React.ReactNode }): React.React
       h('select', {
         id: 'lp-people-select', className: 'lp-select lp-select-sm lp-people-select', value: view.active, disabled: busy,
         onChange: (e: React.ChangeEvent<HTMLSelectElement>) => { void choose(e.target.value) },
-      }, ...view.people.map((p) => h('option', { key: p.id, value: p.id }, optionText(p))))) : null,
+      },
+      ...view.people.filter((p) => !p.demo).map((p) => h('option', { key: p.id, value: p.id }, optionText(p))),
+      // The bundled 示例档案, apart from the real people.
+      ...(view.people.some((p) => p.demo) ? [h('optgroup', { key: 'demo', label: '示例' },
+        ...view.people.filter((p) => p.demo).map((p) => h('option', { key: p.id, value: p.id }, `${p.label_zh}（${p.name}）`)))] : []))) : null,
     h('span', { className: 'lp-header-end' },
       view ? h('button', { type: 'button', className: 'lp-linkbtn', onClick: () => setAdding(true), disabled: busy },
         h(Icon, { name: 'plus', size: 14 }), '添加家人') : null,
@@ -145,8 +149,35 @@ export function PeoplePicker(props: { children?: React.ReactNode }): React.React
 export function PersonNotice(): React.ReactElement | null {
   const view = usePeople()
   const shown = view?.people.find((p) => p.id === view.active)
+  if (shown?.demo) {
+    return h('div', { className: 'lp-callout lp-callout-info lp-people-notice', role: 'note' },
+      h(Icon, { name: 'info', size: 16 }),
+      h('div', { className: 'lp-callout-body' },
+        h('p', { className: 'lp-callout-title' }, '你在看示例档案'),
+        h('p', null, `${shown.name}（虚构人物，58 岁）完整使用 LongPi 后的样子：两次体检、手环数据、一次深度分析和执行了三周的方案。数据都是合成的，不对应任何真实的人。`),
+        h('p', { className: 'lp-caption' }, '在这里随便点，改动不会保存，下次打开会还原。看完后在右上角切回「我」，继续你自己的档案。')))
+  }
   if (!shown || shown.id === 'self' || !shown.link_error_zh) return null
   return h('div', { className: 'lp-callout lp-callout-warn lp-people-notice', role: 'alert' },
     h(Icon, { name: 'warn', size: 14 }),
     h('span', { className: 'lp-callout-body' }, shown.link_error_zh))
+}
+
+/** For someone whose own record is still empty: one line inviting them to the 示例档案 first. */
+export function DemoInvite(props: { empty: boolean }): React.ReactElement | null {
+  const view = usePeople()
+  const [busy, setBusy] = React.useState(false)
+  const demo = view?.people.find((p) => p.demo)
+  if (!props.empty || !view || !demo || view.active !== 'self') return null
+  return h('div', { className: 'lp-callout lp-people-notice' },
+    h(Icon, { name: 'spark', size: 16 }),
+    h('div', { className: 'lp-callout-body' },
+      h('p', null, '想先看看档案完整以后，LongPi 能为你做什么？'),
+      h('button', {
+        type: 'button', className: 'lp-textbtn lp-textbtn-strong', disabled: busy,
+        onClick: () => {
+          setBusy(true)
+          void postJson('/api/longpi/people/active', { id: demo.id }).then(() => window.location.reload()).catch(() => setBusy(false))
+        },
+      }, busy ? '正在打开…' : '打开示例档案 →')))
 }
