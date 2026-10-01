@@ -1,6 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import './host-shims.ts'
-import { readFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { WORKSPACE_MARKER } from './workspace.ts'
 import { Config } from './config.ts'
@@ -310,6 +310,19 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     if (id && !rows.some((w) => String(w.id) === id)) id = null           // deleted since
     if (!id) id = rows.map((w) => ({ id: String(w.id ?? ''), title: String(w.title ?? '').trim() })).find((w) => w.id && (w.title === '健康对话' || w.title === '健康'))?.id ?? null
     return { ok: true, workspace_id: id }
+  })
+  // First-run discovery (0.7.1): whether this install has shown its one-time welcome. Kept in the holder's LongPi
+  // home, so wiping the store shows it again.
+  const introPath = () => join(resolveRootDir(config.dataDir), 'ui-state.json')
+  http.route('GET', '/api/longpi/intro', async () => {
+    try { return { ok: true, seen: Boolean((JSON.parse(readFileSync(introPath(), 'utf8')) as { intro_seen_at?: string }).intro_seen_at) } } catch { return { ok: true, seen: false } }
+  })
+  http.route('POST', '/api/longpi/intro', async () => {
+    try {
+      mkdirSync(resolveRootDir(config.dataDir), { recursive: true, mode: 0o700 })
+      writeFileSync(introPath(), `${JSON.stringify({ intro_seen_at: new Date().toISOString() })}\n`, { mode: 0o600 })
+    } catch { /* not remembered: shown again next time, nothing worse */ }
+    return { ok: true, seen: true }
   })
   http.route('GET', '/api/longpi/usage', async () => ({ ok: true, today: budget.today(), remaining: budget.remaining(), caps: source().budget }))
   setActivePersonResolver(() => activePerson(resolveRootDir(source().dataDir)).id)

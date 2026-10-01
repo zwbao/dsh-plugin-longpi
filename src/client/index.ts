@@ -19,6 +19,7 @@ import { ReminderPill } from './pill.ts'
 import { LongPiSettings } from './settings-page.ts'
 import { injectStyles } from './styles/index.ts'
 import { registerClientModules } from './modules.ts'
+import { IntroCard, IntroDot } from './intro.ts'
 import { setWorkspaceOpener } from './health-chat.ts'
 import { toolViewList } from './registry.ts'
 import { TOOL_VIEWS } from './toolviews.ts'
@@ -61,7 +62,8 @@ export const inject = ['slots', 'layout']
 export const SETTINGS_ID = 'longpi'
 
 function PanelIcon(props: { size?: number }): React.ReactElement {
-  return h(Icon, { name: 'health', size: props.size ?? 18 })
+  // A dot until this install's welcome is seen (DSH's sidebar entry takes no badge of its own).
+  return h(IntroDot, null, h(Icon, { name: 'health', size: props.size ?? 18 }))
 }
 
 export function apply(ctx: ClientContext): void {
@@ -92,6 +94,8 @@ export function apply(ctx: ClientContext): void {
     ctx.slots.inject('tool.call.toolview', () => ctx.slots.register({ name: 'tool.call.toolview', key: view.tool, inject: face }, view.Component))
   }
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'longpi-reminders', order: 50, inject: face }, ReminderPill))
+  // The one-time welcome after installing: non-blocking, dismissible, points at the 健康 entry.
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'longpi-intro', order: 40, inject: face }, IntroCard))
   // Under a finished turn that left something to do: DSH folds the turn's cards, so their actions come back here.
   // Tried after the chain's shipped entries (produced files keep their row).
   ctx.slots.inject('conversation.chat.turnTail', () => ctx.slots.register({ name: 'conversation.chat.turnTail', select: selectLongPiTail, inject: face }, LongPiTurnTail))

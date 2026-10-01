@@ -15,6 +15,7 @@ import { IndicatorsTab } from './indicators.ts'
 import { RecordsStatusLine } from './journey-steps.ts'
 import { Onboarding, ONBOARDING_TITLES, stepsLeft } from './onboarding.ts'
 import { HealthChatButton } from './health-chat.ts'
+import { markIntroSeen, useIntroSeen } from './intro.ts'
 import { Overview } from './overview.ts'
 import { PlanTab } from './plan.ts'
 import { registerClientModules } from './modules.ts'
@@ -219,6 +220,17 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
   const [filter, setFilter] = React.useState<IndicatorFilter>('all')
   const [refreshing, setRefreshing] = React.useState(false)
   const [onboarding, setOnboarding] = React.useState(false)
+  // First visit after installing: the welcome is marked seen here, and onboarding opens by itself when setup
+  // steps remain (the page is LongPi's own; DSH is never locked or interrupted).
+  const introSeen = useIntroSeen()
+  const introHandled = React.useRef(false)
+  React.useEffect(() => {
+    if (introHandled.current || introSeen === null || !journey) return
+    introHandled.current = true
+    if (introSeen) return
+    markIntroSeen()
+    if (stepsLeft(journey) > 0) setOnboarding(true)
+  }, [introSeen, journey])
 
   const setTab = React.useCallback((next: PageTab) => {
     const tab = canonTab(next)

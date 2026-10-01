@@ -96,6 +96,22 @@ export const CHAT = `
 }
 .lp-pill-x:hover { background: var(--lp-hover); color: var(--lp-ink); }
 
+/* --- first-run welcome (shell overlay) and the sidebar dot ------------------------------------------- */
+/* Next to the sidebar's 健康 entry; no mask, the rest of DSH stays usable. */
+.lp-intro-card {
+  position: absolute; left: 284px; top: 112px; z-index: 2; pointer-events: auto; width: min(340px, calc(100vw - 300px));
+  display: grid; gap: 8px; padding: 16px; border-radius: var(--lp-radius-card); background: var(--lp-layer-2);
+  box-shadow: var(--lp-shadow-pop); animation: lp-fade .2s ease both;
+}
+.lp-intro-card::before { content: ""; position: absolute; left: -6px; top: 22px; width: 12px; height: 12px; background: var(--lp-layer-2); transform: rotate(45deg); box-shadow: -1px 1px 0 0 var(--lp-line); }
+.lp-intro-head { display: flex; align-items: center; gap: 8px; }
+.lp-intro-title { margin: 0; flex: 1; font-size: 15px; line-height: 22px; font-weight: 600; }
+.lp-intro-x { width: 28px; height: 28px; }
+.lp-intro-text { margin: 0; font-size: 13px; line-height: 20px; color: var(--lp-ink-2); }
+.lp-intro-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.lp-intro-icon { position: relative; display: inline-flex; color: inherit; font-size: inherit; line-height: inherit; }
+.lp-intro-dot { position: absolute; top: -2px; right: -3px; width: 8px; height: 8px; border-radius: 50%; background: var(--lp-bad); box-shadow: 0 0 0 2px var(--lp-bg); }
+
 /* --- the doctor-first card on 概览 and its one-page brief (triage/care-card.ts) ------------------------ */
 .lp-care-box { min-width: 0; }
 .lp-care-title { display: inline-flex; align-items: center; gap: 8px; }
