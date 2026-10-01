@@ -18,6 +18,19 @@ const h = React.createElement
 const LOOPBACK = new Set(['127.0.0.1', 'localhost', '[::1]'])
 
 /** The same rule the server applies: https, or http only on this computer. */
+/**
+ * The manual connection form (address, token, email and password) is for whoever installs LongPi, not for the
+ * person using it (LongPi pairs with the health data service on this computer by itself). It shows only when this
+ * browser has localStorage longpi.dev = 1.
+ */
+export function manualConnectionAllowed(): boolean {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem('longpi.dev') === '1'
+  } catch {
+    return false
+  }
+}
+
 export function addressProblem(text: string): string | null {
   const trimmed = text.trim()
   if (!trimmed) return '请先展开「改用连接地址」，再粘贴连接地址。'

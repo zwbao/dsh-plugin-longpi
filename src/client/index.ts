@@ -18,6 +18,7 @@ import { HealthPane, PANE_ID, PANE_KIND, paneDefinition, setPaneOpener } from '.
 import { ReminderPill } from './pill.ts'
 import { LongPiSettings } from './settings-page.ts'
 import { injectStyles } from './styles/index.ts'
+import { stopTimers } from './store.ts'
 import { registerClientModules } from './modules.ts'
 import { IntroCard, IntroDot } from './intro.ts'
 import { setWorkspaceOpener } from './health-chat.ts'
@@ -104,6 +105,10 @@ export function apply(ctx: ClientContext): void {
   // Whether a model key is set, for onboarding step 1: only when DSH exposes the Remote services
   // its Models page reads. Absent services leave the status unknown, and step 1 says nothing.
   if (typeof ctx.inject === 'function') {
+    // A plugin reload or unload gives back the change stream, the poll and the listeners (F-5).
+    ctx.inject(['slots'], (sub) => {
+      sub.effect?.(() => () => stopTimers(), 'longpi: store timers')
+    })
     // Each turn's LongPi calls, published as the turn's data for the quick actions.
     ctx.inject(['uiConversation'], (sub) => {
       const events = sub.uiConversation?.events

@@ -7,7 +7,7 @@
 
 import React from 'react'
 import { getJson, postJson } from './api.ts'
-import { ConnectionPanel, ConnectionStatus } from './connection.ts'
+import { ConnectionPanel, ConnectionStatus, manualConnectionAllowed } from './connection.ts'
 import { FollowupPanel } from './followup.ts'
 import { MethodsSection } from './methods.ts'
 import { settingsSections } from './registry.ts'
@@ -69,7 +69,7 @@ function Connection(): React.ReactElement {
   const { data } = useConnection()
   return h('div', { className: 'lp-set-body' },
     data ? h(ConnectionStatus, { connection: data }) : null,
-    h('details', null, h('summary', null, '高级：手动连接（一般不需要）'), h(ConnectionPanel, { idPrefix: 'lp-set-conn', hideStatus: true })))
+    manualConnectionAllowed() ? h('details', null, h('summary', null, '手动连接（安装人员使用）'), h(ConnectionPanel, { idPrefix: 'lp-set-conn', hideStatus: true })) : null)
 }
 
 function Methods(props: { onNotice: (text: string, tone?: 'info' | 'good' | 'bad') => void }): React.ReactElement {

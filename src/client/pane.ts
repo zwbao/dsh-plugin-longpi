@@ -9,7 +9,7 @@ import { BOUNDARY_FALLBACK } from './constants.ts'
 import { Icon } from './icons.ts'
 import { Overview } from './overview.ts'
 import type { ResultTarget } from './results.ts'
-import { requestView, useJourney, useTracking, type PageTab, type ViewRequest } from './store.ts'
+import { requestView, useJourney, usePageShown, useTracking, type PageTab, type ViewRequest } from './store.ts'
 import type { Face } from './types.ts'
 import { Btn, Skeleton, useNotice } from './ui.ts'
 
@@ -58,6 +58,9 @@ export function HealthPane(props: Partial<Face>): React.ReactElement {
   const { journey, loading, error, refresh } = useJourney()
   const tracking = useTracking()
   const [notice, notify] = useNotice()
+  // On screen, the pane gets live updates like the page (store.ts opens the change stream only then).
+  const root = React.useRef<HTMLDivElement>(null)
+  usePageShown(root)
   // Everything that needs more room than the column opens the page there.
   const toPage = (tab: PageTab, request?: Omit<ViewRequest, 'tab'>) => {
     requestView({ tab, ...request })
@@ -77,7 +80,7 @@ export function HealthPane(props: Partial<Face>): React.ReactElement {
   } else {
     body = h(Overview, { journey, tracking: tracking.data, onNotice: notify, onAction, goTab: toPage, openOnboarding: () => toPage('overview') })
   }
-  return h('div', { className: 'lp lp-pane' },
+  return h('div', { className: 'lp lp-pane', ref: root },
     h('div', { className: 'lp-pane-head' },
       h('h2', { className: 'lp-h3 lp-pane-title' }, h(Icon, { name: 'health', size: 14 }), PANE_TITLE),
       props.openPage ? h('button', { type: 'button', className: 'lp-textbtn', onClick: props.openPage }, '打开健康页 →') : null),

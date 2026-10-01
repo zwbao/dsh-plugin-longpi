@@ -5,7 +5,7 @@
 import React from 'react'
 import { getJson } from './api.ts'
 import { DataInSection } from './datain/index.ts'
-import { ConnectionForm, ConnectionStatus } from './connection.ts'
+import { ConnectionForm, ConnectionStatus, manualConnectionAllowed } from './connection.ts'
 import { Icon } from './icons.ts'
 import { RecordsStatusLine } from './journey-steps.ts'
 import { ProfileEditor } from './profile-editor.ts'
@@ -19,19 +19,17 @@ const h = React.createElement
 
 type Notify = (text: string, tone?: 'info' | 'good' | 'bad') => void
 
-/** Where the connection is set: the LongPi page in DSH's settings, or here when settings cannot be opened from the page. */
+/** Whether the record is connected, and what was found. LongPi pairs by itself; the manual form is for installers only. */
 function ConnectionCard(props: { journey: Journey }): React.ReactElement {
   const { data } = useConnection()
-  const openSettings = useSettingsOpener()
+  const manual = manualConnectionAllowed()
   const [editing, setEditing] = React.useState(false)
   return h('div', { className: 'lp-card', id: 'lp-connection-card' },
     h('div', { className: 'lp-card-head' },
       h('h3', { className: 'lp-card-title' }, '数据连接'),
-      openSettings
-        ? h('button', { type: 'button', className: 'lp-textbtn', onClick: () => openSettings('longpi') }, '在设置中修改', h(Icon, { name: 'chevron', size: 12 }))
-        : h('button', { type: 'button', className: 'lp-textbtn', 'aria-expanded': editing, onClick: () => setEditing((current) => !current) }, editing ? '收起' : '修改连接')),
+      manual ? h('button', { type: 'button', className: 'lp-textbtn', 'aria-expanded': editing, onClick: () => setEditing((current) => !current) }, editing ? '收起' : '手动连接') : null),
     data ? h(ConnectionStatus, { connection: data }) : h(RecordsStatusLine, { journey: props.journey }),
-    editing && !openSettings ? h(ConnectionForm, { connection: data, idPrefix: 'lp-profile-conn', onSaved: () => setEditing(false) }) : null)
+    manual && editing ? h(ConnectionForm, { connection: data, idPrefix: 'lp-profile-conn', onSaved: () => setEditing(false) }) : null)
 }
 
 /** The next-checkup add-on list, as rows. What they unlock is said once when it is the same for all of them. */

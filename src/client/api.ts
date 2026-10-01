@@ -35,8 +35,20 @@ function writeHeaders(): Record<string, string> {
   return shownPerson ? { ...JSON_HEADERS, 'x-longpi-person': shownPerson } : JSON_HEADERS
 }
 
+/** A read that has not answered by then is reported, not left as a skeleton forever (F-3). */
+export const READ_TIMEOUT_MS = 25_000
+export const READ_TIMEOUT_ZH = '读取超时。如果同时打开了多个 DeepSeek Harness 标签页，请关闭其余标签页后重试。'
+
 export async function getJson<T>(path: string): Promise<T> {
-  return read<T>(await fetch(path, { credentials: 'same-origin' }))
+  let res: Response
+  try {
+    const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(READ_TIMEOUT_MS) : undefined
+    res = await fetch(path, { credentials: 'same-origin', ...(signal ? { signal } : {}) })
+  } catch (error) {
+    if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) throw new Error(READ_TIMEOUT_ZH)
+    throw error
+  }
+  return read<T>(res)
 }
 
 export async function postJson<T>(path: string, body: unknown): Promise<T> {

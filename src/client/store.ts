@@ -2,8 +2,8 @@
 // under the composer, the settings page, the chat cards and the reminder pill
 // all read the same journey, so opening DSH costs one request, not four. Data
 // is kept while it refreshes (the UI never blanks on a refetch), refreshed on
-// window focus when older than a minute, every ten minutes while something
-// shows it, and right after any save: a save supersedes any request already in
+// window focus when older than a minute, every ten minutes while the page or
+// the 健康 pane is on screen, and right after any save: a save supersedes any request already in
 // flight, whose late answer is then dropped by its sequence number. The store
 // also carries the few hand-offs between surfaces: a prompt waiting for the
 // composer, the note about it, the page view (tab and section) to open, and
@@ -136,40 +136,76 @@ function stale(key: Key): boolean {
   return Date.now() - entries[key].at > STALE_MS
 }
 
+// Live updates cost connections: a browser opens at most six to one host over HTTP/1.1, and DSH keeps its own
+// streams open in every tab. So the change stream and the 10-minute poll run only while the LongPi page or the
+// 健康 pane is on screen in a visible tab; a background tab, or a tab that only shows the reminder pill, holds no
+// LongPi connection. Coming back reloads what is stale.
+let source: EventSource | null = null
+let sourceGone = false
+let pollTimer: ReturnType<typeof setInterval> | null = null
+let revive: (() => void) | null = null
+
+function liveWanted(): boolean {
+  return pageUsers > 0 && typeof document !== 'undefined' && document.visibilityState !== 'hidden'
+}
+
+function closeLive(): void {
+  source?.close()
+  source = null
+  if (pollTimer != null) clearInterval(pollTimer)
+  pollTimer = null
+}
+
+/** Open or close the change stream and the poll to match what is on screen. */
+function syncLive(): void {
+  if (typeof window === 'undefined') return
+  if (!liveWanted()) {
+    closeLive()
+    return
+  }
+  if (pollTimer == null) pollTimer = setInterval(() => { for (const key of inUse()) void load(key) }, POLL_MS)
+  if (source || sourceGone || typeof EventSource === 'undefined') return
+  try {
+    // 0.5.3: the server says when something changed (a chat turn saved a check-in, the coach wrote new surfaces,
+    // a visit was logged): what is on screen loads again at once.
+    const opened = new EventSource('/api/longpi/events')
+    const reload = () => { for (const key of inUse()) void load(key, 'fresh') }
+    for (const type of ['surfaces', 'memory', 'triage', 'changed']) opened.addEventListener(type, reload)
+    opened.onerror = () => {
+      // An older server (404) closes the stream for good; a restart is retried by the browser.
+      if (opened.readyState === EventSource.CLOSED && source === opened) {
+        source = null
+        sourceGone = true
+      }
+    }
+    source = opened
+  } catch {
+    source = null
+  }
+}
+
 function startTimers(): void {
   if (timersOn || typeof window === 'undefined') return
   timersOn = true
-  const revive = () => {
+  revive = () => {
+    syncLive()
     if (document.visibilityState === 'hidden') return
     for (const key of inUse()) if (stale(key)) void load(key)
   }
   window.addEventListener('focus', revive)
   document.addEventListener('visibilitychange', revive)
-  window.setInterval(() => { for (const key of inUse()) void load(key) }, POLL_MS)
-  listenForChanges()
+  syncLive()
 }
 
-/**
- * 0.5.3: the server says when something changed (a chat turn saved a check-in, the coach wrote new
- * surfaces, a visit was logged): what is on screen loads again at once. The 10-minute poll stays.
- */
-function listenForChanges(): void {
-  if (typeof EventSource === 'undefined') return
-  let source: EventSource | null = null
-  const open = () => {
-    try {
-      source = new EventSource('/api/longpi/events')
-      const reload = () => { for (const key of inUse()) void load(key, 'fresh') }
-      for (const type of ['surfaces', 'memory', 'triage', 'changed']) source.addEventListener(type, reload)
-      source.onerror = () => {
-        // An older server (404) or a restart: the browser retries on its own; give up after a 404.
-        if (source && source.readyState === EventSource.CLOSED) source = null
-      }
-    } catch {
-      source = null
-    }
+/** Plugin unload or reload: give back the stream, the poll and the listeners (a reloaded client starts its own). */
+export function stopTimers(): void {
+  closeLive()
+  if (revive && typeof window !== 'undefined') {
+    window.removeEventListener('focus', revive)
+    document.removeEventListener('visibilitychange', revive)
   }
-  open()
+  revive = null
+  timersOn = false
 }
 
 /**
@@ -320,6 +356,7 @@ export function usePageShown(ref: React.RefObject<HTMLElement>): void {
       if (next === shown) return
       shown = next
       pageUsers += next ? 1 : -1
+      syncLive()
       emit()
     }
     if (!node || typeof IntersectionObserver === 'undefined') {
