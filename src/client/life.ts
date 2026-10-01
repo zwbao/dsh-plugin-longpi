@@ -8,7 +8,8 @@ import { setPendingPrompt, type IndicatorFilter, type PageTab } from './store.ts
 import type { Journey } from './types.ts'
 import { isCovered, type Covered } from './overview-facts.ts'
 import { Btn } from './ui.ts'
-import { dateZh } from './charts.ts'
+import { dateZh, fmtAuto } from './charts.ts'
+import { prettyUnits } from './changes.ts'
 import { insightSentence, SCIENCE_INTRO, SEASON_INTRO, suggestedQuestions, buildTimeline, OUTBOX_ZH } from '../ux/plain.ts'
 
 const h = React.createElement
@@ -41,7 +42,7 @@ export function AskTab(props: { journey: Journey; openChat?: () => void }): Reac
       h('p', { className: 'lp-muted lp-text' }, '想问就问，不用攒着。问吃药、补剂、饮食、检查或身体不舒服，会先直接回答，再把该知道的说全；问记录的变化和进度，回答分三小段：我看到的、数据说明不了的、下一步。'),
       h('ul', { className: 'lp-ask-list' },
         ...questions.map((text) => h('li', { key: text },
-          h('button', { type: 'button', className: 'lp-row-btn', onClick: () => ask(text) },
+          h('button', { type: 'button', className: 'lp-ask-btn', onClick: () => ask(text) },
             h('span', { className: 'lp-row-main' }, text),
             h(Icon, { name: 'chevron', size: 14 })))))))
 }
@@ -103,13 +104,13 @@ export function CalendarTab(props: { journey: Journey }): React.ReactElement {
       : h('section', { className: 'lp-card', 'aria-labelledby': 'lp-cal-title' },
         h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title', id: 'lp-cal-title' }, '已写上的日期')),
         h('ul', { className: 'lp-rows' },
-          ...events.map((row) => h('li', { key: row.id, className: 'lp-row' },
+          ...events.map((row) => h('li', { key: row.id, className: 'lp-row lp-cal-line' },
             h('span', { className: 'lp-cal-date' }, dateZh(row.date ?? '')),
             h('div', { className: 'lp-row-main' },
               h('div', { className: 'lp-strong' }, row.title_zh),
               row.brief_zh ? h('div', { className: 'lp-muted' }, row.brief_zh) : null,
               row.questions_zh.length > 0 ? h('div', { className: 'lp-caption' }, `可以问：${row.questions_zh.join('；')}`) : null))),
-          ...retests.map((row) => h('li', { key: row.text_zh, className: 'lp-row' },
+          ...retests.map((row) => h('li', { key: row.text_zh, className: 'lp-row lp-cal-line' },
             h('span', { className: 'lp-cal-date' }, dateZh(row.date ?? '')),
             h('div', { className: 'lp-row-main lp-strong' }, row.text_zh)))),
         suggestionRows.length === 0 && note ? h('p', { className: 'lp-caption', role: 'status' }, note) : null),
@@ -125,13 +126,15 @@ export function CalendarTab(props: { journey: Journey }): React.ReactElement {
 export function Timeline(props: { journey: Journey }): React.ReactElement {
   const [wearables, setWearables] = React.useState<Array<{ date: string; label_zh: string; value_zh: string }>>([])
   React.useEffect(() => {
-    void getJson<{ groups?: Array<{ indicators?: Array<{ label_zh?: string; source?: string; latest?: { date?: string; value?: number | null; text?: string } }> }> }>('/api/longpi/indicators').then((data) => {
+    void getJson<{ groups?: Array<{ indicators?: Array<{ label_zh?: string; source?: string; unit?: string; latest?: { date?: string; value?: number | null; text?: string } }> }> }>('/api/longpi/indicators').then((data) => {
       const rows: Array<{ date: string; label_zh: string; value_zh: string }> = []
       for (const group of data.groups ?? []) {
         for (const row of group.indicators ?? []) {
           if (row.source !== 'device' || !row.latest?.date || !row.label_zh) continue
           if (!/睡眠|步数/.test(row.label_zh)) continue
-          const value = row.latest.text ?? (row.latest.value == null ? '' : String(row.latest.value))
+          const unit = prettyUnits(row.unit ?? '')
+          const number = row.latest.text ?? (row.latest.value == null ? '' : fmtAuto(row.latest.value))
+          const value = !number || !unit ? number : unit.startsWith('%') ? `${number}${unit}` : `${number} ${unit}`
           rows.push({ date: row.latest.date, label_zh: row.label_zh, value_zh: value })
         }
       }
@@ -154,7 +157,7 @@ export function Timeline(props: { journey: Journey }): React.ReactElement {
     h(React.Fragment, null,
         h('p', { className: 'lp-muted' }, '化验、手环和生活上的事放在一起，才看得出比如复查前生过病。'),
         h('ol', { className: 'lp-rows' },
-          ...items.slice(-8).map((item) => h('li', { key: `${item.kind}-${item.date}-${item.title_zh}`, className: 'lp-row' },
+          ...items.slice(-8).map((item) => h('li', { key: `${item.kind}-${item.date}-${item.title_zh}`, className: 'lp-row lp-cal-line' },
             h('span', { className: 'lp-cal-date' }, dateZh(item.date)),
             h('span', { className: 'lp-row-main' }, `${item.title_zh} · ${item.detail_zh}`))))))
 }
@@ -206,8 +209,8 @@ export function ScienceIntro(props: { goTab: (tab: PageTab) => void }): React.Re
     h('p', null, SCIENCE_INTRO),
     h('p', { className: 'lp-caption' }, waiting),
     h('div', { className: 'lp-form-actions' },
-      h(Btn, { size: 'sm', onClick: () => props.goTab('science') }, '加入'),
-      h(Btn, { size: 'sm', variant: 'outline', onClick: later }, '以后再说')))
+      h(Btn, { onClick: () => props.goTab('science') }, '加入'),
+      h(Btn, { variant: 'outline', onClick: later }, '以后再说')))
 }
 
 export function SeasonLink(props: { onOpen: () => void }): React.ReactElement {

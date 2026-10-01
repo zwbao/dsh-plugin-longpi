@@ -61,6 +61,6 @@ export function StudiesTab(): React.ReactElement {
       onChange: load,
       onError: setError,
     }) : null,
-    ...(data.studies ?? []).map((study) => h(ConsentPanel, { key: study.id, study, onChange: load, onError: setError })),
+    ...(data.studies ?? []).map((study) => h(ConsentPanel, { key: study.id, study, threshold: data.thresholds?.find((row) => row.study_id === study.id)?.line_zh, onChange: load, onError: setError })),
     h(TranslogPanel, { rows: data.translog ?? [] }))
 }

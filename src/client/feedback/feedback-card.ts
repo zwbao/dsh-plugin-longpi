@@ -17,7 +17,7 @@ export function FeedbackCard(props: { messages: FeedbackMessage[] }): React.Reac
     h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '这次的变化')),
     h('ul', { className: 'lp-rows' },
       ...props.messages.map((row) => h('li', { key: row.id, className: 'lp-row lp-row-stack' },
-        h('p', { className: row.tone === 'celebrate' ? 'lp-text lp-strong' : 'lp-text' }, row.headline_zh),
-        row.body_zh ? h('p', { className: 'lp-muted lp-measure' }, datesZh(row.body_zh)) : null,
-        row.retest ? h('p', { className: 'lp-caption lp-measure' }, retestLine(row.retest)) : null))))
+        h('p', { className: row.tone === 'celebrate' ? 'lp-small lp-strong lp-measure' : 'lp-small lp-measure' }, datesZh(row.headline_zh)),
+        row.body_zh ? h('p', { className: 'lp-small lp-muted lp-measure' }, datesZh(row.body_zh)) : null,
+        row.retest ? h('p', { className: 'lp-small lp-muted lp-measure' }, retestLine(row.retest)) : null))))
 }

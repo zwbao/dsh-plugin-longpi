@@ -56,7 +56,7 @@ export function pct(value: number): string {
   const text = fmt(percent, Math.abs(percent) < 10 ? 1 : 0)
   if (text === '—') return text
   if (Number(text) === 0) return '0%'
-  return `${percent > 0 ? '+' : ''}${text}%`
+  return `${percent > 0 ? '+' : ''}${text.replace(/^-/, '−')}%`
 }
 
 /** How the body age compares with the calendar age, in words. */
@@ -120,4 +120,6 @@ export function plainUnits(text: string): string {
     .replace(/\bm2\b/g, 'm²')
     .replace(/(\d)\s*h\b(?![\w/])/g, '$1 小时')
     .replace(/(\d)\s*min\b/g, '$1 分钟')
+    // A negative number takes the minus sign (−1.81), not a hyphen; ranges and dates (8-12, 2026-11-05) keep theirs.
+    .replace(/(^|[^\w.\-−])-(?=\d)/g, '$1−')
 }

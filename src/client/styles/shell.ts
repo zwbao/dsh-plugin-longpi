@@ -27,10 +27,13 @@ export const SHELL = `
 .lp-people-dialog { display: grid; gap: 16px; max-height: calc(100vh - 48px); overflow-y: auto; padding: 24px; }
 .lp-people-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .lp-people-dialog .lp-modal-actions { margin-top: 8px; }
-/* 性别 as a full-width control the height of the inputs, so it reads as a choice even with nothing picked (P2-10). */
-.lp-people-dialog .lp-seg { display: flex; width: 100%; padding: 4px; }
+/* 性别: a visible 36px track like the inputs beside it, each option a full-height button, so it reads as a control
+   with nothing picked (R2-P2-10). */
+.lp-people-dialog .lp-seg { display: flex; width: 100%; height: 36px; padding: 2px; gap: 4px; border: 1px solid var(--lp-line-strong); }
 .lp-people-dialog .lp-seg-opt { flex: 1; }
-.lp-people-dialog .lp-seg-opt span { width: 100%; }
+.lp-people-dialog .lp-seg-opt span { width: 100%; height: 30px; color: var(--lp-ink); }
+.lp-people-dialog .lp-seg-opt:hover span { background: var(--lp-hover); }
+.lp-people-dialog .lp-seg-on span, .lp-people-dialog .lp-seg-on:hover span { background: var(--lp-layer); font-weight: 600; }
 @media (max-width: 480px) { .lp-people-dialog { padding: 20px; } .lp-people-dialog .lp-form-grid { grid-template-columns: minmax(0, 1fr); } }
 
 /* --- banners under the header: well, 40px, 12px radius ------------------------------------------- */

@@ -14,8 +14,13 @@ export const ANALYSIS = `
 
 /* organ table: value first, the estimate's range on a 12px line under it */
 .lp-an-organs .lp-an-organ { white-space: nowrap; }
-.lp-an-organs th:nth-child(3), .lp-an-organs td:nth-child(3) { width: 7em; }
-.lp-an-organs th:nth-child(4) { white-space: normal; }
+/* measurements .9 : age 7em : risks 1.1 — the risk column is the widest so disease names stay on one line */
+.lp-an-organs th:nth-child(2) { width: 38%; }
+.lp-an-organs th:nth-child(3) { width: 7em; }
+.lp-an-organs th:nth-child(4) { width: 44%; white-space: normal; }
+.lp-an-valtext { color: var(--lp-ink); }
+.lp-an-narrow-note { display: none; }
+.lp-card > .lp-an-narrow-note + .lp-table-wrap { margin-top: 0; }
 .lp-an-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .lp-an-est { display: grid; gap: 2px; }
 .lp-an-val { white-space: nowrap; color: var(--lp-ink); }
@@ -24,6 +29,8 @@ export const ANALYSIS = `
 @container lp-root (max-width: 760px) {
   .lp-table.lp-an-organs, .lp-an-organs tbody, .lp-an-organs tr, .lp-an-organs td { display: block; width: auto; }
   .lp-an-organs thead { display: none; }
+  .lp-card > .lp-an-narrow-note { display: block; }
+  .lp-card > .lp-an-narrow-note + .lp-table-wrap { margin-top: 12px; }
   .lp-an-organs tr { padding: 12px 0; border-bottom: 1px solid var(--lp-line); }
   .lp-an-organs tr:first-child { padding-top: 0; }
   .lp-an-organs tr:last-child { padding-bottom: 0; border-bottom: 0; }
@@ -36,7 +43,9 @@ export const ANALYSIS = `
 
 /* question board and plan */
 .lp-an-more { display: grid; gap: 8px; }
-.lp-an-next { display: flex; align-items: flex-start; gap: 8px; font-size: 13px; line-height: 20px; color: var(--lp-ink); }
-.lp-an-next > .lp-icon { margin-top: 2px; color: var(--lp-ink-3); }
+.lp-an-next { font-size: 13px; line-height: 20px; color: var(--lp-ink); }
+
+/* a stalled or not-started run: one line instead of eleven empty steps */
+.lp-an-fold { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .lp-an-bullets { margin: 0; color: var(--lp-ink); }
 `

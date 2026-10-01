@@ -331,7 +331,7 @@ function Settings(props: { data: FollowupResponse; onNotice: Notify; hideSwitch?
             onChange: (event: React.ChangeEvent<HTMLInputElement>) => set('url', event.target.value),
           })) : null,
         kind && SIGNED.includes(kind) ? h('div', { className: 'lp-field' },
-          h('label', { className: 'lp-field-label', htmlFor: 'lp-fu-secret' }, '签名密钥', h('span', { className: 'lp-optional' }, '机器人开了“加签”才需要')),
+          h('label', { className: 'lp-field-label', htmlFor: 'lp-fu-secret' }, '签名密钥', h('span', { className: 'lp-optional' }, '机器人开了「加签」才需要')),
           h('div', { className: 'lp-input-unit' },
             h('input', {
               id: 'lp-fu-secret', type: 'password', className: 'lp-input', value: form.secret, autoComplete: 'new-password',
@@ -347,7 +347,7 @@ function Settings(props: { data: FollowupResponse; onNotice: Notify; hideSwitch?
         options: [{ value: 'minimal', label: '简要：不含健康数值' }, { value: 'full', label: '详细' }],
       }),
       h('p', { className: 'lp-caption' }, form.detail === 'minimal'
-        ? '只发“今天还有 2 项待打卡”这类提示，不含项目名称和健康数值。'
+        ? '只发「今天还有 2 项待打卡」这类提示，不含项目名称和健康数值。'
         : '会带上方案项目名称、执行率和复测指标，发到你配置的渠道。')),
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
     h('div', { className: 'lp-form-actions' },
@@ -363,7 +363,7 @@ function Settings(props: { data: FollowupResponse; onNotice: Notify; hideSwitch?
 function switchCaption(data: FollowupResponse): string {
   const settings = data.settings
   const channels = [settings.desktop && data.platform_desktop ? '桌面通知' : '', settings.webhook ? '手机（Webhook）' : ''].filter(Boolean)
-  const where = channels.length > 0 ? channels.join('和') : data.platform_desktop ? '桌面通知' : '（还没有可用的渠道，在“更多设置”里填写 Webhook）'
+  const where = channels.length > 0 ? channels.join('和') : data.platform_desktop ? '桌面通知' : '（还没有可用的渠道，在「更多设置」里填写 Webhook）'
   const what = settings.detail === 'minimal' ? '不含健康数值' : '含方案项目名称和执行率'
   return `还有没打的卡时，${settings.checkin_time} 发${where}；${what}。`
 }

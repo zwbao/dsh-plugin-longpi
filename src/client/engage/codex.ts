@@ -44,7 +44,7 @@ export function CodexPanel(props: { codex: CodexView | null; onDraw: () => void;
         h('li', null, '连续 10 次里，至少有一次是银或更好。这不是指标变好了。'),
         codex.odds_zh ? h('li', null, codex.odds_zh) : null)),
     h('div', { className: 'lp-actions' },
-      h(Btn, { size: 'sm', onClick: props.onDraw, disabled: props.busy || codex.draws_available < 1 }, '抽一张'),
+      h(Btn, { onClick: props.onDraw, disabled: props.busy || codex.draws_available < 1 }, '抽一张'),
       h('span', { className: 'lp-caption' }, `可抽 ${codex.draws_available} 次 · 今天已抽 ${codex.draws_today} / ${codex.daily_cap}`)),
     props.note ? h('p', { className: 'lp-small lp-measure', role: 'status' }, props.note) : null,
     codex.owned.length === 0

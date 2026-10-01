@@ -75,9 +75,9 @@ function VisitForm(props: { journey: Journey; onNotice: Notify }): React.ReactEl
   return h('div', { className: 'lp-care-visit' },
     h('p', { className: 'lp-small lp-muted' }, lastText ? `约了吗？医生怎么说？（上次：${lastText}）` : '约了吗？医生怎么说？'),
     step === 'none' ? h('div', { className: 'lp-actions' },
-      h(Btn, { size: 'sm', variant: 'outline', disabled: busy, onClick: () => setStep('booked') }, '已预约'),
-      h(Btn, { size: 'sm', variant: 'outline', disabled: busy, onClick: () => setStep('visited') }, '看完了'),
-      h(Btn, { size: 'sm', variant: 'ghost', disabled: busy, onClick: () => { void send('declined') } }, '暂时不去')) : null,
+      h(Btn, { variant: 'outline', disabled: busy, onClick: () => setStep('booked') }, '已预约'),
+      h(Btn, { variant: 'outline', disabled: busy, onClick: () => setStep('visited') }, '看完了'),
+      h(Btn, { variant: 'ghost', disabled: busy, onClick: () => { void send('declined') } }, '暂时不去')) : null,
     step !== 'none' ? h('div', { className: 'lp-care-visit-form' },
       h('div', { className: 'lp-field lp-care-date' },
         h('label', { className: 'lp-field-label', htmlFor: 'lp-care-visit-date' }, step === 'booked' ? '就诊日期' : '看医生的日期'),
@@ -86,8 +86,8 @@ function VisitForm(props: { journey: Journey; onNotice: Notify }): React.ReactEl
         h('label', { className: 'lp-field-label', htmlFor: 'lp-care-visit-outcome' }, '医生怎么说'),
         h('textarea', { id: 'lp-care-visit-outcome', className: 'lp-input', rows: 2, placeholder: '例如：缺铁，开了药，3 个月后复查', value: outcome, onChange: (event: React.ChangeEvent<HTMLTextAreaElement>) => setOutcome(event.target.value) })) : null,
       h('div', { className: 'lp-actions' },
-        h(Btn, { size: 'sm', disabled: busy || !date, onClick: () => { void send(step) } }, busy ? '保存中…' : '保存'),
-        h(Btn, { size: 'sm', variant: 'ghost', disabled: busy, onClick: () => setStep('none') }, '取消'))) : null)
+        h(Btn, { disabled: busy || !date, onClick: () => { void send(step) } }, busy ? '保存中…' : '保存'),
+        h(Btn, { variant: 'ghost', disabled: busy, onClick: () => setStep('none') }, '取消'))) : null)
 }
 
 /** The doctor-first card: title, the values, the brief and the visit answers. */
@@ -116,9 +116,9 @@ export function CareCard(props: { journey: Journey; onNotice: Notify; onIndicato
       h('p', { className: 'lp-strong' }, journey.next.title_zh),
       detail ? h('p', { className: 'lp-muted' }, detail) : null),
     h('div', { className: 'lp-actions' },
-      h(Btn, { size: 'sm', disabled: busy, onClick: () => { void openBrief() } }, busy ? '正在整理…' : '医生简报（可打印）'),
-      h(Btn, { size: 'sm', variant: 'outline', onClick: props.onIndicators }, '看这些指标'),
-      journey.triage.needs_sex ? h(Btn, { size: 'sm', variant: 'outline', onClick: props.onProfile }, '填写性别') : null),
+      h(Btn, { disabled: busy, onClick: () => { void openBrief() } }, busy ? '正在整理…' : '医生简报（可打印）'),
+      h(Btn, { variant: 'outline', onClick: props.onIndicators }, '看这些指标'),
+      journey.triage.needs_sex ? h(Btn, { variant: 'outline', onClick: props.onProfile }, '填写性别') : null),
     h(VisitForm, { journey, onNotice: props.onNotice }),
     brief ? h(BriefModal, { answer: brief, onClose: () => setBrief(null) }) : null)
 }

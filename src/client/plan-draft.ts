@@ -233,7 +233,7 @@ export async function acceptDraft(draft: PlanDraft, kept: DraftItem[], remind: b
 function Hint(props: { onPrompt: (text: string) => void }): React.ReactElement {
   return h('span', { className: 'lp-caption lp-draft-hint' },
     '想调整？在对话中说',
-    h('button', { type: 'button', className: 'lp-textbtn', onClick: () => props.onPrompt(DRAFT_PROMPT) }, `“${DRAFT_PROMPT}”`))
+    h('button', { type: 'button', className: 'lp-textbtn', onClick: () => props.onPrompt(DRAFT_PROMPT) }, `「${DRAFT_PROMPT}」`))
 }
 
 function Draft(props: { data: PlanDraftResponse; draft: PlanDraft; journey: Journey; onNotice: Notify; onPrompt: (text: string) => void }): React.ReactElement {

@@ -26,14 +26,25 @@ interface Status { ok: boolean; runs: Run[]; current: Current | null; plan_read_
 const CONF_ZH: Record<string, string> = { low: '低', moderate: '中' }
 
 /** Anything shown comes from a file a pipeline wrote: shown as text, never as an object. */
-const t = (v: unknown): string => (typeof v === 'string' ? v : typeof v === 'number' && Number.isFinite(v) ? String(v) : '')
+const t = (v: unknown): string => (typeof v === 'string' ? tidy(v) : typeof v === 'number' && Number.isFinite(v) ? num(v) : '')
+
+/** Pipeline text, put into the house style: no doubled 岁, 「1/7」 without spaces, the minus sign, 「」 quotes. */
+function tidy(text: string): string {
+  return text
+    .replace(/岁\s*岁/g, '岁')
+    .replace(/(\d)\s*\/\s*(\d)/g, '$1/$2')
+    .replace(/(^|[\s（(：:，,；;=≈<>])-(?=\d)/g, '$1−')
+    .replace(/[“"]([^“”"]*)[”"]/g, '「$1」')
+    .replace(/‘([^‘’]*)’/g, '「$1」')
+}
 const errText = (e: unknown, fallback: string) => (e instanceof Error && e.message ? e.message : fallback)
 
 /** Numbers by the spec rule: whole numbers as they are, below 10 two decimals, 10 and above one decimal. */
 function num(v: unknown): string {
   if (typeof v !== 'number' || !Number.isFinite(v)) return t(v) || '—'
-  if (Number.isInteger(v)) return String(v)
-  return String(Number(v.toFixed(Math.abs(v) < 10 ? 2 : 1)))   // 4.5 not 4.50
+  const a = Math.abs(v)
+  const text = Number.isInteger(v) ? String(a) : String(Number(a.toFixed(a < 10 ? 2 : 1)))   // 4.5 not 4.50
+  return v < 0 && Number(text) !== 0 ? `−${text}` : text   // the minus sign, not a hyphen
 }
 
 const isProb = (r: Readout) => r.unit === '概率'
@@ -134,6 +145,7 @@ export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone
     error ? h('div', { className: 'lp-callout lp-callout-bad', role: 'alert' }, h(Icon, { name: 'warn', size: 16 }), h('div', { className: 'lp-callout-body' }, error)) : null,
     h('section', { className: 'lp-section', 'aria-label': '深度分析状态' },
       h('div', { className: 'lp-card lp-an-prose' },
+        h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-h3' }, '关于深度分析')),
         h('p', { className: 'lp-text lp-muted' }, '用全基因组、甲基化、肠道菌、蛋白组和体检数据，算生物学年龄、各器官状况和以后的疾病风险，提出针对性的问题并逐一查证，最后给一份能照着做的方案。分析在对话里进行；也可以随时在对话里直接要求做一次。'),
         h(Switch, { checked: Boolean(status.readiness?.auto_on), onChange: (on: boolean) => { void toggle(on) }, label: '自动深度分析', disabled, busy: busy === 'auto', describedBy: 'lp-auto-cost' }),
         h('div', { className: 'lp-callout lp-callout-warn', id: 'lp-auto-cost', role: 'note' },
@@ -145,6 +157,7 @@ export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone
 
     cur && cur.organs.length ? h(Section, { title: '器官体检表' },
       h('div', { className: 'lp-card' },
+        h('p', { className: 'lp-caption lp-an-narrow-note' }, '年龄与疾病风险均为 AI 估计，风险为 10 年。'),
         h('div', { className: 'lp-table-wrap' },
           h('table', { className: 'lp-table lp-an-organs' },
             h('thead', null, h('tr', null, ...['器官', '测量和公式', '年龄 · AI 估计', '疾病风险 · 10 年 · AI 估计'].map((x) => h('th', { key: x, scope: 'col' }, x)))),
@@ -154,13 +167,13 @@ export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone
                 h('td', { className: 'lp-an-organ' }, t(o.label_zh)),
                 h('td', { className: measures.length ? undefined : 'lp-an-none', 'data-label': '测量和公式' }, measures.length
                   ? h('ul', { className: 'lp-an-list' }, ...measures.map((r, i) => h('li', { key: `${t(r.id)}-${i}` },
-                    h('span', { className: 'lp-muted' }, t(r.label_zh)), ' ', h('span', { className: 'lp-num lp-an-val' }, valueText(r)))))
+                    h('span', { className: 'lp-muted' }, t(r.label_zh)), ' ', h('span', { className: typeof r.value === 'number' ? 'lp-num lp-an-val' : 'lp-an-valtext' }, valueText(r)))))
                   : '—'),
-                h('td', { className: o.ai_age ? undefined : 'lp-an-none', 'data-label': '年龄 · AI 估计' }, o.ai_age
+                h('td', { className: o.ai_age ? undefined : 'lp-an-none', 'data-label': '年龄' }, o.ai_age
                   ? h('div', { className: 'lp-an-est' }, h('span', { className: 'lp-num lp-an-val' }, valueText(o.ai_age)),
                     rangeText(o.ai_age) ? h('span', { className: 'lp-caption lp-num' }, rangeText(o.ai_age)) : null)
                   : '—'),
-                h('td', { className: o.ai_risks.length || o.overrides.length ? undefined : 'lp-an-none', 'data-label': '疾病风险 · 10 年 · AI 估计' }, o.ai_risks.length || o.overrides.length
+                h('td', { className: o.ai_risks.length || o.overrides.length ? undefined : 'lp-an-none', 'data-label': '疾病风险' }, o.ai_risks.length || o.overrides.length
                   ? h('ul', { className: 'lp-an-list' },
                     ...o.ai_risks.map((r, i) => h('li', { key: `${t(r.id)}-${i}`, className: 'lp-an-est' },
                       h('span', null, cleanLabel(t(r.label_zh)), ' ', h('span', { className: 'lp-num lp-an-val' }, valueText(r))),
@@ -200,17 +213,29 @@ function StatusCard(props: {
 }): React.ReactElement | null {
   const { status, running, stopped, ready, disabled } = props
   const run = running ?? stopped
+  const [showSteps, setShowSteps] = React.useState(false)
 
   if (run) {
     const total = run.stages.length
     const now = running ? run.stages.findIndex((s) => !s.done) : -1
+    // A live run that has made progress shows every step; a stalled or not-yet-started one folds them into a line.
+    const folded = !running || run.done === 0
+    const firstOpen = run.stages.findIndex((s) => !s.done)
+    const at = firstOpen < 0 ? Math.max(total - 1, 0) : firstOpen
+    const nowLabel = run.stages[at]?.label_zh ?? ''
+    const summary = running
+      ? `正在进行第 1 步${nowLabel ? `「${t(nowLabel)}」` : ''} · 共 ${total} 步`
+      : `停在第 ${at + 1} 步${nowLabel ? `「${t(nowLabel)}」` : ''} · 共 ${total} 步`
     return h('div', { className: 'lp-card lp-an-prose' },
       h('div', { className: 'lp-card-head' },
         h('h3', { className: 'lp-h3' }, running ? '分析进行中' : '上次分析没有完成'),
         h('span', { className: 'lp-caption lp-num', role: 'status', 'aria-label': `已完成 ${run.done} 步，共 ${total} 步` }, `${run.done}/${total}`)),
       h('div', { className: 'lp-bar', role: 'progressbar', 'aria-label': '分析进度', 'aria-valuemin': 0, 'aria-valuemax': total, 'aria-valuenow': run.done },
         h('span', { style: { width: `${total ? Math.round((run.done / total) * 100) : 0}%` } })),
-      h('ol', { className: 'lp-progress-steps' }, ...run.stages.map((s, i) => h('li', {
+      folded ? h('div', { className: 'lp-an-fold' },
+        h('span', { className: 'lp-small' }, summary),
+        h('button', { type: 'button', className: 'lp-textbtn', 'aria-expanded': showSteps, 'aria-controls': 'lp-an-steps', onClick: () => setShowSteps((v) => !v) }, showSteps ? '收起步骤' : '展开步骤')) : null,
+      folded && !showSteps ? null : h('ol', { className: 'lp-progress-steps', id: 'lp-an-steps' }, ...run.stages.map((s, i) => h('li', {
         key: s.key, className: `lp-progress-step${s.done ? ' is-done' : i === now ? ' is-now' : ''}`, 'aria-current': i === now ? 'step' : undefined,
       },
       h('span', { className: 'lp-progress-dot', 'aria-hidden': true }, s.done ? h(Icon, { name: 'check', size: 12, strokeWidth: 2 }) : null),
@@ -219,10 +244,10 @@ function StatusCard(props: {
       running ? null : h('p', { className: 'lp-small lp-muted' }, '可以回到那段对话说「继续」，或者放弃后重新发起。'),
       run.state_error ? h('div', { className: 'lp-callout lp-callout-warn' }, h(Icon, { name: 'warn', size: 16 }), h('div', { className: 'lp-callout-body' }, t(run.state_error))) : null,
       ready ? h('div', { className: 'lp-callout lp-callout-good' }, h(Icon, { name: 'check', size: 16 }),
-        h('div', { className: 'lp-callout-body' }, '另有一份分析已完成，可以先导入。', h('div', null, h(Btn, { size: 'sm', onClick: () => props.onImport(ready.id), disabled }, '导入结果')))) : null,
+        h('div', { className: 'lp-callout-body' }, '另有一份分析已完成，可以先导入。', h('div', null, h(Btn, { onClick: () => props.onImport(ready.id), disabled }, '导入结果')))) : null,
       h('div', { className: 'lp-card-foot' },
         h('span', { className: 'lp-caption' }, running ? '每 15 秒自动刷新' : ''),
-        h(Btn, { variant: 'outline', size: 'sm', onClick: () => props.onAbandon(run.id), disabled }, '放弃这次分析')))
+        h(Btn, { variant: 'outline', onClick: () => props.onAbandon(run.id), disabled }, '放弃这次分析')))
   }
 
   if (ready) {
@@ -270,7 +295,7 @@ function ReportCard(props: { cur: Current; planItems: number }): React.ReactElem
     cur.boundary_zh ? h('p', { className: 'lp-caption' }, t(cur.boundary_zh)) : null,
     h('div', { className: 'lp-card-foot' },
       h('span', { className: 'lp-caption' }, '完整报告在新标签页打开'),
-      h('a', { className: 'lp-linkbtn lp-btn-primary', href, target: '_blank', rel: 'noopener noreferrer' }, '打开完整报告', h(Icon, { name: 'arrow', size: 14 }))))
+      h('a', { className: 'lp-linkbtn lp-btn-primary', href, target: '_blank', rel: 'noopener noreferrer' }, '打开完整报告', h(Icon, { name: 'chevron', size: 14 }))))
 }
 
 /** First sentence of a conclusion, cut to about two lines at a clause break; the whole text then goes under the fold. */
@@ -302,5 +327,5 @@ function QuestionCard(props: { row: BoardRow }): React.ReactElement {
       h('div', { className: 'lp-an-more' },
         more ? h('p', { className: 'lp-text lp-muted' }, more) : null,
         limits ? h('p', { className: 'lp-text lp-muted' }, `局限：${limits}`) : null)) : null,
-    next ? h('p', { className: 'lp-an-next' }, h(Icon, { name: 'arrow', size: 14 }), h('span', null, h('span', { className: 'lp-muted' }, '下一步：'), next)) : null)
+    next ? h('p', { className: 'lp-an-next' }, h('span', { className: 'lp-muted' }, '下一步：'), next) : null)
 }

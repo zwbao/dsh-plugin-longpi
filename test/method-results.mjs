@@ -65,7 +65,7 @@ assert.match(sleepSentence, /还没对上/)
 
 const clock = fixtures.find((row) => row.skill === 'aging-biomarker-framework')
 const clockSentence = resultSentence(clock, { youngerAllowed: false })
-assert.match(clockSentence, /-1\.4/)
+assert.match(clockSentence, /−1\.4/)
 assert.match(clockSentence, /甲基化报告上的时钟年龄 46\.6 岁/)
 assert.equal(clockSentence.split('。').filter(Boolean).length, 1, clockSentence)
 assert.doesNotMatch(clockSentence, YOUNGER)

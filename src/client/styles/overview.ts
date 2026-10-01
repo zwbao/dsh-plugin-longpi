@@ -26,7 +26,7 @@ export const OVERVIEW = `
 .lp-result-title.lp-result-title { display: block; }
 .lp-result-title .lp-info-wrap { vertical-align: -4px; }
 .lp-result-self { display: grid; gap: 8px; width: 100%; }
-.lp-result-foot .lp-tag { height: auto; min-height: 20px; white-space: normal; }
+.lp-result-needs .lp-tag { height: auto; min-height: 20px; white-space: normal; }
 .lp-bignum-unit { font-size: 14px; line-height: 20px; font-weight: 400; color: var(--lp-ink-2); letter-spacing: 0; }
 .lp-method-sentence { overflow-wrap: anywhere; }
 .lp-method-evidence { grid-column: 1 / -1; }

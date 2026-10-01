@@ -69,7 +69,7 @@ function ModelHint(props: { onOpen: (() => void) | null }): React.ReactElement |
     h(Icon, { name: 'info', size: 16 }),
     h('div', { className: 'lp-callout-body' },
       h('p', null, '对话功能需要先在 DSH 设置里填写模型的 API Key。'),
-      props.onOpen ? h(Btn, { size: 'sm', variant: 'outline', onClick: props.onOpen }, '去设置') : h('p', { className: 'lp-caption' }, '在左下角「设置 → 模型」中填写。')))
+      props.onOpen ? h(Btn, { variant: 'outline', onClick: props.onOpen }, '去设置') : h('p', { className: 'lp-caption' }, '在左下角「设置 → 模型」中填写。')))
 }
 
 function NotRead(props: { onRetry: () => void; onLater: () => void; busy: boolean }): React.ReactElement {

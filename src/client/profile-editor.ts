@@ -156,7 +156,7 @@ export function ProfileEditor(props: {
     h('fieldset', { className: 'lp-facts' },
       h('legend', { className: 'lp-facts-legend' },
         h('span', { className: 'lp-field-label' }, '心血管风险还需要这 6 项'),
-        h('span', { className: 'lp-caption' }, `已回答 ${answeredFacts} 项。不确定就选“不确定”，不会当作“否”。`)),
+        h('span', { className: 'lp-caption' }, `已回答 ${answeredFacts} 项。不确定就选「不确定」，不会当作「否」。`)),
       ...facts.map((row) => h('div', { className: 'lp-fact', key: row.key },
         h('div', { className: 'lp-fact-text' },
           h('div', { className: 'lp-fact-label', id: `${props.idPrefix}-${row.key}-text` }, row.label_zh),

@@ -104,13 +104,15 @@ function NextCard(props: OverviewProps): React.ReactElement | null {
   const next = props.journey.next
   if (!next.title_zh && !next.detail_zh) return null
   if (SETUP_ACTIONS.includes(next.action) && stepsLeft(props.journey) > 0) return null
+  // 记录今天 is the 今天 card right above: say it once (N3).
+  if (next.action === 'checkin' && props.journey.plan.exists) return null
   const cta = ctaOf(next.action, props)
   return h('section', { className: 'lp-card lp-next-card', 'aria-label': '下一步' },
     h('div', { className: 'lp-next-text' },
       h('div', { className: 'lp-caption' }, '下一步'),
       h('h3', { className: 'lp-h3' }, next.title_zh),
       next.detail_zh && next.detail_zh !== next.title_zh ? h('p', { className: 'lp-muted lp-small' }, next.detail_zh) : null),
-    cta ? h(Btn, { size: 'sm', onClick: cta.run }, cta.label) : null)
+    cta ? h(Btn, { onClick: cta.run }, cta.label) : null)
 }
 
 /** Some reads failed: the missing values are unknown, not "not measured". */
@@ -124,7 +126,7 @@ function PartialNote(props: { journey: Journey }): React.ReactElement | null {
     h('span', null,
       `有一部分记录这次没有读到${errors.length > 0 ? `（${errors.slice(0, 2).join('；')}）` : ''}。`,
       missing.length > 0 ? `没读到的指标：${missing.slice(0, 6).join('、')}${missing.length > 6 ? ` 等 ${missing.length} 项` : ''}。` : '',
-      '它们不是“没测”，稍后点右上角的刷新再读一次。'))
+      '它们不是「没测」，稍后点右上角的刷新再读一次。'))
 }
 
 export interface OverviewProps {

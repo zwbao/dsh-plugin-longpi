@@ -60,7 +60,7 @@ body[data-ds-dark-theme] .lp {
   --lp-good-ink: #4ed17e;
   --lp-good-wash: rgba(34, 197, 94, .16);
   --lp-warn-ink: #f7ad31;
-  --lp-warn-wash: rgba(245, 158, 11, .16);
+  --lp-warn-wash: rgba(245, 158, 11, .09);
   --lp-bad-ink: #f47272;
   --lp-bad-wash: rgba(242, 90, 90, .14);
   --lp-field: rgba(255, 255, 255, .03);

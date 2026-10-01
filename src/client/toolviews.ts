@@ -169,7 +169,7 @@ function DraftCard(props: { callId: string; data: PlanDraftResponse; draft: Plan
     h(DraftItems, { draft, removed, onToggle: toggle, compact: true }),
     props.data.brief.notes_zh[0] ? h('p', { className: 'lp-fine' }, props.data.brief.notes_zh[0]) : null,
     h('div', { className: 'lp-form-actions' },
-      h(Btn, { size: 'sm', onClick: () => { setError(null); setConfirming(true) }, disabled: kept.length === 0 }, '采用这份方案'),
+      h(Btn, { onClick: () => { setError(null); setConfirming(true) }, disabled: kept.length === 0 }, '采用这份方案'),
       h('span', { className: 'lp-caption' }, '每项是试验里的平均效果，个人结果会不同；补剂不给剂量，不涉及处方药。')),
     confirming ? h(ConfirmModal, {
       draft, items: kept, goals, today: journey?.today ?? localToday(), busy, error,

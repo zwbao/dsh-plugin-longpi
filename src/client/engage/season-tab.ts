@@ -60,11 +60,13 @@ export function SeasonPanel(props: {
   const season = props.view.season
   const note = props.note ? h('p', { className: 'lp-small lp-measure', role: 'status' }, props.note) : null
   if (props.view.invite?.show) {
-    return h('section', { className: 'lp-card', 'aria-label': props.view.invite.title_zh },
-      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, props.view.invite.title_zh)),
+    // The card is the season invitation itself; the server's title names a quest, not what this text says.
+    return h('section', { className: 'lp-card', 'aria-label': '开始一个赛季' },
+      h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '开始一个赛季')),
       h('p', { className: 'lp-text' }, props.view.invite.body_zh),
+      props.view.invite.title_zh ? h('p', { className: 'lp-caption' }, `这一季：${props.view.invite.title_zh}`) : null,
       props.view.subject_zh ? h('p', { className: 'lp-caption lp-measure' }, `这个赛季用的是${props.view.subject_zh}的年龄和性别。`) : null,
-      h('a', { className: 'lp-textbtn', href: props.view.invite.odds_path }, '概率说明'),
+      h('a', { className: 'lp-textbtn', href: props.view.invite.odds_path }, '概率说明 →'),
       h('div', { className: 'lp-actions' },
         h(Btn, { disabled: props.busy, onClick: () => props.onAction({ action: 'opt_in' }) }, '开始这个赛季'),
         h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onAction({ action: 'decline_invite' }) }, '先不用')),
@@ -83,8 +85,8 @@ export function SeasonPanel(props: {
   const ratio = season ? Math.min(1, season.week / Math.max(1, season.weeks)) : 0
   const family = props.view.family?.available
     ? props.view.family.opted
-      ? h(Btn, { size: 'sm', variant: 'outline', disabled: props.busy, onClick: () => props.onAction({ action: 'share_recap' }) }, '把这个赛季的回看发给家人')
-      : h(Btn, { size: 'sm', variant: 'outline', disabled: props.busy, onClick: () => props.onAction({ action: 'family_on' }) }, '打开家人圈')
+      ? h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onAction({ action: 'share_recap' }) }, '把这个赛季的回看发给家人')
+      : h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onAction({ action: 'family_on' }) }, '打开家人圈')
     : null
   return h(React.Fragment, null,
     h('section', { className: 'lp-card', 'aria-label': '本赛季' },
@@ -103,14 +105,14 @@ export function SeasonPanel(props: {
         : h('p', { className: 'lp-small lp-muted lp-measure' }, '这一赛季还没有开始。'),
       season?.status === 'closed' || family
         ? h('div', { className: 'lp-actions' },
-          season?.status === 'closed' ? h(Btn, { size: 'sm', disabled: props.busy, onClick: () => props.onAction({ action: 'next_season' }) }, '开始下一个赛季') : null,
+          season?.status === 'closed' ? h(Btn, { disabled: props.busy, onClick: () => props.onAction({ action: 'next_season' }) }, '开始下一个赛季') : null,
           family)
         : null,
       h('div', { className: 'lp-card-foot' },
         h('span', { className: 'lp-caption' }, '生病或出行的这一天：不算中断，也不算完成。'),
         h('div', { className: 'lp-actions' },
-          h(Btn, { size: 'sm', variant: 'outline', disabled: props.busy, onClick: () => props.onFreeze('sick') }, '今天生病'),
-          h(Btn, { size: 'sm', variant: 'outline', disabled: props.busy, onClick: () => props.onFreeze('travel') }, '今天出行')))),
+          h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onFreeze('sick') }, '今天生病'),
+          h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onFreeze('travel') }, '今天出行')))),
     shown.length > 0
       ? h('section', { className: 'lp-card', 'aria-label': '小目标' },
         h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '小目标')),

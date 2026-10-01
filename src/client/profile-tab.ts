@@ -31,7 +31,7 @@ function ConnectionCard(props: { journey: Journey }): React.ReactElement {
         : h('button', { type: 'button', className: 'lp-textbtn', 'aria-expanded': editing, onClick: () => setEditing((current) => !current) }, editing ? '收起' : '修改连接')),
     data ? h(ConnectionStatus, { connection: data }) : h(RecordsStatusLine, { journey: props.journey }),
     editing && !openSettings ? h(ConnectionForm, { connection: data, idPrefix: 'lp-profile-conn', onSaved: () => setEditing(false) }) : null,
-    openSettings ? null : h('p', { className: 'lp-caption lp-measure' }, '也可以在 DSH 左下角的“设置 → LongPi”中修改。'))
+    openSettings ? null : h('p', { className: 'lp-caption lp-measure' }, '也可以在 DSH 左下角的「设置 → LongPi」中修改。'))
 }
 
 /** The next-checkup add-on list, as rows; items the person can measure at home get a field right in the row. */
@@ -40,7 +40,7 @@ function AddonRows(props: { journey: Journey; onNotice: Notify }): React.ReactEl
     ...props.journey.addons.map((row) => h('li', { key: row.item_zh, className: 'lp-row' },
       h('div', { className: 'lp-row-main lp-row-lines' },
         h('span', { className: 'lp-strong' }, row.item_zh),
-        h('span', { className: 'lp-caption' }, `解锁：${row.unlocks_zh}${row.self_measurable ? ' · 可以自己在家量' : ' · 下次体检加测'}`)),
+        h('span', { className: 'lp-caption' }, `解锁：${row.unlocks_zh}${row.self_measurable ? ' · 可以自己在家量' : ''}`)),
       row.self_measurable && row.self_key
         ? h(InlineSelf, { journey: props.journey, selfKey: row.self_key, idPrefix: 'lp-profile-addons-' + row.self_key, onNotice: props.onNotice })
         : null)))

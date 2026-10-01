@@ -19,7 +19,7 @@ export function ShareCard(props: { card: ShareCardModel; onNotice?: Notify; comp
     }
     void clip.writeText(text).then(() => props.onNotice?.('已复制', 'good')).catch(() => props.onNotice?.('请手动选择这句话', 'info'))
   }
-  const action = h('div', { className: 'lp-actions' }, h(Btn, { size: 'sm', variant: 'outline', onClick: copy }, '复制这句话'))
+  const action = h('div', { className: 'lp-actions' }, h(Btn, { variant: 'outline', onClick: copy }, '复制这句话'))
   if (props.compact) {
     return h('section', { className: 'lp-card', id: 'lp-share', 'aria-label': props.card.title_zh },
       h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, props.card.title_zh)),

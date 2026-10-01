@@ -110,6 +110,8 @@ export interface MarkerChart {
   unit: string
   better: string
   points: Array<{ date: string; value: number }>
+  /** Points are weekly means dated by the week's Monday (home blood pressure): say 「X 月 X 日起一周」. */
+  weekly?: boolean
   band: { base: number; base_date: string; low: number; high: number; verified: boolean } | null
   goal: number | null
   items: string[]
@@ -354,6 +356,7 @@ function chartsFor(plan: PlanVersion, markers: ResolvedMarker[], series: Record<
       unit: marker.unit,
       better: marker.biovar?.better ?? 'none',
       points,
+      ...(marker.biovar?.average_days ? { weekly: true } : {}),
       band,
       goal: goal ? goal.value : null,
       items,

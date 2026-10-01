@@ -54,7 +54,7 @@ assert.equal(titleOf('unknown-skill', '可穿戴时钟'), '可穿戴时钟')
 assert.equal(titleOf('aging-biomarker-framework', '衰老标志物对照', 'blood_phenoage_age_deviation'), '血检身体年龄减周岁', 'a blood panel is not a methylation clock')
 assert.equal(titleOf('aging-biomarker-framework', '', 'grimage2_age_deviation'), '甲基化时钟偏差')
 assert.equal(titleOf('biological-aging-generational-shifts', '衰老测量对照', 'phenoage_gap'), '身体年龄减周岁')
-assert.equal(formatMeasure(-8.89, 'a', 'phenoage_gap'), '-8.89 岁')
+assert.equal(formatMeasure(-8.89, 'a', 'phenoage_gap'), '−8.89 岁')
 const unbound = resultSentence({
   skill: 'china-par-ascvd-risk',
   label: 'unverified-binding',

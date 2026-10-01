@@ -171,7 +171,7 @@ function Failed(props: { error: string; onRetry: () => void }): React.ReactEleme
   return h('div', { className: 'lp-card lp-failed', role: 'alert' },
     h('div', { className: 'lp-strong' }, 'LongPi 没有读到数据'),
     h('p', { className: 'lp-muted' }, `服务返回：${props.error}。通常是刚打开，稍等几秒再试。`),
-    h(Btn, { variant: 'outline', size: 'sm', onClick: props.onRetry }, h(Icon, { name: 'refresh', size: 14 }), '重试'))
+    h(Btn, { variant: 'outline', onClick: props.onRetry }, h(Icon, { name: 'refresh', size: 14 }), '重试'))
 }
 
 /**

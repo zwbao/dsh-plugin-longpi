@@ -453,6 +453,8 @@ export interface Chart {
   unit: string
   better?: string
   points: Array<{ date: string; value: number }>
+  /** Weekly means dated by Monday. */
+  weekly?: boolean
   band?: { base: number; base_date: string; low: number; high: number; verified?: boolean } | null
   goal?: number | null
   items?: string[]

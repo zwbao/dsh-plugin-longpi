@@ -22,6 +22,6 @@ export function NudgeOffer(props: { offer: boolean; onAccept: () => void; onDism
     h('div', { className: 'lp-callout-body' },
       h('p', null, '要不要在别的对话里，偶尔看到一句这个赛季的事？默认关闭。'),
       h('div', { className: 'lp-actions' },
-        h(Btn, { size: 'sm', variant: 'outline', onClick: props.onAccept }, '偶尔一句'),
-        h(Btn, { size: 'sm', variant: 'ghost', onClick: props.onDismiss }, '不用'))))
+        h(Btn, { variant: 'outline', onClick: props.onAccept }, '偶尔一句'),
+        h(Btn, { variant: 'ghost', onClick: props.onDismiss }, '不用'))))
 }

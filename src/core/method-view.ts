@@ -81,7 +81,7 @@ export function formatMeasure(value: number | string, unit: string, key = ''): s
     return shownUnit && !text.includes(shownUnit) ? `${text} ${shownUnit}`.trim() : text
   }
   if (!Number.isFinite(value)) return ''
-  const shown = String(Number(value.toFixed(2)))
+  const shown = String(Number(value.toFixed(2))).replace(/^-/, '−')   // the mathematical minus sign (design spec)
   if (!shownUnit) return shown
   if (shownUnit === '%') return `${shown}%`
   return `${shown} ${shownUnit}`

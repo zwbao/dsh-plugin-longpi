@@ -12,6 +12,11 @@ import { Info, Section } from './ui.ts'
 
 const h = React.createElement
 
+/** Negative numbers with the minus sign (−), not a hyphen. */
+export function minus(text: string): string {
+  return text.replace(/(^|[\s(（:：→])-(?=\d)/g, '$1−')
+}
+
 export function Goals(props: { tracking: Tracking | null }): React.ReactElement | null {
   const models = props.tracking?.models ?? []
   if (!props.tracking?.plan || models.length === 0) return null
@@ -35,9 +40,9 @@ export function Goals(props: { tracking: Tracking | null }): React.ReactElement 
           : sensitivityRows.length > 0
             ? h('div', null, h('div', { className: 'lp-subhead' }, '对你的身体年龄影响最大的指标'), h(LeverBars, { rows: sensitivityRows }))
             : null,
-        ...(pheno.levers ?? []).slice(0, 3).map((row) => h('p', { key: row.label, className: 'lp-caption' }, projectionSentence(row.label, row.to, row.years, row.from))),
+        ...(pheno.levers ?? []).slice(0, 3).map((row) => h('p', { key: row.label, className: 'lp-caption lp-measure' }, minus(projectionSentence(row.label, row.to, row.years, row.from)))),
         pheno.goal && pheno.goal.phenoage_delta != null
-          ? h('p', { className: 'lp-caption lp-measure' }, projectionSentence('达到方案目标时的身体年龄', `${fmt(pheno.goal.phenoage)} 岁`, pheno.goal.phenoage_delta as number, pheno.now?.phenoage != null ? `${fmt(pheno.now.phenoage)} 岁` : undefined))
+          ? h('p', { className: 'lp-caption lp-measure' }, minus(projectionSentence('达到方案目标时的身体年龄', `${fmt(pheno.goal.phenoage)} 岁`, pheno.goal.phenoage_delta as number, pheno.now?.phenoage != null ? `${fmt(pheno.now.phenoage)} 岁` : undefined)))
           : null,
         h('p', { className: 'lp-caption lp-measure' }, `${pheno.measured_on ? `按 ${pheno.measured_on} 的血检计算。` : ''}${pheno.boundary_zh ?? ''}`)) : null,
       risk ? h('div', { className: 'lp-card' },
@@ -63,8 +68,8 @@ export function Goals(props: { tracking: Tracking | null }): React.ReactElement 
       h('div', { className: 'lp-callout lp-callout-info' },
         h(Icon, { name: 'info', size: 14 }),
         h('div', { className: 'lp-callout-body' },
-          h('div', { className: 'lp-callout-title' }, '关于“能多活几年”'),
-          h('p', null, '没有经过验证的模型能对个人给出“多活几年”。这里只给有依据的模型估计：达到目标时身体年龄大概会怎样，以及中国人群的 10 年心血管风险。'),
+          h('div', { className: 'lp-callout-title' }, '关于「能多活几年」'),
+          h('p', null, '没有经过验证的模型能对个人给出「多活几年」。这里只给有依据的模型估计：达到目标时身体年龄大概会怎样，以及中国人群的 10 年心血管风险。'),
           h('p', { className: 'lp-muted lp-measure' }, '试验里的平均效应都不大：热量限制使衰老速度慢约 2–3%，鱼油三年约慢 3 个月。能坚持的小改变，比追逐一个数字更重要。')))))
 }
 

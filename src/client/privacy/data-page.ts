@@ -67,19 +67,20 @@ export function DataPage(props: { onDecided?: (decision: 'granted' | 'declined')
       h(List, { title: '会发给 DeepSeek 的', lines: flow.to_deepseek ?? [] }),
       h(List, { title: '留在这台电脑的', lines: flow.stays_local ?? [] }),
       h(List, { title: '体检原件留在原来的地方', lines: flow.mirobody ?? [] }),
-      flow.name ? h('p', { className: 'lp-muted' }, flow.name) : null) : null,
+      // The name line repeats what the DeepSeek list already says in most copy: show it, as a caption, only when it is new.
+      flow.name && !(flow.to_deepseek ?? []).some((line) => /名字|称呼|姓名/.test(line)) ? h('p', { className: 'lp-caption' }, flow.name) : null) : null,
     h('div', { className: 'lp-data-group' },
       h('div', { className: 'lp-field-label' }, '健康对话发给 DeepSeek'),
       // Decided: the state and one quiet way to change it. Undecided: the two choices.
       decision === 'granted' || decision === 'declined'
         ? h('div', { className: 'lp-actions' },
           h('span', { className: `lp-badge ${decision === 'granted' ? 'lp-badge-good' : 'lp-badge-neutral'}` }, decision === 'granted' ? '已同意' : '不发送'),
-          h(Btn, { size: 'sm', variant: 'outline', disabled: busy, onClick: () => act({ scope: 'data_flow_deepseek', decision: decision === 'granted' ? 'declined' : 'granted' }) }, decision === 'granted' ? '撤回' : '同意'))
+          h(Btn, { variant: 'outline', disabled: busy, onClick: () => act({ scope: 'data_flow_deepseek', decision: decision === 'granted' ? 'declined' : 'granted' }) }, decision === 'granted' ? '撤回' : '同意'))
         : h(React.Fragment, null,
           h('p', { className: 'lp-caption' }, '还没有选择。'),
           h('div', { className: 'lp-actions' },
-            h(Btn, { size: 'sm', disabled: busy, onClick: () => act({ scope: 'data_flow_deepseek', decision: 'granted' }) }, copy?.buttons?.flow_grant ?? '同意把健康对话发给 DeepSeek'),
-            h(Btn, { size: 'sm', variant: 'outline', disabled: busy, onClick: () => act({ scope: 'data_flow_deepseek', decision: 'declined' }) }, copy?.buttons?.flow_decline ?? '先不发送')))),
+            h(Btn, { disabled: busy, onClick: () => act({ scope: 'data_flow_deepseek', decision: 'granted' }) }, copy?.buttons?.flow_grant ?? '同意把健康对话发给 DeepSeek'),
+            h(Btn, { variant: 'outline', disabled: busy, onClick: () => act({ scope: 'data_flow_deepseek', decision: 'declined' }) }, copy?.buttons?.flow_decline ?? '先不发送')))),
     h('div', { className: 'lp-data-group' },
       h(Switch, { checked: sessionOn, busy, disabled: busy || !status, label: '上传会话日志', onChange: (next) => act({ scope: 'session_log_upload', decision: next ? 'granted' : 'declined' }) }),
       h('p', { className: 'lp-caption' }, flow?.session_log || '健康对话默认不上传会话日志。')),
@@ -93,7 +94,7 @@ export function DataPage(props: { onDecided?: (decision: 'granted' | 'declined')
         h('label', { className: 'lp-field-label', htmlFor: 'lp-privacy-phrase' }, `删除：输入「${phraseText}」`),
         h('input', { id: 'lp-privacy-phrase', className: 'lp-input', value: phrase, autoComplete: 'off', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setPhrase(event.target.value) })),
       h('div', { className: 'lp-actions' },
-        h(Btn, { size: 'sm', variant: 'outline', onClick: () => {
+        h(Btn, { variant: 'outline', onClick: () => {
           void postJson('/api/longpi/privacy/delete', { confirm: phrase }).then(() => setNote('已删除这台电脑上的 LongPi 档案')).catch((err: unknown) => setError(errorText(err, '没有删除')))
         } }, '删除这台电脑上的 LongPi 数据')),
       copy?.delete?.note ? h('p', { className: 'lp-caption' }, copy.delete.note) : null),

@@ -96,7 +96,7 @@ function ChangesLine(props: { journey: Journey; onOpenChanges?: () => void }): R
     h('span', null,
       h('span', { className: 'lp-strong' }, `值得注意：${rows.length} 项指标的变化超出正常波动`),
       ` · ${names}${rows.length > 3 ? ' 等' : ''}`,
-      props.onOpenChanges ? h(React.Fragment, null, ' · ', h('button', { type: 'button', className: 'lp-textbtn', onClick: props.onOpenChanges }, '在健康页查看', h(Icon, { name: 'chevron', size: 14 }))) : null))
+      props.onOpenChanges ? h(React.Fragment, null, ' · ', h('button', { type: 'button', className: 'lp-textbtn', onClick: props.onOpenChanges }, '在健康页查看 →')) : null))
 }
 
 /** Step 3: what LongPi found, or the connection form (no installer needed). */
@@ -108,7 +108,7 @@ export function RecordsStep(props: { journey: Journey; onOpenChanges?: () => voi
       ? h(React.Fragment, null,
         h('p', { className: 'lp-muted' }, '已经放进来的体检（只读）：'),
         h(FoundTiles, { journey: props.journey }),
-        records.status === 'partial' ? h('p', { className: 'lp-blocker lp-blocker-bad' }, `有一部分记录这次没有读到${records.read_errors[0] ? `：${records.read_errors[0]}` : ''}。它们不是“没测”，稍后在健康页刷新。`) : null,
+        records.status === 'partial' ? h('div', { className: 'lp-callout lp-callout-warn', role: 'note' }, h(Icon, { name: 'warn', size: 14 }), h('span', null, `有一部分记录这次没有读到${records.read_errors[0] ? `：${records.read_errors[0]}` : ''}。它们不是「没测」，稍后在健康页刷新。`)) : null,
         h(ChangesLine, props))
       : h(React.Fragment, null,
         records.status === 'error'

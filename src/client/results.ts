@@ -131,23 +131,25 @@ function Blocked(props: {
 }): React.ReactElement {
   const action = props.action
   const self = props.selfAddon && props.selfAddon.self_key && action?.target !== 'profile' && action?.target !== 'records' ? props.selfAddon : null
-  // The missing items and what to do about them sit together on the card's floor (#39).
-  const foot = props.needs.length > 0 || self || action
+  // What is missing is said once (N23): as tags when the server lists the items, else as the server's sentence.
+  const needs = props.needs.length > 0
+    ? h('div', { className: 'lp-tags lp-result-needs' },
+      h('span', { className: 'lp-caption' }, `还差 ${props.needs.length} 项`),
+      ...props.needs.slice(0, NEEDS_SHOWN).map((need) => h('span', { className: 'lp-tag', key: need }, need)),
+      props.needs.length > NEEDS_SHOWN ? h('span', { className: 'lp-caption' }, '…') : null)
+    : h('p', { className: 'lp-blocker' }, props.blocker ? `还缺：${props.blocker.replace(/^记录里还缺|^档案里还缺|^还缺/, '').replace(/^[：:]/, '')}` : '还缺计算需要的数据。')
+  // What to do about it sits on the card's floor (#39).
   return h('div', { className: 'lp-card lp-result' },
     h(CardHead, { label: props.label, info: props.info }),
     h('div', { className: 'lp-result-wait' }, '暂时无法计算'),
-    h('p', { className: 'lp-blocker' }, props.blocker ? `还缺：${props.blocker.replace(/^记录里还缺|^档案里还缺|^还缺/, '').replace(/^[：:]/, '')}` : '还缺计算需要的数据。'),
+    needs,
     props.note ?? null,
-    foot ? h('div', { className: 'lp-result-foot' },
-      props.needs.length > 0 ? h('div', { className: 'lp-tags' },
-        h('span', { className: 'lp-caption' }, `还差 ${props.needs.length} 项`),
-        ...props.needs.slice(0, NEEDS_SHOWN).map((need) => h('span', { className: 'lp-tag', key: need }, need)),
-        props.needs.length > NEEDS_SHOWN ? h('span', { className: 'lp-caption' }, '…') : null) : null,
-      self?.self_key
-        ? h('div', { className: 'lp-result-self' },
+    self?.self_key
+      ? h('div', { className: 'lp-result-foot' },
+        h('div', { className: 'lp-result-self' },
           h('div', { className: 'lp-caption' }, `${self.item_zh}可以自己在家量，记下就能算：`),
-          h(InlineSelf, { journey: props.journey, selfKey: self.self_key, idPrefix: `${props.idPrefix}-self`, onNotice: props.onNotice }))
-        : action ? h(Btn, { size: 'sm', variant: 'outline', onClick: () => props.onAction(action.target) }, action.label) : null) : null)
+          h(InlineSelf, { journey: props.journey, selfKey: self.self_key, idPrefix: `${props.idPrefix}-self`, onNotice: props.onNotice })))
+      : action ? h('div', { className: 'lp-result-foot' }, h(Btn, { variant: 'outline', onClick: () => props.onAction(action.target) }, action.label)) : null)
 }
 
 export function BodyAgeCard(props: {
@@ -197,7 +199,7 @@ export function BodyAgeCard(props: {
   return h('div', { className: 'lp-card lp-result', ...(props.method ? { 'data-result-label': props.method.label } : {}) },
     h(CardHead, { label: '身体年龄', info, mark: props.method?.label ?? null }),
     h('div', { className: 'lp-result-figure' },
-      h('span', { className: 'lp-num-lg' }, fmt(phenoage)),
+      h('span', { className: 'lp-num-lg' }, plainUnits(fmt(phenoage))),
       h('span', { className: 'lp-bignum-unit' }, '岁'),
       younger ? h('span', { className: 'lp-badge lp-badge-good' }, '真实的变化') : null),
     // The method results that measure body age are folded in here as one line in glossary words (INT062 fix 7):
@@ -294,7 +296,7 @@ function MethodCard(props: { result: MethodResult }): React.ReactElement {
     h(CardHead, { label: title, info: h('span', { className: 'lp-info-line' }, props.result.limits_zh || '模型估计，不是诊断。'), mark: props.result.label }),
     numeric
       ? h('div', { className: 'lp-result-figure' },
-        h('span', { className: 'lp-num-lg' }, figure),
+        h('span', { className: 'lp-num-lg' }, plainUnits(figure)),
         unit ? h('span', { className: 'lp-bignum-unit' }, unit) : null)
       : figure ? h('div', { className: 'lp-result-figure' }, h('span', { className: 'lp-num-md' }, plainUnits(figure))) : null,
     sentence ? h('p', { className: `${unmatched ? 'lp-caption' : 'lp-muted'} lp-method-sentence` }, sentence) : null)

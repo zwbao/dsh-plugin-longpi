@@ -81,7 +81,7 @@ function decimals(value: number): number {
 /** Both ends with the same decimals, as a lab prints them: 4.2 → 3.0, not 4.2 → 3. */
 export function pairText(from: number, to: number): string {
   const digits = Math.min(2, Math.max(decimals(from), decimals(to)))
-  return `${from.toFixed(digits)} → ${to.toFixed(digits)}`
+  return plainUnits(`${from.toFixed(digits)} → ${to.toFixed(digits)}`)
 }
 
 function NotableRow(props: { row: RecordChange }): React.ReactElement {
@@ -89,12 +89,12 @@ function NotableRow(props: { row: RecordChange }): React.ReactElement {
   return h('li', { className: 'lp-notable-row' },
     h(ChangeChip, { verdict: row.verdict, askDoctor: row.ask_doctor }),
     h('span', { className: 'lp-strong' }, row.label_zh),
-    h('span', { className: 'lp-num lp-notable-values' }, `${row.compare.from === row.compare.to ? `${row.compare.to} ${prettyUnits(row.unit)}`.trim() : `${pairText(row.compare.from, row.compare.to)} ${prettyUnits(row.unit)}`.trim()}`),
+    h('span', { className: 'lp-num lp-notable-values' }, `${row.compare.from === row.compare.to ? `${plainUnits(String(row.compare.to))} ${prettyUnits(row.unit)}`.trim() : `${pairText(row.compare.from, row.compare.to)} ${prettyUnits(row.unit)}`.trim()}`),
     h(Spark, { row }))
 }
 
 /** The one plain sentence behind 判断依据 (INT062 fix 7): what "超出正常波动" means, and what it is not. */
-export const BASIS_ZH = '“超出正常波动”是说两次结果的差别，比同一个人平常的起伏更大。不同医院、不同仪器之间的差别没有算进去，这也不是诊断。'
+export const BASIS_ZH = '「超出正常波动」是说两次结果的差别，比同一个人平常的起伏更大。不同医院、不同仪器之间的差别没有算进去，这也不是诊断。'
 
 /**
  * 判断依据: one plain sentence and where the fluctuation data comes from. Method notes (CV scales, instrument
@@ -137,7 +137,7 @@ export function NotableChanges(props: { journey: Journey; onOpenIndicators: () =
   return h('section', { className: 'lp-card lp-notable', id: 'lp-changes', 'aria-labelledby': 'lp-changes-title' },
     h('div', { className: 'lp-card-head' },
       h('h3', { className: 'lp-card-title', id: 'lp-changes-title' }, '值得注意的变化', rows.length > 0 ? h('span', { className: 'lp-caption' }, `${rows.length} 项超出正常波动`) : null),
-      h('button', { type: 'button', className: 'lp-textbtn', onClick: props.onOpenIndicators }, '在「化验」里看全部', h(Icon, { name: 'chevron', size: 14 }))),
+      h('button', { type: 'button', className: 'lp-textbtn', onClick: props.onOpenIndicators }, '在「化验」里看全部 →')),
     pointer ? h('p', { className: 'lp-caption' }, pointer) : null,
     ...advice.map((group) => h('div', { key: group.advice, className: 'lp-callout lp-callout-warn' },
       h(Icon, { name: 'warn', size: 14 }), h('span', null, group.advice))),

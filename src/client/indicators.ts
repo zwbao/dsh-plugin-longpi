@@ -93,10 +93,12 @@ export function JudgedChip(props: { row: IndicatorRow; gate?: string; reason?: s
     return h('span', { className: `lp-badge lp-badge-${tone}`, title: full }, judgementText(kind, false))
   }
   if (kind === 'within') return h('span', { className: 'lp-badge lp-badge-good', title: full }, judgementText(kind, false))
-  const why = kind === 'unjudged'
-    ? (row.read_error ? '这项没有读到' : row.points.length < 2 ? '只有一次结果' : '还缺比较要用的信息')
-    : reason || full
-  return h('span', { className: 'lp-caption', title: why }, judgementText(kind, false))
+  if (kind === 'unjudged') {
+    // No judgement is shown as 「—」; the reason stays in the tooltip and the detail panel.
+    const why = row.read_error ? '这项没有读到' : row.points.length < 2 ? '只有一次结果，还不能下结论' : '还缺比较要用的信息，还不能下结论'
+    return h('span', { className: 'lp-caption', title: why, 'aria-label': judgementText(kind, false) }, '—')
+  }
+  return h('span', { className: 'lp-caption', title: reason || full }, judgementText(kind, false))
 }
 
 function latestText(row: IndicatorRow): string {
@@ -124,8 +126,9 @@ function IndicatorLine(props: { row: IndicatorRow; open: boolean; onToggle: () =
       missed
         ? h('span', { className: 'lp-ind-value' }, h('span', { className: 'lp-ind-error', title: missed }, h(Icon, { name: 'warn', size: 12 }), '没有读到'))
         : h('span', { className: 'lp-ind-value' },
-          h('span', null, h('span', { className: 'lp-num' }, latestText(row)), unit ? h('span', { className: 'lp-ind-unit' }, unit.startsWith('%') ? unit : ` ${unit}`) : null),
-          when ? h('span', { className: 'lp-caption' }, when) : null),
+          h('span', { className: 'lp-ind-num' }, latestText(row)),
+          h('span', { className: 'lp-ind-unit' }, unit)),
+      h('span', { className: 'lp-ind-date lp-caption' }, missed || !when ? '—' : when),
       h('span', { className: 'lp-ind-spark' }, missed ? h('span', { className: 'lp-caption' }, '—') : h(Sparkline, { points: row.points, label: row.label_zh })),
       h('span', { className: 'lp-ind-judged' }, missed ? h('span', { className: 'lp-caption' }, '—') : h(JudgedChip, { row, gate: props.gate, reason: props.reason })),
       h('span', { className: 'lp-ind-source' }, SOURCE_ZH[row.source] ?? '—'),
@@ -294,13 +297,14 @@ export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filte
   // The 「和正常波动比」 column only shows when some row in view has something to say in it.
   const judgedAny = groups.some((group) => group.indicators.some((row) => !row.read_error
     && (row.range_flag === 'low' || row.range_flag === 'high' || judgementKind({ ...gateOf(row), judged: row.judged }) !== 'unjudged')))
-  const lastDate = area === 'labs' ? lastCheckup(all) : null
-  const checkup = lastDate ? dateZh(lastDate) : ''
+  // 化验: the last checkup; 睡眠 / 运动: the newest value of any row.
+  const lastDate = area === 'labs' ? lastCheckup(all) : all.reduce<string | null>((last, row) => (row.latest && (!last || row.latest.date > last) ? row.latest.date : last), null)
+  const latestLine = lastDate ? `${area === 'labs' ? '最近一次体检' : '最近一次'} ${dateZh(lastDate)}` : ''
   return h('div', { className: 'lp-tab-body' },
     data.record.status === 'partial' || data.record.status === 'error'
       ? h('div', { className: 'lp-callout lp-callout-warn', role: 'note' }, h(Icon, { name: 'warn', size: 14 }),
         h('div', { className: 'lp-callout-body' },
-          `有一部分记录这次没有读到${data.record.error ? `：${data.record.error}` : failed > 0 ? `（${failed} 项）` : ''}。标着“没有读到”的指标不是没测，稍后刷新再读。`))
+          `有一部分记录这次没有读到${data.record.error ? `：${data.record.error}` : failed > 0 ? `（${failed} 项）` : ''}。标着「没有读到」的指标不是没测，稍后刷新再读。`))
       : null,
     h('div', { className: 'lp-ind-toolbar' },
       h('div', { className: 'lp-seg', role: 'group', 'aria-label': '筛选指标' },
@@ -312,13 +316,13 @@ export function IndicatorsTab(props: { filter: IndicatorFilter; onFilter: (filte
             disabled: count === 0 && !on, onClick: () => props.onFilter(row.key),
           }, row.label, h('span', { className: 'lp-seg-count' }, String(count)))
         })),
-      h('span', { className: 'lp-caption lp-ind-meta' }, checkup ? `最近一次体检 ${checkup}` : '和正常波动比',
-        h(Info, { label: '和正常波动比', align: 'end' }, JUDGEMENT_HELP))),
+      latestLine ? h('span', { className: 'lp-caption lp-ind-meta' }, latestLine,
+        judgedAny ? h(Info, { label: '和正常波动比', align: 'end' }, JUDGEMENT_HELP) : null) : null),
     groups.length === 0
-      ? h(EmptyCard, { icon: 'check', title: `没有“${filter.label}”的指标`, text: '换一个筛选看看。', action: { label: '看全部', onClick: () => props.onFilter('all') } })
+      ? h(EmptyCard, { icon: 'check', title: `没有「${filter.label}」的指标`, text: '换一个筛选看看。', action: { label: '看全部', onClick: () => props.onFilter('all') } })
       : h('div', { className: `lp-card lp-ind-card ${judgedAny ? '' : 'lp-ind-nojudge'}`.trim() },
         h('div', { className: 'lp-ind-head', 'aria-hidden': true },
-          h('span', null, '指标'), h('span', null, '最近一次'), h('span', null, '趋势'), h('span', { className: 'lp-ind-head-judged' }, '和正常波动比'), h('span', null, '来源'), h('span', null)),
+          h('span', null, '指标'), h('span', { className: 'lp-ind-value' }, h('span', { className: 'lp-ind-num' }, '最近一次'), h('span', null)), h('span', { className: 'lp-ind-date' }, '日期'), h('span', null, '趋势'), h('span', { className: 'lp-ind-head-judged' }, '和正常波动比'), h('span', null, '来源'), h('span', null)),
         ...groups.map((group) => h('section', { key: group.key, className: 'lp-ind-group', 'aria-label': group.label_zh },
           h('h3', { className: 'lp-ind-group-title' }, group.label_zh, h('span', { className: 'lp-optional' }, `${group.indicators.length} 项`)),
           h('ul', { className: 'lp-ind-list' },

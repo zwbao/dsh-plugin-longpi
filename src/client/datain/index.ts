@@ -76,7 +76,7 @@ function MedsForm(): React.ReactElement {
         h('input', { id: 'lp-med-times', className: 'lp-input', value: times, placeholder: '每天早上一次', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setTimes(event.target.value) }))),
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
     h('div', { className: 'lp-actions' },
-      h(Btn, { type: 'button', size: 'sm', disabled: !name.trim(), onClick: () => { void save() } }, '记下这味药')))
+      h(Btn, { type: 'button', disabled: !name.trim(), onClick: () => { void save() } }, '记下这味药')))
 }
 
 function ConditionsForm(): React.ReactElement {
@@ -106,7 +106,7 @@ function ConditionsForm(): React.ReactElement {
       h('input', { id: 'lp-cond-name', className: 'lp-input', value: name, placeholder: '脂肪肝', onChange: (event: React.ChangeEvent<HTMLInputElement>) => setName(event.target.value) })),
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null,
     h('div', { className: 'lp-actions' },
-      h(Btn, { type: 'button', size: 'sm', disabled: !name.trim(), onClick: () => { void save() } }, '记下')),
+      h(Btn, { type: 'button', disabled: !name.trim(), onClick: () => { void save() } }, '记下')),
     h('p', { className: 'lp-caption lp-measure' }, '诊断记在这台电脑上。体检原件那边不接收病情。'))
 }
 

@@ -34,13 +34,16 @@ export function peopleView(deps: CoreDeps) {
     ok: true,
     active: reg.active,
     people: [
-      { id: SELF, label_zh: '我', name: '', connected: Boolean(readConnection(root)?.mcp_url), managed: false, link_error_zh: '' },
+      { id: SELF, label_zh: '我', name: '', connected: Boolean(readConnection(root)?.mcp_url || deps.config().mcpUrl?.trim()), managed: false, link_error_zh: '' },
       ...reg.people.map((p) => ({ id: p.id, label_zh: p.label_zh, name: p.name, sex: p.sex, birth_year: p.birth_year,
         connected: Boolean(readConnection(personDir(root, p.id))?.mcp_url) && !p.link_error, managed: Boolean(p.mirobody_user_id),
         link_error_zh: p.link_error ?? '' })),
     ],
     can_create_in_mirobody: !('error_zh' in holder),
-    create_hint_zh: 'error_zh' in holder ? holder.error_zh : '',
+    // A link set in the installer's config (no saved connection) also reads records but cannot create accounts.
+    create_hint_zh: !('error_zh' in holder) ? ''
+      : !readConnection(root) && deps.config().mcpUrl?.trim() ? '现在的连接是手动填写的个人链接，不能替家人建档。可以粘贴家人自己的 Mirobody 个人链接。'
+        : holder.error_zh,
   }
 }
 

@@ -3,6 +3,7 @@
 import React from 'react'
 import { scrubVisible } from '../../ux/plain.ts'
 import { chineseDate } from '../format.ts'
+import { Icon } from '../icons.ts'
 
 const h = React.createElement
 
@@ -13,8 +14,8 @@ export function TranslogPanel(props: { rows: LogRow[] }): React.ReactElement {
     h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title' }, '发出记录')),
     props.rows.length === 0
       ? h('div', { className: 'lp-empty' },
-        h('div', { className: 'lp-empty-title' }, '还没有东西离开这台电脑'),
-        h('p', { className: 'lp-empty-text lp-measure' }, '这里只记离开这台电脑的东西：什么时候、发给哪一项研究。'))
+        h(Icon, { name: 'send', size: 20 }),
+        h('p', { className: 'lp-empty-text lp-measure' }, '还没有东西离开这台电脑。这里只记离开的东西：什么时候、发给哪一项研究。'))
       : h(React.Fragment, null,
         h('p', { className: 'lp-small lp-muted lp-measure' }, '这里只记离开这台电脑的东西：什么时候、发给哪一项研究。'),
         h('ol', { className: 'lp-rows' }, ...props.rows.map((row) => h('li', { key: row.seq, className: 'lp-row' },

@@ -49,6 +49,8 @@ export const BASE = `
 /* --- buttons: DSH Btn (with .lp-btn) and .lp-linkbtn share one shape -------------------- */
 .lp .lp-btn.lp-btn { height: 32px; padding: 0 12px; border-radius: var(--lp-radius-ctl); font-size: 13px; line-height: 20px; font-weight: 500; gap: 6px; }
 .lp .lp-btn.lp-btn-sm { height: 28px; padding: 0 10px; font-size: 12px; }
+/* disabled: the same button, faded — never a solid grey block louder than an enabled outline button */
+.lp .lp-btn.lp-btn:disabled { opacity: .4; cursor: default; }
 .lp-linkbtn {
   display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 12px;
   border-radius: var(--lp-radius-ctl); border: 1px solid var(--lp-line-strong); background: transparent; color: var(--lp-ink);
@@ -173,6 +175,7 @@ textarea.lp-input { height: auto; min-height: 80px; padding: 8px 12px; resize: v
 .lp-seg-opt:hover span, .lp-seg-item:hover:not(:disabled) { color: var(--lp-ink); }
 .lp-seg-on span, .lp-seg-item.is-on { background: var(--lp-layer); color: var(--lp-ink); font-weight: 500; box-shadow: 0 0 0 1px var(--lp-line), 0 1px 2px rgba(0, 0, 0, .05); }
 .lp-seg-item:disabled { color: var(--lp-ink-4); cursor: default; }
+body[data-ds-dark-theme] .lp .lp-seg-on span, body[data-ds-dark-theme] .lp .lp-seg-item.is-on { background: var(--lp-press); box-shadow: 0 0 0 1px var(--lp-line-strong); }
 .lp-seg-count { font-size: 12px; color: var(--lp-ink-3); font-weight: 400; font-variant-numeric: tabular-nums; }
 .lp-seg-opt input:focus-visible + span { outline: 2px solid var(--lp-focus); outline-offset: 1px; }
 .lp-toggles { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -184,11 +187,13 @@ textarea.lp-input { height: auto; min-height: 80px; padding: 8px 12px; resize: v
 .lp-toggle:hover { background: var(--lp-hover); }
 .lp-toggle-on, .lp-toggle-on:hover { background: var(--lp-accent); color: var(--lp-on-accent); border-color: transparent; }
 .lp-toggle-badge { min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px; background: var(--lp-on-accent); color: var(--lp-accent); font-size: 12px; line-height: 18px; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
-.lp-switch { display: inline-flex; align-items: center; gap: 10px; padding: 0; border: 0; background: transparent; color: var(--lp-ink); font-size: 14px; font-weight: 500; line-height: 22px; cursor: pointer; text-align: left; }
+.lp-switch { display: inline-flex; align-items: center; gap: 10px; padding: 0; border: 0; background: transparent; color: var(--lp-ink); font-size: 13px; font-weight: 500; line-height: 22px; cursor: pointer; text-align: left; }
 .lp-switch:disabled { cursor: progress; opacity: .7; }
 .lp-switch-track { position: relative; width: 36px; height: 20px; flex: none; border-radius: 10px; background: var(--lp-line-strong); transition: background-color .2s ease; }
-.lp-switch-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0, 0, 0, .2); transition: transform .2s ease; }
+.lp-switch-thumb { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--lp-layer); box-shadow: 0 1px 2px rgba(0, 0, 0, .2); transition: transform .2s ease; }
 .lp-switch-on .lp-switch-track { background: var(--lp-accent); }
+/* the thumb contrasts with the track in both themes (the dark accent is near white) */
+.lp-switch-on .lp-switch-thumb { background: var(--lp-on-accent); }
 .lp-switch-on .lp-switch-thumb { transform: translateX(16px); }
 .lp-switch-label { min-width: 0; }
 
@@ -255,9 +260,9 @@ textarea.lp-input { height: auto; min-height: 80px; padding: 8px 12px; resize: v
 .lp-bar > span { display: block; height: 100%; border-radius: 3px; background: var(--lp-accent); transition: width .3s ease; }
 .lp-progress-steps { list-style: none; margin: 0; padding: 0; display: grid; }
 .lp-progress-step { position: relative; display: flex; align-items: center; gap: 12px; min-height: 32px; font-size: 13px; line-height: 20px; color: var(--lp-ink-3); }
-.lp-progress-step::before { content: ""; position: absolute; left: 7.5px; top: 24px; bottom: -8px; width: 1px; background: var(--lp-line); }
+.lp-progress-step::before { content: ""; position: absolute; left: 7.5px; top: 24px; bottom: -8px; width: 1px; background: var(--lp-line-strong); }
 .lp-progress-step:last-child::before { display: none; }
-.lp-progress-dot { position: relative; z-index: 1; width: 16px; height: 16px; flex: none; border-radius: 50%; border: 1px solid var(--lp-line-strong); background: var(--lp-layer); display: inline-flex; align-items: center; justify-content: center; color: var(--lp-on-accent); }
+.lp-progress-dot { position: relative; z-index: 1; width: 16px; height: 16px; flex: none; border-radius: 50%; border: 1.5px solid var(--lp-line-strong); background: var(--lp-layer); display: inline-flex; align-items: center; justify-content: center; color: var(--lp-on-accent); }
 .lp-progress-step.is-done { color: var(--lp-ink-2); }
 .lp-progress-step.is-done .lp-progress-dot { background: var(--lp-accent); border-color: var(--lp-accent); }
 .lp-progress-step.is-now { color: var(--lp-ink); font-weight: 500; }

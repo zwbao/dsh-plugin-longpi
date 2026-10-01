@@ -60,7 +60,10 @@ export function fmtAuto(value: number | null | undefined): string {
 export function fmt(value: number | null | undefined, digits = 1): string {
   if (value == null || !Number.isFinite(value)) return '—'
   const fixed = value.toFixed(digits)
-  return fixed.replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1')
+  const text = fixed.replace(/\.0+$/, '').replace(/(\.\d*?)0+$/, '$1')
+  // A real minus sign (−), never a hyphen; -0 is 0.
+  if (text === '-0') return '0'
+  return text.startsWith('-') ? `−${text.slice(1)}` : text
 }
 
 function linear(d0: number, d1: number, r0: number, r1: number): (value: number) => number {
@@ -132,9 +135,12 @@ export interface LineChartProps {
   reference?: { value: number; label: string } | null
   digits?: number
   compact?: boolean
+  /** Points are weekly means dated by Monday: dates read「9 月 7 日起一周」. */
+  weekly?: boolean
 }
 
 export function LineChart(props: LineChartProps): React.ReactElement {
+  const pointDate = (iso: string) => (props.weekly ? `${dateZh(iso)}起一周` : dateZh(iso))
   const [ref, width] = useWidth()
   const [tip, setTip] = React.useState<TipState | null>(null)
   const [focus, setFocus] = React.useState<number | null>(null)
@@ -143,6 +149,15 @@ export function LineChart(props: LineChartProps): React.ReactElement {
   const pad = { top: 14, right: props.compact ? 10 : 56, bottom: props.compact ? 6 : 22, left: props.compact ? 6 : 36 }
   const points = props.points
   if (points.length === 0) return h('div', { ref, className: 'lp-chart-empty' }, '还没有数据')
+  if (points.length === 1) {
+    // One value draws no trend: the value, its date, and what it takes to get a chart.
+    const only = points[0] as Point
+    return h('div', { ref, className: 'lp-chart-single' },
+      h('div', null,
+        h('span', { className: 'lp-num-md' }, fmt(only.value, digits)),
+        props.unit ? h('span', { className: 'lp-unit' }, props.unit.startsWith('%') ? props.unit : ` ${props.unit}`) : null),
+      h('p', { className: 'lp-caption' }, `${pointDate(only.date)} · 还需一次复测才能画趋势`))
+  }
   const values = points.map((point) => point.value)
   const extra = [props.band?.low, props.band?.high, props.goal ?? undefined, props.reference?.value].filter((value): value is number => typeof value === 'number')
   let min = Math.min(...values, ...extra)
@@ -178,13 +193,13 @@ export function LineChart(props: LineChartProps): React.ReactElement {
   const show = (index: number) => {
     const point = points[index] as Point
     setFocus(index)
-    setTip({ x: x(days[index] as number), y: y(point.value), title: dateZh(point.date), rows: [{ label: props.label, value: `${fmt(point.value, digits)} ${props.unit}`.trim() }] })
+    setTip({ x: x(days[index] as number), y: y(point.value), title: pointDate(point.date), rows: [{ label: props.label, value: `${fmt(point.value, digits)} ${props.unit}`.trim() }] })
   }
   const bandFrom = props.band ? Math.max(pad.left, x(dayNumber(props.band.from))) : 0
   return h('div', { ref, className: 'lp-chart', style: { height } },
     h('svg', {
       width, height, role: 'img',
-      'aria-label': `${props.label}：${points.map((point) => `${dateZh(point.date)} ${fmt(point.value, digits)}${props.unit}`).join('，')}`,
+      'aria-label': `${props.label}：${points.map((point) => `${pointDate(point.date)} ${fmt(point.value, digits)}${props.unit}`).join('，')}`,
       onPointerMove: (event: React.PointerEvent<SVGSVGElement>) => show(nearest(event.clientX, event.currentTarget.getBoundingClientRect())),
       onPointerLeave: () => { setTip(null); setFocus(null) },
       tabIndex: 0,
@@ -231,19 +246,28 @@ export interface TimelineItem {
   headline: string
 }
 
-/** Rough width of a label at 13px: CJK characters are square, Latin about half. */
-function textWidth(text: string): number {
+let measureCtx: CanvasRenderingContext2D | null | undefined
+
+/** Width of `text` in px as the browser draws it (13px in the page font); an estimate where canvas is unavailable. */
+function textWidth(text: string, font: string): number {
+  if (measureCtx === undefined) {
+    try { measureCtx = typeof document === 'undefined' ? null : document.createElement('canvas').getContext('2d') } catch { measureCtx = null }
+  }
+  if (measureCtx) {
+    measureCtx.font = font
+    return measureCtx.measureText(text).width
+  }
   let width = 0
   for (const char of text) width += char.charCodeAt(0) > 255 ? 13 : 7.5
   return width
 }
 
-/** Cut a label to fit `max` px, ending with 「…」. */
-function fitText(text: string, max: number): string {
-  if (textWidth(text) <= max) return text
+/** Cut a label to fit `max` px by its measured width, ending with 「…」. */
+function fitText(text: string, max: number, font: string): string {
+  if (textWidth(text, font) <= max) return text
   let out = ''
   for (const char of text) {
-    if (textWidth(`${out}${char}…`) > max) break
+    if (textWidth(`${out}${char}…`, font) > max) break
     out += char
   }
   return `${out}…`
@@ -254,8 +278,20 @@ function fitText(text: string, max: number): string {
  * 12 weeks ahead: the elapsed part of each item solid, the part still ahead as a wash, checkups inside the window as dots.
  */
 export function Timeline(props: { items: TimelineItem[]; checkups: string[]; today: string }): React.ReactElement {
+  const first = props.items[0]
+  // Every item starts and ends on the same days: a chart of identical bars says nothing, one sentence does.
+  if (first && props.items.every((item) => item.start === first.start && (item.end ?? null) === (first.end ?? null))) {
+    const count = props.items.length === 1 ? '这 1 项' : `${props.items.length} 项都`
+    return h('p', { className: 'lp-small lp-muted' }, `${count}从 ${dateZh(first.start)} 开始${first.end ? `，到 ${dateZh(first.end)} 结束` : ''}。`)
+  }
+  return h(TimelineChart, props)
+}
+
+function TimelineChart(props: { items: TimelineItem[]; checkups: string[]; today: string }): React.ReactElement {
   const [ref, width] = useWidth(560)
   const [tip, setTip] = React.useState<TipState | null>(null)
+  const family = ref.current ? getComputedStyle(ref.current).fontFamily : 'sans-serif'
+  const font = `13px ${family}`
   const labelWidth = Math.round(Math.min(220, Math.max(96, width * 0.3)))
   const row = 34
   const top = 28
@@ -273,6 +309,7 @@ export function Timeline(props: { items: TimelineItem[]; checkups: string[]; tod
     const iso = new Date(day * 86_400_000).toISOString().slice(0, 10)
     if (iso.endsWith('-01')) months.push(iso)
   }
+  const anyAhead = props.items.some((item) => !item.end || dayNumber(item.end) > today)
   const step = Math.max(1, Math.ceil(months.length / Math.max(2, Math.floor((width - labelWidth) / 72))))
   // A month tick never sits on top of 「今天」.
   const ticks = months.filter((_, index) => index % step === 0).filter((iso) => Math.abs(x(dayNumber(iso)) - todayX) > 44)
@@ -298,15 +335,18 @@ export function Timeline(props: { items: TimelineItem[]; checkups: string[]; tod
           onPointerEnter: () => setTip({ x: Math.max(x0, todayX), y: y0 - 8, title: item.title, rows: [{ label: item.subtitle, value: item.headline }] }),
           onPointerLeave: () => setTip(null),
         },
-        h('text', { x: 0, y: y0 + 4, className: 'lp-row-label' }, h('title', null, item.title), fitText(item.title, labelWidth - 16)),
+        h('text', { x: 0, y: y0 + 4, className: 'lp-row-label' }, h('title', null, item.title), fitText(item.title, labelWidth - 16, font)),
         h('rect', { x: labelWidth, y: y0 - 12, width: width - labelWidth, height: 24, className: 'lp-hit' }),
         ahead > 0 ? h('rect', { x: Math.max(x0, x1), y: y0 - 5, width: ahead, height: 10, rx: 5, className: 'lp-cbar-ahead' }) : null,
         h('rect', { x: x0, y: y0 - 5, width: Math.max(10, x1 - x0), height: 10, rx: 5, className: done ? 'lp-cbar-muted' : 'lp-cbar' }))
       })),
     h(Tooltip, { tip, width })),
   // Outside the fixed-height chart box, so the legend never spills over the card's edge.
+  // Only the marks actually drawn.
   h('div', { className: 'lp-legend-inline' },
-    h('span', { className: 'lp-key-bar' }), '已进行', h('span', { className: 'lp-key-ahead' }), '接下来', h('span', { className: 'lp-key-dot' }), '体检日'))
+    h('span', { className: 'lp-key-bar' }), '已进行',
+    anyAhead ? h(React.Fragment, null, h('span', { className: 'lp-key-ahead' }), '接下来') : null,
+    inWindow.length > 0 ? h(React.Fragment, null, h('span', { className: 'lp-key-dot' }), '体检日') : null))
 }
 
 // --- 12-week adherence strip --------------------------------------------------------

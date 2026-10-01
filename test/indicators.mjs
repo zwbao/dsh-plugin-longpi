@@ -191,6 +191,14 @@ try {
   // no biological-variation row: not judged
   assert.equal(rowOf(response, 'loinc:788-0').judged, 'unjudged')
 
+  // a wearable series that arrives with a LOINC code and its field name in the label is still a wearable row
+  {
+    const specs = mod.indicatorSpecsForTest({ indicators: [{ name: '41950-7', label: 'dailySteps', loinc: '41950-7', unit: 'count', source: 'checkup', date: '2026-09-09', value: 5445 }] }, [], [])
+    const steps = specs.find((spec) => spec.id === 'device:dailySteps')
+    assert.ok(steps, `steps is a wearable row: ${specs.map((spec) => spec.id).join(', ')}`)
+    assert.deepEqual({ label: steps.label, unit: steps.unit, source: steps.source }, { label: '每日步数', unit: '步', source: 'device' })
+    assert.equal(mod.lifeAreaOf(steps.label), 'training')
+  }
   // a wearable row: weekly means (Monday dates) over 26 weeks at most, the latest day as it is
   const sleep = rowOf(response, 'device:dailyTotalSleepTime')
   assert.deepEqual({ label: sleep.label_zh, unit: sleep.unit, source: sleep.source, plan: sleep.plan_marker, judged: sleep.judged }, { label: '每晚睡眠', unit: '小时', source: 'device', plan: true, judged: 'unjudged' })

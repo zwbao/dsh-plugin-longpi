@@ -17,8 +17,7 @@ export const PLAN = `
 .lp-today-done .lp-today-title, .lp-today-missed .lp-today-title { color: var(--lp-ink-2); }
 
 /* --- 方案 -------------------------------------------------------------------------------------- */
-.lp-plan-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
-.lp-plan-tile-today { grid-column: 1 / -1; }
+.lp-plan-tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 @container lp-root (max-width: 720px) { .lp-plan-tiles { grid-template-columns: minmax(0, 1fr); } }
 /* cards are top-aligned and keep their own height; the grow wrapper only spaces the body */
 .lp-plan-grow { display: grid; gap: 12px; align-content: start; min-width: 0; }
@@ -27,9 +26,13 @@ export const PLAN = `
 .lp-plan-streak .lp-icon { color: var(--lp-warn-ink); }
 .lp-plan-win { display: flex; align-items: flex-start; gap: 12px; }
 .lp-plan-win-icon { width: 28px; height: 28px; flex: none; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: var(--lp-good-wash); color: var(--lp-good-ink); }
-.lp-plan-win-icon-quiet { background: var(--lp-well); color: var(--lp-ink-3); }
 .lp-plan-win-text { display: grid; gap: 2px; min-width: 0; }
-.lp-plan-adherence { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; padding: 12px 0; border-top: 1px solid var(--lp-line); border-bottom: 1px solid var(--lp-line); }
+.lp-plan-row { align-items: flex-start; padding: 12px 0; }
+.lp-plan-row-main { display: grid; gap: 6px; }
+.lp-plan-row-title { font-size: 14px; line-height: 22px; font-weight: 500; color: var(--lp-ink); }
+.lp-today-done .lp-plan-row-title { color: var(--lp-ink-2); font-weight: 400; }
+.lp-plan-row-end { flex: none; display: flex; align-items: center; min-height: 22px; }
+@container lp-root (max-width: 560px) { .lp-plan-row { flex-direction: column; } }
 .lp-plan-verdict { display: grid; gap: 4px; }
 .lp-plan-verdict-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; line-height: 20px; }
 .lp-plan-verdict details > summary { font-size: 12px; line-height: 18px; color: var(--lp-ink-3); }

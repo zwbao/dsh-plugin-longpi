@@ -204,23 +204,25 @@ function newer(a: IndicatorRow | null, b: IndicatorRow): IndicatorRow {
 }
 
 /** The rows to show, one per LOINC code, device series, self key or uncoded report name. */
-function specsOf(records: RecordSnapshot, selfRows: readonly SelfRow[], markers: readonly BiovarMarker[]): Spec[] {
+export function specsOf(records: RecordSnapshot, selfRows: readonly SelfRow[], markers: readonly BiovarMarker[]): Spec[] {
   const biovar = { z: 1.96, default_cva_rule_zh: '', markers: [...markers] }
   const byId = new Map<string, Spec>()
   for (const row of records.indicators) {
     if (row.source === 'self' || !row.name) continue
     let spec: Spec
-    // A wearable series is a wearable series even when the service attached a LOINC code to it (dailySteps).
-    if (row.loinc && !isDeviceName(row.name, markers)) {
+    // A wearable series is a wearable series even when the service attached a LOINC code to it, and its field
+    // name may arrive as the label instead of the name (dailySteps under LOINC 41950-7).
+    const deviceKey = isDeviceName(row.name, markers) ? row.name : row.label && isDeviceName(row.label, markers) ? row.label : ''
+    if (row.loinc && !deviceKey) {
       const marker = checkupMarkerFor(biovar, row)
       spec = byId.get(`loinc:${row.loinc}`) ?? {
         id: `loinc:${row.loinc}`, source: 'checkup', group: groupOf(row), label: '', unit: '', names: [], loinc: row.loinc, snapshot: null, marker,
       }
-    } else if (isDeviceName(row.name, markers)) {
-      const known = DEVICE_ZH[row.name]
-      spec = byId.get(`device:${row.name}`) ?? {
-        id: `device:${row.name}`, source: 'device', group: 'wearable', label: known?.label ?? deviceLabel(row.label, row.name), unit: '', names: [], snapshot: null,
-        marker: markers.find((item) => (item.device_codes ?? []).includes(row.name)) ?? null,
+    } else if (deviceKey) {
+      const known = DEVICE_ZH[deviceKey]
+      spec = byId.get(`device:${deviceKey}`) ?? {
+        id: `device:${deviceKey}`, source: 'device', group: 'wearable', label: known?.label ?? deviceLabel(row.label, deviceKey), unit: known?.unit ?? '', names: [], snapshot: null,
+        marker: markers.find((item) => (item.device_codes ?? []).includes(deviceKey)) ?? null,
       }
     } else {
       const id = `name:${foldName(row.label || row.name)}`
@@ -234,7 +236,7 @@ function specsOf(records: RecordSnapshot, selfRows: readonly SelfRow[], markers:
     const snapshot = spec.snapshot
     if (spec.source === 'device') {
       const raw = snapshot?.unit ?? ''
-      spec.unit = DEVICE_ZH[spec.names[0] ?? '']?.unit ?? UNIT_ZH[raw] ?? raw
+      spec.unit = spec.unit || (DEVICE_ZH[spec.names[0] ?? '']?.unit ?? UNIT_ZH[raw] ?? raw)
     } else {
       spec.label = snapshot?.label || spec.marker?.label_zh || snapshot?.name || spec.id
       spec.unit = snapshot?.unit || spec.marker?.unit || ''

@@ -36,10 +36,10 @@ function month(iso: string | null): string {
   return chineseMonth(iso)
 }
 
-/** "4 次体检 · 2025 年 10 月 → 2026 年 8 月 · 血脂、血糖等 · 手环 355 天": only what the server counted. */
+/** "4 次体检 · 2025 年 10 月至 2026 年 8 月 · 血脂、血糖等 · 手环 355 天": only what the server counted. */
 export function summaryParts(summary: RecordsSummary): string[] {
   const range = summary.first_date && summary.last_date
-    ? summary.first_date.slice(0, 7) === summary.last_date.slice(0, 7) ? month(summary.last_date) : `${month(summary.first_date)} → ${month(summary.last_date)}`
+    ? summary.first_date.slice(0, 7) === summary.last_date.slice(0, 7) ? month(summary.last_date) : `${month(summary.first_date)}至 ${month(summary.last_date)}`
     : ''
   const categories = summary.categories_zh.length > 3 ? `${summary.categories_zh.slice(0, 3).join('、')}等` : summary.categories_zh.join('、')
   return [

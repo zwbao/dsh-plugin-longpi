@@ -41,7 +41,7 @@ function RunReady(props: { board: Board; onNotice: Notify }): React.ReactElement
         h('span', { className: 'lp-strong' }, row.blurb || row.name), h('span', { className: 'lp-caption' }, row.domain || row.name)))),
     ready.length > 8 ? h('p', { className: 'lp-caption lp-measure' }, `另有 ${ready.length - 8} 项`) : null,
     ready.length > 0 ? h('div', { className: 'lp-actions' },
-      h(Btn, { size: 'sm', disabled: running, onClick: () => { void run() } }, h(Icon, { name: 'play', size: 12 }), running ? '正在计算…' : `一键计算 ${ready.length} 项`)) : null,
+      h(Btn, { disabled: running, onClick: () => { void run() } }, h(Icon, { name: 'play', size: 12 }), running ? '正在计算…' : `一键计算 ${ready.length} 项`)) : null,
     results ? h('ul', { className: 'lp-rows' }, ...results.map((row) => h('li', { key: row.skill, className: 'lp-row lp-row-stack' },
       h('span', null, h('span', { className: row.ok ? 'lp-good-ink' : 'lp-muted-ink' }, row.ok ? '✓ ' : '· '), row.skill),
       h('span', { className: 'lp-caption' }, row.excerpt.split('\n')[0] ?? '')))) : null)
@@ -76,7 +76,7 @@ function Search(props: { board: Board }): React.ReactElement {
         id: 'lp-method-q', className: 'lp-input', placeholder: '例如：生物年龄、甲基化、NMN 有用吗', value: question,
         onChange: (event: React.ChangeEvent<HTMLInputElement>) => setQuestion(event.target.value),
       }),
-      h(Btn, { type: 'submit', size: 'sm', variant: 'outline', disabled: busy || !question.trim() }, busy ? '匹配中' : '匹配')),
+      h(Btn, { type: 'submit', variant: 'outline', disabled: busy || !question.trim() }, busy ? '匹配中' : '匹配')),
     error ? h('p', { className: 'lp-form-error' }, error) : null,
     note ? h('p', { className: 'lp-caption lp-measure' }, note) : null,
     shown.length > 0 ? h('ul', { className: 'lp-rows' }, ...shown.slice(0, 6).map((item) => h('li', { key: item.name, className: 'lp-row lp-row-stack' },
