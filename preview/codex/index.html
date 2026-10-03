@@ -1,20 +1,24 @@
 <!doctype html>
-<html lang="zh-CN" data-theme="light">
+<html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>长寿图鉴 v2 · 卡面与玩法</title>
+  <title>长寿图鉴 v2 · 像素版</title>
+  <link rel="stylesheet" href="fonts/font.css">
   <link rel="stylesheet" href="codex.css">
 </head>
 <body>
+  <canvas id="bg" aria-hidden="true"></canvas>
   <div class="pg">
     <header class="pg-head">
-      <div>
-        <p class="pg-eyebrow">LongPi · 长寿图鉴 v2 设计稿</p>
-        <h1 class="pg-h1">卡面与玩法</h1>
-        <p class="pg-meta">卡面文字来自方法库，图案按卡号生成。设计说明见 docs/codex-v2.md。</p>
+      <div class="logo">
+        <img id="logo" alt="">
+        <div>
+          <p class="pg-eyebrow">LongPi · 长寿图鉴 v2 设计稿</p>
+          <h1 class="pg-h1">卡面与玩法</h1>
+          <p class="pg-meta">卡面文字来自方法库，像素图按卡号生成。字体：Fusion Pixel 12px（OFL）。设计说明见 docs/codex-v2.md。</p>
+        </div>
       </div>
-      <button id="theme" class="btn outline theme-toggle">切换深色</button>
     </header>
     <nav id="tabs" class="tabs" role="tablist"></nav>
     <main id="page"></main>
