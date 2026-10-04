@@ -300,7 +300,9 @@ main() {
   mkdir -p "$profile_dir"
   local patch="$profile_dir/cordis.patch.yml" result
   strip_brand_rows "$dsh_home" "$py"
-  result="$("$py" -c "$WRITE_CONFIG" "$patch" "$skills_dir" "$py" "$set_mcp" "$mcp_url" "$mcp_token" "$pin" </dev/null)" \
+  local local_base=""
+  [ "$with_mirobody" = 1 ] && local_base="$mirobody_base"
+  result="$("$py" -c "$WRITE_CONFIG" "$patch" "$skills_dir" "$py" "$set_mcp" "$mcp_url" "$mcp_token" "$pin" "$local_base" </dev/null)" \
     || die "Could not update $patch; add the dsh-plugin-longpi row by hand (docs/install.md)." "无法更新 ${patch}；请按 docs/install.zh.md 手动添加 dsh-plugin-longpi 配置。"
   ok "$(pretty "$patch")" "$(pretty "$patch")"
   local dump
@@ -1157,7 +1159,8 @@ mirobody_native_start() {
     {
       printf 'ENV=localdb\nPYTHONUNBUFFERED=1\nHTTP_HOST=%s\nHTTP_PORT=%s\n' "$host" "$port"
       # The demo account is seeded only when no --mcp-url was given (the installer connects it then).
-      if [ "$has_mcp" = 1 ]; then printf 'SEED_DEMO_DATA=false\n'; else printf 'SEED_DEMO_DATA=true\n'; fi
+      # No demo readings: LongPi pairs an account of its own, and the 健康 page has an example profile.
+      printf 'SEED_DEMO_DATA=false\n'
       printf 'PG_HOST=127.0.0.1\nPG_PORT=%s\nPG_USER=holistic_user\nPG_DBNAME=holistic_db\n' "$pgport"
       printf 'PG_PASSWORD=%s\n' "$(sed -n 's/^PG_PASSWORD=//p' "$dir/.env" | head -n 1)"
     } > "$envfile"
@@ -1508,13 +1511,16 @@ if len(argv) < 6:
     sys.exit("expected patch, skills home, python, set_mcp, mcp url, mcp token")
 path, skills_home, python_bin, set_mcp, mcp_url, mcp_token = argv[:6]
 skills_version = argv[6] if len(argv) > 6 else ""
+mirobody_base = argv[7] if len(argv) > 7 else ""
 BEGIN = "# >>> dsh-plugin-longpi (written by install.sh; keep one value per line) >>>"
 END = "# <<< dsh-plugin-longpi <<<"
 KEYS = ["skillsHome", "skillsVersion", "mirobodyPluginHome", "pythonBin", "mirobodyHome", "mcpUrl", "mcpToken",
-        "member", "timeoutMs", "skillPython", "skillTimeoutMs", "skillRuntimes", "dataDir", "maxSkillMatches", "bootstrapWorkspace"]
+        "member", "timeoutMs", "skillPython", "skillTimeoutMs", "skillRuntimes", "dataDir", "maxSkillMatches", "bootstrapWorkspace",
+        "mirobodyUrl"]
 DEFAULTS = {"skillsVersion": "\x27\x27", "mirobodyHome": "\x27\x27", "mcpUrl": "\x27\x27", "mcpToken": "\x27\x27",
             "member": "\x27\x27", "timeoutMs": "30000", "skillTimeoutMs": "120000", "skillRuntimes": "{}",
-            "dataDir": "\x27\x27", "maxSkillMatches": "8", "bootstrapWorkspace": "true"}
+            "dataDir": "\x27\x27", "maxSkillMatches": "8", "bootstrapWorkspace": "true",
+            "mirobodyUrl": "\x27http://127.0.0.1:18060\x27"}
 
 def quote(text):
     return "\x27" + text.replace("\x27", "\x27\x27") + "\x27"
@@ -1561,6 +1567,20 @@ values["mirobodyPluginHome"] = "\x27\x27"
 if set_mcp == "1":
     values["mcpUrl"] = quote(mcp_url)
     values["mcpToken"] = quote(mcp_token)
+
+# With a Mirobody this installer runs on this computer, LongPi pairs an account of its own with it, at that address.
+# A link left by an older installer for that Mirobody without a token (the demo account, before 0.8.0) is dropped,
+# so the pairing can happen; a link the person passed with --mcp-url this time is kept.
+def host_of(url):
+    match = re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://([^/?#]+)", url.strip())
+    return match.group(1).lower() if match else ""
+
+if mirobody_base:
+    values["mirobodyUrl"] = quote(mirobody_base)
+    if set_mcp != "1":
+        old_url, old_token = unquote(values["mcpUrl"]), unquote(values["mcpToken"])
+        if old_url and not old_token and host_of(old_url) == host_of(mirobody_base):
+            values["mcpUrl"] = "\x27\x27"
 
 # The LongPi block holds the LongPi row only. Up to 0.7.0 it also disabled the DeepSeek Harness wordmark row
 # (ui-brand-official); rewriting the block whole, as below, removes that line from an older install.

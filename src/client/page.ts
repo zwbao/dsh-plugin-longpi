@@ -27,7 +27,7 @@ import { DemoInvite, PeoplePicker, PersonNotice } from './people.ts'
 import { pageTabs } from './registry.ts'
 import type { ResultTarget } from './results.ts'
 import {
-  canonTab, clearViewRequest, setPendingPrompt, useJourney, usePageShown, useTracking, useViewRequest,
+  canonTab, clearViewRequest, setPendingPrompt, takePendingPrompt, useJourney, usePageShown, useTracking, useViewRequest,
   type IndicatorFilter, type PageTab, type ViewRequest,
 } from './store.ts'
 import type { Face, Journey, Stage } from './types.ts'
@@ -271,10 +271,17 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
   const onPrompt = (text: string) => {
     setPendingPrompt(text)
     const copying = copyText(text)
-    if (props.openChat) {
-      props.openChat()
+    const opened = props.openChat?.()
+    if (opened instanceof Promise) {
+      void opened.then((ok) => {
+        if (ok) return
+        // Not into whatever chat is open: the question waits on the clipboard for 健康对话.
+        takePendingPrompt()
+        void copying.then((copied) => notify(copied ? '未能打开「健康对话」，问题已复制。请在左侧工作区打开「健康对话」后粘贴发送。' : '未能打开「健康对话」。请在左侧工作区打开「健康对话」后提问。', 'bad'))
+      })
       return
     }
+    if (props.openChat) return
     void copying.then((copied) => notify(copied ? '已复制，请粘贴到对话中发送。' : text, 'info'))
   }
 
@@ -294,7 +301,7 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
     } else if (tab === 'calendar') {
       panel = h(CalendarTab, { journey })
     } else if (tab === 'ask') {
-      panel = h(AskTab, { journey, openChat: props.openChat })
+      panel = h(AskTab, { journey, onPrompt })
     } else if (tab === 'analysis') {
       panel = h(AnalysisTab, { onNotice: notify })
     } else if (tab === 'plan') {

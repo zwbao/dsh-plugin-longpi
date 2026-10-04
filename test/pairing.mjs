@@ -74,12 +74,39 @@ function fakeMirobody(opts = {}) {
   assert.equal(again.status, 'paired'); assert.notEqual(readConnection(root).mcp_url, before); assert.equal(m.users.size, 1, 'never a second account')
   assert.equal(mod.pairingProblem(root), '')
 }
-// why pairing failed is kept for the page, and cleared once it works
+// reclaim never replaces a remote link (an installer's real account elsewhere): nothing changes
+{
+  const root = mkdtempSync(join(tmpdir(), 'pair-'))
+  saveConnection(root, { mcp_url: 'https://mirobody.example.com/mcp/REMOTE', mcp_token: jwt(Date.now() / 1000 - 10) })
+  const m = fakeMirobody()
+  const r = await mod.ensureLocalPairing(root, { base: 'http://127.0.0.1:18060', force: true, reclaim: true, fetchImpl: m.fetchImpl })
+  assert.deepEqual(r, { status: 'skipped', why: 'remote_connection' }); assert.equal(m.calls.length, 0)
+  assert.equal(readConnection(root).mcp_url, 'https://mirobody.example.com/mcp/REMOTE')
+}
+// the service no longer knows LongPi's account (its database was reset): reclaim pairs a new one
+{
+  const root = mkdtempSync(join(tmpdir(), 'pair-'))
+  const first = fakeMirobody()
+  await mod.ensureLocalPairing(root, { base: 'http://127.0.0.1:18060', force: true, fetchImpl: first.fetchImpl })
+  const reset = fakeMirobody()                       // a fresh service: login is refused
+  const r = await mod.ensureLocalPairing(root, { base: 'http://127.0.0.1:18060', force: true, reclaim: true, fetchImpl: reset.fetchImpl })
+  assert.equal(r.status, 'paired'); assert.deepEqual(reset.calls, ['/password/login', '/password/register', '/personal/mcp'])
+}
+// two clicks at once: one pairing, one account
+{
+  const root = mkdtempSync(join(tmpdir(), 'pair-'))
+  const m = fakeMirobody()
+  const both = await Promise.all([1, 2].map(() => mod.ensureLocalPairing(root, { base: 'http://127.0.0.1:18060', force: true, reclaim: true, fetchImpl: m.fetchImpl })))
+  assert.deepEqual(both.map((row) => row.status), ['paired', 'paired']); assert.equal(m.users.size, 1)
+}
+// why pairing failed is kept for the page (also through throttled calls), and cleared once it works
 {
   const root = mkdtempSync(join(tmpdir(), 'pair-'))
   const down = await mod.ensureLocalPairing(root, { base: 'http://127.0.0.1:18060', force: true, fetchImpl: fakeMirobody({ down: true }).fetchImpl })
   assert.equal(down.status, 'error')
   assert.match(mod.pairingProblem(root), /健康数据服务/)
+  await mod.ensureLocalPairing(root, { base: 'http://127.0.0.1:18060', fetchImpl: fakeMirobody().fetchImpl })
+  assert.match(mod.pairingProblem(root), /健康数据服务/, 'a throttled call does not clear the reason')
   await mod.ensureLocalPairing(root, { base: 'http://127.0.0.1:18060', force: true, fetchImpl: fakeMirobody().fetchImpl })
   assert.equal(mod.pairingProblem(root), '')
 }

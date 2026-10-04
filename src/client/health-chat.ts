@@ -14,7 +14,11 @@ export function setWorkspaceOpener(fn: ((id: string) => Promise<void>) | null): 
 
 let workspaceId: Promise<string | null> | null = null
 function healthWorkspaceId(): Promise<string | null> {
-  workspaceId ??= getJson<{ workspace_id: string | null }>('/api/longpi/workspace').then((v) => v.workspace_id).catch(() => {
+  // Only a found workspace is kept: none yet (or a failed read) is asked again next time.
+  workspaceId ??= getJson<{ workspace_id: string | null }>('/api/longpi/workspace').then((v) => {
+    if (!v.workspace_id) workspaceId = null
+    return v.workspace_id
+  }).catch(() => {
     workspaceId = null
     return null
   })

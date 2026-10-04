@@ -49,5 +49,5 @@ export function notOnePersonReason(profile: Profile, rows: ReadonlyArray<{ name:
   if (!hit) return null
   const example = sex === 'female' ? '前列腺特异性抗原' : '宫颈检查'
   const whose = sex === 'female' ? '男性' : '女性'
-  return `记录里有${example}这类只有${whose}才做的检查，和档案里的性别对不上，像是两个人的体检放在了一起。身体年龄要用同一个人的血检和年龄来算，这次先不算。如果这是家人的体检，请在档案里写明是谁、今年几岁。`
+  return `记录里有${example}这类只有${whose}才做的检查，和档案里的性别对不上，像是两个人的体检放在了一起。身体年龄要用同一个人的血检和年龄来算，这次先不算。如果这是家人的体检，请在健康页「添加家人」为家人建立档案后再上传。`
 }

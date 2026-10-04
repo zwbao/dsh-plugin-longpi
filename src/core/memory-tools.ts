@@ -115,7 +115,8 @@ export function registerMemoryTools(ctx: Context, deps: CoreDeps): void {
       }
       const quote = typeof args.quote === 'string' ? args.quote.trim().slice(0, 200) : ''
       const said = lastPersonText(session)
-      const confirmed = Boolean(quote) && (said ? quoteIn(quote, said) : true)
+      // No words of theirs to check against (a scheduled or restarted turn): never confirmed on the model's say-so.
+      const confirmed = Boolean(quote) && Boolean(said) && quoteIn(quote, said)
       const provenance: Provenance = { kind: confirmed ? 'chat' : 'model_extracted', at: now, session_id: session, by: 'M0', ...(quote ? { quote_zh: quote } : {}) }
       const item = itemFrom(args as Record<string, unknown>, provenance, confirmed, today)
       if (!item) return asJson({ ok: false, error: 'kind and text are required' })

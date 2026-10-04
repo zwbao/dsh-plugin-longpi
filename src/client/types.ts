@@ -499,5 +499,6 @@ export interface Tracking {
 /** What LongPi's slot registrations inject into their components. */
 export interface Face {
   openPage: () => void
-  openChat: () => void
+  /** Opens 健康对话 for a queued question; resolves false when it could not (the question is then not sent anywhere). */
+  openChat: () => void | Promise<boolean>
 }

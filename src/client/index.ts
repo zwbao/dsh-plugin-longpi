@@ -78,11 +78,11 @@ export function apply(ctx: ClientContext): void {
       // The panel is gone (plugin reloading); stay where we are.
     }
   }
-  // A question from the page goes to 健康对话, never into whatever session was open last (C-04); back to the chat
-  // view only when DSH cannot open workspaces.
+  // A question from the page goes to 健康对话, never into whatever session was open last (C-04). When 健康对话
+  // cannot be opened the caller says so and keeps the question out of other chats.
   const face = (): Face => ({
     openPage: () => select(PANEL_ID),
-    openChat: () => { void openHealthChat().then((opened) => { if (!opened) select(null) }) },
+    openChat: () => openHealthChat(),
   })
 
   ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID, inject: face }, LongPiPage))

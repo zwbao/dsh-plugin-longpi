@@ -316,7 +316,10 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
         }
         void (async () => {
           const current = config()
-          const result = await ensureLocalPairing(resolveRootDir(current.dataDir), { base: current.mirobodyUrl ?? '', configuredUrl: current.mcpUrl, force: true, reclaim: true })
+          const root = resolveRootDir(current.dataDir)
+          const result = await ensureLocalPairing(root, { base: current.mirobodyUrl ?? '', configuredUrl: current.mcpUrl, force: true, reclaim: true })
+          // The family member the page shows reads through a link minted with the holder's token: renew it too.
+          if (result.status === 'paired' || result.status === 'renewed') await renewActiveMember(root, true).catch(() => '')
           connectionChanged()
           const status = await connectionStatus()
           if (result.status === 'error') {
@@ -324,7 +327,10 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
             return
           }
           if (result.status === 'skipped') {
-            sendJson(res, 200, { ok: false, error: '健康数据服务不在这台电脑上，LongPi 无法自动重新连接。请联系安装人员。', ...status })
+            const why = result.why === 'own_login'
+              ? '当前连接使用你自己登录的账号，LongPi 不会替换。如需更换，请联系安装人员。'
+              : '当前连接指向其他位置的健康数据服务，由安装人员设置，LongPi 不会替换。'
+            sendJson(res, 200, { ok: false, error: why, ...status })
             return
           }
           sendJson(res, 200, { ok: true, ...status })

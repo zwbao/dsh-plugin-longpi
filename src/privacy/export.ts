@@ -138,14 +138,21 @@ function scrub(data: Buffer, secrets: string[]): Buffer {
   } catch {
     return data
   }
-  if (text.includes('\u0000')) return data
+  // Only text that is UTF-8 as it stands is edited; anything else (a binary without NUL) is kept byte for byte.
+  if (text.includes('\u0000') || !Buffer.from(text, 'utf8').equals(data)) return data
   let next = text
   for (const secret of secrets) {
     if (secret.length >= 6) next = next.split(secret).join('[redacted]')
   }
-  next = next.replace(MCP_PATH, '$1[redacted]').replace(JWT, '[redacted]')
+  // JWTs first: one inside an MCP path would otherwise leave its payload and signature behind.
+  next = next.replace(JWT, '[redacted]').replace(MCP_PATH, '$1[redacted]')
   const home = homedir()
-  if (home.length > 1) next = next.split(home).join('~').split(JSON.stringify(home).slice(1, -1)).join('~')
+  if (home.length > 1) {
+    // The home folder only as a whole path segment: /Users/li is not the start of /Users/lisa.
+    for (const form of new Set([home, JSON.stringify(home).slice(1, -1)])) {
+      next = next.replace(new RegExp(`${form.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?=[/\\\\"'\\s]|$)`, 'g'), '~')
+    }
+  }
   return next === text ? data : Buffer.from(next, 'utf8')
 }
 

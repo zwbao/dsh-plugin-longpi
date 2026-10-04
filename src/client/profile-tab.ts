@@ -5,7 +5,7 @@
 import React from 'react'
 import { getJson } from './api.ts'
 import { DataInSection } from './datain/index.ts'
-import { ConnectionForm, ConnectionStatus, ReconnectAction, manualConnectionAllowed } from './connection.ts'
+import { ConnectionForm, ConnectionStatus, ReconnectAction, manualConnectionAllowed, reconnectOffer } from './connection.ts'
 import { Icon } from './icons.ts'
 import { RecordsStatusLine } from './journey-steps.ts'
 import { ProfileEditor } from './profile-editor.ts'
@@ -29,7 +29,7 @@ function ConnectionCard(props: { journey: Journey }): React.ReactElement {
       h('h3', { className: 'lp-card-title' }, '数据连接'),
       manual ? h('button', { type: 'button', className: 'lp-textbtn', 'aria-expanded': editing, onClick: () => setEditing((current) => !current) }, editing ? '收起' : '手动连接') : null),
     data ? h(ConnectionStatus, { connection: data }) : h(RecordsStatusLine, { journey: props.journey }),
-    data && data.status !== 'ok' ? h(ReconnectAction) : null,
+    reconnectOffer(data).show ? h(ReconnectAction, { confirm: reconnectOffer(data).confirm }) : null,
     manual && editing ? h(ConnectionForm, { connection: data, idPrefix: 'lp-profile-conn', onSaved: () => setEditing(false) }) : null)
 }
 

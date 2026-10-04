@@ -83,7 +83,8 @@ export function registerTriageTools(ctx: Context, deps: CoreDeps): void {
       const quote = typeof args.quote === 'string' ? args.quote.trim() : ''
       const said = lastPersonText(session)
       const booking = String(args.status) === 'booked'
-      const confirmed = booking ? undefined : (!said || !quote ? true : quoteIn(quote, said))
+      // No words of theirs to check against (a scheduled or restarted turn): not confirmed on the model's say-so.
+      const confirmed = booking ? undefined : !said ? false : !quote ? true : quoteIn(quote, said)
       const result = logCareVisit(deps.dataDir(), {
         status: String(args.status) as CareStatus,
         ...(typeof args.visit_date === 'string' ? { visit_date: args.visit_date.slice(0, 10) } : {}),

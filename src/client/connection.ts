@@ -75,11 +75,28 @@ export function ConnectionStatus(props: { connection: Connection; brief?: boolea
     ok && connection.summary && !props.brief ? h('div', { className: 'lp-caption' }, `找到：${summaryParts(connection.summary).join(' · ')}`) : null)
 }
 
-/** 重新连接: LongPi pairs with the health data service on this computer again. Nothing to fill in. */
-export function ReconnectAction(): React.ReactElement {
+/** Whether the 数据连接 card offers 重新连接: the record does not read, or the link was set by hand (no token). */
+export function reconnectOffer(connection: Connection | null): { show: boolean; confirm: string } {
+  if (!connection) return { show: false, confirm: '' }
+  const handSet = connection.source !== 'none' && !connection.token_set
+  if (connection.status === 'ok' && !handSet) return { show: false, confirm: '' }
+  return { show: true, confirm: connection.status === 'ok' && handSet ? '当前连接由安装时设置。重新连接后将改用 LongPi 在这台电脑上的账号，原连接中的记录不再显示。' : '' }
+}
+
+/**
+ * 重新连接: LongPi pairs with the health data service on this computer again. Nothing to fill in. With confirm,
+ * the first click says what will change and a second click goes ahead.
+ */
+export function ReconnectAction(props: { confirm?: string }): React.ReactElement {
   const [busy, setBusy] = React.useState(false)
+  const [asking, setAsking] = React.useState(false)
   const [message, setMessage] = React.useState<{ text: string; ok: boolean } | null>(null)
   const run = async () => {
+    if (props.confirm && !asking) {
+      setAsking(true)
+      return
+    }
+    setAsking(false)
     setBusy(true)
     setMessage(null)
     try {
@@ -93,7 +110,10 @@ export function ReconnectAction(): React.ReactElement {
     }
   }
   return h('div', { className: 'lp-conn-reconnect' },
-    h('div', { className: 'lp-actions' }, h(Btn, { variant: 'outline', disabled: busy, onClick: () => { void run() } }, busy ? '正在重新连接…' : '重新连接')),
+    asking ? h('p', { className: 'lp-caption' }, props.confirm) : null,
+    h('div', { className: 'lp-actions' },
+      h(Btn, { variant: 'outline', disabled: busy, onClick: () => { void run() } }, busy ? '正在重新连接…' : asking ? '确认重新连接' : '重新连接'),
+      asking ? h(Btn, { variant: 'ghost', disabled: busy, onClick: () => setAsking(false) }, '取消') : null),
     message ? h('p', { className: message.ok ? 'lp-conn-ok' : 'lp-form-error', role: message.ok ? 'status' : 'alert' }, message.text) : null)
 }
 

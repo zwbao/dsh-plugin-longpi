@@ -5,13 +5,13 @@
 给使用者
 
 - 插件不再检查对话中的急症和用药问题：不再逐条判断、不再附加安全提示、不再在回复后补写或更正，也不再插入事先写好的标准回答。遇到急症，请直接拨打 120，不要等待回复。基本原则（急症时先说拨打 120，不给个人用药剂量）仍写在 LongPi 的设定中，由模型遵守。保存方案、你主动发起深度分析之前，仍需要你在 DeepSeek Harness 中确认。
-- 随之变化：在对话中回复同意语句不再算作同意，请在健康页完成同意；「别天天提醒我」「不要限时进食」等说法不再按固定规则立即记下，由对话结束后的后台整理记录，起草方案时提出的要求仍会保存。
+- 随之变化：在对话中回复同意语句不再算作同意，请在健康页完成同意；对话中说的偏好（例如不要某种饮食方式）不再按固定规则立即记下，起草方案时提出的要求仍会保存。
 - LongPi 的设定和健康页内容只在「健康对话」工作区中生效；健康页上的提问会打开「健康对话」再填入问题。其他工作区的对话不会附加 LongPi 的内容。
 - 「下载完整档案」只包含当前查看的档案：基本情况、方案与打卡、日程、自测、用药与病情、记下的事项、医生简报、深度分析结果，以及只保存在这台电脑上的甲基化、菌群、蛋白组和诊断表。不再包含连接健康数据服务的账号、密码和链接，也不含提醒渠道设置和其他家人的档案。0.8.0 之前下载的档案压缩包含有连接账号和密码，建议删除。
 - 「添加家人」此前在这台电脑的健康数据服务上始终失败，现已修复。
-- 「数据连接」卡片新增「重新连接」按钮，不需要填写任何内容；连接不上时会显示原因。档案页和设置页不再显示填写地址、令牌、邮箱和密码的表单。
+- 「数据连接」卡片新增「重新连接」按钮，不需要填写任何内容；连接不上时会显示原因；连接是安装时设置的（例如旧版本连接的演示账号），也可以在确认后改用 LongPi 自己的账号。档案页和设置页不再显示填写地址、令牌、邮箱和密码的表单。
 - 在对话中提到「我妈」「我爸」，不再把你本人的档案改为家人的档案；旧版本因此写入的错误信息会被忽略。
-- 用 `--with-mirobody` 安装时，不再把演示账号当作你本人的记录，LongPi 会为你建立自己的账号。
+- 用 `--with-mirobody` 安装或重新安装时，不再把演示账号当作你本人的记录，也不再写入演示数据；LongPi 会为你建立自己的账号。
 - 重新运行安装脚本时，会恢复 DeepSeek Harness 自己的名称标识（旧版本把它隐藏了）；只用 `dsh plugin update` 更新不会恢复。
 - 同时打开多个 DeepSeek Harness 标签页时，健康页不再停在加载状态；读取超过 90 秒会给出提示。实时更新只在健康页或右侧「健康」栏显示在屏幕上时进行。
 - 升级方法：重新运行安装脚本，然后重启 DeepSeek Harness，并刷新所有已打开的标签页。
@@ -23,8 +23,9 @@ English
   evidence_explainer agent. Plan-save and person-started deep-analysis approvals stay (tools-approval.ts,
   decoupled). The guard's deterministic chat writes (exclusions, drinking, avoidance, consent by phrase) go with it;
   the memory distiller and plan constraints remain. The vendored Mirobody plugin's own rule notice is dropped in
-  every workspace. Without the DeepSeek consent, the egress wrapper on llm.stream still holds health text, now
-  opening with 120 and 12356 (whether DSH's main loop goes through that wrapper is not verified end to end).
+  every workspace. Known issue (pre-existing, not fixed here): the consent egress wrapper replaces llm.stream,
+  but DSH's main loop streams through prepareCall (dsh-agent-loop), so it does not hold the main chat; its hold
+  text now opens with 120 and 12356. The right hook is the llm/stream waterfall.
   `guardScope` and agents.evidence_explainer are still accepted in config and ignored.
 - Orchestrator: persona, rules and the page snapshot only in LongPi's own workspace; a sub-agent (header.origin
   "subagent" or delegationDepth > 0) gets neither persona nor write tools nor snapshot; a session the person forked
@@ -37,7 +38,12 @@ English
   named in the note; local date in the file name (A-01).
 - Managed members are created at /api/user/virtual (H-01). POST /api/longpi/connection/reconnect pairs LongPi's
   own account with the local Mirobody, replacing a hand-set link; GET /api/longpi/connection carries
-  pairing_error. The installer no longer connects the demo account with --with-mirobody.
+  pairing_error. Reclaim takes over only a token-less link to the same Mirobody (an installer's demo account), never
+  a remote link or one signed into by hand; a refused login re-registers; one pairing per home at a time; a throttled
+  call keeps the last failure. The page offers 重新连接 for a token-less link too, with a confirmation. The
+  installer no longer connects the demo account with --with-mirobody, drops a token-less demo link a 0.7 install
+  left for that Mirobody, writes mirobodyUrl, and seeds no demo data.
+- Quote checks (remember_for_me, log_care_visit) fail closed when the person's words are not known.
 - Installer: no `ui-brand-official` row in LongPi's block, and the row a 0.7 installer left is stripped from every
   profile's block; Mirobody logs are 0600 (umask 077 for new logs, chmod for existing ones) (F-13, J-07, F-9).
 - Client: the change stream only while the page or the 健康 pane is on screen in a visible tab (reopening reloads

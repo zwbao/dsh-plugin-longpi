@@ -145,6 +145,8 @@ function stale(key: Key): boolean {
 // does not poll. Coming back reloads what is stale; a stream that opens again reloads what is on screen.
 let source: EventSource | null = null
 let sourceGone = false
+/** When the stream last closed (0: never open yet): on reopening, only what was read before that loads again. */
+let closedAt = 0
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let revive: (() => void) | null = null
 
@@ -153,6 +155,7 @@ function tabVisible(): boolean {
 }
 
 function closeLive(): void {
+  if (source) closedAt = Date.now()
   source?.close()
   source = null
   if (pollTimer != null) clearInterval(pollTimer)
@@ -168,6 +171,7 @@ function syncLive(): void {
   }
   if (pollTimer == null) pollTimer = setInterval(() => { for (const key of inUse()) void load(key) }, POLL_MS)
   if (liveUsers <= 0) {
+    if (source) closedAt = Date.now()
     source?.close()
     source = null
     return
@@ -187,8 +191,9 @@ function syncLive(): void {
       }
     }
     source = opened
-    // Changes while the stream was closed were not sent: what is on screen loads again now.
-    for (const key of inUse()) void load(key, 'fresh')
+    // Changes while the stream was closed were not sent: what was read before it closed loads again (joining a
+    // read already on its way); a first open reads nothing extra.
+    if (closedAt > 0) for (const key of inUse()) if (entries[key].at <= closedAt) void load(key)
   } catch {
     source = null
   }

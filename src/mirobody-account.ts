@@ -19,8 +19,11 @@ export interface LocalAccount { base: string; email: string; password: string; c
 
 export type PairResult =
   | { status: 'paired' | 'renewed' | 'ok' }
-  | { status: 'skipped'; why: 'not_local' | 'manual_connection' }
+  | { status: 'skipped'; why: 'not_local' | 'manual_connection' | 'remote_connection' | 'own_login' }
   | { status: 'error'; error_zh: string }
+
+/** The service answered and refused (an account it no longer knows, a bad request): not a service that is down. */
+class Refused extends Error {}
 
 export function isLocalBase(base: string): boolean {
   try {
@@ -65,7 +68,7 @@ async function call(fetchImpl: typeof fetch, url: string, body: unknown, token?:
     signal: AbortSignal.timeout(15_000),
   })
   const json = await res.json().catch(() => ({})) as { code?: number; msg?: string; data?: Record<string, unknown> }
-  if (!res.ok || json.code !== 0) throw new Error(String(json.msg ?? `HTTP ${res.status}`).slice(0, 160))
+  if (!res.ok || json.code !== 0) throw new Refused(String(json.msg ?? `HTTP ${res.status}`).slice(0, 160))
   return json
 }
 
@@ -91,10 +94,19 @@ export async function ensureLocalPairing(
   root: string,
   opts: { base: string; configuredUrl?: string; force?: boolean; reclaim?: boolean; fetchImpl?: typeof fetch; now?: () => number },
 ): Promise<PairResult> {
-  const result = await pairOnce(root, opts)
-  if (result.status === 'error') lastFailure.set(root, result.error_zh)
-  else if (result.status !== 'skipped' || opts.reclaim) lastFailure.delete(root)
-  return result
+  const now = opts.now ?? Date.now
+  // Throttled: nothing is checked, and the reason a check failed stays for the page.
+  if (!opts.force && now() - (lastCheck.get(root) ?? 0) < CHECK_EVERY_MS) return { status: 'ok' }
+  // One pairing per LongPi home at a time (two clicks on 重新连接 must not register two accounts).
+  const running = inflight.get(root)
+  if (running) return running
+  const run = pairOnce(root, opts).then((result) => {
+    if (result.status === 'error') lastFailure.set(root, result.error_zh)
+    else if (result.status !== 'skipped' || opts.reclaim) lastFailure.delete(root)
+    return result
+  }).finally(() => inflight.delete(root))
+  inflight.set(root, run)
+  return run
 }
 
 async function pairOnce(
@@ -102,17 +114,21 @@ async function pairOnce(
   opts: { base: string; configuredUrl?: string; force?: boolean; reclaim?: boolean; fetchImpl?: typeof fetch; now?: () => number },
 ): Promise<PairResult> {
   const now = opts.now ?? Date.now
-  if (!opts.force && now() - (lastCheck.get(root) ?? 0) < CHECK_EVERY_MS) return { status: 'ok' }
   lastCheck.set(root, now())
   const fetchImpl = opts.fetchImpl ?? fetch
   const base = opts.base.replace(/\/+$/, '')
   if (!isLocalBase(base)) return { status: 'skipped', why: 'not_local' }
   const saved = readConnection(root)
   let account = readAccount(root)
-  // A link someone set up by hand (installer flag or pasted), with no account behind it: theirs, not ours —
-  // unless the person asked to reconnect (reclaim): then LongPi pairs its own account and its link is used.
-  if (!opts.reclaim && !account && ((saved?.mcp_url && !saved.mcp_token) || (!saved && opts.configuredUrl?.trim()))) {
-    return { status: 'skipped', why: 'manual_connection' }
+  // A link someone set up by hand (installer flag or pasted), with no account behind it: theirs, not ours. When the
+  // person asks to reconnect (reclaim), LongPi takes over only a link to this same Mirobody without a token (an
+  // installer's demo account, a pasted link); a remote link, or one they signed into with their own account, stays.
+  if (opts.reclaim && saved?.mcp_url && sameHost(saved.mcp_url, base) === false) return { status: 'skipped', why: 'remote_connection' }
+  const handLink = !account ? (saved?.mcp_url || (!saved ? opts.configuredUrl?.trim() ?? '' : '')) : ''
+  if (handLink) {
+    if (!opts.reclaim) return saved?.mcp_token ? { status: 'ok' } : { status: 'skipped', why: 'manual_connection' }
+    if (sameHost(handLink, base) === false) return { status: 'skipped', why: 'remote_connection' }
+    if (saved?.mcp_token) return { status: 'skipped', why: 'own_login' }
   }
   try {
     if (!opts.reclaim && saved?.mcp_url && saved.mcp_token) {
@@ -123,10 +139,17 @@ async function pairOnce(
       saveConnection(root, { mcp_url: await mintLink(fetchImpl, account.base, token), mcp_token: token })
       return { status: 'renewed' }
     }
-    let token: string
+    let token = ''
     if (account) {
-      token = await accessToken(fetchImpl, account, false)
-    } else {
+      try {
+        token = await accessToken(fetchImpl, account, false)
+      } catch (error) {
+        // The service is up but no longer knows this account (its database was reset): pair a new one.
+        if (!(error instanceof Refused)) throw error
+        account = null
+      }
+    }
+    if (!account) {
       account = {
         base,
         email: `longpi-${randomBytes(6).toString('hex')}@longpi.local`,
@@ -141,12 +164,23 @@ async function pairOnce(
   } catch (error) {
     lastCheck.set(root, now() - CHECK_EVERY_MS + 60_000)   // try again in a minute, not ten
     const detail = error instanceof Error ? error.message : String(error)
+    if (error instanceof Refused) return { status: 'error', error_zh: `健康数据服务拒绝了 LongPi 的请求（${detail}），请稍后重试。` }
     return { status: 'error', error_zh: `无法连接这台电脑上的健康数据服务（${detail}），服务可能未在运行。` }
   }
 }
 
 const lastCheck = new Map<string, number>()
 const lastFailure = new Map<string, string>()
+const inflight = new Map<string, Promise<PairResult>>()
+
+/** Whether two addresses are the same host and port; null when one cannot be read. */
+function sameHost(a: string, b: string): boolean | null {
+  try {
+    return new URL(a).host.toLowerCase() === new URL(b).host.toLowerCase()
+  } catch {
+    return null
+  }
+}
 
 /** Why the last pairing with the local health data service failed, in words for the page; '' when it did not. */
 export function pairingProblem(root: string): string {

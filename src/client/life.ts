@@ -4,7 +4,7 @@ import React from 'react'
 import { errorText, getJson, postJson } from './api.ts'
 import { cleanLabel, IndicatorsTab } from './indicators.ts'
 import { Icon } from './icons.ts'
-import { setPendingPrompt, type IndicatorFilter, type PageTab } from './store.ts'
+import { type IndicatorFilter, type PageTab } from './store.ts'
 import type { Journey } from './types.ts'
 import { isCovered, type Covered } from './overview-facts.ts'
 import { Btn } from './ui.ts'
@@ -28,14 +28,11 @@ export function TrainingTab(props: { onConnect?: () => void } = {}): React.React
   return h(AreaTab, { area: 'training', onConnect: props.onConnect })
 }
 
-export function AskTab(props: { journey: Journey; openChat?: () => void }): React.ReactElement {
+export function AskTab(props: { journey: Journey; onPrompt: (text: string) => void }): React.ReactElement {
   const names = (props.journey.changes ?? []).slice(0, 2).map((row) => row.label_zh)
   const visit = props.journey.reminders.find((row) => row.kind === 'retest')?.date ?? null
   const questions = suggestedQuestions({ changes: names, visit })
-  const ask = (text: string) => {
-    setPendingPrompt(text)
-    props.openChat?.()
-  }
+  const ask = (text: string) => props.onPrompt(text)
   return h('div', { className: 'lp-tab-body' },
     h('section', { className: 'lp-card', 'aria-labelledby': 'lp-ask-title' },
       h('div', { className: 'lp-card-head' }, h('h3', { className: 'lp-card-title', id: 'lp-ask-title' }, '可以这样问')),
