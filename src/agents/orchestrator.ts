@@ -8,6 +8,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { PageState } from '../contracts/surfaces.ts'
 import type { MountState } from '../mirobody.ts'
 import { insideWorkspace } from '../guard-scope.ts'
+import { rememberPersonText } from '../core/turn-text.ts'
+import { sessionKey } from '../plan-hold.ts'
 import { personaLines } from '../prompt.ts'
 import { PROMPT_SECTIONS } from '../version.ts'
 
@@ -22,7 +24,7 @@ export const WRITE_TOOLS = [
 export const ORCHESTRATOR_RULES = [
   'Orchestrator rules (0.5.3):',
   '1. At the start of a health turn a message marked LongPi 健康页快照 says what the LongPi page shows now, the most important fact, and what the person told LongPi before. It comes from the plugin, not from the person; never quote it as their words.',
-  '2. If the snapshot has a line 最重要的事（必须先说）and the person asks anything about their health, open with that fact in ONE short sentence with its key numbers (a low value is 偏低) and who to see — not the whole paragraph again unless they ask about it — then answer what they asked, in full. Never contradict the page silently: if you think the page is wrong, say why and call note_page_issue.',
+  '2. Not in an emergency turn (then only the emergency answer). Otherwise, if the snapshot has a line 最重要的事（必须先说）and the person asks anything about their health, open with that fact in ONE short sentence with its key numbers (a low value is 偏低) and who to see — not the whole paragraph again unless they ask about it — then answer what they asked, in full. Never contradict the page silently: if you think the page is wrong, say why and call note_page_issue.',
   '3. When the snapshot says 就医跟进, ask once in this session, in one short question: 约了吗？医生怎么说？ — not in every reply. When they answer, record it with log_care_visit in their words. When they want to prepare for the visit, offer the one-page brief (prepare_doctor_brief).',
   '4. When the person states a goal, something they do not want (不要…), a condition, a medicine they take or stopped, a sick or travel day, or whether they drink, call remember_for_me with their exact words as quote. read_person_memory shows what is already kept; do not ask again.',
   '5. Use the job skills for the job at hand. Never send the person\'s name anywhere; call them 你.',
@@ -37,7 +39,7 @@ export function orchestratorPrompt(mount: MountState): string {
 
 interface AgentLike {
   ctx?: unknown
-  session?: { id?: unknown; header?: { cwd?: unknown; parentSession?: unknown } }
+  session?: { id?: unknown; header?: { cwd?: unknown; origin?: unknown; delegationDepth?: unknown } }
 }
 
 function freeze<T>(value: T): T {
@@ -107,6 +109,30 @@ export interface Orchestrator {
   injected: Map<string, string>
 }
 
+/** A sub-agent DSH spawned for a task (dsh-subagent writes origin "subagent" and a depth). A session the person
+ * forked from another carries parentSession too, but it is theirs: it is not a sub-agent. */
+export function isSubAgent(agent: unknown): boolean {
+  const header = (agent as AgentLike | undefined)?.session?.header
+  return header?.origin === 'subagent' || Number(header?.delegationDepth ?? 0) > 0
+}
+
+/** The person's latest message in a step's messages (not a plugin note, not a sub-agent's task text). */
+export function latestPersonText(messages: readonly unknown[]): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const row = messages[index] as { role?: string; source?: { kind?: string }; content?: unknown }
+    if (row?.role !== 'user' || (row.source && row.source.kind && row.source.kind !== 'user')) continue
+    if (typeof row.content === 'string') return row.content
+    if (Array.isArray(row.content)) return row.content.map((part) => (part && typeof part === 'object' && typeof (part as { text?: unknown }).text === 'string' ? (part as { text: string }).text : '')).join('')
+  }
+  return ''
+}
+
+/** The vendored Mirobody plugin's own rule notice (its guard). LongPi has no guard since 0.8.0, and drops this one too. */
+export function isMirobodyNotice(message: unknown): boolean {
+  const source = (message as { source?: { kind?: string; plugin?: string; form?: string } } | undefined)?.source
+  return source?.kind === 'plugin' && source.plugin === 'dsh-plugin-mirobody' && source.form === 'notice'
+}
+
 function sessionId(agent: AgentLike | undefined): string {
   return typeof agent?.session?.id === 'string' ? agent.session.id : ''
 }
@@ -121,6 +147,7 @@ export function registerOrchestrator(ctx: Context, options: OrchestratorOptions)
   }
   const isHealth = (agent: unknown) => {
     const row = agent as AgentLike | undefined
+    if (isSubAgent(row)) return false
     if (row && typeof row === 'object' && healthAgents.has(row)) return true
     const id = sessionId(row)
     return (id && healthSessions.has(id)) || inHealthWorkspace(row)
@@ -132,7 +159,7 @@ export function registerOrchestrator(ctx: Context, options: OrchestratorOptions)
       const agent = (payload as unknown as { agent?: AgentLike })?.agent
       if (!agent || typeof agent !== 'object') return
       const scoped = agent.ctx as { systemPrompt?: { section?: (row: unknown) => unknown }; tools?: { restrict?: (filter: unknown) => unknown }; get?: (name: string) => unknown } | undefined
-      if (inHealthWorkspace(agent)) {
+      if (inHealthWorkspace(agent) && !isSubAgent(agent)) {
         healthAgents.add(agent)
         const id = sessionId(agent)
         if (id) healthSessions.add(id)
@@ -158,15 +185,30 @@ export function registerOrchestrator(ctx: Context, options: OrchestratorOptions)
     }
   })
 
+  // Outermost: the vendored Mirobody plugin appends its own rule notice (its guard, with a US-only crisis number) in
+  // every workspace. LongPi removed its guard in 0.8.0 and drops that notice as well.
+  ctx.on('agent/pre-step', async (_raw, next) => {
+    const decision = await next()
+    if (decision.kind !== 'enter') return decision
+    const kept = decision.messages.filter((message) => !isMirobodyNotice(message))
+    return kept.length === decision.messages.length ? decision : { ...decision, messages: kept }
+  }, { prepend: true })
+
   ctx.on('agent/pre-step', async (raw, next) => {
     const decision = await next()
     try {
       const payload = raw as unknown as { agent?: AgentLike; messages: unknown[]; step?: number; signal?: AbortSignal }
-      if (decision.kind !== 'enter' || payload.signal?.aborted || payload.step !== 1) return decision
+      if (decision.kind !== 'enter' || payload.signal?.aborted) return decision
       const agent = payload.agent
       const id = sessionId(agent)
-      // Only LongPi's own workspace, and only the person's session there: a sub-agent gets its task from its parent.
-      if (!id || !isHealth(agent) || agent?.session?.header?.parentSession) return decision
+      // Only LongPi's own workspace, and only the person's sessions there (a fork included): a sub-agent gets its
+      // task from its parent.
+      if (!id || !isHealth(agent) || isSubAgent(agent)) return decision
+      // What the person just said, for the tools that check a quote against their words (remember_for_me,
+      // log_care_visit) and for the memory distiller after the turn.
+      const said = latestPersonText(payload.messages)
+      if (said.trim()) rememberPersonText(sessionKey(agent), said)
+      if (payload.step !== 1) return decision
       const extra: never[] = []
       const snap = await options.snapshot(8_000).catch(() => null)
       if (snap && id && injected.get(id) !== snap.page.inputs_fp) {

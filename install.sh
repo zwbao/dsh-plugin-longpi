@@ -278,11 +278,9 @@ main() {
       ok "Mirobody is running at $mirobody_base" "Mirobody 已在 $mirobody_base 运行"
     fi
     if [ "$set_mcp" = 0 ]; then
-      mcp_url="$(demo_mcp_url "$mirobody_base" "$py")" \
-        || die "Could not get a personal MCP address for the demo account (is SEED_DEMO_DATA off?). Pass your own with --mcp-url." \
-               "无法为演示账号生成个人 MCP 地址（是否关闭了 SEED_DEMO_DATA？）。请用 --mcp-url 传入自己的地址。"
-      set_mcp=1
-      ok "Connected the demo account (you@mirobody.ai)" "已连接演示账号（you@mirobody.ai）"
+      # 0.8.0: no demo account as the person's record. LongPi pairs an account of its own with this Mirobody
+      # when DeepSeek Harness starts; the example profile on the 健康 page shows what a full record looks like.
+      ok "LongPi will pair with this Mirobody by itself" "LongPi 会自动与这台电脑上的 Mirobody 配对"
     fi
   fi
 
@@ -301,6 +299,7 @@ main() {
   step "Writing the configuration" "写入配置"
   mkdir -p "$profile_dir"
   local patch="$profile_dir/cordis.patch.yml" result
+  strip_brand_rows "$dsh_home" "$py"
   result="$("$py" -c "$WRITE_CONFIG" "$patch" "$skills_dir" "$py" "$set_mcp" "$mcp_url" "$mcp_token" "$pin" </dev/null)" \
     || die "Could not update $patch; add the dsh-plugin-longpi row by hand (docs/install.md)." "无法更新 ${patch}；请按 docs/install.zh.md 手动添加 dsh-plugin-longpi 配置。"
   ok "$(pretty "$patch")" "$(pretty "$patch")"
@@ -326,7 +325,11 @@ main() {
   backup_line="$(printf '%s\n' "$result" | grep '^backups=' || true)"
   case "$mcp_line" in
     mcp=configured*) row "Mirobody  " "Mirobody  " "$(pick "connected" "已连接") ${mcp_line#*configured }" ;;
-    *) row "Mirobody  " "Mirobody  " "$(pick "not connected; rerun with --mcp-url <URL> or --with-mirobody" "未连接；可加 --mcp-url <地址> 或 --with-mirobody 重新运行")" ;;
+    *) if [ "$with_mirobody" = 1 ]; then
+         row "Mirobody  " "Mirobody  " "$(pick "paired by LongPi when DeepSeek Harness starts" "DeepSeek Harness 启动后由 LongPi 自动配对")"
+       else
+         row "Mirobody  " "Mirobody  " "$(pick "not found on this computer; rerun with --with-mirobody" "这台电脑上没有健康数据服务；请加 --with-mirobody 重新运行")"
+       fi ;;
   esac
   if [ -n "$backup_line" ]; then
     kept="${backup_line#backups=}"; removed="${kept#* }"; kept="${kept% *}"
@@ -510,6 +513,37 @@ wait_for() {
 }
 
 # Sign in to Mirobody's seeded demo account and mint a personal MCP address.
+# Up to 0.7.0 the installer also disabled DeepSeek Harness's wordmark row inside LongPi's block, in whichever profile
+# it configured. Every profile's patch loses that row (only inside the LongPi block), not just the one configured now.
+strip_brand_rows() {
+  local dsh_home="$1" py="$2" file
+  for file in "$dsh_home"/profiles/*/cordis.patch.yml; do
+    [ -f "$file" ] || continue
+    "$py" - "$file" <<'PYEOF' >/dev/null 2>&1 || true
+import sys
+path = sys.argv[1]
+lines = open(path, encoding="utf-8").read().split("\n")
+out, inside, skip_next = [], False, False
+for line in lines:
+    stripped = line.strip()
+    if stripped.startswith("# >>> dsh-plugin-longpi"):
+        inside = True
+    elif stripped.startswith("# <<< dsh-plugin-longpi"):
+        inside = False
+    if skip_next:
+        skip_next = False
+        if stripped == "disabled: true":
+            continue
+    if inside and stripped == "- id: ui-brand-official":
+        skip_next = True
+        continue
+    out.append(line)
+if out != lines:
+    open(path, "w", encoding="utf-8").write("\n".join(out))
+PYEOF
+  done
+}
+
 demo_mcp_url() {
   local base="$1" py="$2" jwt attempt=0
   local field='import json, sys
@@ -1129,6 +1163,10 @@ mirobody_native_start() {
     } > "$envfile"
   )
   chmod 600 "$envfile"
+  # The logs carry personal MCP links: only this account may read them, also when Mirobody is already running.
+  for name in serve worker; do
+    [ -f "$longpi_home/mirobody-$name.log" ] && chmod 600 "$longpi_home/mirobody-$name.log" 2>/dev/null
+  done
   for name in serve worker; do
     if [ -f "$longpi_home/mirobody-$name.pid" ] && kill -0 "$(cat "$longpi_home/mirobody-$name.pid")" 2>/dev/null; then
       continue
@@ -1136,7 +1174,6 @@ mirobody_native_start() {
     # exec: the pid written is Mirobody's own, not a wrapper shell's
     # umask 077: the logs carry personal MCP links, so only this account may read them (0600).
     (cd "$dir"; umask 077; set -a; . "$envfile"; set +a; exec nohup "$venv/bin/mirobody" "$name" >"$longpi_home/mirobody-$name.log" 2>&1) </dev/null &
-    chmod 600 "$longpi_home/mirobody-$name.log" 2>/dev/null || true
     echo $! > "$longpi_home/mirobody-$name.pid"
   done
   wait_for "$base/" 300 || fail_log "Mirobody (native) did not answer at $base within 5 minutes; see $longpi_home/mirobody-serve.log." \

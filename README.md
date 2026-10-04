@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/instal
 
 The installer adds the DeepSeek Harness CLI if it is missing, downloads the skill library, creates a Python environment with the Mirobody terminology engine under `~/longpi`, and installs and configures the plugin in DeepSeek Harness. It needs Node.js 22.19+, Python 3.12+ and git, and running it again updates everything.
 
-Health records come from [Mirobody](https://github.com/thetahealth/mirobody). LongPi pairs with the Mirobody on this computer by itself; the person using it never types an address, an account or a password. Without one, add `--with-mirobody` to deploy a local instance with demo data through Docker (an installer connecting a Mirobody elsewhere can add `--mcp-url`):
+Health records come from [Mirobody](https://github.com/thetahealth/mirobody). LongPi pairs with the Mirobody on this computer by itself; the person using it never types an address, an account or a password. Without one, add `--with-mirobody` to deploy a local instance through Docker; LongPi creates an account of its own on it (an installer connecting a Mirobody elsewhere can add `--mcp-url`):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/install.sh | bash -s -- --with-mirobody

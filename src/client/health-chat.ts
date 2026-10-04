@@ -12,6 +12,30 @@ export function setWorkspaceOpener(fn: ((id: string) => Promise<void>) | null): 
   opener = fn
 }
 
+let workspaceId: Promise<string | null> | null = null
+function healthWorkspaceId(): Promise<string | null> {
+  workspaceId ??= getJson<{ workspace_id: string | null }>('/api/longpi/workspace').then((v) => v.workspace_id).catch(() => {
+    workspaceId = null
+    return null
+  })
+  return workspaceId
+}
+
+/**
+ * Open a session in 健康对话 (a blank one when there is one), where LongPi's persona and tools are; a prompt the
+ * page queued is put into its composer there. False when DSH cannot open workspaces or there is no 健康对话.
+ */
+export async function openHealthChat(): Promise<boolean> {
+  const id = await healthWorkspaceId()
+  if (!id || !opener) return false
+  try {
+    await opener(id)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function HealthChatButton(): React.ReactElement | null {
   const [id, setId] = React.useState<string | null>(null)
   const [error, setError] = React.useState('')

@@ -52,6 +52,7 @@ export const SETTINGS = `
 .lp-conn-form .lp-form-actions { margin-top: 0; }
 .lp-conn-login { display: grid; gap: 12px; min-width: 0; }
 .lp-conn-advanced > :not(summary) + :not(summary) { margin-top: 12px; }
+.lp-conn-reconnect { display: grid; gap: 6px; margin-top: 8px; }
 .lp-conn-ok { display: flex; align-items: center; gap: 8px; margin: 0; color: var(--lp-good-ink); font-size: 13px; line-height: 20px; }
 
 /* --- 隐私与数据 (privacy/data-page.ts, privacy/consent-screen.ts) ------------------------------------------ */

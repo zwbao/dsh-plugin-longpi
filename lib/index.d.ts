@@ -123,7 +123,6 @@ interface Config {
   skillsVersion: string;
   /** On a DSH with no workspace, register <dataDir>/workspace as 「健康对话」 once, so a session can open. */
   bootstrapWorkspace: boolean;
-  /** Where the safety classifier asks the model: LongPi's workspace and health talk ('health'), or every message ('all'). */
   /** Accepted for older profiles; the safety guard it scoped was removed in 0.8.0. */
   guardScope: 'health' | 'all';
   /** Per agent profile (AA §2.3): enabled (false = always the deterministic fallback), route and deadline. */
@@ -3705,7 +3704,7 @@ declare function seenNotes(state: CareState): string[];
 declare function deepseekConsentPending(decision: string | null | undefined): boolean;
 //#endregion
 //#region src/privacy/egress.d.ts
-declare const CONSENT_HOLD_ZH = "你尚未同意把健康对话发给 DeepSeek，因此本次不发送健康信息。请在开始页或档案中选择「我知道了，同意把健康对话发给 DeepSeek」。";
+declare const CONSENT_HOLD_ZH = "如果正在发生急症，请立即拨打 120；如有伤害自己的想法，请拨打全国心理援助热线 12356。你尚未同意把健康对话发给 DeepSeek，因此本次不发送健康信息。请在开始页或档案中选择「我知道了，同意把健康对话发给 DeepSeek」。";
 /** `blob` is the whole call (system prompt included). `personText` is only what the person typed. */
 declare function modelEgress(granted: boolean, blob: string, personText?: string): 'send' | 'hold';
 //#endregion
@@ -3912,6 +3911,8 @@ interface ConnectionStatus {
   token_set: boolean;
   status: 'ok' | 'error' | 'none';
   error?: string;
+  /** Why pairing with the health data service on this computer failed, when it did. */
+  pairing_error?: string;
   summary?: RecordsSummary;
 }
 //#endregion
@@ -4010,6 +4011,14 @@ declare const DATA_FILES: {
     readonly path: "plan_prefs.json";
     readonly writer: "M3";
   };
+  readonly interventions: {
+    readonly path: "interventions";
+    readonly writer: "M3";
+  };
+  readonly schedule: {
+    readonly path: "schedule";
+    readonly writer: "M6";
+  };
   readonly medicationStatements: {
     readonly path: "medication_statements.jsonl";
     readonly writer: "M7";
@@ -4017,10 +4026,6 @@ declare const DATA_FILES: {
   readonly followup: {
     readonly path: "followup.json";
     readonly writer: "M6";
-  };
-  readonly guardStats: {
-    readonly path: "guard-stats.json";
-    readonly writer: "M2";
   };
   readonly memory: {
     readonly path: "memory.json";

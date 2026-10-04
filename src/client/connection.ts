@@ -71,8 +71,30 @@ export function ConnectionStatus(props: { connection: Connection; brief?: boolea
   return h('div', { className: 'lp-conn-status' },
     h('div', { className: 'lp-status' },
       h('span', { className: `lp-statusdot ${ok ? 'lp-statusdot-on' : bad ? 'lp-statusdot-bad' : ''}`, 'aria-hidden': true }),
-      ok ? '已连接' : bad ? `连接失败：${connection.error || '未返回原因'}` : '尚未连接'),
+      ok ? '已连接' : bad ? `连接失败：${connection.error || '未返回原因'}` : connection.pairing_error ? `尚未连接：${connection.pairing_error}` : '尚未连接'),
     ok && connection.summary && !props.brief ? h('div', { className: 'lp-caption' }, `找到：${summaryParts(connection.summary).join(' · ')}`) : null)
+}
+
+/** 重新连接: LongPi pairs with the health data service on this computer again. Nothing to fill in. */
+export function ReconnectAction(): React.ReactElement {
+  const [busy, setBusy] = React.useState(false)
+  const [message, setMessage] = React.useState<{ text: string; ok: boolean } | null>(null)
+  const run = async () => {
+    setBusy(true)
+    setMessage(null)
+    try {
+      const result = await postJson<{ ok?: boolean; error?: string }>('/api/longpi/connection/reconnect', {})
+      setMessage(result.ok ? { text: '已重新连接。', ok: true } : { text: result.error || '重新连接失败，请稍后重试。', ok: false })
+      notifyChanged()
+    } catch (error) {
+      setMessage({ text: errorText(error, '重新连接失败，请稍后重试。'), ok: false })
+    } finally {
+      setBusy(false)
+    }
+  }
+  return h('div', { className: 'lp-conn-reconnect' },
+    h('div', { className: 'lp-actions' }, h(Btn, { variant: 'outline', disabled: busy, onClick: () => { void run() } }, busy ? '正在重新连接…' : '重新连接')),
+    message ? h('p', { className: message.ok ? 'lp-conn-ok' : 'lp-form-error', role: message.ok ? 'status' : 'alert' }, message.text) : null)
 }
 
 function TestOutcome(props: { result: ConnectionResult }): React.ReactElement {

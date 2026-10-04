@@ -35,9 +35,12 @@ function writeHeaders(): Record<string, string> {
   return shownPerson ? { ...JSON_HEADERS, 'x-longpi-person': shownPerson } : JSON_HEADERS
 }
 
-/** A read that has not answered by then is reported, not left as a skeleton forever (F-3). */
-export const READ_TIMEOUT_MS = 25_000
-export const READ_TIMEOUT_ZH = '读取超时。如果同时打开了多个 DeepSeek Harness 标签页，请关闭其余标签页后重试。'
+/**
+ * A read that has not answered by then is reported, not left as a skeleton forever (F-3). Long enough for a first
+ * read that runs the body-age methods (journey has no server-side limit).
+ */
+export const READ_TIMEOUT_MS = 90_000
+export const READ_TIMEOUT_ZH = '读取时间较长，请稍后点「刷新」重试。如果同时打开了多个 DeepSeek Harness 标签页，关闭其余标签页也可能有帮助。'
 
 export async function getJson<T>(path: string): Promise<T> {
   let res: Response
@@ -45,7 +48,7 @@ export async function getJson<T>(path: string): Promise<T> {
     const signal = typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function' ? AbortSignal.timeout(READ_TIMEOUT_MS) : undefined
     res = await fetch(path, { credentials: 'same-origin', ...(signal ? { signal } : {}) })
   } catch (error) {
-    if (error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')) throw new Error(READ_TIMEOUT_ZH)
+    if (error instanceof Error && error.name === 'TimeoutError') throw new Error(READ_TIMEOUT_ZH)
     throw error
   }
   return read<T>(res)

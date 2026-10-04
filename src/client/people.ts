@@ -2,6 +2,7 @@
 // so every section, and the chat's next turn, reads the chosen person's store.
 
 import React from 'react'
+import { manualConnectionAllowed } from './connection.ts'
 import { getJson, postJson, setShownPerson } from './api.ts'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { Icon } from './icons.ts'
@@ -85,7 +86,7 @@ function AddPersonDialog(props: { view: PeopleView; onClose: () => void }): Reac
         h('button', { type: 'button', className: 'lp-iconbtn', 'aria-label': '关闭', onClick: props.onClose }, h(Icon, { name: 'close', size: 18 }))),
       h('p', { className: 'lp-muted lp-small' }, view.can_create_in_mirobody
         ? '将为家人建立独立档案，家人无需单独注册。家人的体检、方案和深度分析都和你的分开。'
-        : /个人链接/.test(view.create_hint_zh) ? view.create_hint_zh.trim() : `${view.create_hint_zh.trim().replace(/[。.]?$/, '。')}也可以粘贴家人自己的健康数据服务个人链接。`),
+        : view.create_hint_zh.trim()),
       h('div', { className: 'lp-form-grid' },
         input('label_zh', '称呼', { placeholder: '如 爸爸、妈妈', autoFocus: true }),
         input('birth_year', '出生年份', { inputMode: 'numeric', placeholder: '例如 1960' }),
@@ -97,7 +98,8 @@ function AddPersonDialog(props: { view: PeopleView; onClose: () => void }): Reac
             options: [{ value: 'male', label: '男' }, { value: 'female', label: '女' }],
             onChange: (sex) => setForm({ ...form, sex }),
           })),
-        view.can_create_in_mirobody ? null : input('mcp_url', '家人的健康数据服务个人链接（选填）', {}, '', true)),
+        // A family member's own link is for installers (longpi.dev); LongPi creates family records by itself.
+        view.can_create_in_mirobody || !manualConnectionAllowed() ? null : input('mcp_url', '家人的健康数据服务个人链接（选填）', {}, '', true)),
       error ? h('div', { className: 'lp-callout lp-callout-warn', role: 'alert' },
         h(Icon, { name: 'warn', size: 14 }), h('span', { className: 'lp-callout-body' }, error)) : null,
       h('div', { className: 'lp-modal-actions' },

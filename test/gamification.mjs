@@ -144,17 +144,22 @@ try {
   assert.doesNotMatch(insightBody(21, ['预约血液科或消化科']), /年轻|付费/)
   assert.match(insightBody(21, ['预约血液科或消化科']), /21 天/)
 
+  // 0.8.0: a family member has a record of their own, so a 16-year-old is a record whose own age is 16; a record
+  // subject written by 0.7 (a sentence about 我爸) is dropped and no longer makes the holder's record a minor's.
   const childRecord = tempDir()
-  profile(childRecord, { subject: { relationship_zh: '父亲', age: 16, sex: 'male' } })
+  profile(childRecord, { birthYear: 2010, age: 16, sex: 'male' })
   const childView = syncEngage(childRecord, at('2026-07-27'))
   assert.equal(childView.codex.reason, 'minor')
-  assert.equal(childView.subject_zh, '父亲')
+  assert.equal(childView.subject_zh, null)
+  const legacy = tempDir()
+  profile(legacy, { subject: { relationship_zh: '父亲', age: 16, sex: 'male' } })
+  assert.notEqual(syncEngage(legacy, at('2026-07-27')).codex.reason, 'minor', 'a 0.7 record subject is ignored')
   const refused = prefsEngage(childRecord, { family: true }, at('2026-07-27'))
   assert.equal(refused.family.opted, false)
   assert.match(shareEngage(childRecord, { kind: 'recap' }, at('2026-07-27')).error ?? '', /成年人/)
 
   const parent = tempDir()
-  profile(parent, { subject: { relationship_zh: '父亲', age: 76, sex: 'male' } })
+  profile(parent, { birthYear: 1950, age: 76, sex: 'male' })
   noteSeasonContext(parent, { facts: anaemia, firstResult: true }, at('2026-07-27'))
   prefsEngage(parent, { pressure: true, family: true }, at('2026-07-27'))
   const closed = syncEngage(parent, at('2026-10-19'))

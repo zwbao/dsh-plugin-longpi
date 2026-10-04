@@ -43,7 +43,7 @@ export function peopleView(deps: CoreDeps) {
     can_create_in_mirobody: !('error_zh' in holder),
     // A link set in the installer's config (no saved connection) also reads records but cannot create accounts.
     create_hint_zh: !('error_zh' in holder) ? ''
-      : !readConnection(root) && deps.config().mcpUrl?.trim() ? '当前连接为手动填写的个人链接，无法为家人建档。可粘贴家人本人的健康数据服务个人链接。'
+      : !readConnection(root) && deps.config().mcpUrl?.trim() ? '当前的数据连接由安装时设置，暂时无法为家人建档。请先在「档案」的「数据连接」中点「重新连接」。'
         : holder.error_zh,
   }
 }

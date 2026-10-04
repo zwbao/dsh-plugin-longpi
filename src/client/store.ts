@@ -58,6 +58,8 @@ const listeners = new Set<() => void>()
 let version = 0
 let timersOn = false
 let pageUsers = 0
+/** The page or the 健康 pane on screen: what keeps the change stream open (the pill does not). */
+let liveUsers = 0
 let bridges = 0
 let heroUsers = 0
 let pending: { text: string; at: number; origin: PromptOrigin } | null = null
@@ -137,16 +139,17 @@ function stale(key: Key): boolean {
 }
 
 // Live updates cost connections: a browser opens at most six to one host over HTTP/1.1, and DSH keeps its own
-// streams open in every tab. So the change stream and the 10-minute poll run only while the LongPi page or the
-// 健康 pane is on screen in a visible tab; a background tab, or a tab that only shows the reminder pill, holds no
-// LongPi connection. Coming back reloads what is stale.
+// streams open in every tab. So the change stream is open only while the LongPi page or the 健康 pane is on screen
+// in a visible tab: a background tab, or a tab that only shows the reminder pill, holds no LongPi connection. The
+// 10-minute poll (short requests) runs in any visible tab that shows LongPi data, the pill included; a hidden tab
+// does not poll. Coming back reloads what is stale; a stream that opens again reloads what is on screen.
 let source: EventSource | null = null
 let sourceGone = false
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let revive: (() => void) | null = null
 
-function liveWanted(): boolean {
-  return pageUsers > 0 && typeof document !== 'undefined' && document.visibilityState !== 'hidden'
+function tabVisible(): boolean {
+  return typeof document !== 'undefined' && document.visibilityState !== 'hidden'
 }
 
 function closeLive(): void {
@@ -158,12 +161,17 @@ function closeLive(): void {
 
 /** Open or close the change stream and the poll to match what is on screen. */
 function syncLive(): void {
-  if (typeof window === 'undefined') return
-  if (!liveWanted()) {
+  if (typeof window === 'undefined' || !timersOn) return
+  if (!tabVisible()) {
     closeLive()
     return
   }
   if (pollTimer == null) pollTimer = setInterval(() => { for (const key of inUse()) void load(key) }, POLL_MS)
+  if (liveUsers <= 0) {
+    source?.close()
+    source = null
+    return
+  }
   if (source || sourceGone || typeof EventSource === 'undefined') return
   try {
     // 0.5.3: the server says when something changed (a chat turn saved a check-in, the coach wrote new surfaces,
@@ -179,6 +187,8 @@ function syncLive(): void {
       }
     }
     source = opened
+    // Changes while the stream was closed were not sent: what is on screen loads again now.
+    for (const key of inUse()) void load(key, 'fresh')
   } catch {
     source = null
   }
@@ -188,6 +198,8 @@ function startTimers(): void {
   if (timersOn || typeof window === 'undefined') return
   timersOn = true
   revive = () => {
+    // A stream that failed (a restart, a 404 from an older server) is tried again when the tab comes back.
+    sourceGone = false
     syncLive()
     if (document.visibilityState === 'hidden') return
     for (const key of inUse()) if (stale(key)) void load(key)
@@ -200,6 +212,7 @@ function startTimers(): void {
 /** Plugin unload or reload: give back the stream, the poll and the listeners (a reloaded client starts its own). */
 export function stopTimers(): void {
   closeLive()
+  sourceGone = false
   if (revive && typeof window !== 'undefined') {
     window.removeEventListener('focus', revive)
     document.removeEventListener('visibilitychange', revive)
@@ -349,13 +362,23 @@ export function putFollowup(raw: unknown): void {
  * mounted: a host that keeps a hidden panel mounted must not silence the pill.
  */
 export function usePageShown(ref: React.RefObject<HTMLElement>): void {
+  useShown(ref, true)
+}
+
+/** The 健康 pane on screen: live updates like the page, but the pill and the welcome card stay as they are. */
+export function useLiveShown(ref: React.RefObject<HTMLElement>): void {
+  useShown(ref, false)
+}
+
+function useShown(ref: React.RefObject<HTMLElement>, page: boolean): void {
   React.useEffect(() => {
     const node = ref.current
     let shown = false
     const set = (next: boolean) => {
       if (next === shown) return
       shown = next
-      pageUsers += next ? 1 : -1
+      if (page) pageUsers += next ? 1 : -1
+      liveUsers += next ? 1 : -1
       syncLive()
       emit()
     }
@@ -369,7 +392,7 @@ export function usePageShown(ref: React.RefObject<HTMLElement>): void {
       observer.disconnect()
       set(false)
     }
-  }, [ref])
+  }, [ref, page])
 }
 
 /** The home greeting counts itself while mounted: its row already lists today's check-ins, so the pill stays away. */

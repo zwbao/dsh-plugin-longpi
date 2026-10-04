@@ -1,5 +1,6 @@
-// The person's latest message per session, as the guard saw it, so a tool can check that a quote it was
-// given is really the person's words (remember_for_me, log_care_visit).
+// The person's latest message per session in LongPi's workspace (agents/orchestrator.ts keeps it at each step),
+// so a tool can check that a quote it was given is really the person's words (remember_for_me, log_care_visit),
+// and the memory distiller reads what was just said.
 
 const last = new Map<string, { text: string; at: number }>()
 

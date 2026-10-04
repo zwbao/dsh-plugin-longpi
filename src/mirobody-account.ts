@@ -89,7 +89,17 @@ async function mintLink(fetchImpl: typeof fetch, base: string, token: string): P
  */
 export async function ensureLocalPairing(
   root: string,
-  opts: { base: string; configuredUrl?: string; force?: boolean; fetchImpl?: typeof fetch; now?: () => number },
+  opts: { base: string; configuredUrl?: string; force?: boolean; reclaim?: boolean; fetchImpl?: typeof fetch; now?: () => number },
+): Promise<PairResult> {
+  const result = await pairOnce(root, opts)
+  if (result.status === 'error') lastFailure.set(root, result.error_zh)
+  else if (result.status !== 'skipped' || opts.reclaim) lastFailure.delete(root)
+  return result
+}
+
+async function pairOnce(
+  root: string,
+  opts: { base: string; configuredUrl?: string; force?: boolean; reclaim?: boolean; fetchImpl?: typeof fetch; now?: () => number },
 ): Promise<PairResult> {
   const now = opts.now ?? Date.now
   if (!opts.force && now() - (lastCheck.get(root) ?? 0) < CHECK_EVERY_MS) return { status: 'ok' }
@@ -99,12 +109,13 @@ export async function ensureLocalPairing(
   if (!isLocalBase(base)) return { status: 'skipped', why: 'not_local' }
   const saved = readConnection(root)
   let account = readAccount(root)
-  // A link someone set up by hand (installer flag or pasted), with no account behind it: theirs, not ours.
-  if (!account && ((saved?.mcp_url && !saved.mcp_token) || (!saved && opts.configuredUrl?.trim()))) {
+  // A link someone set up by hand (installer flag or pasted), with no account behind it: theirs, not ours —
+  // unless the person asked to reconnect (reclaim): then LongPi pairs its own account and its link is used.
+  if (!opts.reclaim && !account && ((saved?.mcp_url && !saved.mcp_token) || (!saved && opts.configuredUrl?.trim()))) {
     return { status: 'skipped', why: 'manual_connection' }
   }
   try {
-    if (saved?.mcp_url && saved.mcp_token) {
+    if (!opts.reclaim && saved?.mcp_url && saved.mcp_token) {
       const exp = tokenExpiry(saved.mcp_token)
       if (exp === null || exp - now() > RENEW_BEFORE_MS) return { status: 'ok' }
       if (!account) return { status: 'ok' }          // an account the person signed into themselves: kept as is
@@ -135,10 +146,17 @@ export async function ensureLocalPairing(
 }
 
 const lastCheck = new Map<string, number>()
+const lastFailure = new Map<string, string>()
+
+/** Why the last pairing with the local health data service failed, in words for the page; '' when it did not. */
+export function pairingProblem(root: string): string {
+  return lastFailure.get(root) ?? ''
+}
 
 /** Tests. */
 export function resetPairingThrottle(): void {
   lastCheck.clear()
+  lastFailure.clear()
 }
 
 export function hasAccount(root: string): boolean {

@@ -51,7 +51,7 @@ export function RecordsStatusLine(props: { journey: Journey; inline?: boolean })
   }
   return h(tag, { className: 'lp-status' },
     h('span', { className: 'lp-statusdot', 'aria-hidden': true }),
-    recordConnected(records.status) ? '还没有体检记录' : '正在连接健康数据服务…')
+    recordConnected(records.status) ? '还没有体检记录' : '尚未连接健康数据服务（可在「档案」的「数据连接」中重新连接）')
 }
 
 /** 2025 年 3 月, never 2025-03 (P1-9). */

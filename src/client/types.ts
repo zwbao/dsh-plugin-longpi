@@ -183,6 +183,8 @@ export interface Connection {
   token_set: boolean
   status: 'ok' | 'error' | 'none'
   error: string
+  /** Why pairing with the health data service on this computer failed, when it did. */
+  pairing_error: string
   summary: RecordsSummary | null
 }
 

@@ -1,12 +1,13 @@
 // One archive of the local LongPi store, without secrets, plus a pointer to the person's Mirobody.
 
 import { lstatSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join, relative, sep } from 'node:path'
 import { readConnection } from '../connection.ts'
 import { disclosureCopy } from './disclosure.ts'
 
-const MAX_FILE = 8_000_000
-const MAX_TOTAL = 30_000_000
+const MAX_FILE = 25_000_000
+const MAX_TOTAL = 80_000_000
 
 export interface MirobodyLink {
   url: string
@@ -84,15 +85,20 @@ function zipStore(files: Array<{ name: string; data: Buffer }>): Buffer {
 // account for the health data service, reminder channels, logs, page state, the workspace folder, family members'
 // stores) is left out, so a file added later stays out until it is listed here.
 const KEEP_FILES = new Set([
-  'profile.json', 'plan_prefs.json', 'plan.jsonl', 'adherence.jsonl', 'self_measurements.jsonl', 'wearable.json',
-  'medication_statements.jsonl', 'memory.json', 'triage.json', 'feedback.jsonl', 'history.jsonl', 'privacy/consents.jsonl',
+  'profile.json', 'plan_prefs.json', 'self_measurements.jsonl', 'medication_statements.jsonl', 'memory.json', 'memory_log.jsonl',
+  'feedback.jsonl', 'history.jsonl', 'privacy/consents.jsonl',
+  // methylation, microbiome, protein and diagnosis tables saved on this computer only (stores/disk.ts)
+  'methylation.json', 'taxa.json', 'proteins.json', 'conditions.json',
 ])
-const KEEP_DIRS = ['briefs/', 'datain/', 'analysis/', 'science/', 'engage/']
+// interventions/: the plan versions and check-ins; schedule/: confirmed visits and retests.
+const KEEP_DIRS = ['interventions/', 'schedule/', 'briefs/', 'datain/', 'analysis/', 'science/', 'engage/']
+/** An import in progress leaves these next to analysis/current for a moment. */
+const TRANSIENT = /(?:^|\/)current\.(?:next|old)-/
 
 /** Whether a path (relative, with /) is outside what the archive carries. Directories on the way are walked. */
 function skip(name: string, isDir = false): boolean {
   if (!name || name.includes('..')) return true
-  if (name.endsWith('.tmp') || name.includes('.tmp-') || name.includes('.damaged-')) return true
+  if (name.endsWith('.tmp') || name.includes('.tmp-') || name.includes('.damaged-') || TRANSIENT.test(name)) return true
   if (isDir) return !(KEEP_DIRS.some((dir) => `${name}/`.startsWith(dir)) || name === 'privacy')
   return !(KEEP_FILES.has(name) || KEEP_DIRS.some((dir) => name.startsWith(dir)))
 }
@@ -120,6 +126,11 @@ function walk(root: string, dir: string, out: string[]): void {
   }
 }
 
+// Any personal MCP path (a family member's link, one minted for a deep analysis) and any JWT, even those not saved
+// as this person's connection; the home folder in an absolute path becomes ~.
+const MCP_PATH = /(\/mcp\/)[A-Za-z0-9_-]{16,}/g
+const JWT = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g
+
 function scrub(data: Buffer, secrets: string[]): Buffer {
   let text: string | null = null
   try {
@@ -132,6 +143,9 @@ function scrub(data: Buffer, secrets: string[]): Buffer {
   for (const secret of secrets) {
     if (secret.length >= 6) next = next.split(secret).join('[redacted]')
   }
+  next = next.replace(MCP_PATH, '$1[redacted]').replace(JWT, '[redacted]')
+  const home = homedir()
+  if (home.length > 1) next = next.split(home).join('~').split(JSON.stringify(home).slice(1, -1)).join('~')
   return next === text ? data : Buffer.from(next, 'utf8')
 }
 
@@ -162,18 +176,24 @@ export function buildExport(dataDir: string, fallbackMcpUrl = ''): { zip: Buffer
   const files: Array<{ name: string; data: Buffer }> = []
   let total = 0
   const included: string[] = []
+  const tooLarge: string[] = []
   for (const name of names) {
-    if (total >= MAX_TOTAL) break
     const path = join(dataDir, ...name.split('/'))
     let data: Buffer
     try {
-      if (statSync(path).size > MAX_FILE) continue
+      if (statSync(path).size > MAX_FILE) {
+        tooLarge.push(name)
+        continue
+      }
       data = readFileSync(path)
     } catch {
       continue
     }
     data = scrub(data, secrets)
-    if (total + data.length > MAX_TOTAL) continue
+    if (total + data.length > MAX_TOTAL) {
+      tooLarge.push(name)
+      continue
+    }
     files.push({ name, data })
     included.push(name)
     total += data.length
@@ -190,6 +210,7 @@ export function buildExport(dataDir: string, fallbackMcpUrl = ''): { zip: Buffer
     copy.data_flow.session_log,
     '',
     `文件 ${included.length} 个。`,
+    ...(tooLarge.length > 0 ? ['', `以下文件过大，未放入压缩包，仍保存在这台电脑上：${tooLarge.join('、')}。`] : []),
   ].join('\n')
   files.push({ name: '说明.txt', data: Buffer.from(note, 'utf8') })
   const now = new Date()

@@ -57,6 +57,32 @@ function fakeMirobody(opts = {}) {
   const r2 = await mod.ensureLocalPairing(mkdtempSync(join(tmpdir(), 'pair-')), { base: 'http://127.0.0.1:18060', configuredUrl: 'http://127.0.0.1:18060/mcp/INSTALLER', force: true, fetchImpl: m.fetchImpl })
   assert.equal(r2.status, 'skipped')
 }
+// 重新连接 (reclaim, 0.8.0): the person asks; LongPi pairs its own account and its link replaces one set by hand
+// (an installer's demo account, an expired link). Nothing to fill in.
+{
+  const root = mkdtempSync(join(tmpdir(), 'pair-'))
+  saveConnection(root, { mcp_url: 'http://127.0.0.1:18060/mcp/DEMOACCOUNT', mcp_token: '' })
+  const m = fakeMirobody()
+  const r = await mod.ensureLocalPairing(root, { base: 'http://127.0.0.1:18060', configuredUrl: 'http://127.0.0.1:18060/mcp/DEMOACCOUNT', force: true, reclaim: true, fetchImpl: m.fetchImpl })
+  assert.equal(r.status, 'paired')
+  const c = readConnection(root)
+  assert.ok(c.mcp_token, 'the new link has a token (uploads and family members work)')
+  assert.ok(!c.mcp_url.endsWith('DEMOACCOUNT'), 'the hand-set link is replaced')
+  // a working own link is minted again on request (an expired or replaced link is repaired)
+  const before = readConnection(root).mcp_url
+  const again = await mod.ensureLocalPairing(root, { base: 'http://127.0.0.1:18060', force: true, reclaim: true, fetchImpl: m.fetchImpl })
+  assert.equal(again.status, 'paired'); assert.notEqual(readConnection(root).mcp_url, before); assert.equal(m.users.size, 1, 'never a second account')
+  assert.equal(mod.pairingProblem(root), '')
+}
+// why pairing failed is kept for the page, and cleared once it works
+{
+  const root = mkdtempSync(join(tmpdir(), 'pair-'))
+  const down = await mod.ensureLocalPairing(root, { base: 'http://127.0.0.1:18060', force: true, fetchImpl: fakeMirobody({ down: true }).fetchImpl })
+  assert.equal(down.status, 'error')
+  assert.match(mod.pairingProblem(root), /健康数据服务/)
+  await mod.ensureLocalPairing(root, { base: 'http://127.0.0.1:18060', force: true, fetchImpl: fakeMirobody().fetchImpl })
+  assert.equal(mod.pairingProblem(root), '')
+}
 // service down: an error, nothing written
 {
   const root = mkdtempSync(join(tmpdir(), 'pair-'))

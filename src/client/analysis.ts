@@ -116,7 +116,8 @@ export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone
   const running = status?.runs.find((r) => r.active) ?? null
   React.useEffect(() => {
     if (!running) return undefined
-    const timer = setInterval(load, 15_000)                 // stage progress while a run is going
+    // stage progress while a run is going; a hidden tab does not ask
+    const timer = setInterval(() => { if (typeof document === 'undefined' || document.visibilityState !== 'hidden') void load() }, 15_000)
     return () => clearInterval(timer)
   }, [running?.id, load])
 

@@ -4,33 +4,48 @@
 
 给使用者
 
-- 去掉了安全守卫。对话不再逐条判断是否急症、不再附加「安全提示」、不再在回复后补写或更正，也不再插入事先写好的标准回答。急症时建议拨打 120、不给个人用药剂量等基本原则仍写在 LongPi 的角色设定中，由模型遵循。保存方案、发起深度分析之前，仍需要你在 DeepSeek Harness 中确认。
-- LongPi 只在「健康对话」工作区中起作用。其他工作区的对话即使谈到健康，也不会附加 LongPi 的说明或健康页内容。
-- 「下载完整档案」只包含你本人的档案、方案、打卡、自测、用药、记下的事项、简报和深度分析结果，不再包含连接健康数据服务的账号、密码和链接，也不含提醒渠道设置和家人的档案。
-- 「添加家人」此前在本机的健康数据服务上始终失败，现已修复。
-- 在对话中提到「我妈」「我爸」，不再把你本人的档案改为家人的档案。
-- 安装和更新不再隐藏 DeepSeek Harness 自己的名称标识；从旧版本更新时会自动恢复。
-- 同时打开多个 DeepSeek Harness 标签页时，健康页不再停在加载状态；读取超过 25 秒会给出提示。只有健康页或右侧「健康」栏显示在屏幕上时，LongPi 才保持实时更新。
-- 档案页和设置页不再显示填写地址、令牌、邮箱和密码的表单（安装人员可在浏览器中设置 longpi.dev = 1 后使用）。
+- 插件不再检查对话中的急症和用药问题：不再逐条判断、不再附加安全提示、不再在回复后补写或更正，也不再插入事先写好的标准回答。遇到急症，请直接拨打 120，不要等待回复。基本原则（急症时先说拨打 120，不给个人用药剂量）仍写在 LongPi 的设定中，由模型遵守。保存方案、你主动发起深度分析之前，仍需要你在 DeepSeek Harness 中确认。
+- 随之变化：在对话中回复同意语句不再算作同意，请在健康页完成同意；「别天天提醒我」「不要限时进食」等说法不再按固定规则立即记下，由对话结束后的后台整理记录，起草方案时提出的要求仍会保存。
+- LongPi 的设定和健康页内容只在「健康对话」工作区中生效；健康页上的提问会打开「健康对话」再填入问题。其他工作区的对话不会附加 LongPi 的内容。
+- 「下载完整档案」只包含当前查看的档案：基本情况、方案与打卡、日程、自测、用药与病情、记下的事项、医生简报、深度分析结果，以及只保存在这台电脑上的甲基化、菌群、蛋白组和诊断表。不再包含连接健康数据服务的账号、密码和链接，也不含提醒渠道设置和其他家人的档案。0.8.0 之前下载的档案压缩包含有连接账号和密码，建议删除。
+- 「添加家人」此前在这台电脑的健康数据服务上始终失败，现已修复。
+- 「数据连接」卡片新增「重新连接」按钮，不需要填写任何内容；连接不上时会显示原因。档案页和设置页不再显示填写地址、令牌、邮箱和密码的表单。
+- 在对话中提到「我妈」「我爸」，不再把你本人的档案改为家人的档案；旧版本因此写入的错误信息会被忽略。
+- 用 `--with-mirobody` 安装时，不再把演示账号当作你本人的记录，LongPi 会为你建立自己的账号。
+- 重新运行安装脚本时，会恢复 DeepSeek Harness 自己的名称标识（旧版本把它隐藏了）；只用 `dsh plugin update` 更新不会恢复。
+- 同时打开多个 DeepSeek Harness 标签页时，健康页不再停在加载状态；读取超过 90 秒会给出提示。实时更新只在健康页或右侧「健康」栏显示在屏幕上时进行。
+- 升级方法：重新运行安装脚本，然后重启 DeepSeek Harness，并刷新所有已打开的标签页。
 
 English
 
 - The safety guard is removed (owner decision): no message labels, rule layer, emergency scripts, answer cards
   (playbook, OWNER_HINT), completeness corrections, dose check, advise_on_substance, GET /api/longpi/advice, or the
-  evidence_explainer agent. Plan-save and deep-analysis approvals stay (tools-approval.ts, decoupled). Without the
-  DeepSeek consent, egress still holds health text; the local first-aid replacement is gone. `guardScope` is still
-  accepted in config and ignored; the installer no longer writes it.
-- The orchestrator injects persona, rules and the page snapshot only in LongPi's own workspace and never into a
-  sub-agent (C-08). remember-rules no longer writes profile.subject from 我妈 / 我爸 (H-03).
-- Export is an allowlist of the person's records; the link, token, account email and password are scrubbed from
-  every kept file; local date in the file name (A-01).
-- Managed members are created at /api/user/virtual (H-01).
-- Installer: no `ui-brand-official` row in LongPi's block (an older one is removed on the next install or update);
-  Mirobody logs under umask 077, 0600 (F-13, J-07, F-9).
-- Client: the change stream and the 10-minute poll run only while the page or the 健康 pane is on screen in a
-  visible tab; reads time out after 25 s; stopTimers on unload; the manual connection form needs localStorage
-  longpi.dev = 1 (F-1, F-3, F-5, E-21).
-- Persona: crisis lines 12356 / 400-161-9995; no "paste the MCP address"; no guard-note instructions.
+  evidence_explainer agent. Plan-save and person-started deep-analysis approvals stay (tools-approval.ts,
+  decoupled). The guard's deterministic chat writes (exclusions, drinking, avoidance, consent by phrase) go with it;
+  the memory distiller and plan constraints remain. The vendored Mirobody plugin's own rule notice is dropped in
+  every workspace. Without the DeepSeek consent, the egress wrapper on llm.stream still holds health text, now
+  opening with 120 and 12356 (whether DSH's main loop goes through that wrapper is not verified end to end).
+  `guardScope` and agents.evidence_explainer are still accepted in config and ignored.
+- Orchestrator: persona, rules and the page snapshot only in LongPi's own workspace; a sub-agent (header.origin
+  "subagent" or delegationDepth > 0) gets neither persona nor write tools nor snapshot; a session the person forked
+  is theirs and gets the snapshot. The person's latest words are kept at each step there (rememberPersonText), for
+  quote checks (remember_for_me, log_care_visit) and the distiller (C-08, H-03).
+- profile.subject is accepted and dropped on read; remember-rules no longer writes it.
+- Export is an allowlist of the person's records (interventions/, schedule/, briefs/, datain/, analysis/,
+  science/, engage/, the on-device stores, memory, consents); the link, token, account email and password, any
+  personal MCP path and any JWT are scrubbed from every kept file, the home folder becomes ~; oversized files are
+  named in the note; local date in the file name (A-01).
+- Managed members are created at /api/user/virtual (H-01). POST /api/longpi/connection/reconnect pairs LongPi's
+  own account with the local Mirobody, replacing a hand-set link; GET /api/longpi/connection carries
+  pairing_error. The installer no longer connects the demo account with --with-mirobody.
+- Installer: no `ui-brand-official` row in LongPi's block, and the row a 0.7 installer left is stripped from every
+  profile's block; Mirobody logs are 0600 (umask 077 for new logs, chmod for existing ones) (F-13, J-07, F-9).
+- Client: the change stream only while the page or the 健康 pane is on screen in a visible tab (reopening reloads
+  what is shown); the 10-minute poll in any visible tab; reads time out after 90 s; stopTimers on unload; page
+  questions open 健康对话 (C-04); the manual connection form needs localStorage longpi.dev = 1 (F-1, F-3, F-5, E-21).
+- Persona and skills: crisis lines 12356 / 400-161-9995; one emergency order (120 first, one immediate action,
+  nothing else that turn); no "paste the MCP address"; longpi-boundary no longer describes interception and takes
+  supplement numbers only from tool results.
 
 ## 0.7.0
 

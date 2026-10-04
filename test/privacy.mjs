@@ -233,6 +233,17 @@ try {
   writeFileSync(join(dataDir, 'notifier', 'LongPi.app', 'x'), 'binary')
   mkdirSync(join(dataDir, 'people', 'pmom'), { recursive: true })
   writeFileSync(join(dataDir, 'people', 'pmom', 'profile.json'), '{"displayName":"妈妈"}\n')
+  // The person's own records, written by the real writers (not by hand): plan and check-ins under interventions/,
+  // a confirmed visit under schedule/, a methylation table kept on this computer only.
+  mod.savePlan(dataDir, mod.normalizePlan({ title: '先动起来', items: [{ category: 'exercise', title: '快走', start: '2026-09-01' }] }, { today: '2026-09-28', medications: [], previous: null }).plan)
+  mod.addCheckIns(dataDir, [{ item: '快走', date: '2026-09-28', done: true }], { today: '2026-09-28', source: 'board' })
+  const { saveEvent, suggestEvent, confirmEvent } = await import('../src/ux/schedule.ts')
+  saveEvent(dataDir, confirmEvent(suggestEvent({ date: '2026-10-08', kind: 'visit', title_zh: '血液科复诊', brief_zh: '', questions_zh: [] })))
+  const { writeStoreDocument } = await import('../src/stores/disk.ts')
+  writeStoreDocument(dataDir, 'methylation', [{ cpg: 'cg00000029', beta: 0.42 }])
+  // A kept file that happens to echo the service's secrets: the bytes are scrubbed, the file stays.
+  mkdirSync(join(dataDir, 'briefs'), { recursive: true })
+  writeFileSync(join(dataDir, 'briefs', 'echo.json'), `${JSON.stringify({ note: 'link http://127.0.0.1:18060/mcp/x_PERSONALPATH token SECRETTOKENVALUE mail longpi-holder@example.invalid other http://127.0.0.1:18060/mcp/abcdefghijklmnopqrstuv jwt eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ4eHh4eHgifQ.c2lnbmF0dXJlc2ln' })}\n`)
   const exported = await call(host, 'GET', '/api/longpi/privacy/export')
   assert.equal(exported.status, 200)
   assert.match(exported.headers['content-type'], /application\/zip/)
@@ -249,7 +260,11 @@ try {
   for (const left of ['connection.json', 'mirobody-account.json', 'followup.json', 'usage.jsonl', 'notifier/', 'workspace/', 'people']) {
     assert.ok(!names.includes(left), `${left} is not in the archive`)
   }
-  for (const secret of ['SECRETTOKENVALUE', 'longpi-holder@example.invalid', 'PASSWORD-SHOULD-NOT-LEAK', 'x_PERSONALPATH', 'hooks.example.invalid']) {
+  for (const kept of ['interventions/', 'schedule/', 'methylation.json', 'briefs/echo.json']) {
+    assert.ok(names.includes(kept), `${kept} is in the archive (the person's own records)`)
+  }
+  assert.match(listed.stdout, /\[redacted\]/, 'secrets inside a kept file are replaced')
+  for (const secret of ['SECRETTOKENVALUE', 'longpi-holder@example.invalid', 'PASSWORD-SHOULD-NOT-LEAK', 'x_PERSONALPATH', 'hooks.example.invalid', 'abcdefghijklmnopqrstuv', 'eyJhbGciOiJIUzI1NiJ9']) {
     assert.ok(!listed.stdout.includes(secret), `${secret} is nowhere in the archive`)
   }
   assert.doesNotMatch(listed.stdout, /~\/\.dsh|已移除连接令牌/, 'the note names no folder and makes no claim the archive does not keep')

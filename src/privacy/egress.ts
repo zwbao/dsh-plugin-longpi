@@ -3,7 +3,7 @@
 
 const HEALTH = /血红蛋白|血糖|铁蛋白|胸痛|心梗|胸闷|体检|表型年龄|血压|mmol|g\/L|用药|怀孕|中风|头晕|过敏|自杀|不想活|心口|喘/
 
-export const CONSENT_HOLD_ZH = '你尚未同意把健康对话发给 DeepSeek，因此本次不发送健康信息。请在开始页或档案中选择「我知道了，同意把健康对话发给 DeepSeek」。'
+export const CONSENT_HOLD_ZH = '如果正在发生急症，请立即拨打 120；如有伤害自己的想法，请拨打全国心理援助热线 12356。你尚未同意把健康对话发给 DeepSeek，因此本次不发送健康信息。请在开始页或档案中选择「我知道了，同意把健康对话发给 DeepSeek」。'
 
 /** `blob` is the whole call (system prompt included). `personText` is only what the person typed. */
 export function modelEgress(granted: boolean, blob: string, personText = blob): 'send' | 'hold' {

@@ -18,13 +18,13 @@ export function holderAuth(root: string): HolderAuth | { error_zh: string } {
     return { error_zh: '当前连接为手动填写的个人链接，无法为家人建档。可粘贴家人本人的健康数据服务个人链接。' }
   }
   if (!saved?.mcp_token || !saved.mcp_url) {
-    return { error_zh: 'LongPi 尚未连接这台电脑上的健康数据服务，暂时无法为家人建档。请确认服务正在运行，稍后再试。' }
+    return { error_zh: 'LongPi 尚未连接这台电脑上的健康数据服务，暂时无法为家人建档。请先在「档案」的「数据连接」中点「重新连接」。' }
   }
   try {
     const url = new URL(saved.mcp_url)
     return { base: `${url.protocol}//${url.host}`, token: saved.mcp_token }
   } catch {
-    return { error_zh: '无法读取已保存的健康数据服务地址，请在设置页重新登录。' }
+    return { error_zh: '无法读取已保存的数据连接，请在「档案」的「数据连接」中点「重新连接」。' }
   }
 }
 
@@ -76,7 +76,7 @@ export async function ensureMemberLink(root: string, person: Person, fetchImpl: 
     try {
       saveMemberLink(root, person, await mintMemberLink(auth, person.mirobody_user_id, fetchImpl), now)
     } catch (e) {
-      error = `${person.label_zh}的链接续期失败：${e instanceof Error ? e.message : String(e)}。请在设置页重新登录你的健康数据服务账号。`
+      error = `${person.label_zh}的链接续期失败：${e instanceof Error ? e.message : String(e)}。请在「档案」的「数据连接」中点「重新连接」。`
     }
   }
   updatePerson(root, person.id, { link_error: error })

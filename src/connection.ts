@@ -213,7 +213,7 @@ function timeoutText(timeoutMs: number): string {
 function refusedText(result: McpCallResult, secrets: string[], timeoutMs: number): string {
   const detail = redact(result.error || '', secrets)
   if (result.error_kind === 'unavailable' && /time(?:d)? ?out/i.test(result.error ?? '')) return timeoutText(timeoutMs)
-  if (result.error_kind === 'denied') return `健康数据服务拒绝了该地址或令牌${detail ? `（${detail}）` : ''}。请重新登录后再试。`
+  if (result.error_kind === 'denied') return `健康数据服务拒绝了该地址或令牌${detail ? `（${detail}）` : ''}。请在「档案」的「数据连接」中点「重新连接」。`
   if (result.error_kind === 'unavailable') return `无法连接该地址${detail ? `（${detail}）` : ''}。请确认健康数据服务正在运行且地址无误。`
   return `读取记录目录失败${detail ? `（${detail}）` : ''}。`
 }

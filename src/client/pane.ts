@@ -9,7 +9,7 @@ import { BOUNDARY_FALLBACK } from './constants.ts'
 import { Icon } from './icons.ts'
 import { Overview } from './overview.ts'
 import type { ResultTarget } from './results.ts'
-import { requestView, useJourney, usePageShown, useTracking, type PageTab, type ViewRequest } from './store.ts'
+import { requestView, useJourney, useLiveShown, useTracking, type PageTab, type ViewRequest } from './store.ts'
 import type { Face } from './types.ts'
 import { Btn, Skeleton, useNotice } from './ui.ts'
 
@@ -60,7 +60,7 @@ export function HealthPane(props: Partial<Face>): React.ReactElement {
   const [notice, notify] = useNotice()
   // On screen, the pane gets live updates like the page (store.ts opens the change stream only then).
   const root = React.useRef<HTMLDivElement>(null)
-  usePageShown(root)
+  useLiveShown(root)
   // Everything that needs more room than the column opens the page there.
   const toPage = (tab: PageTab, request?: Omit<ViewRequest, 'tab'>) => {
     requestView({ tab, ...request })

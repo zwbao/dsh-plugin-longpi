@@ -148,6 +148,8 @@ export function normalizeProfile(input: unknown): { ok: true; profile: Profile }
   if (!consent.ok) return consent
   const consents = consentsOf(raw.consents)
   if (!consents.ok) return consents
+  // 0.8.0: whose record this is never comes from the profile any more (each family member has a record of their
+  // own). A subject written by 0.7 from a sentence about 我妈 / 我爸 is accepted and dropped, so it is gone on read.
   const subject = subjectOf(raw.subject)
   if (!subject.ok) return subject
   return {
@@ -155,7 +157,6 @@ export function normalizeProfile(input: unknown): { ok: true; profile: Profile }
     profile: {
       displayName, birthYear: birthYear.value, age: age.value, sex, risk, focus: focus.value, consent: consent.value, consents: consents.value,
       ...(riskUnknown.value.length > 0 ? { riskUnknown: riskUnknown.value } : {}),
-      ...(subject.value ? { subject: subject.value } : {}),
     },
   }
 }

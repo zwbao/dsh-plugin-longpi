@@ -329,9 +329,26 @@ try {
   const codingHealth = await ownStep({ ...codingAgent, session: { ...codingAgent.session, id: 'code-2' } }, '我的血红蛋白偏低要紧吗？顺便帮我诊断一下这个 bug')
   assert.equal(codingHealth.messages.filter((message) => message.source?.kind === 'plugin' && message.source?.plugin === 'dsh-plugin-longpi').length, 0, 'health talk elsewhere gets nothing from LongPi')
   // nor does a sub-agent inside the health workspace: its task comes from its parent
-  const subAgent = { ...healthAgent, session: { ...healthAgent.session, id: 'health-sub', header: { ...healthAgent.session.header, parentSession: healthAgent.session.id } } }
+  const subAgent = { ...healthAgent, session: { ...healthAgent.session, id: 'health-sub', header: { ...healthAgent.session.header, parentSession: healthAgent.session.id, origin: 'subagent', delegationDepth: 1 } } }
   const sub = await ownStep(subAgent, '我最近睡得不好')
   assert.equal(sub.messages.filter((message) => message.source?.form === 'snapshot').length, 0, 'no snapshot for a sub-agent')
+  assert.equal(mod.lastPersonText('health-sub'), '', 'a sub-agent\'s task text is not the person\'s words')
+  // a session the person forked from another is theirs: it gets the snapshot (parentSession alone is not a sub-agent)
+  const forked = await ownStep({ ...healthAgent, session: { ...healthAgent.session, id: 'health-fork', header: { ...healthAgent.session.header, parentSession: healthAgent.session.id } } }, '我最近睡得不好')
+  assert.equal(forked.messages.filter((message) => message.source?.form === 'snapshot').length, 1, 'a forked health session gets the snapshot')
+  // the person's words are kept by the real pre-step (no manual seeding), only in the health workspace
+  await ownStep(codingAgent, '我在写代码，顺便说我要减到 70 公斤')
+  assert.equal(mod.lastPersonText('code-1'), '', 'words in another workspace are not kept')
+  // the vendored Mirobody plugin's own rule notice is dropped in every workspace (LongPi has no guard since 0.8.0)
+  {
+    const notice = { role: 'user', source: { kind: 'plugin', plugin: 'dsh-plugin-mirobody', form: 'notice' }, content: [{ type: 'text', text: '可拨打 988。' }] }
+    let decision = { kind: 'enter', messages: [userMessage('胸口很痛'), notice] }
+    for (const listener of preSteps.slice().reverse()) {
+      const inner = decision
+      decision = await listener({ agent: codingAgent, messages: inner.messages, turn: 1, step: 1, signal: new AbortController().signal }, async () => inner)
+    }
+    assert.equal(decision.messages.some((message) => message.source?.plugin === 'dsh-plugin-mirobody'), false, 'the Mirobody notice is dropped')
+  }
 
   // --- 5. M1: brief, visit follow-up, the plan adapts --------------------------------------------------
   const briefTool = await host.tools.get('prepare_doctor_brief').execute({})
@@ -361,7 +378,7 @@ try {
   assert.equal(afterBooking.next.action, 'doctor')
   // visited, in the chat, with the doctor's words
   const sessionAgent = { session: { id: 'health-1' } }
-  mod.rememberPersonText('health-1', '看完了，医生说是缺铁性贫血，开了铁剂，让我 3 个月后复查，还要做个胃镜')
+  await ownStep(healthAgent, '看完了，医生说是缺铁性贫血，开了铁剂，让我 3 个月后复查，还要做个胃镜', 2)
   const visit = await host.tools.get('log_care_visit').execute({ status: 'visited', visit_date: '2026-09-22', outcome: '缺铁性贫血，开了铁剂，3 个月后复查，还要做胃镜', quote: '医生说是缺铁性贫血' }, { agent: sessionAgent })
   assert.equal(visit.ok, true)
   assert.match(visit.saved_zh, /已看过医生 (2026 年 )?9 月 22 日/)
@@ -392,7 +409,7 @@ try {
   assert.equal(inherited.item.outcome_zh, '缺铁，开了药', 'a leading 医生说 is not doubled')
 
   // remember_for_me: a quote from their message is confirmed; one that is not stays unconfirmed
-  mod.rememberPersonText('health-1', '以后别给我安排限时进食了，我试过受不了')
+  await ownStep(healthAgent, '以后别给我安排限时进食了，我试过受不了', 2)
   const kept = await host.tools.get('remember_for_me').execute({ op: 'add', kind: 'exclusion', text: '不要限时进食', quote: '别给我安排限时进食' }, { agent: sessionAgent })
   assert.equal(kept.saved.confirmed, true)
   assert.ok(mod.readPlanPrefs(ownerDir).excluded_phrases.includes('限时进食'), 'the planner sees it')

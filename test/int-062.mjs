@@ -263,10 +263,6 @@ try {
   assert.match(hbOnly.sentence_zh, /全科或血液科，尽量在 1 到 2 周内就诊/)
   assert.doesNotMatch(hbOnly.sentence_zh, /消化科/)
 
-  // --- after the gates: the yam steer fires when the heme-iron foods are missing -------------------------
-  const yamSteer = mod.steerNeed ? mod.steerNeed('吃山药能补铁吗？', '山药含铁很少，补不了铁。请先去看医生。') : null
-  if (mod.steerNeed) assert.match(yamSteer?.say ?? '', /红肉/, 'a reply without the heme-iron foods is steered')
-
   // --- 7. 总览: each fact once, the top fact first, one body-age card ------------------------------------
   const doctorJourney = {
     next: { action: 'doctor', title_zh: '请先去看医生：血红蛋白 114 g/L 偏低，平均红细胞体积 72.4 fL 偏低，铁蛋白 8 ng/mL 偏低', detail_zh: '' },

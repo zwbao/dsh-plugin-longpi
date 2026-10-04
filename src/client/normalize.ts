@@ -533,6 +533,7 @@ export function normalizeConnection(input: unknown): Connection {
     token_set: raw.token_set === true,
     status: oneOf(raw.status, CONNECTION_STATES, 'none'),
     error: str(raw.error),
+    pairing_error: str(raw.pairing_error),
     summary: summaryOf(raw.summary),
   }
 }

@@ -21,7 +21,7 @@ import { injectStyles } from './styles/index.ts'
 import { stopTimers } from './store.ts'
 import { registerClientModules } from './modules.ts'
 import { IntroCard, IntroDot } from './intro.ts'
-import { setWorkspaceOpener } from './health-chat.ts'
+import { openHealthChat, setWorkspaceOpener } from './health-chat.ts'
 import { toolViewList } from './registry.ts'
 import { TOOL_VIEWS } from './toolviews.ts'
 import { longPiTurnDefinition, selectLongPiTail } from './turn-data.ts'
@@ -78,7 +78,12 @@ export function apply(ctx: ClientContext): void {
       // The panel is gone (plugin reloading); stay where we are.
     }
   }
-  const face = (): Face => ({ openPage: () => select(PANEL_ID), openChat: () => select(null) })
+  // A question from the page goes to 健康对话, never into whatever session was open last (C-04); back to the chat
+  // view only when DSH cannot open workspaces.
+  const face = (): Face => ({
+    openPage: () => select(PANEL_ID),
+    openChat: () => { void openHealthChat().then((opened) => { if (!opened) select(null) }) },
+  })
 
   ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL_ID, inject: face }, LongPiPage))
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: PANEL_ID, order: 5, label: () => '健康' }, PanelIcon))

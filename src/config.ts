@@ -19,7 +19,6 @@ export interface Config {
   skillsVersion: string
   /** On a DSH with no workspace, register <dataDir>/workspace as 「健康对话」 once, so a session can open. */
   bootstrapWorkspace: boolean
-  /** Where the safety classifier asks the model: LongPi's workspace and health talk ('health'), or every message ('all'). */
   /** Accepted for older profiles; the safety guard it scoped was removed in 0.8.0. */
   guardScope: 'health' | 'all'
   /** Per agent profile (AA §2.3): enabled (false = always the deterministic fallback), route and deadline. */

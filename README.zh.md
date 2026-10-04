@@ -23,7 +23,7 @@ curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/instal
 
 安装脚本会安装 DeepSeek Harness 命令行（如尚未安装），下载方法库，在 `~/longpi` 下创建包含 Mirobody 术语引擎的 Python 环境，并将插件安装、配置到 DeepSeek Harness。运行前需要 Node.js 22.19 及以上、Python 3.12 及以上和 git；重复运行即可更新。
 
-健康记录由 [Mirobody](https://github.com/thetahealth/mirobody) 提供。LongPi 会与这台电脑上的 Mirobody 自动配对，使用者不需要填写地址、账号或密码。尚未部署时，追加 `--with-mirobody`，由脚本通过 Docker 在本机部署一个带演示数据的实例（连接其他位置的 Mirobody 时，安装人员可追加 `--mcp-url`）：
+健康记录由 [Mirobody](https://github.com/thetahealth/mirobody) 提供。LongPi 会与这台电脑上的 Mirobody 自动配对，使用者不需要填写地址、账号或密码。尚未部署时，追加 `--with-mirobody`，由脚本通过 Docker 在本机部署一个实例，LongPi 会为你建立自己的账号（连接其他位置的 Mirobody 时，安装人员可追加 `--mcp-url`）：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/install.sh | bash -s -- --with-mirobody

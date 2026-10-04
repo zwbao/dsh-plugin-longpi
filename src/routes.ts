@@ -1,3 +1,4 @@
+import { ensureLocalPairing, pairingProblem } from './mirobody-account.ts'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import type { Context } from '@deepseek-ai/cordis'
 import { buildBoard } from './board.ts'
@@ -152,6 +153,8 @@ export interface ConnectionStatus {
   token_set: boolean
   status: 'ok' | 'error' | 'none'
   error?: string
+  /** Why pairing with the health data service on this computer failed, when it did. */
+  pairing_error?: string
   summary?: RecordsSummary
 }
 
@@ -285,7 +288,8 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
       return { source: connectionSource(current), url_masked: maskMcpUrl(current.mcpUrl), token_set: Boolean(current.mcpToken.trim()) }
     }
     const connectionStatus = async (): Promise<ConnectionStatus> => {
-      const base = connectionBase()
+      const problem = pairingProblem(resolveRootDir(config().dataDir))
+      const base = { ...connectionBase(), ...(problem ? { pairing_error: problem } : {}) }
       if (base.source === 'none') return { ...base, status: 'none' }
       const input = await indicatorsContext(CONNECTION_SUMMARY_MS)
       const status = input.records.record_status as string
@@ -298,6 +302,35 @@ export function registerRoutes(ctx: Context, config: () => Config, mount: MountS
       invalidateRecords()
       invalidateTracking()
     }
+
+    // 重新连接: no address, email or password from the person. LongPi pairs its own account with the health data
+    // service on this computer and uses that link, replacing a link set by hand (an installer's demo account, an
+    // expired link). The holder's connection only; a family member's link is renewed by people/.
+    web.register({
+      kind: 'exact',
+      path: '/api/longpi/connection/reconnect',
+      handler: (req, res) => {
+        if (req.method !== 'POST') {
+          sendJson(res, 405, { ok: false, error: 'POST' })
+          return
+        }
+        void (async () => {
+          const current = config()
+          const result = await ensureLocalPairing(resolveRootDir(current.dataDir), { base: current.mirobodyUrl ?? '', configuredUrl: current.mcpUrl, force: true, reclaim: true })
+          connectionChanged()
+          const status = await connectionStatus()
+          if (result.status === 'error') {
+            sendJson(res, 200, { ok: false, error: result.error_zh, ...status })
+            return
+          }
+          if (result.status === 'skipped') {
+            sendJson(res, 200, { ok: false, error: '健康数据服务不在这台电脑上，LongPi 无法自动重新连接。请联系安装人员。', ...status })
+            return
+          }
+          sendJson(res, 200, { ok: true, ...status })
+        })().catch(() => sendJson(res, 500, { ok: false, error: '重新连接失败，请稍后重试。' }))
+      },
+    })
 
     web.register({
       kind: 'exact',
