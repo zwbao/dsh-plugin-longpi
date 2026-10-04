@@ -56,3 +56,27 @@ The plan is the person's own, saved after a read-back they confirm. Tools: `save
 The `健康看板` tab loads `/api/longpi/board` (profile, record status, readiness) and then `/api/longpi/tracking` (plan, verdicts, charts, phenotypic age, model cards, next steps). It leads with phenotypic age against its noise band, adherence and the next retest; shows what really improved; the plan timeline and item cards with 12-week adherence strips and check-in buttons; each target marker against its band and goal; model estimates; next steps; and, collapsed, records, methods and the profile. Saving a profile or a check-in does not write Mirobody. `preview/` renders the built client with demo data from `test/fake-mirobody.mjs`.
 
 Accounts and consent are out of scope. One DSH profile is one person. Penguin and sequence-to-function tools are not part of this plugin.
+
+## 长寿图鉴 (the Codex)
+
+The design is `docs/codex-design.md` (1.2). The main line is a two-week personal experiment: an experiment pack shows three, the person picks one, does it, and turns the card over at the end. That reveal is the only pack opening. The library of research cards is free to read. There are no draws, rarities, streaks or caps.
+
+| Module | Job |
+| --- | --- |
+| `engage/state.ts` | `engage/state.json` (version 2) in the account holder's LongPi home (`resolveRootDir`), whoever is being looked at. A v1 file migrates once: owned method cards become 已读, unused draws become the opening experiment pack, the streak is dropped, and the seed and `draws.jsonl` stay. |
+| `engage/data.ts` | The shipped data: `data/codex/v3/library.json` (built; reviewed cards only) and `data/codex/v3/experiments.zh.json` (the experiment catalogue, the metrics, and the minimal meaningful differences). Adults only; the Codex can be closed. |
+| `engage/context.ts` | What a journey build hands the Codex: safety facts (drug classes, conditions, pregnancy, open 先看医生 findings), the plan and next-step text (relevance only), LDL, retest dates, the latest checkup, and the results a retest pack shows. China-PAR outside 35–74, or with heart disease, gives no number. |
+| `engage/series.ts` | The daily series the experiments are judged on (resting heart rate, HRV, sleep, sleep onset, night wakings, steps, home blood pressure, weight, waist, glucose), cached in `engage/series.json`. They are refreshed after each journey build of the holder, one Mirobody day read per series. Units are read off each series. |
+| `engage/eligibility.ts` | The three-pick, in this order: safety, then data to measure the outcome, then relevance to the plan, then not done recently. A seeded order breaks ties only. Also the randomized version's 7 + 7 day schedule. |
+| `engage/verdict.ts` | The three verdict words: 超出平时波动, 在平时波动内, 数据不够. Wristband metrics use the person's own spread (two-sample t, `posteriorDiff`) and a minimal meaningful difference. Blood pressure, weight, glucose and LDL use the reference change value. A good result outside the usual variation is said plainly and never attributed to the experiment. |
+| `engage/nudge.ts` | The one prompt slot. The stand-up reminder is opt-in, for wristband owners only, inside 我的白天, never in presentation mode, at most twice a day and 2 h apart, and counts only when steps arrive within 10 minutes of 好. The reveal notice appears once on the day, plus once the next day after 稍后. |
+| `engage/engine.ts` | Season (8 weeks or until the next retest), packs, runs (≥10 days with data, up to 7 more), retest packs, footprints. Footprints for family visits and checkups go to the holder and never bring a pack. Also the views, the actions, and the seams for the fact pack and the next steps. |
+| `engage/routes.ts`, `tools.ts` | `GET/POST /api/longpi/codex`, `GET /api/longpi/codex/library`, `GET /api/longpi/codex/slot`; chat tools `read_season` and `log_life_event`. |
+
+The client side:
+- `client/engage/codex-page.ts` is the pixel panel, styled only inside `.lp-codex`.
+- `client/engage/slot*.ts` and `activity.ts` hold the prompt slot. It shows as the 健康 pane's top row, or as a bottom-right `shell.overlay` bar when the pane is not on screen. The client checks continuous DSH use, a running turn and typing.
+- 演示模式 is at the sidebar foot (`sidebar.footer.action`), on ⌘⌥P / Ctrl+Alt+P, and via `/演示模式`.
+- The pane folds personal numbers until 显示 is pressed, then shows them for 60 s.
+
+Not built: quiet hours from calendar meetings, because LongPi has no calendar connection (`calendar.ts` only writes an ICS file). Until there is one, 演示模式 and the folded pane are the safeguards.

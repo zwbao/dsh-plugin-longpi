@@ -38,9 +38,19 @@ interface Runtime {
   skillsHome: () => string
   codexOn: () => boolean
   bus: Bus | null
+  /** Re-read the holder's record and the Codex series (bound by register(); absent in tests). */
+  refresh: (() => Promise<void>) | null
 }
 
-let runtime: Runtime = { dataDir: () => '', rootDir: () => '', skillsHome: () => '', codexOn: () => true, bus: null }
+let runtime: Runtime = { dataDir: () => '', rootDir: () => '', skillsHome: () => '', codexOn: () => true, bus: null, refresh: null }
+let lastKick = 0
+
+/** From the slot poll: refresh the series in the background at most every 15 minutes, so a day away from the page still counts. */
+export function kickRefresh(now: number = Date.now()): void {
+  if (!runtime.refresh || now - lastKick < 15 * 60_000) return
+  lastKick = now
+  void runtime.refresh().catch(() => undefined)
+}
 
 export function bindRuntime(next: Partial<Runtime>): void {
   runtime = { ...runtime, ...next }

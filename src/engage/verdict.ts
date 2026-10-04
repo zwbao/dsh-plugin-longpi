@@ -49,7 +49,7 @@ export function thresholdZh(spec: MetricSpec, biovar: Biovar | null, opts: { ran
   const band = marker ? rcvBand(marker, biovar?.z ?? 1.96) : null
   const pct = band ? `约 ±${Math.round(Math.max(band.up, -band.down) * 100)}%` : '这项指标的参考变化值'
   if (spec.method === 'lab') return `比较开始前最近一次和 8 周后复查的${spec.label_zh}。变化超过${pct}，才算「超出平时波动」。这个范围来自同一个人反复测量时的正常起伏。`
-  return `比较${what}的平均。变化超过${pct}，才算「超出平时波动」。这个范围来自同一个人反复测量时的正常起伏。`
+  return `比较${what}平均值。变化超过${pct}，才算「超出平时波动」。这个范围来自同一个人反复测量时的正常起伏。`
 }
 
 function direction(spec: MetricSpec, diff: number): MetricResult['direction'] {

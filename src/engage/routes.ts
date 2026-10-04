@@ -4,7 +4,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { calendarEvents, confirmEvent, listEvents, saveEvent, suggestEvent } from '../ux/schedule.ts'
 import { loadLibrary } from './data.ts'
-import { actCodex, boundRootDir, syncCodex, type CodexAction } from './engine.ts'
+import { actCodex, boundRootDir, kickRefresh, syncCodex, type CodexAction } from './engine.ts'
 import { readState } from './state.ts'
 import { isoDay } from '../interventions.ts'
 
@@ -126,6 +126,7 @@ export function mountEngageRoutes(register: (path: string, handler: Handler) => 
     if ((req.method ?? '').toUpperCase() !== 'GET') { sendJson(res, 405, { ok: false, error: '只接受 GET。' }); return }
     try {
       const view = syncCodex()
+      if (view.enabled && view.started) kickRefresh()
       sendJson(res, 200, { ok: true, enabled: view.enabled && view.started, slot: view.slot, pane_zh: view.pane_zh, presentation: view.prefs.presentation, ready: view.ready.length + view.packs.filter((pack) => pack.kind === 'retest').length })
     } catch (error) { fail(res, error) }
   })

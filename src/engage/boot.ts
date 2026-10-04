@@ -20,6 +20,7 @@ export interface EngageRuntime {
   skillsHome?: () => string
   codexOn?: () => boolean
   bus?: Bus | null
+  refresh?: () => Promise<void>
 }
 
 let booted = false
@@ -60,6 +61,7 @@ export function bootEngage(ctx: Context, runtime: EngageRuntime): void {
     dataDir: runtime.dataDir,
     ...(runtime.rootDir ? { rootDir: runtime.rootDir } : {}),
     ...(runtime.skillsHome ? { skillsHome: runtime.skillsHome } : {}),
+    ...(runtime.refresh ? { refresh: runtime.refresh } : {}),
     ...(runtime.codexOn ? { codexOn: runtime.codexOn } : {}),
     ...(runtime.bus !== undefined ? { bus: runtime.bus } : {}),
   })
