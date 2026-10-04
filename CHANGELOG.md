@@ -5,7 +5,9 @@
 给使用者
 
 - LongPi 现在由长寿教练 Pi 说话：先肯定你做到的事，一次只讲一件，最后说"这周就这一件事"。Pi 会记住你七八十岁时最想还能做的事、为什么在乎、你的小承诺和小胜利。不想要 Pi，可以用 `--without-coach` 重新运行安装脚本，LongPi 会恢复原来的口吻。
-- 次数都改成累计：打卡和健康行动的天数不会因为某天没做到而清零。图鉴的抽卡机会在累计到 1、5、10、20、50、100 天时发放，之后每 50 天一次；不再按天发放，也不再显示"连续 N 天"。生病或出行的日子随时可以记，不限次数。
+- 长寿图鉴换成新玩法：主线是两周的个人小实验。拆开实验包三选一，做两周，最后翻开实验卡看自己的结果；结果只说「超出平时波动」「在平时波动内」或「数据不够」，朝好的方向超出时会明确告诉你。图书馆的 169 张研究卡随时可读，不用抽卡；卡包只来自赛季开始、做完一个实验和你自己的复查。家人的就诊和复查记成足迹卡。没有抽卡、稀有度、连续打卡和每天的上限。
+- 工作时 LongPi 只占一个提示位：右侧健康栏最上面一行（或右下角小条）。起身提醒要你自己打开，只给连着手环的人；揭晓那天提示一次「有一张实验卡可以翻了」。侧栏底部的「演示」（⌘⌥P）一键隐藏所有提示和健康栏内容；右侧健康栏平时默认不显示数字，点「显示」展开 60 秒。晚上 6 点后的「N 项未打卡」小条默认关闭。
+- 打卡和健康行动的天数是累计的，不会因为某天没做到而清零。生病或出行的日子随时可以记，这些天不算进实验，也不算失败。
 - 深度分析里交给医生的事项（补剂、检查、转诊）不再进入方案打卡，而是写进「医生简报」；只有深度分析也能生成简报。第二次深度分析之后，「深度分析」页会和上一次对比，只有超出个人正常波动的变化才算变化。
 - 「档案」里可以下载会员档案（Pi 记下的画面、小承诺和小胜利）；以前在独立版 Pi 里的档案也可以导入，之前的累计次数会接着算。
 
@@ -19,9 +21,25 @@ English
   remember_for_me takes replaces and op graduate; the digest leads with these lines and a commitment's count is its
   plan item's done check-ins plus any carried count. `GET /api/longpi/member-file` renders the coach's template;
   `import_member_file` reads a standalone one (no medicines, no measurements).
-- Engagement: draws at cumulative milestones (`milestone:N`), older state's passed milestones counted as given; the
-  season view has `count`; weekly, recap, plan tile and weekly reminder say cumulative counts; freezes are never
-  rationed. Cards u-streak-freeze and i-three-weeks renamed.
+- Codex 1.2 (docs/codex-design.md): src/engage rewritten. engage/state.json v2 lives in the holder's home and v1
+  migrates once (owned method cards → read, unused draws → the opening experiment pack; the seed and draws.jsonl are
+  kept). Experiment catalogue and metrics in data/codex/v3/experiments.zh.json; three-pick by safety → data →
+  relevance → recency; verdicts by the person's own spread plus a minimal difference (wristband) or the reference
+  change value (BP, weight, glucose, LDL); ≥10 days with data, up to 7 more. Retest packs from the holder's new
+  checkup; family events give footprints only. Daily series cached in engage/series.json, refreshed after journey
+  builds and from the slot poll.
+- Routes: `GET/POST /api/longpi/codex`, `GET /api/longpi/codex/library`, `GET /api/longpi/codex/slot`. Removed:
+  `/api/longpi/season`, `/streak-freeze`, `/codex/draw`, `/codex/odds`, `/codex/run`, `/weekly`, `/nudges`. Tools:
+  `read_season` (new shape) and `log_life_event`; `propose_personal_season` and `run_drawn_method` removed. Events
+  `codex.pack_granted`, `codex.experiment_started`, `codex.experiment_revealed`, `codex.footprint` replace the draw,
+  quest, unlock and streak events. `FactPack.engagement` is `{season_week, season_weeks, experiments_running,
+  reveal_ready, packs_waiting}`. Action kinds `codex_experiment`, `codex_reveal` replace `season_quest`, `claim_draw`.
+- Library: data/codex/v3/library.json built by scripts/build-codex.mjs from content.zh.json; only reviewed cards go on
+  the shelf, with a copy gate. All 169 cards were written and reviewed; docs/codex-library-issues.md lists 39 method
+  library errors found on the way.
+- Client: the 长寿图鉴 tab (pixel panel, styles under .lp-codex, Fusion Pixel subset); the prompt slot (pane row,
+  shell.overlay bar); 演示模式 (sidebar.footer.action, ⌘⌥P / Ctrl+Alt+P, /演示模式); the pane folds personal numbers
+  until 显示; the evening check-in pill is off by default.
 - Deep analysis: la-export `executor`, `kind` and `evidence_grade` are kept; the physician's items and supplements,
   tests and referrals are left out of the plan and listed in the doctor brief (`analysis_zh`). Each import keeps its
   `twin.json` and the previous one; `la.py twin compare` judges them (`twin-compare.json`, `compare` in the summary and

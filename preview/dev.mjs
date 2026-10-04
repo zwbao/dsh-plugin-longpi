@@ -160,6 +160,7 @@ const SHOTS = [
   // 长寿图鉴 (docs/codex-design.md §5): the page at 1280 × 800 and in a narrow pane (headless Chrome's narrowest
   // window is 500 px), then each moment.
   ['codex-experiments', 'view=codex', 1280, 800],
+  ['page-codex', 'view=page&stage=routine&tab=codex', 1280, 800],
   ['pane-folded', 'view=pane&stage=routine', 1280, 800],
   ['pane-shown', 'view=pane&stage=routine&shown=1', 1280, 800],
   ['pane-presentation', 'view=pane&stage=routine&codex=still', 1280, 800],
