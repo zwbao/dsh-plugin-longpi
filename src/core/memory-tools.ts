@@ -17,7 +17,9 @@ import { appendJsonl } from './store.ts'
 import { jsonOut, sessionOfExec } from './tool-kit.ts'
 import { lastPersonText, quoteIn } from './turn-text.ts'
 
-const KINDS: MemoryKind[] = ['goal', 'exclusion', 'condition', 'medication', 'supplement', 'family_history', 'life_event', 'preference', 'note']
+const KINDS: MemoryKind[] = ['goal', 'exclusion', 'condition', 'medication', 'supplement', 'family_history', 'life_event', 'preference', 'note',
+  'vision', 'motivation', 'win', 'style', 'commitment']
+const TONES = ['upbeat', 'gentle', 'direct'] as const
 
 function isDay(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
@@ -52,6 +54,22 @@ export function itemFrom(args: Record<string, unknown>, provenance: Provenance, 
       return { ...base, kind } as NewMemoryItem
     case 'preference':
       return { ...base, kind, key: 'detail', value: text } as NewMemoryItem
+    case 'vision':
+    case 'motivation':
+      return { ...base, kind } as NewMemoryItem
+    case 'win':
+      return { ...base, kind, day: isDay(args.day) ? args.day : today } as NewMemoryItem
+    case 'style': {
+      const tone = TONES.find((row) => row === args.tone)
+      const address = args.address === '您' || args.address === '你' ? args.address : undefined
+      return { ...base, kind, ...(tone ? { tone } : {}), ...(address ? { address } : {}) } as NewMemoryItem
+    }
+    case 'commitment': {
+      const raw = typeof args.confidence === 'number' ? args.confidence : Number.parseFloat(String(args.confidence ?? ''))
+      const confidence = Number.isFinite(raw) ? Math.max(0, Math.min(10, Math.round(raw))) : null
+      const planItem = typeof args.plan_item === 'string' && args.plan_item.trim() ? args.plan_item.trim().slice(0, 80) : undefined
+      return { ...base, kind, confidence, started: today, ...(planItem ? { plan_item: planItem } : {}) } as NewMemoryItem
+    }
     default:
       return { ...base, kind: 'note' } as NewMemoryItem
   }
@@ -64,7 +82,7 @@ function brief(item: MemoryItem) {
 export function registerMemoryTools(ctx: Context, deps: CoreDeps): void {
   ctx.tools.register(defineTool({
     name: 'read_person_memory',
-    description: 'What this person told LongPi before and it keeps across sessions: goals, what they do not want (exclusions), conditions, medicines and supplements, family history, life events (sick, travel), doctor visits, preferences. Each item has an id (to retract or confirm with remember_for_me) and whether they confirmed it. Read-only.',
+    description: 'What this person told LongPi before and it keeps across sessions: goals, what they do not want (exclusions), conditions, medicines and supplements, family history, life events (sick, travel), doctor visits, preferences; and the coach\'s file: why they care, their vision, wins, style and small commitments with their cumulative counts. Each item has an id (to retract, confirm or graduate with remember_for_me) and whether they confirmed it. Read-only.',
     parameters: {},
     output: jsonOut,
     timeoutMs: 20000,
@@ -78,10 +96,16 @@ export function registerMemoryTools(ctx: Context, deps: CoreDeps): void {
 
   ctx.tools.register(defineTool({
     name: 'remember_for_me',
-    description: 'Keep something the person just told you for every later session: a goal (目标 75 公斤), an exclusion (不要限时进食), a condition (脂肪肝、怀孕), a medicine or supplement they take or stopped, family history, a life event (感冒了、出差到 25 号), a preference; or retract / confirm an item by id (from read_person_memory). Pass quote = their exact words from this message. Never store what they did not say, and never something about another person as theirs.',
+    description: 'Keep something the person just told you for every later session: a goal (目标 75 公斤), an exclusion (不要限时进食), a condition (脂肪肝、怀孕), a medicine or supplement they take or stopped, family history, a life event (感冒了、出差到 25 号), a preference; and the coach\'s file: why they care (motivation), the picture of what they want to still do at 70 or 80 (vision), a win (something they did), how to speak to them (style), a small commitment written as 当…时，我就… (commitment, with confidence 0–10 and the plan item it carries out). Or retract / confirm an item by id (from read_person_memory), or graduate a commitment that has become a habit. Pass quote = their exact words from this message. Never store what they did not say, and never something about another person as theirs.',
     parameters: {
-      op: { type: 'string', enum: ['add', 'retract', 'confirm'], required: true },
+      op: { type: 'string', enum: ['add', 'retract', 'confirm', 'graduate'], required: true },
       kind: { type: 'string', enum: KINDS, description: 'For add.' },
+      confidence: { type: 'number', description: 'For a commitment: how sure they are, 0–10, in their words.' },
+      plan_item: { type: 'string', description: 'For a commitment: the id of the plan item it carries out (read_intervention_plan); its check-ins are the cumulative count.' },
+      replaces: { type: 'string', description: 'For a commitment made smaller or rewritten: the id of the commitment it replaces.' },
+      tone: { type: 'string', enum: [...TONES], description: 'For style.' },
+      address: { type: 'string', enum: ['你', '您'], description: 'For style: how to address them. Never a name.' },
+      day: { type: 'string', description: 'For a win: YYYY-MM-DD, default today.' },
       text: { type: 'string', description: 'For add: one short line they would recognise (不要限时进食; 目标体重 75 公斤).' },
       quote: { type: 'string', description: 'Their exact words from this message.' },
       id: { type: 'string', description: 'For retract or confirm.' },
@@ -104,6 +128,14 @@ export function registerMemoryTools(ctx: Context, deps: CoreDeps): void {
       const now = new Date().toISOString()
       const today = isoDay()
       const op = String(args.op ?? '')
+      if (op === 'graduate') {
+        const id = typeof args.id === 'string' ? args.id : ''
+        const result = memory.apply([{ op: 'graduate', id, day: today, provenance: { kind: 'chat', at: now, session_id: session, by: 'M0' } }], 'M0')
+        if (result.applied.length === 0) return asJson({ ok: false, error: 'no active commitment with that id; call read_person_memory' })
+        deps.invalidate()
+        const item = memory.read().items.find((row) => row.id === id)
+        return asJson({ ok: true, done_zh: `已成习惯：${item?.text_zh ?? ''}` })
+      }
       if (op === 'retract' || op === 'confirm') {
         const id = typeof args.id === 'string' ? args.id : ''
         const item = memory.read().items.find((row) => row.id === id)
@@ -120,7 +152,9 @@ export function registerMemoryTools(ctx: Context, deps: CoreDeps): void {
       const provenance: Provenance = { kind: confirmed ? 'chat' : 'model_extracted', at: now, session_id: session, by: 'M0', ...(quote ? { quote_zh: quote } : {}) }
       const item = itemFrom(args as Record<string, unknown>, provenance, confirmed, today)
       if (!item) return asJson({ ok: false, error: 'kind and text are required' })
-      const result = memory.apply([{ op: 'add', item }], 'M0')
+      const replaces = item.kind === 'commitment' && typeof args.replaces === 'string'
+        ? memory.read().items.find((row) => row.id === args.replaces && row.status === 'active' && row.kind === 'commitment') : undefined
+      const result = memory.apply([replaces ? { op: 'supersede', id: replaces.id, item } : { op: 'add', item }], 'M0')
       deps.invalidate()
       const saved = memory.read().items.find((row) => row.id === result.applied[0])
       return asJson({

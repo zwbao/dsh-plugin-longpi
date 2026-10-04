@@ -50,6 +50,7 @@ export const TOOL_NAMES = [
   'run_deep_analysis',
   'import_analysis',
   'read_deep_analysis',
+  'import_member_file',
 ] as const
 
 export type ToolName = (typeof TOOL_NAMES)[number]

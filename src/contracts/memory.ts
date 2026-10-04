@@ -5,6 +5,7 @@ import type { Focus, Id, IsoDay, IsoTime, ModuleId, Provenance } from './common.
 export const MEMORY_VERSION = 1
 export type MemoryKind = 'goal' | 'exclusion' | 'condition' | 'medication' | 'supplement' | 'family_history'
   | 'life_event' | 'care' | 'preference' | 'asked_topic' | 'note'
+  | 'vision' | 'motivation' | 'win' | 'style' | 'commitment'
 export type ConditionFlag = 'diabetes' | 'prediabetes' | 'ckd' | 'pregnancy' | 'pregnancy_planning' | 'breastfeeding'
   | 'cancer_followup' | 'cvd' | 'stent' | 'hypertension' | 'nafld' | 'anaemia' | 'thyroid' | 'minor' | 'caregiver_subject'
 export type DrugClass = 'sglt2i' | 'insulin' | 'sulfonylurea' | 'metformin' | 'glp1ra' | 'statin' | 'anticoagulant'
@@ -68,7 +69,27 @@ export type PreferenceKey = 'tone' | 'cadence' | 'detail' | 'nudge_in_workflow' 
 export interface PreferenceItem extends MemoryItemBase { kind: 'preference'; key: PreferenceKey; value: string | number | boolean }
 export interface AskedTopicItem extends MemoryItemBase { kind: 'asked_topic'; topic_key: string; last_asked: IsoDay; count: number }
 export interface NoteItem extends MemoryItemBase { kind: 'note' }
+// The coach's file (longevity-coach templates/member.md): why they care, the picture they want at 70 or 80, wins,
+// how Pi speaks to them, and small commitments.
+export interface VisionItem extends MemoryItemBase { kind: 'vision' }
+export interface MotivationItem extends MemoryItemBase { kind: 'motivation' }
+export interface WinItem extends MemoryItemBase { kind: 'win'; day: IsoDay }
+export type CoachTone = 'upbeat' | 'gentle' | 'direct'
+export interface StyleItem extends MemoryItemBase { kind: 'style'; tone?: CoachTone; address?: '你' | '您' }
+export interface CommitmentItem extends MemoryItemBase {
+  kind: 'commitment'
+  /** 0–10, how sure they are; Pi shrinks the step while it is below 7. */
+  confidence: number | null
+  /** The plan item it carries out: its check-ins are the cumulative count. */
+  plan_item?: Id
+  started: IsoDay
+  /** Set when it became a habit; still active, asked about now and then. */
+  graduated?: IsoDay
+  /** Times counted before LongPi (a member file brought from the standalone coach): counts never reset. */
+  carried_count?: number
+}
 export type MemoryItem = GoalItem | ExclusionItem | ConditionItem | MedicationItem | FamilyHistoryItem | LifeEventItem | CareItem | PreferenceItem | AskedTopicItem | NoteItem
+  | VisionItem | MotivationItem | WinItem | StyleItem | CommitmentItem
 export interface PersonMemory { version: typeof MEMORY_VERSION; rev: number; updated: IsoTime; items: MemoryItem[]; migrated?: string[] }
 export type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never
 export type NewMemoryItem = DistributiveOmit<MemoryItem, 'id' | 'updated' | 'status' | 'safety_relevant'>
@@ -77,6 +98,7 @@ export type MemoryOp =
   | { op: 'retract'; id: Id; provenance: Provenance }
   | { op: 'supersede'; id: Id; item: NewMemoryItem }
   | { op: 'confirm'; id: Id; provenance: Provenance }
+  | { op: 'graduate'; id: Id; day: IsoDay; provenance: Provenance }
   | { op: 'touch_topic'; topic_key: string; day: IsoDay; provenance: Provenance }
 export interface MemoryApplyResult { rev: number; applied: Id[]; rejected: Array<{ op: MemoryOp; reason: string }> }
 export interface MemoryApi {

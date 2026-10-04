@@ -7,9 +7,10 @@ import { join } from 'node:path'
 import type { Id, IsoDay, ModuleId, Provenance } from '../contracts/common.ts'
 import {
   MEMORY_VERSION, SAFETY_CONDITION_FLAGS, SAFETY_DRUG_CLASSES,
-  type CareItem, type ConditionFlag, type DrugClass, type ExclusionItem, type MemoryApi, type MemoryApplyResult, type MemoryItem,
+  type CareItem, type CommitmentItem, type ConditionFlag, type DrugClass, type ExclusionItem, type MemoryApi, type MemoryApplyResult, type MemoryItem,
   type MemoryKind, type MemoryOp, type NewMemoryItem, type PersonMemory,
 } from '../contracts/memory.ts'
+import { doneCounts } from '../interventions.ts'
 import { currentBus } from './bus.ts'
 import { appendJsonl, newId, readJson, readJsonl, writeJsonAtomic } from './store.ts'
 
@@ -172,6 +173,17 @@ export function createMemory(dataDir: () => string): MemoryStore {
             changed.push(item)
             applied.push(item.id)
             log.push({ at: now, by, op: op.op, id: item.id, provenance: op.provenance })
+          } else if (op.op === 'graduate') {
+            const item = memory.items.find((row) => row.id === op.id)
+            if (!item || item.status !== 'active' || item.kind !== 'commitment') {
+              rejected.push({ op, reason: 'no active commitment with that id' })
+              continue
+            }
+            item.graduated = op.day
+            item.updated = now
+            changed.push(item)
+            applied.push(item.id)
+            log.push({ at: now, by, op: 'graduate', id: item.id, day: op.day, provenance: op.provenance })
           } else if (op.op === 'supersede') {
             const old = memory.items.find((row) => row.id === op.id)
             if (!old || old.status !== 'active') {
@@ -222,7 +234,7 @@ export function createMemory(dataDir: () => string): MemoryStore {
     digest({ purpose, maxChars = 1200 }) {
       const items = read().items.filter((item) => item.status === 'active')
       const mark = (item: MemoryItem) => (item.confirmed ? '' : '（未确认）')
-      const lines: string[] = []
+      const lines: string[] = purpose === 'triage' || purpose === 'advice' ? [] : coachLines(items, dataDir())
       const meds = items.filter((item) => item.kind === 'medication' || item.kind === 'supplement') as Array<Extract<MemoryItem, { kind: 'medication' | 'supplement' }>>
       const safetyMeds = meds.filter((item) => item.safety_relevant && !item.stopped)
       if (safetyMeds.length > 0) lines.push(`用药安全：${safetyMeds.map((item) => `${item.name_zh}（${item.drug_class.map((cls) => DRUG_ZH[cls]).filter(Boolean).join('、') || '药物'}）${mark(item)}`).join('；')}`)
@@ -262,6 +274,38 @@ export function createMemory(dataDir: () => string): MemoryStore {
     },
   }
   return api
+}
+
+/** Pi's part of the file, first so a clipped digest keeps it: the picture, why, how to speak, commitments with their counts, wins. */
+export function coachLines(items: MemoryItem[], dataDir: string): string[] {
+  const latest = <K extends MemoryItem['kind']>(kind: K, n: number) => items.filter((item) => item.kind === kind).slice(-n) as Array<Extract<MemoryItem, { kind: K }>>
+  const lines: string[] = []
+  const vision = latest('vision', 2)
+  if (vision.length > 0) lines.push(`想要的画面：${vision.map((item) => item.text_zh).join('；')}`)
+  const why = latest('motivation', 1)
+  if (why.length > 0) lines.push(`为什么在乎：${why.map((item) => item.text_zh).join('；')}`)
+  const style = latest('style', 1)
+  if (style.length > 0) lines.push(`称呼和风格：${style[0]?.text_zh}`)
+  const commitments = items.filter((item): item is CommitmentItem => item.kind === 'commitment')
+  if (commitments.length > 0) {
+    let counts = new Map<string, number>()
+    try {
+      counts = doneCounts(dataDir)
+    } catch {
+      // the counts are a bonus; the commitments are still listed
+    }
+    const count = (item: CommitmentItem) => {
+      const total = (item.carried_count ?? 0) + (item.plan_item ? counts.get(item.plan_item) ?? 0 : 0)
+      return item.plan_item || item.carried_count ? `，累计 ${total} 次` : ''
+    }
+    const doing = commitments.filter((item) => !item.graduated).slice(-3)
+    if (doing.length > 0) lines.push(`在做的小承诺：${doing.map((item) => `${item.text_zh}（${item.confidence !== null ? `把握度 ${item.confidence}/10` : '把握度未问'}${count(item)}）[${item.id}]`).join('；')}`)
+    const habits = commitments.filter((item) => item.graduated).slice(-3)
+    if (habits.length > 0) lines.push(`已成习惯：${habits.map((item) => `${item.text_zh}${count(item)}`).join('；')}`)
+  }
+  const wins = latest('win', 3)
+  if (wins.length > 0) lines.push(`最近的小胜利：${wins.map((item) => `${item.day.slice(5).replace('-', '/')} ${item.text_zh}`).join('；')}`)
+  return lines
 }
 
 const stores = new Map<string, MemoryStore>()

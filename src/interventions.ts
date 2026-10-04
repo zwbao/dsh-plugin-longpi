@@ -127,6 +127,13 @@ export function checkinStatus(rows: readonly CheckIn[]): Map<string, Map<string,
   return out
 }
 
+/** Days each item was done, counted cumulatively: a missed day never takes one away. */
+export function doneCounts(dataDir: string): Map<string, number> {
+  const out = new Map<string, number>()
+  for (const [item, days] of checkinStatus(readCheckIns(dataDir))) out.set(item, [...days.values()].filter(Boolean).length)
+  return out
+}
+
 /** Civil clock for check-ins, streaks and reminders. The person is in China; the process zone is not. */
 export const CIVIL_TZ = 'Asia/Shanghai'
 

@@ -130,7 +130,12 @@ try {
   assert.equal(scrubVisible('Mirobody MCP record_status ~/.dsh/longpi tok/s User says: hi').includes('Mirobody'), false)
 
   const lines = personaLines({ mounted: true, peer: false, error: '', pluginHome: '' })
-  assert.ok(lines.some((line) => line.includes('数据显示') && line.includes('数据尚不能说明的') && line.includes('下一步')))
+  // Pi's voice (owner decision, 0.9): Pi speaks first; status replies have no headings and end with the one thing this week
+  assert.match(lines[0], /^You are Pi, the longevity coach of LongPi/)
+  assert.ok(lines.some((line) => /Counts are cumulative: a missed day never resets anything/.test(line)))
+  assert.ok(lines.some((line) => /has no headings/.test(line) && line.includes('这周就这一件事')))
+  assert.ok(!lines.some((line) => line.includes('数据尚不能说明的')), 'the three headings are gone from the persona')
+  assert.ok(lines.some((line) => /Every number you cite comes from a tool result/.test(line)), 'LongPi\'s rules still bound the facts')
 
   const scheduleDir = tempDir()
   const suggested = suggestEvent({ date: '2026-12-20', kind: 'retest', title_zh: '复查血红蛋白', brief_zh: '带上简报', questions_zh: ['这次和上次差多少？'] })

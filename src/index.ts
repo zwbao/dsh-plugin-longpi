@@ -12,6 +12,7 @@ import { createBus, setBus } from './core/bus.ts'
 import { createHttp } from './core/http.ts'
 import { memoryFor } from './core/memory.ts'
 import { registerMemoryRoutes, registerMemoryTools } from './core/memory-tools.ts'
+import { registerMemberFile } from './member-file.ts'
 import { registerEmitHooks } from './core/emit-hooks.ts'
 import { startTick } from './core/tick.ts'
 import { registerCandidates } from './core/nba-registry.ts'
@@ -82,7 +83,11 @@ export { runSkill, reportExcerpt, readReceipts } from './runner.ts'
 export { resolveSkillsHome, resolveMirobodyPlugin, resolveDataDir } from './paths.ts'
 export { buildBoard } from './board.ts'
 export { readiness, runReady, buildReport } from './overview.ts'
-export { normalizePlan, savePlan, currentPlan, readPlans, addCheckIns, readCheckIns, isoDay, addDays, daysBetween, CIVIL_TZ } from './interventions.ts'
+export { normalizePlan, savePlan, currentPlan, readPlans, addCheckIns, readCheckIns, doneCounts, isoDay, addDays, daysBetween, CIVIL_TZ } from './interventions.ts'
+export { renderMemberFile, parseMemberFile, registerMemberFile } from './member-file.ts'
+export { registerMemoryTools } from './core/memory-tools.ts'
+export { coachSkillPath, coachSkillVersion } from './coach.ts'
+export { piLines } from './prompt.ts'
 export { adherenceFor, evaluateMarker, evaluatePlan, resolveMarkers, suggestNext } from './evaluate.ts'
 export { loadReference, markerFor, checkupMarkerFor, rcvBand, effectsFor, markerGroupKeys, expandMarkerNames } from './reference.ts'
 export { buildTracking, invalidateTracking, trackingGeneration, modelGoals, homeBloodPressure, readFailed, PHENOAGE_SKILL, RISK_SKILL } from './tracking.ts'
@@ -264,6 +269,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }
   registerMemoryTools(ctx, deps)
   registerMemoryRoutes(deps)
+  registerMemberFile(ctx, deps)
   const sse = createSse(http, bus)
   // The coach writes the surfaces when a model is there and the profile is on; the floor otherwise.
   setCoach({

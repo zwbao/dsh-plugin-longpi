@@ -18,7 +18,7 @@ export const PLUGIN_SOURCE = 'dsh-plugin-longpi'
 export const WRITE_TOOLS = [
   'save_personal_profile', 'save_intervention_plan', 'log_intervention_checkin', 'save_self_measurement', 'record_medication_statement',
   'set_followup', 'send_followup_message', 'remember_for_me', 'log_care_visit', 'note_page_issue',
-  'forward_report', 'record_condition', 'log_life_event', 'run_deep_analysis', 'import_analysis',
+  'forward_report', 'record_condition', 'log_life_event', 'run_deep_analysis', 'import_analysis', 'import_member_file',
 ] as const
 
 export const ORCHESTRATOR_RULES = [
@@ -89,7 +89,7 @@ export function snapshotText(input: SnapshotInput): string {
   if (others.length > 0) lines.push(`也要留意：${others.map((row) => row.text_zh).join('；')}`)
   if (input.care_due_zh) lines.push(`就医跟进：${input.care_due_zh}`)
   if (input.analysis_zh) lines.push(input.analysis_zh)
-  if (input.memory_zh) lines.push(`你之前记下：${clip(input.memory_zh.replace(/\n/g, '；'), 500)}`)
+  if (input.memory_zh) lines.push(`你之前记下：${clip(input.memory_zh.replace(/\n/g, '；'), 800)}`)
   if (input.noted_zh) lines.push(`刚从对话里记下（未确认）：${clip(input.noted_zh, 200)}。回答时顺带说一句「已记录：…（如有误，可以说「撤销」）」。`)
   if (page.suggestions_zh.length > 0) lines.push(`页面建议的问题：${page.suggestions_zh.slice(0, 3).join(' / ')}`)
   return lines.join('\n')
