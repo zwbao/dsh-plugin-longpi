@@ -123,6 +123,8 @@ interface Config {
   skillsVersion: string;
   /** On a DSH with no workspace, register <dataDir>/workspace as 「健康对话」 once, so a session can open. */
   bootstrapWorkspace: boolean;
+  /** Pi, the longevity coach, speaks for LongPi (default). false: LongPi's own voice and the three-part status reply. */
+  coach: boolean;
   /** Accepted for older profiles; the safety guard it scoped was removed in 0.8.0. */
   guardScope: 'health' | 'all';
   /** Per agent profile (AA §2.3): enabled (false = always the deterministic fallback), route and deadline. */
@@ -193,7 +195,9 @@ declare function planKey(args: unknown): string;
 declare function planApprovalReason(args: unknown): string;
 /** Tests: forget every read-back. */
 declare function resetReadBacks(): void;
-declare function registerApprovals(ctx: Context): void;
+declare function registerApprovals(ctx: Context, opts?: {
+  analysisBlocked?: () => boolean;
+}): void;
 //#endregion
 //#region src/guard-scope.d.ts
 interface WorkspaceLike {
@@ -202,12 +206,12 @@ interface WorkspaceLike {
 }
 /** LongPi's workspaces: the one it created (its marker in dataDir), and any titled 健康对话 or 健康. */
 declare function healthWorkspacePaths(dataDir: string, workspaces: readonly WorkspaceLike[]): string[];
-/** Whether a session's working directory is the workspace or inside it. */
+/** Whether a session's working directory is the workspace or inside it, also through symlinks (macOS /var, /tmp). */
 declare function insideWorkspace(cwd: string, root: string): boolean;
 //#endregion
 //#region src/version.d.ts
 declare const PRODUCT_VERSION: string;
-declare const TOOL_NAMES: readonly ["read_personal_situation", "list_longevity_intents", "match_longevity_skills", "read_longevity_skill", "run_longevity_skill", "query_longevity_evidence", "list_longevity_domains", "save_personal_profile", "longpi_status", "save_intervention_plan", "draft_intervention_plan", "log_intervention_checkin", "save_self_measurement", "record_medication_statement", "read_intervention_plan", "review_interventions", "model_intervention_goals", "set_followup", "send_followup_message", "read_person_memory", "remember_for_me", "note_page_issue", "read_care_navigation", "prepare_doctor_brief", "log_care_visit", "run_deep_analysis", "import_analysis", "read_deep_analysis"];
+declare const TOOL_NAMES: readonly ["read_personal_situation", "list_longevity_intents", "match_longevity_skills", "read_longevity_skill", "run_longevity_skill", "query_longevity_evidence", "list_longevity_domains", "save_personal_profile", "longpi_status", "save_intervention_plan", "draft_intervention_plan", "log_intervention_checkin", "save_self_measurement", "record_medication_statement", "read_intervention_plan", "review_interventions", "model_intervention_goals", "set_followup", "send_followup_message", "read_person_memory", "remember_for_me", "note_page_issue", "read_care_navigation", "prepare_doctor_brief", "log_care_visit", "run_deep_analysis", "import_analysis", "read_deep_analysis", "import_member_file"];
 declare const HARNESS_SKILLS: readonly ["longpi-dispatch", "longpi-board", "longpi-boundary", "longpi-interventions"];
 /**
  * Model-facing tool names reserved at C0 (AA §3.4), by owning module. A name moves into TOOL_NAMES
@@ -1728,6 +1732,8 @@ declare function readCheckIns(dataDir: string): CheckIn[];
  * is an undo, is absent: unknown, never a miss. A note or tag alone says nothing about it.
  */
 declare function checkinStatus(rows: readonly CheckIn[]): Map<string, Map<string, boolean>>;
+/** Days each item was done, counted cumulatively: a missed day never takes one away. */
+declare function doneCounts(dataDir: string): Map<string, number>;
 /** Civil clock for check-ins, streaks and reminders. The person is in China; the process zone is not. */
 declare const CIVIL_TZ = "Asia/Shanghai";
 /** YYYY-MM-DD in Asia/Shanghai, not UTC and not the process zone. */
@@ -2218,9 +2224,11 @@ interface FollowupState {
     date: string;
     first_due: string;
   }>;
+  /** done_total is said (cumulative check-ins); streak is kept for older state and never said. */
   week: {
     pct: number | null;
     streak: number;
+    done_total?: number;
     next_retest: {
       marker: string;
       date: string;
@@ -2534,7 +2542,7 @@ declare function invalidateIndicators(): void;
 //#endregion
 //#region src/contracts/memory.d.ts
 declare const MEMORY_VERSION = 1;
-type MemoryKind = 'goal' | 'exclusion' | 'condition' | 'medication' | 'supplement' | 'family_history' | 'life_event' | 'care' | 'preference' | 'asked_topic' | 'note';
+type MemoryKind = 'goal' | 'exclusion' | 'condition' | 'medication' | 'supplement' | 'family_history' | 'life_event' | 'care' | 'preference' | 'asked_topic' | 'note' | 'vision' | 'motivation' | 'win' | 'style' | 'commitment';
 type ConditionFlag = 'diabetes' | 'prediabetes' | 'ckd' | 'pregnancy' | 'pregnancy_planning' | 'breastfeeding' | 'cancer_followup' | 'cvd' | 'stent' | 'hypertension' | 'nafld' | 'anaemia' | 'thyroid' | 'minor' | 'caregiver_subject';
 type DrugClass = 'sglt2i' | 'insulin' | 'sulfonylurea' | 'metformin' | 'glp1ra' | 'statin' | 'anticoagulant' | 'antiplatelet' | 'antihypertensive' | 'thyroid_hormone' | 'iron' | 'steroid' | 'other';
 /** Rule tables (not the model) decide safety relevance. */
@@ -2640,7 +2648,35 @@ interface AskedTopicItem extends MemoryItemBase {
 interface NoteItem extends MemoryItemBase {
   kind: 'note';
 }
-type MemoryItem = GoalItem | ExclusionItem | ConditionItem | MedicationItem | FamilyHistoryItem | LifeEventItem | CareItem | PreferenceItem | AskedTopicItem | NoteItem;
+interface VisionItem extends MemoryItemBase {
+  kind: 'vision';
+}
+interface MotivationItem extends MemoryItemBase {
+  kind: 'motivation';
+}
+interface WinItem extends MemoryItemBase {
+  kind: 'win';
+  day: IsoDay;
+}
+type CoachTone = 'upbeat' | 'gentle' | 'direct';
+interface StyleItem extends MemoryItemBase {
+  kind: 'style';
+  tone?: CoachTone;
+  address?: '你' | '您';
+}
+interface CommitmentItem extends MemoryItemBase {
+  kind: 'commitment';
+  /** 0–10, how sure they are; Pi shrinks the step while it is below 7. */
+  confidence: number | null;
+  /** The plan item it carries out: its check-ins are the cumulative count. */
+  plan_item?: Id;
+  started: IsoDay;
+  /** Set when it became a habit; still active, asked about now and then. */
+  graduated?: IsoDay;
+  /** Times counted before LongPi (a member file brought from the standalone coach): counts never reset. */
+  carried_count?: number;
+}
+type MemoryItem = GoalItem | ExclusionItem | ConditionItem | MedicationItem | FamilyHistoryItem | LifeEventItem | CareItem | PreferenceItem | AskedTopicItem | NoteItem | VisionItem | MotivationItem | WinItem | StyleItem | CommitmentItem;
 interface PersonMemory {
   version: typeof MEMORY_VERSION;
   rev: number;
@@ -2664,6 +2700,11 @@ type MemoryOp = {
 } | {
   op: 'confirm';
   id: Id;
+  provenance: Provenance;
+} | {
+  op: 'graduate';
+  id: Id;
+  day: IsoDay;
   provenance: Provenance;
 } | {
   op: 'touch_topic';
@@ -2926,6 +2967,8 @@ interface DoctorBrief {
   conditions_zh: string[];
   questions_zh: string[];
   tests_zh: string[];
+  /** Items a deep analysis gave to a doctor (supplements, tests, referrals, the physician's items). */
+  analysis_zh?: string[];
   /** Model prose around refs, validated; the template otherwise. */
   summary_zh: string;
   /** dataDir/briefs/<id>.md, printable. */
@@ -2983,9 +3026,12 @@ interface FactPack {
   memory_digest_zh: string;
   /** Topic keys asked in the last 7 days. */
   asked_recent: string[];
+  /** days_total is what is said (cumulative, never resets); streak stays for older readers and is not shown. */
   engagement: {
     season_title_zh: string | null;
     week: number | null;
+    days_total: number;
+    next_milestone: number;
     streak: number;
     freezes_left: number;
     open_quests: number;
@@ -3334,6 +3380,7 @@ interface Journey {
       units: string[];
     }>;
   };
+  /** done_total: check-ins marked done across the plan, cumulative (what is shown); streak is kept for older readers. */
   plan: {
     exists: boolean;
     title: string;
@@ -3347,6 +3394,7 @@ interface Journey {
       done_today: boolean | null;
     }>;
     streak: number;
+    done_total: number;
     adherence_pct: number | null;
   };
   reminders: Array<{
@@ -3445,644 +3493,6 @@ declare function followupStateOf(journey: Journey, tracking: Tracking): Followup
 declare function stageNow(profile: Profile, mcpConfigured: boolean): {
   stage: Stage | null;
   title_zh: string;
-};
-//#endregion
-//#region src/calendar.d.ts
-declare function escapeText(value: string): string;
-/** Split a content line into 75-octet pieces without cutting a UTF-8 character; continuations start with a space. */
-declare function foldLine(line: string): string;
-/**
- * The day a retest event sits on: its date while that is still ahead or due
- * today for the first time; once it is overdue, tomorrow, so the 09:00 alarm
- * can still fire. The UID stays the same, so a re-import moves the one event.
- */
-declare function retestDay(retest: {
-  date: string;
-  first_due: string;
-}, today: string): {
-  date: string;
-  sequence: number;
-};
-declare function buildCalendar(journey: Journey, tracking: Tracking, opts: {
-  now: Date;
-}): string;
-//#endregion
-//#region src/tools-followup.d.ts
-/**
- * The model's text is refused, with the reason, when it names a dose or, with minimal detail, a health
- * value, a number that is not a date, a time or a count, or one of `names` (the plan's item titles and
- * markers). Full-width digits and letters are read as their plain forms.
- */
-declare function followupTextProblem(text: string, detail: 'minimal' | 'full', names?: readonly string[]): string;
-/**
- * Why a set_followup call needs the person's own approval, or '' when it does not: turning reminders on,
- * sending item names and adherence (detail full), or any webhook address. The tool's text says "only on
- * their word"; this makes DSH ask them, so text the model read cannot switch it on alone.
- */
-declare function followupApprovalReason(args: unknown): string;
-//#endregion
-//#region src/planner.d.ts
-declare const DRAFT_CATEGORIES: readonly ["diet", "exercise", "sleep", "weight", "behavior", "supplement"];
-type DraftCategory$1 = (typeof DRAFT_CATEGORIES)[number];
-interface PlanBrief {
-  today: string;
-  focus: Focus[];
-  /** What is worth improving, most important first. */
-  priorities: Array<{
-    marker_key: string;
-    label_zh: string;
-    value: number | null;
-    unit: string;
-    date: string | null;
-    why_zh: string;
-    source: 'phenoage_levers' | 'china_par_levers' | 'focus';
-  }>;
-  /** Evidence-backed options for those priorities, from data/effects.jsonl; never a drug. */
-  candidates: Array<{
-    id: string;
-    intervention_zh: string;
-    category: string;
-    marker_key: string;
-    label_zh: string;
-    effect: {
-      value: number;
-      unit: string;
-      kind?: string;
-    };
-    duration_weeks: number | null;
-    population: string;
-    design: string;
-    doi: string;
-    verified: boolean;
-    expected_zh: string;
-    needs_doctor: boolean;
-    cautions_zh: string[];
-    /** The trial average in the unit of this person's latest value, when it converts exactly; else null. Used for goals. */
-    effect_in_record_unit: number | null;
-    /** The evidence row's own note (left out for supplements, whose notes name study doses). */
-    note_zh?: string;
-    /** Forms the evidence row lists (快走、骑车…), for exercise items. */
-    examples_zh: string[];
-  }>;
-  /**
-   * weight_med: a current medicine, or one that starts inside the plan window, that moves weight by itself (GLP-1,
-   * SGLT2, insulin). The draft then gives no trial kilogram figure and no weight goal (INT062 fix 5b).
-   */
-  safety: {
-    medications: string[];
-    notes_zh: string[];
-    stop_zh?: string;
-    no_weight_loss?: boolean;
-    weight_med?: string;
-  };
-  /** Evidence ids and titles the person already refused. */
-  excluded_ids?: string[];
-  excluded_phrases?: string[];
-  past_items: Array<{
-    title: string;
-    category: string;
-    verdicts: string[];
-    adherence_pct: number | null;
-  }>;
-  /** Daily wearable metrics on record (dailySteps, dailyTotalSleepTime): a target is only offered for these. */
-  metrics: string[];
-  /** Why a focus or a priority got no item (no evidence rows yet, no value on record). */
-  notes_zh: string[];
-  boundary_zh: string;
-}
-interface DraftItem {
-  /** The evidence row the item came from. */
-  id: string;
-  category: DraftCategory$1;
-  category_zh: string;
-  title: string;
-  detail: string;
-  start: string;
-  markers: string[];
-  target: {
-    metric: string;
-    op: '>=' | '<=';
-    value: number;
-    unit: string;
-  } | null;
-  evidence: {
-    effect_id: string;
-    expected_zh: string;
-    doi: string;
-    verified: boolean;
-    population: string;
-  };
-  needs_doctor: boolean;
-  cautions_zh: string[];
-}
-interface PlanDraft {
-  title: string;
-  items: DraftItem[];
-  /** basis_item_id: the draft item whose evidence gives the goal; the goal goes when that item is removed. */
-  goals: Array<{
-    marker: string;
-    value: number;
-    unit: string;
-    basis_zh: string;
-    basis_item_id: string;
-  }>;
-  notes_zh: string[];
-}
-interface BriefOptions {
-  /** Focus for this draft only (the saved profile is not changed). */
-  focus?: readonly Focus[];
-  /** Markers the person asked to improve, by name or key; they come first. */
-  markers?: readonly string[];
-  /** Limits they just stated (不要限时进食, 怀孕). Saved, and applied to this draft. */
-  constraints?: string;
-}
-/**
- * A draft's focus and markers as the tool and the accept route both read them: unknown focus values are
- * dropped (none left, the saved focus), markers trimmed, at most 8 of 40 characters or fewer.
- */
-declare function briefOptionsOf(focus: unknown, markers: unknown): BriefOptions;
-declare function buildPlanBrief(context: TrackingContext & {
-  mount?: MountState;
-}, options?: BriefOptions): Promise<PlanBrief>;
-declare function expectedText(row: EffectRow): string;
-/**
- * Up to maxItems (default 3) items that cover the most important priorities with the largest verified
- * effects: one item per intervention, at most one supplement, different categories first. Deterministic;
- * saves nothing. Null when there is nothing evidence-backed to propose.
- */
-/** The Chinese reply for this draft. The model sends it and does not call another tool first. */
-/** Walking, meal quality, sleep, and smoking or alcohol. No fast, no large weight target, no supplement, no iron. */
-declare function softHoldDraft(today: string, notes?: readonly string[]): PlanDraft;
-declare function replyForDraft(brief: PlanBrief, draft: PlanDraft | null): string;
-/**
- * Keep the draft's date while the labs and medicines are the same. A new day,
- * by itself, does not retitle the draft. A new exclusion regenerates the items
- * and keeps the date.
- */
-declare function settleDraft(dataDir: string, brief: PlanBrief, today: string, opts?: {
-  maxItems?: number;
-}): PlanDraft | null;
-declare function draftPlan(brief: PlanBrief, opts: {
-  today: string;
-  maxItems?: number;
-}): PlanDraft | null;
-/**
- * The plan to save when the person accepts a draft on the page. Each item is rebuilt from the evidence
- * by its id (so nothing but what the evidence says is saved, and never a drug), goals are recomputed for
- * the items kept and filtered to the ones they kept. The caller normalizes and saves it like any plan.
- */
-declare function acceptedPlan(brief: PlanBrief, posted: unknown, today: string): {
-  ok: true;
-  plan: Record<string, unknown>;
-} | {
-  ok: false;
-  error: string;
-  problems: string[];
-};
-//#endregion
-//#region src/triage/care.d.ts
-type CareStatus = CareItem['care_status'];
-declare function careItems(dataDir: string): CareItem[];
-declare function careFor(dataDir: string, findingId: string): CareItem | null;
-interface VisitInput {
-  finding_id?: string;
-  status: CareStatus;
-  visit_date?: string;
-  department_zh?: string;
-  outcome_zh?: string;
-  quote_zh?: string;
-  /** The person's own message this turn, for the verbatim check. */
-  said_zh?: string;
-  /** Civil day used to resolve 下周一. */
-  today?: string;
-  via: 'chat' | 'page';
-  session_id?: string;
-  confirmed?: boolean;
-}
-/** Whether their words name this calendar day (2026-10-05, 10月5日, or 下周一 when that is the day). */
-declare function dateSaid(quote: string, visitDate: string, today?: string): boolean;
-/** They are denying a booking (没约那一天, 页头说我已约). */
-declare function deniesBooking(quote: string): boolean;
-/**
- * A booking is theirs only when the quote is their words, says they booked, and names the date.
- * 「下周一去社区医院」 is a plan, not a booking. 「页头说我已约 10 月 5 日」 is a denial.
- */
-declare function affirmsBooking(quote: string, said: string, visitDate: string, today?: string): boolean;
-/**
- * Record a booking, a visit or a decision not to go. Without a finding id it applies to the first open
- * finding. Supersedes the finding's previous care item, so the history stays in memory_log.
- */
-declare function logCareVisit(dataDir: string, input: VisitInput, findings: readonly TriageFinding[]): {
-  ok: true;
-  item: CareItem;
-  cleared?: boolean;
-  kept?: boolean;
-} | {
-  ok: false;
-  error: string;
-};
-interface CareState {
-  /** The stop after visits: findings a doctor has seen since their values are taken out. */
-  stop: StopResult;
-  findings: TriageFinding[];
-  /** Findings a doctor has seen, with what they said. */
-  seen: Array<{
-    finding: TriageFinding;
-    care: CareItem;
-  }>;
-}
-/**
- * The record's stop with the person's visits applied. A finding counts as seen when a visit is logged on
- * or after the date of its newest value; a checkup after the visit that still shows it opens it again.
- */
-declare function careState(dataDir: string, stop: StopResult, today: string): CareState;
-/** What the doctor said, for the plan's notes: one line per finding seen. */
-declare function seenNotes(state: CareState): string[];
-//#endregion
-//#region src/privacy/pending.d.ts
-/** True until the person has granted or declined sending health chat to DeepSeek. A missing decision is still required. */
-declare function deepseekConsentPending(decision: string | null | undefined): boolean;
-//#endregion
-//#region src/privacy/egress.d.ts
-declare const CONSENT_HOLD_ZH = "如果正在发生急症，请立即拨打 120；如有伤害自己的想法，请拨打全国心理援助热线 12356。你尚未同意把健康对话发给 DeepSeek，因此本次不发送健康信息。请在开始页或档案中选择「我知道了，同意把健康对话发给 DeepSeek」。";
-/** `blob` is the whole call (system prompt included). `personText` is only what the person typed. */
-declare function modelEgress(granted: boolean, blob: string, personText?: string): 'send' | 'hold';
-//#endregion
-//#region src/doctor-first.d.ts
-declare function buildDoctorFirst(context: {
-  config: Config;
-  records: RecordSnapshot;
-  today: string;
-}): Promise<StopResult>;
-//#endregion
-//#region src/plan-hold.d.ts
-declare function holdPlanDraft(session?: string, ms?: number, now?: number): void;
-declare function releasePlanDraft(session?: string): void;
-declare function planDraftHeld(session?: string, now?: number): boolean;
-/** The session id of the agent a tool or hook runs for; '' when there is none. */
-declare function sessionKey(agent: unknown): string;
-//#endregion
-//#region src/contracts/plan.d.ts
-type DraftCategory = 'diet' | 'exercise' | 'sleep' | 'weight' | 'behavior' | 'supplement';
-/** Z's shape, kept as a view: excluded_* also come from ExclusionItems; draft state stays in plan_prefs.json. */
-interface PlanPrefs {
-  excluded_ids: string[];
-  excluded_phrases: string[];
-  /** Items taken out on the page, so 恢复 can put them back after a reload. */
-  removed_items: Array<{
-    id: string;
-    title: string;
-  }>;
-  pregnant: boolean | null;
-  ckd: boolean | null;
-  /** Whether they drink alcohol, from their own answer; null = never asked, so no alcohol item. */
-  drinks: boolean | null;
-  drafted_on: IsoDay | '';
-  clinical_fp: string;
-  content_fp: string;
-  draft: unknown;
-}
-interface PlanDraftItem {
-  id: string;
-  category: DraftCategory;
-  title_zh: string;
-  /** A behavioural target only when evidence, data or a skill gives the number. */
-  behaviour_zh: string;
-  target?: {
-    marker_key: string;
-    label_zh: string;
-  };
-  evidence: {
-    effect_zh: string;
-    population_zh: string;
-    doi: string | null;
-    design: 'meta' | 'rct' | 'cohort' | 'guideline' | 'mechanistic';
-  };
-  needs_doctor: boolean;
-  /** From plan-safety.ts rules only (e.g. the SGLT2i note, the fish-oil note). */
-  cautions_zh: string[];
-  start: IsoDay;
-}
-interface PlanDraftV2 {
-  id: Id;
-  version: 2;
-  drafted_on: IsoDay;
-  basis: {
-    fact_fp: string;
-    memory_rev: number;
-    triage: 'clear' | 'doctor_first';
-  };
-  /** Doctor-first: the draft is limited or paused, never silently produced. */
-  hold?: {
-    reason_zh: string;
-    finding_ids: Id[];
-  };
-  items: PlanDraftItem[];
-  goals: Array<{
-    marker_key: string;
-    value: number;
-    unit: string;
-    label_zh: string;
-    kind: 'trial_average_projection';
-  }>;
-  removed: Array<{
-    item_id: string;
-    why: 'exclusion' | 'safety' | 'unsuitable' | 'duplicate';
-    rule_or_memory_id: string;
-  }>;
-  /** The co-designer's own words; validated. */
-  rationale_zh?: string;
-  source: 'rules' | 'co_designer';
-}
-//#endregion
-//#region src/plan-prefs.d.ts
-declare function readPlanPrefs(dataDir: string): PlanPrefs;
-/** Take an exclusion back everywhere (memory retract through the chat or the page). */
-declare function forgetExclusion(dataDir: string, keys: string[]): PlanPrefs;
-/** Drop or restore one drafted item. The title is stored as a phrase so the same intervention cannot regrow under another evidence id. */
-declare function setPlanExclusion(dataDir: string, item: {
-  id?: string;
-  title?: string;
-  excluded: boolean;
-}): PlanPrefs;
-declare function rememberExclusions(dataDir: string, phrases: readonly string[]): PlanPrefs;
-/** Whether they drink, from their own words: 不喝酒 → false; 喝酒, 一个月两杯红酒 → true. null leaves it as it was. */
-declare function drinkingFromText(text: string): boolean | null;
-declare function setDrinking(dataDir: string, drinks: boolean): PlanPrefs;
-//#endregion
-//#region src/meds-stated.d.ts
-interface StatedMedication {
-  name: string;
-  dose_text: string;
-  frequency_text: string;
-  since: string;
-  at: string;
-}
-declare function readStatements(dataDir: string): StatedMedication[];
-/** Mirobody prints a once-daily plan as "0x/day" (period of 1 day, count left at 0). */
-declare function fixScheduleText(text: string): string;
-/**
- * One current line per drug. A statement the person just asked to remember
- * wins. An older or ended plan stays on a second line so it is not read as today's dose.
- */
-declare function presentMedications(rows: readonly MedicationRow[], stated?: readonly StatedMedication[]): {
-  rows: MedicationRow[];
-  lines: string[];
-};
-//#endregion
-//#region src/connection.d.ts
-declare const CONNECTION_FILE = "connection.json";
-/** One catalogue read, all round trips included. */
-declare const CONNECTION_TEST_MS = 10000;
-interface SavedConnection {
-  mcp_url: string;
-  mcp_token?: string;
-  saved_at: string;
-}
-type ConnectionSource = 'saved' | 'config' | 'none';
-/** The saved connection, or null when there is none or the file is unreadable. */
-declare function readConnection(dataDir: string): SavedConnection | null;
-/** Write the connection, private to the person (0600), replacing the file in one step. */
-declare function saveConnection(dataDir: string, input: {
-  mcp_url: string;
-  mcp_token?: string;
-}, now?: Date): SavedConnection;
-/** Remove the saved connection; the configured values apply again. True when there was one. */
-declare function clearConnection(dataDir: string): boolean;
-/**
- * The configuration every module reads: the plugin's own, with mcpUrl and mcpToken taken from the saved
- * connection when there is one. A saved connection without a token means none, never the configured one:
- * a token belongs to its address.
- */
-declare function effectiveConfig(config: Config): Config;
-/** Where the effective address comes from. */
-declare function connectionSource(config: Config): ConnectionSource;
-/**
- * A short hash of the MCP token, for cache keys: two accounts behind one address never share a cached
- * record. sha256 of the trimmed token, first 16 hex characters; '' when there is no token.
- */
-declare function connectionKey(config: Pick<Config, 'mcpToken'>): string;
-/**
- * The address as the page may show it. The installer's rule: everything after /mcp/ is the personal
- * secret and is hidden. A query or fragment is hidden too, and so is anything that does not parse.
- */
-declare function maskMcpUrl(url: string): string;
-/** Why an address cannot be used, in Chinese; '' when it can. https, or http to this machine only. */
-declare function connectionUrlProblem(url: unknown): string;
-/** Why a token cannot be used, in Chinese; '' when it can (or when there is none). */
-declare function connectionTokenProblem(token: unknown): string;
-type ConnectionTest = {
-  ok: true;
-  indicators: number;
-} | {
-  ok: false;
-  error: string;
-};
-/**
- * Read the record catalogue once through an address and token, within CONNECTION_TEST_MS in all.
- * Never saves anything. Errors are in Chinese, with the address and token taken out.
- */
-declare function testConnection(input: {
-  mcp_url: string;
-  mcp_token?: string;
-  member?: string;
-}, timeoutMs?: number): Promise<ConnectionTest>;
-//#endregion
-//#region src/routes.d.ts
-type Handler = (req: IncomingMessage, res: ServerResponse) => void;
-/**
- * The part of DSH's `connection` service (dsh-client-connection, HostConnectionHandle) the routes use:
- * the Host/Origin/Sec-Fetch-Site fence, then the signed `dsh-auth` cookie. 401 or 403 rejects.
- */
-interface ConnectionGuard {
-  requestRejection(request: {
-    headers: IncomingMessage['headers'];
-  }): 401 | 403 | undefined;
-}
-declare const CONNECTION_UNAVAILABLE = "longpi: DeepSeek Harness connection service unavailable";
-/** application/json, with or without a charset or other parameters. */
-declare function isJsonRequest(req: Pick<IncomingMessage, 'headers'>): boolean;
-declare function setActivePersonResolver(fn: () => string): void;
-declare function guardRoute(connection: () => ConnectionGuard | null, handler: Handler): Handler;
-/** GET /api/longpi/connection, and the answer of every connection write. */
-interface ConnectionStatus {
-  source: ConnectionSource;
-  url_masked: string;
-  token_set: boolean;
-  status: 'ok' | 'error' | 'none';
-  error?: string;
-  /** Why pairing with the health data service on this computer failed, when it did. */
-  pairing_error?: string;
-  summary?: RecordsSummary;
-}
-//#endregion
-//#region src/workspace.d.ts
-/** The part of DSH's workspaceRegistry service (@deepseek-ai/dsh-workspace) this uses. */
-interface WorkspaceRegistryLike {
-  list(): ReadonlyArray<{
-    id: string;
-    path: string;
-    title?: string;
-  }>;
-  create(path: string, title?: string): Promise<{
-    id: string;
-    path: string;
-  }>;
-}
-declare const WORKSPACE_MARKER = "workspace-bootstrap.json";
-declare const WORKSPACE_DIR = "workspace";
-declare const WORKSPACE_TITLE = "健康对话";
-type BootstrapResult = {
-  status: 'created';
-  path: string;
-  workspace_id: string;
-} | {
-  status: 'disabled' | 'done_before' | 'not_empty' | 'no_registry';
-} | {
-  status: 'error';
-  error: string;
-};
-/** Create the 健康对话 workspace once, unless one already exists. Never throws. */
-declare function bootstrapWorkspace(registry: WorkspaceRegistryLike | null | undefined, options: {
-  dataDir: string;
-  enabled: boolean;
-  now?: Date;
-}): Promise<BootstrapResult>;
-//#endregion
-//#region src/dose.d.ts
-/** A fresh pattern: `g` for replacing, none for testing (a global pattern keeps lastIndex between tests). */
-declare function dosePattern(flags?: string): RegExp;
-/** Whether the text names an amount of a medicine or supplement. */
-declare function hasDose(text: string): boolean;
-/**
- * The text without any amount of a medicine or supplement, and whether one was taken out. What is left is
- * tidied (a separator or empty bracket the amount leaves behind goes too) but never restored: a text that was
- * only a dose comes back empty.
- */
-declare function stripDoses(value: string): {
-  text: string;
-  stripped: boolean;
-};
-//#endregion
-//#region src/core/nba-registry.d.ts
-declare function registerCandidates(module: ModuleId, provider: CandidateProvider): () => void;
-/**
- * Every provider's candidates for this pack. A provider that throws adds nothing; a mandatory flag from a
- * provider not registered as M1 or M2 is cleared, and each candidate carries the module it came from.
- */
-declare function collectCandidates(pack: Omit<FactPack, 'candidates' | 'fp'>): NextBestAction[];
-declare function candidateProviders(): number;
-//#endregion
-//#region src/core/validate.d.ts
-type ValidatedKind = SurfaceKind | 'feedback' | 'brief' | 'plan' | 'advice';
-declare function registerValidator(rule: ValidatorRule): () => void;
-/** Every number a card may quote: the pack's numbers (and their roundings), dates, and the deterministic texts. */
-declare function allowedNumbers(pack: FactPack): Set<string>;
-declare const BASE_RULES: ValidatorRule[];
-declare function validatorRules(): readonly ValidatorRule[];
-/** The failures of every rule that applies to this kind of output; empty when it passes. */
-declare function runValidators(kind: ValidatedKind, text: string, card: {
-  fact_ids: Id[];
-  number_keys: string[];
-}, pack: FactPack): Array<{
-  rule: string;
-  detail: string;
-}>;
-/** Only the module-registered rules (C0 behaviour, for the registry test). */
-declare function runRegistered(kind: ValidatedKind, text: string, card: {
-  fact_ids: Id[];
-  number_keys: string[];
-}, pack: FactPack): Array<{
-  rule: string;
-  detail: string;
-}>;
-//#endregion
-//#region src/core/files.d.ts
-declare const DATA_FILES: {
-  readonly profile: {
-    readonly path: "profile.json";
-    readonly writer: "M11/M7";
-  };
-  readonly connection: {
-    readonly path: "connection.json";
-    readonly writer: "M7";
-  };
-  readonly planPrefs: {
-    readonly path: "plan_prefs.json";
-    readonly writer: "M3";
-  };
-  readonly interventions: {
-    readonly path: "interventions";
-    readonly writer: "M3";
-  };
-  readonly schedule: {
-    readonly path: "schedule";
-    readonly writer: "M6";
-  };
-  readonly medicationStatements: {
-    readonly path: "medication_statements.jsonl";
-    readonly writer: "M7";
-  };
-  readonly followup: {
-    readonly path: "followup.json";
-    readonly writer: "M6";
-  };
-  readonly memory: {
-    readonly path: "memory.json";
-    readonly writer: "M0";
-  };
-  readonly memoryLog: {
-    readonly path: "memory_log.jsonl";
-    readonly writer: "M0";
-  };
-  readonly events: {
-    readonly path: "events.jsonl";
-    readonly writer: "M0";
-  };
-  readonly eventsCursor: {
-    readonly path: "events_cursor.json";
-    readonly writer: "M0";
-  };
-  readonly usage: {
-    readonly path: "usage.jsonl";
-    readonly writer: "M0";
-  };
-  readonly surfaces: {
-    readonly path: "surfaces.json";
-    readonly writer: "M5";
-  };
-  readonly surfacesLog: {
-    readonly path: "surfaces_log.jsonl";
-    readonly writer: "M5";
-  };
-  readonly triage: {
-    readonly path: "triage.json";
-    readonly writer: "M1";
-  };
-  readonly briefs: {
-    readonly path: "briefs";
-    readonly writer: "M1";
-  };
-  readonly feedback: {
-    readonly path: "feedback.jsonl";
-    readonly writer: "M4";
-  };
-  readonly engage: {
-    readonly path: "engage";
-    readonly writer: "M6";
-  };
-  readonly datain: {
-    readonly path: "datain";
-    readonly writer: "M7";
-  };
-  readonly science: {
-    readonly path: "science";
-    readonly writer: "M8";
-  };
-  readonly privacy: {
-    readonly path: "privacy";
-    readonly writer: "M11";
-  };
 };
 //#endregion
 //#region src/contracts/codex.d.ts
@@ -4420,6 +3830,724 @@ interface Bus {
 /** Only the owning module emits a given type (AA §3.4). */
 declare const EVENT_OWNERS: Readonly<Record<HealthEventType, ModuleId>>;
 //#endregion
+//#region src/contracts/plan.d.ts
+type DraftCategory = 'diet' | 'exercise' | 'sleep' | 'weight' | 'behavior' | 'supplement';
+/** Z's shape, kept as a view: excluded_* also come from ExclusionItems; draft state stays in plan_prefs.json. */
+interface PlanPrefs {
+  excluded_ids: string[];
+  excluded_phrases: string[];
+  /** Items taken out on the page, so 恢复 can put them back after a reload. */
+  removed_items: Array<{
+    id: string;
+    title: string;
+  }>;
+  pregnant: boolean | null;
+  ckd: boolean | null;
+  /** Whether they drink alcohol, from their own answer; null = never asked, so no alcohol item. */
+  drinks: boolean | null;
+  drafted_on: IsoDay | '';
+  clinical_fp: string;
+  content_fp: string;
+  draft: unknown;
+}
+interface PlanDraftItem {
+  id: string;
+  category: DraftCategory;
+  title_zh: string;
+  /** A behavioural target only when evidence, data or a skill gives the number. */
+  behaviour_zh: string;
+  target?: {
+    marker_key: string;
+    label_zh: string;
+  };
+  evidence: {
+    effect_zh: string;
+    population_zh: string;
+    doi: string | null;
+    design: 'meta' | 'rct' | 'cohort' | 'guideline' | 'mechanistic';
+  };
+  needs_doctor: boolean;
+  /** From plan-safety.ts rules only (e.g. the SGLT2i note, the fish-oil note). */
+  cautions_zh: string[];
+  start: IsoDay;
+}
+interface PlanDraftV2 {
+  id: Id;
+  version: 2;
+  drafted_on: IsoDay;
+  basis: {
+    fact_fp: string;
+    memory_rev: number;
+    triage: 'clear' | 'doctor_first';
+  };
+  /** Doctor-first: the draft is limited or paused, never silently produced. */
+  hold?: {
+    reason_zh: string;
+    finding_ids: Id[];
+  };
+  items: PlanDraftItem[];
+  goals: Array<{
+    marker_key: string;
+    value: number;
+    unit: string;
+    label_zh: string;
+    kind: 'trial_average_projection';
+  }>;
+  removed: Array<{
+    item_id: string;
+    why: 'exclusion' | 'safety' | 'unsuitable' | 'duplicate';
+    rule_or_memory_id: string;
+  }>;
+  /** The co-designer's own words; validated. */
+  rationale_zh?: string;
+  source: 'rules' | 'co_designer';
+}
+//#endregion
+//#region src/contracts/index.d.ts
+type RouteHandler = (req: {
+  method: string;
+  url: string;
+  query: URLSearchParams;
+  headers: Record<string, unknown>;
+}, body: unknown) => Promise<unknown>;
+interface CoreDeps {
+  config: () => Config;
+  bus: Bus;
+  memory: MemoryApi;
+  factpack: {
+    build(opts?: {
+      refresh?: boolean;
+    }): Promise<FactPack>;
+    cached(): FactPack | null;
+  };
+  llm: LlmCall;
+  specialists: Specialists;
+  budget: {
+    remaining(): {
+      input: number;
+      output: number;
+      spawns: number;
+    };
+    record(run: AgentRunRecord): void;
+  };
+  http: {
+    route(method: 'GET' | 'POST' | 'DELETE', path: `/api/longpi/${string}`, handler: RouteHandler): void;
+  };
+  nba: {
+    register(module: ModuleId, provider: CandidateProvider): () => void;
+  };
+  validators: {
+    register(rule: ValidatorRule): () => void;
+  };
+  mount: MountState;
+  /** Everything a journey is built from, read now (config, dataDir, records, catalog, today). */
+  context: () => Promise<JourneyContext>;
+  /** The dataDir now (config may change on reload). */
+  dataDir: () => string;
+  /** Drop the cached records and tracking so the next build reads again. */
+  invalidate: () => void;
+}
+//#endregion
+//#region src/member-file.d.ts
+interface MemberFileInput {
+  dataDir: string;
+  label_zh: string;
+  personId: string;
+  today: string;
+}
+/** The member file, in the coach template's sections and order, from what LongPi keeps. */
+declare function renderMemberFile(input: MemberFileInput): string;
+interface ParsedMemberFile {
+  items: NewMemoryItem[];
+  skipped_zh: string[];
+}
+/** The standalone coach's member file as memory items (the person's own file: confirmed, provenance import). */
+declare function parseMemberFile(text: string, at: string, today: string): ParsedMemberFile;
+declare function registerMemberFile(ctx: Context, deps: CoreDeps): void;
+//#endregion
+//#region src/core/memory-tools.d.ts
+/** One memory item from what the model passed, typed by kind; null when it cannot be stored. */
+declare function itemFrom(args: Record<string, unknown>, provenance: Provenance, confirmed: boolean, today: string): NewMemoryItem | null;
+declare function registerMemoryTools(ctx: Context, deps: CoreDeps): void;
+//#endregion
+//#region src/coach.d.ts
+/** apply() binds this to the config's coach switch (installer --without-coach writes false). */
+declare function setCoachEnabled(get: () => boolean): void;
+declare function coachEnabled(): boolean;
+declare function coachSkillPath(): string;
+/** The installed coach skill's version, or null when it is not installed. */
+declare function coachSkillVersion(): string | null;
+//#endregion
+//#region src/prompt.d.ts
+/** Pi's voice, from the longevity-coach skill's persona; LongPi's rules below still bound every fact and number. */
+declare function piLines(coachInstalled: boolean): string[];
+declare function personaLines(mount: MountState): string[];
+//#endregion
+//#region src/calendar.d.ts
+declare function escapeText(value: string): string;
+/** Split a content line into 75-octet pieces without cutting a UTF-8 character; continuations start with a space. */
+declare function foldLine(line: string): string;
+/**
+ * The day a retest event sits on: its date while that is still ahead or due
+ * today for the first time; once it is overdue, tomorrow, so the 09:00 alarm
+ * can still fire. The UID stays the same, so a re-import moves the one event.
+ */
+declare function retestDay(retest: {
+  date: string;
+  first_due: string;
+}, today: string): {
+  date: string;
+  sequence: number;
+};
+declare function buildCalendar(journey: Journey, tracking: Tracking, opts: {
+  now: Date;
+}): string;
+//#endregion
+//#region src/tools-followup.d.ts
+/**
+ * The model's text is refused, with the reason, when it names a dose or, with minimal detail, a health
+ * value, a number that is not a date, a time or a count, or one of `names` (the plan's item titles and
+ * markers). Full-width digits and letters are read as their plain forms.
+ */
+declare function followupTextProblem(text: string, detail: 'minimal' | 'full', names?: readonly string[]): string;
+/**
+ * Why a set_followup call needs the person's own approval, or '' when it does not: turning reminders on,
+ * sending item names and adherence (detail full), or any webhook address. The tool's text says "only on
+ * their word"; this makes DSH ask them, so text the model read cannot switch it on alone.
+ */
+declare function followupApprovalReason(args: unknown): string;
+//#endregion
+//#region src/planner.d.ts
+declare const DRAFT_CATEGORIES: readonly ["diet", "exercise", "sleep", "weight", "behavior", "supplement"];
+type DraftCategory$1 = (typeof DRAFT_CATEGORIES)[number];
+interface PlanBrief {
+  today: string;
+  focus: Focus[];
+  /** What is worth improving, most important first. */
+  priorities: Array<{
+    marker_key: string;
+    label_zh: string;
+    value: number | null;
+    unit: string;
+    date: string | null;
+    why_zh: string;
+    source: 'phenoage_levers' | 'china_par_levers' | 'focus';
+  }>;
+  /** Evidence-backed options for those priorities, from data/effects.jsonl; never a drug. */
+  candidates: Array<{
+    id: string;
+    intervention_zh: string;
+    category: string;
+    marker_key: string;
+    label_zh: string;
+    effect: {
+      value: number;
+      unit: string;
+      kind?: string;
+    };
+    duration_weeks: number | null;
+    population: string;
+    design: string;
+    doi: string;
+    verified: boolean;
+    expected_zh: string;
+    needs_doctor: boolean;
+    cautions_zh: string[];
+    /** The trial average in the unit of this person's latest value, when it converts exactly; else null. Used for goals. */
+    effect_in_record_unit: number | null;
+    /** The evidence row's own note (left out for supplements, whose notes name study doses). */
+    note_zh?: string;
+    /** Forms the evidence row lists (快走、骑车…), for exercise items. */
+    examples_zh: string[];
+  }>;
+  /**
+   * weight_med: a current medicine, or one that starts inside the plan window, that moves weight by itself (GLP-1,
+   * SGLT2, insulin). The draft then gives no trial kilogram figure and no weight goal (INT062 fix 5b).
+   */
+  safety: {
+    medications: string[];
+    notes_zh: string[];
+    stop_zh?: string;
+    no_weight_loss?: boolean;
+    weight_med?: string;
+  };
+  /** Evidence ids and titles the person already refused. */
+  excluded_ids?: string[];
+  excluded_phrases?: string[];
+  past_items: Array<{
+    title: string;
+    category: string;
+    verdicts: string[];
+    adherence_pct: number | null;
+  }>;
+  /** Daily wearable metrics on record (dailySteps, dailyTotalSleepTime): a target is only offered for these. */
+  metrics: string[];
+  /** Why a focus or a priority got no item (no evidence rows yet, no value on record). */
+  notes_zh: string[];
+  boundary_zh: string;
+}
+interface DraftItem {
+  /** The evidence row the item came from. */
+  id: string;
+  category: DraftCategory$1;
+  category_zh: string;
+  title: string;
+  detail: string;
+  start: string;
+  markers: string[];
+  target: {
+    metric: string;
+    op: '>=' | '<=';
+    value: number;
+    unit: string;
+  } | null;
+  evidence: {
+    effect_id: string;
+    expected_zh: string;
+    doi: string;
+    verified: boolean;
+    population: string;
+  };
+  needs_doctor: boolean;
+  cautions_zh: string[];
+}
+interface PlanDraft {
+  title: string;
+  items: DraftItem[];
+  /** basis_item_id: the draft item whose evidence gives the goal; the goal goes when that item is removed. */
+  goals: Array<{
+    marker: string;
+    value: number;
+    unit: string;
+    basis_zh: string;
+    basis_item_id: string;
+  }>;
+  notes_zh: string[];
+}
+interface BriefOptions {
+  /** Focus for this draft only (the saved profile is not changed). */
+  focus?: readonly Focus[];
+  /** Markers the person asked to improve, by name or key; they come first. */
+  markers?: readonly string[];
+  /** Limits they just stated (不要限时进食, 怀孕). Saved, and applied to this draft. */
+  constraints?: string;
+}
+/**
+ * A draft's focus and markers as the tool and the accept route both read them: unknown focus values are
+ * dropped (none left, the saved focus), markers trimmed, at most 8 of 40 characters or fewer.
+ */
+declare function briefOptionsOf(focus: unknown, markers: unknown): BriefOptions;
+declare function buildPlanBrief(context: TrackingContext & {
+  mount?: MountState;
+}, options?: BriefOptions): Promise<PlanBrief>;
+declare function expectedText(row: EffectRow): string;
+/**
+ * Up to maxItems (default 3) items that cover the most important priorities with the largest verified
+ * effects: one item per intervention, at most one supplement, different categories first. Deterministic;
+ * saves nothing. Null when there is nothing evidence-backed to propose.
+ */
+/** The Chinese reply for this draft. The model sends it and does not call another tool first. */
+/** Walking, meal quality, sleep, and smoking or alcohol. No fast, no large weight target, no supplement, no iron. */
+declare function softHoldDraft(today: string, notes?: readonly string[]): PlanDraft;
+declare function replyForDraft(brief: PlanBrief, draft: PlanDraft | null): string;
+/**
+ * Keep the draft's date while the labs and medicines are the same. A new day,
+ * by itself, does not retitle the draft. A new exclusion regenerates the items
+ * and keeps the date.
+ */
+declare function settleDraft(dataDir: string, brief: PlanBrief, today: string, opts?: {
+  maxItems?: number;
+}): PlanDraft | null;
+declare function draftPlan(brief: PlanBrief, opts: {
+  today: string;
+  maxItems?: number;
+}): PlanDraft | null;
+/**
+ * The plan to save when the person accepts a draft on the page. Each item is rebuilt from the evidence
+ * by its id (so nothing but what the evidence says is saved, and never a drug), goals are recomputed for
+ * the items kept and filtered to the ones they kept. The caller normalizes and saves it like any plan.
+ */
+declare function acceptedPlan(brief: PlanBrief, posted: unknown, today: string): {
+  ok: true;
+  plan: Record<string, unknown>;
+} | {
+  ok: false;
+  error: string;
+  problems: string[];
+};
+//#endregion
+//#region src/triage/care.d.ts
+type CareStatus = CareItem['care_status'];
+declare function careItems(dataDir: string): CareItem[];
+declare function careFor(dataDir: string, findingId: string): CareItem | null;
+interface VisitInput {
+  finding_id?: string;
+  status: CareStatus;
+  visit_date?: string;
+  department_zh?: string;
+  outcome_zh?: string;
+  quote_zh?: string;
+  /** The person's own message this turn, for the verbatim check. */
+  said_zh?: string;
+  /** Civil day used to resolve 下周一. */
+  today?: string;
+  via: 'chat' | 'page';
+  session_id?: string;
+  confirmed?: boolean;
+}
+/** Whether their words name this calendar day (2026-10-05, 10月5日, or 下周一 when that is the day). */
+declare function dateSaid(quote: string, visitDate: string, today?: string): boolean;
+/** They are denying a booking (没约那一天, 页头说我已约). */
+declare function deniesBooking(quote: string): boolean;
+/**
+ * A booking is theirs only when the quote is their words, says they booked, and names the date.
+ * 「下周一去社区医院」 is a plan, not a booking. 「页头说我已约 10 月 5 日」 is a denial.
+ */
+declare function affirmsBooking(quote: string, said: string, visitDate: string, today?: string): boolean;
+/**
+ * Record a booking, a visit or a decision not to go. Without a finding id it applies to the first open
+ * finding. Supersedes the finding's previous care item, so the history stays in memory_log.
+ */
+declare function logCareVisit(dataDir: string, input: VisitInput, findings: readonly TriageFinding[]): {
+  ok: true;
+  item: CareItem;
+  cleared?: boolean;
+  kept?: boolean;
+} | {
+  ok: false;
+  error: string;
+};
+interface CareState {
+  /** The stop after visits: findings a doctor has seen since their values are taken out. */
+  stop: StopResult;
+  findings: TriageFinding[];
+  /** Findings a doctor has seen, with what they said. */
+  seen: Array<{
+    finding: TriageFinding;
+    care: CareItem;
+  }>;
+}
+/**
+ * The record's stop with the person's visits applied. A finding counts as seen when a visit is logged on
+ * or after the date of its newest value; a checkup after the visit that still shows it opens it again.
+ */
+declare function careState(dataDir: string, stop: StopResult, today: string): CareState;
+/** What the doctor said, for the plan's notes: one line per finding seen. */
+declare function seenNotes(state: CareState): string[];
+//#endregion
+//#region src/privacy/pending.d.ts
+/** True until the person has granted or declined sending health chat to DeepSeek. A missing decision is still required. */
+declare function deepseekConsentPending(decision: string | null | undefined): boolean;
+//#endregion
+//#region src/privacy/egress.d.ts
+declare const CONSENT_HOLD_ZH = "如果正在发生急症，请立即拨打 120；如有伤害自己的想法，请拨打全国心理援助热线 12356。你尚未同意把健康对话发给 DeepSeek，因此本次不发送健康信息。请在开始页或档案中选择「我知道了，同意把健康对话发给 DeepSeek」。";
+/** `blob` is the whole call (system prompt included). `personText` is only what the person typed. */
+declare function modelEgress(granted: boolean, blob: string, personText?: string): 'send' | 'hold';
+//#endregion
+//#region src/doctor-first.d.ts
+declare function buildDoctorFirst(context: {
+  config: Config;
+  records: RecordSnapshot;
+  today: string;
+}): Promise<StopResult>;
+//#endregion
+//#region src/plan-hold.d.ts
+declare function holdPlanDraft(session?: string, ms?: number, now?: number): void;
+declare function releasePlanDraft(session?: string): void;
+declare function planDraftHeld(session?: string, now?: number): boolean;
+/** The session id of the agent a tool or hook runs for; '' when there is none. */
+declare function sessionKey(agent: unknown): string;
+//#endregion
+//#region src/plan-prefs.d.ts
+declare function readPlanPrefs(dataDir: string): PlanPrefs;
+/** Take an exclusion back everywhere (memory retract through the chat or the page). */
+declare function forgetExclusion(dataDir: string, keys: string[]): PlanPrefs;
+/** Drop or restore one drafted item. The title is stored as a phrase so the same intervention cannot regrow under another evidence id. */
+declare function setPlanExclusion(dataDir: string, item: {
+  id?: string;
+  title?: string;
+  excluded: boolean;
+}): PlanPrefs;
+declare function rememberExclusions(dataDir: string, phrases: readonly string[]): PlanPrefs;
+/** Whether they drink, from their own words: 不喝酒 → false; 喝酒, 一个月两杯红酒 → true. null leaves it as it was. */
+declare function drinkingFromText(text: string): boolean | null;
+declare function setDrinking(dataDir: string, drinks: boolean): PlanPrefs;
+//#endregion
+//#region src/meds-stated.d.ts
+interface StatedMedication {
+  name: string;
+  dose_text: string;
+  frequency_text: string;
+  since: string;
+  at: string;
+}
+declare function readStatements(dataDir: string): StatedMedication[];
+/** Mirobody prints a once-daily plan as "0x/day" (period of 1 day, count left at 0). */
+declare function fixScheduleText(text: string): string;
+/**
+ * One current line per drug. A statement the person just asked to remember
+ * wins. An older or ended plan stays on a second line so it is not read as today's dose.
+ */
+declare function presentMedications(rows: readonly MedicationRow[], stated?: readonly StatedMedication[]): {
+  rows: MedicationRow[];
+  lines: string[];
+};
+//#endregion
+//#region src/connection.d.ts
+declare const CONNECTION_FILE = "connection.json";
+/** One catalogue read, all round trips included. */
+declare const CONNECTION_TEST_MS = 10000;
+interface SavedConnection {
+  mcp_url: string;
+  mcp_token?: string;
+  saved_at: string;
+}
+type ConnectionSource = 'saved' | 'config' | 'none';
+/** The saved connection, or null when there is none or the file is unreadable. */
+declare function readConnection(dataDir: string): SavedConnection | null;
+/** Write the connection, private to the person (0600), replacing the file in one step. */
+declare function saveConnection(dataDir: string, input: {
+  mcp_url: string;
+  mcp_token?: string;
+}, now?: Date): SavedConnection;
+/** Remove the saved connection; the configured values apply again. True when there was one. */
+declare function clearConnection(dataDir: string): boolean;
+/**
+ * The configuration every module reads: the plugin's own, with mcpUrl and mcpToken taken from the saved
+ * connection when there is one. A saved connection without a token means none, never the configured one:
+ * a token belongs to its address.
+ */
+declare function effectiveConfig(config: Config): Config;
+/** Where the effective address comes from. */
+declare function connectionSource(config: Config): ConnectionSource;
+/**
+ * A short hash of the MCP token, for cache keys: two accounts behind one address never share a cached
+ * record. sha256 of the trimmed token, first 16 hex characters; '' when there is no token.
+ */
+declare function connectionKey(config: Pick<Config, 'mcpToken'>): string;
+/**
+ * The address as the page may show it. The installer's rule: everything after /mcp/ is the personal
+ * secret and is hidden. A query or fragment is hidden too, and so is anything that does not parse.
+ */
+declare function maskMcpUrl(url: string): string;
+/** Why an address cannot be used, in Chinese; '' when it can. https, or http to this machine only. */
+declare function connectionUrlProblem(url: unknown): string;
+/** Why a token cannot be used, in Chinese; '' when it can (or when there is none). */
+declare function connectionTokenProblem(token: unknown): string;
+type ConnectionTest = {
+  ok: true;
+  indicators: number;
+} | {
+  ok: false;
+  error: string;
+};
+/**
+ * Read the record catalogue once through an address and token, within CONNECTION_TEST_MS in all.
+ * Never saves anything. Errors are in Chinese, with the address and token taken out.
+ */
+declare function testConnection(input: {
+  mcp_url: string;
+  mcp_token?: string;
+  member?: string;
+}, timeoutMs?: number): Promise<ConnectionTest>;
+//#endregion
+//#region src/routes.d.ts
+type Handler = (req: IncomingMessage, res: ServerResponse) => void;
+/**
+ * The part of DSH's `connection` service (dsh-client-connection, HostConnectionHandle) the routes use:
+ * the Host/Origin/Sec-Fetch-Site fence, then the signed `dsh-auth` cookie. 401 or 403 rejects.
+ */
+interface ConnectionGuard {
+  requestRejection(request: {
+    headers: IncomingMessage['headers'];
+  }): 401 | 403 | undefined;
+}
+declare const CONNECTION_UNAVAILABLE = "longpi: DeepSeek Harness connection service unavailable";
+/** application/json, with or without a charset or other parameters. */
+declare function isJsonRequest(req: Pick<IncomingMessage, 'headers'>): boolean;
+declare function setActivePersonResolver(fn: () => string): void;
+declare function guardRoute(connection: () => ConnectionGuard | null, handler: Handler): Handler;
+/** GET /api/longpi/connection, and the answer of every connection write. */
+interface ConnectionStatus {
+  source: ConnectionSource;
+  url_masked: string;
+  token_set: boolean;
+  status: 'ok' | 'error' | 'none';
+  error?: string;
+  /** Why pairing with the health data service on this computer failed, when it did. */
+  pairing_error?: string;
+  summary?: RecordsSummary;
+}
+//#endregion
+//#region src/workspace.d.ts
+/** The part of DSH's workspaceRegistry service (@deepseek-ai/dsh-workspace) this uses. */
+interface WorkspaceRegistryLike {
+  list(): ReadonlyArray<{
+    id: string;
+    path: string;
+    title?: string;
+  }>;
+  create(path: string, title?: string): Promise<{
+    id: string;
+    path: string;
+  }>;
+}
+declare const WORKSPACE_MARKER = "workspace-bootstrap.json";
+declare const WORKSPACE_DIR = "workspace";
+declare const WORKSPACE_TITLE = "健康对话";
+type BootstrapResult = {
+  status: 'created';
+  path: string;
+  workspace_id: string;
+} | {
+  status: 'disabled' | 'done_before' | 'not_empty' | 'no_registry';
+} | {
+  status: 'error';
+  error: string;
+};
+/** Create the 健康对话 workspace once, unless one already exists. Never throws. */
+declare function bootstrapWorkspace(registry: WorkspaceRegistryLike | null | undefined, options: {
+  dataDir: string;
+  enabled: boolean;
+  now?: Date;
+}): Promise<BootstrapResult>;
+//#endregion
+//#region src/dose.d.ts
+/** A fresh pattern: `g` for replacing, none for testing (a global pattern keeps lastIndex between tests). */
+declare function dosePattern(flags?: string): RegExp;
+/** Whether the text names an amount of a medicine or supplement. */
+declare function hasDose(text: string): boolean;
+/**
+ * The text without any amount of a medicine or supplement, and whether one was taken out. What is left is
+ * tidied (a separator or empty bracket the amount leaves behind goes too) but never restored: a text that was
+ * only a dose comes back empty.
+ */
+declare function stripDoses(value: string): {
+  text: string;
+  stripped: boolean;
+};
+//#endregion
+//#region src/core/nba-registry.d.ts
+declare function registerCandidates(module: ModuleId, provider: CandidateProvider): () => void;
+/**
+ * Every provider's candidates for this pack. A provider that throws adds nothing; a mandatory flag from a
+ * provider not registered as M1 or M2 is cleared, and each candidate carries the module it came from.
+ */
+declare function collectCandidates(pack: Omit<FactPack, 'candidates' | 'fp'>): NextBestAction[];
+declare function candidateProviders(): number;
+//#endregion
+//#region src/core/validate.d.ts
+type ValidatedKind = SurfaceKind | 'feedback' | 'brief' | 'plan' | 'advice';
+declare function registerValidator(rule: ValidatorRule): () => void;
+/** Every number a card may quote: the pack's numbers (and their roundings), dates, and the deterministic texts. */
+declare function allowedNumbers(pack: FactPack): Set<string>;
+declare const BASE_RULES: ValidatorRule[];
+declare function validatorRules(): readonly ValidatorRule[];
+/** The failures of every rule that applies to this kind of output; empty when it passes. */
+declare function runValidators(kind: ValidatedKind, text: string, card: {
+  fact_ids: Id[];
+  number_keys: string[];
+}, pack: FactPack): Array<{
+  rule: string;
+  detail: string;
+}>;
+/** Only the module-registered rules (C0 behaviour, for the registry test). */
+declare function runRegistered(kind: ValidatedKind, text: string, card: {
+  fact_ids: Id[];
+  number_keys: string[];
+}, pack: FactPack): Array<{
+  rule: string;
+  detail: string;
+}>;
+//#endregion
+//#region src/core/files.d.ts
+declare const DATA_FILES: {
+  readonly profile: {
+    readonly path: "profile.json";
+    readonly writer: "M11/M7";
+  };
+  readonly connection: {
+    readonly path: "connection.json";
+    readonly writer: "M7";
+  };
+  readonly planPrefs: {
+    readonly path: "plan_prefs.json";
+    readonly writer: "M3";
+  };
+  readonly interventions: {
+    readonly path: "interventions";
+    readonly writer: "M3";
+  };
+  readonly schedule: {
+    readonly path: "schedule";
+    readonly writer: "M6";
+  };
+  readonly medicationStatements: {
+    readonly path: "medication_statements.jsonl";
+    readonly writer: "M7";
+  };
+  readonly followup: {
+    readonly path: "followup.json";
+    readonly writer: "M6";
+  };
+  readonly memory: {
+    readonly path: "memory.json";
+    readonly writer: "M0";
+  };
+  readonly memoryLog: {
+    readonly path: "memory_log.jsonl";
+    readonly writer: "M0";
+  };
+  readonly events: {
+    readonly path: "events.jsonl";
+    readonly writer: "M0";
+  };
+  readonly eventsCursor: {
+    readonly path: "events_cursor.json";
+    readonly writer: "M0";
+  };
+  readonly usage: {
+    readonly path: "usage.jsonl";
+    readonly writer: "M0";
+  };
+  readonly surfaces: {
+    readonly path: "surfaces.json";
+    readonly writer: "M5";
+  };
+  readonly surfacesLog: {
+    readonly path: "surfaces_log.jsonl";
+    readonly writer: "M5";
+  };
+  readonly triage: {
+    readonly path: "triage.json";
+    readonly writer: "M1";
+  };
+  readonly briefs: {
+    readonly path: "briefs";
+    readonly writer: "M1";
+  };
+  readonly feedback: {
+    readonly path: "feedback.jsonl";
+    readonly writer: "M4";
+  };
+  readonly engage: {
+    readonly path: "engage";
+    readonly writer: "M6";
+  };
+  readonly datain: {
+    readonly path: "datain";
+    readonly writer: "M7";
+  };
+  readonly science: {
+    readonly path: "science";
+    readonly writer: "M8";
+  };
+  readonly privacy: {
+    readonly path: "privacy";
+    readonly writer: "M11";
+  };
+};
+//#endregion
 //#region src/skills-provider.d.ts
 /** Worse than the four LongPi harness skills, so a shared name cannot hide them. */
 declare const LIBRARY_SKILL_RANK = 800;
@@ -4472,51 +4600,6 @@ interface OverviewSlice {
 declare function overviewSlice(results: readonly MethodResult[]): OverviewSlice;
 /** Verified and unverified-binding results the overview actually draws. */
 declare function methodsOnPage(results: readonly MethodResult[]): number;
-//#endregion
-//#region src/contracts/index.d.ts
-type RouteHandler = (req: {
-  method: string;
-  url: string;
-  query: URLSearchParams;
-  headers: Record<string, unknown>;
-}, body: unknown) => Promise<unknown>;
-interface CoreDeps {
-  config: () => Config;
-  bus: Bus;
-  memory: MemoryApi;
-  factpack: {
-    build(opts?: {
-      refresh?: boolean;
-    }): Promise<FactPack>;
-    cached(): FactPack | null;
-  };
-  llm: LlmCall;
-  specialists: Specialists;
-  budget: {
-    remaining(): {
-      input: number;
-      output: number;
-      spawns: number;
-    };
-    record(run: AgentRunRecord): void;
-  };
-  http: {
-    route(method: 'GET' | 'POST' | 'DELETE', path: `/api/longpi/${string}`, handler: RouteHandler): void;
-  };
-  nba: {
-    register(module: ModuleId, provider: CandidateProvider): () => void;
-  };
-  validators: {
-    register(rule: ValidatorRule): () => void;
-  };
-  mount: MountState;
-  /** Everything a journey is built from, read now (config, dataDir, records, catalog, today). */
-  context: () => Promise<JourneyContext>;
-  /** The dataDir now (config may change on reload). */
-  dataDir: () => string;
-  /** Drop the cached records and tracking so the next build reads again. */
-  invalidate: () => void;
-}
 //#endregion
 //#region src/triage/register.d.ts
 declare function register$10(ctx: Context, deps: CoreDeps): void;
@@ -4746,7 +4829,7 @@ declare function statusLine(finding: TriageFinding, hits: readonly StopHit[]): s
 //#endregion
 //#region src/agents/orchestrator.d.ts
 /** Write tools a non-health agent does not see (D5). Read tools stay global. */
-declare const WRITE_TOOLS: readonly ["save_personal_profile", "save_intervention_plan", "log_intervention_checkin", "save_self_measurement", "record_medication_statement", "set_followup", "send_followup_message", "remember_for_me", "log_care_visit", "note_page_issue", "forward_report", "record_condition", "log_life_event", "run_deep_analysis", "import_analysis"];
+declare const WRITE_TOOLS: readonly ["save_personal_profile", "save_intervention_plan", "log_intervention_checkin", "save_self_measurement", "record_medication_statement", "set_followup", "send_followup_message", "remember_for_me", "log_care_visit", "note_page_issue", "forward_report", "record_condition", "log_life_event", "run_deep_analysis", "import_analysis", "import_member_file"];
 declare const ORCHESTRATOR_RULES: string[];
 declare function orchestratorPrompt(mount: MountState): string;
 declare function pluginMessage(text: string, form: 'snapshot' | 'instructions', name: string): never;
@@ -4776,13 +4859,6 @@ interface Orchestrator {
   injected: Map<string, string>;
 }
 declare function registerOrchestrator(ctx: Context, options: OrchestratorOptions): Orchestrator;
-//#endregion
-//#region src/prompt.d.ts
-/**
- * LongPi's persona lines (0.5.3: no longer a global section; agents/orchestrator.ts adds them, with the
- * orchestrator rules, only to agents in a health session).
- */
-declare function personaLines(mount: MountState): string[];
 //#endregion
 //#region src/triage/brief.d.ts
 interface BriefInput {
@@ -4814,10 +4890,6 @@ declare function rememberPersonText(session: string, text: string): void;
 declare function lastPersonText(session: string): string;
 /** Whether quote is a contiguous part of what the person said (spacing and punctuation ignored). */
 declare function quoteIn(quote: string, said: string): boolean;
-//#endregion
-//#region src/core/memory-tools.d.ts
-/** One memory item from what the model passed, typed by kind; null when it cannot be stored. */
-declare function itemFrom(args: Record<string, unknown>, provenance: Provenance, confirmed: boolean, today: string): NewMemoryItem | null;
 //#endregion
 //#region src/core/tick.d.ts
 declare function checkDay(bus: Bus, dataDir: string, now?: Date): boolean;
@@ -5002,7 +5074,7 @@ declare function coachFallback(_pack: FactPack, extra: CoachExtra): CoachDraft;
 declare const coachProfile: AgentProfile<CoachExtra, CoachDraft>;
 //#endregion
 //#region src/agents/prompts/coach.d.ts
-declare const COACH_PROMPT = "你是 LongPi 的健康教练，为【这一个人】写今天打开 LongPi 时看到的几句话。你只写措辞，不决定事实。\n输入是 JSON：top_facts（已排好序的重要事实）、candidates（系统允许的下一步，含 id，第一个若 mandatory 为 true 就必须用它）、\nfeedback（每条结果能说什么 allowed_claims）、memory_digest（此人说过的目标、不要的事、身体状况）、\nasked_recent 和 last_shown_suggestions（最近问过和看过的）、numbers（唯一可以引用的数字，用它们的 text 原样写）。\n写作规则：\n1. 如果 top_facts[0].priority 是 emergency 或 must_surface：status 必须围绕它，写清楚是哪项、变化多少（只用 numbers 或 top_facts 里的数字）、下一步找谁；\n   语气是关心而不是吓人，不下诊断，不说\"患有\"。偏低就说偏低。status.fact_ids 填这个事实的 id。next.action_id 必须是 mandatory 的那个。\n2. 否则按此人的目标和今天的状态写：做到的行为先肯定；有真实进步（allowed_claims 含 celebrate）就直接庆祝；在波动内就讲具体进展和何时复测。\n   只有 allowed_claims 含 younger 时才能说\"年轻了\"。\n3. suggestions 2–4 条：每条是此人今天真会点的一句话（写成他会发给 LongPi 的原话，放在 prompt_zh），彼此不同、不重复 last_shown_suggestions、\n   不碰 memory_digest 里\"不要\"的事；优先对应 candidates（填 action_id）。\n4. 数字只能来自 numbers 或 top_facts；不写剂量；不建议开始、停止或调整处方药，也不建议补铁或任何补剂；不出现工具名、英文或技能 id；不写人名，称呼用\"你\"。\n5. 长度：greeting ≤ 30 字，status ≤ 60 字，next.text_zh ≤ 40 字，next.detail_zh ≤ 80 字，每条建议 ≤ 24 字。\n调用 emit 一次返回，不要输出别的文字。";
+declare const COACH_PROMPT = "你是 Pi，LongPi 里的长寿教练：热情、诚实、说人话，为【这一个人】写今天打开 LongPi 时看到的几句话。你只写措辞，不决定事实。\n输入是 JSON：top_facts（已排好序的重要事实）、candidates（系统允许的下一步，含 id，第一个若 mandatory 为 true 就必须用它）、\nfeedback（每条结果能说什么 allowed_claims）、memory_digest（此人说过的目标、不要的事、身体状况）、\nasked_recent 和 last_shown_suggestions（最近问过和看过的）、numbers（唯一可以引用的数字，用它们的 text 原样写）。\n写作规则：\n1. 如果 top_facts[0].priority 是 emergency 或 must_surface：status 必须围绕它，写清楚是哪项、变化多少（只用 numbers 或 top_facts 里的数字）、下一步找谁；\n   语气是关心而不是吓人，不下诊断，不说\"患有\"。偏低就说偏低。status.fact_ids 填这个事实的 id。next.action_id 必须是 mandatory 的那个。\n2. 否则按此人的目标和今天的状态写：先具体地肯定一件他做到的事（做了什么、累计第几次；用累计，不用连续天数），能连回 memory_digest 里他想要的画面就连回去；\n   有真实进步（allowed_claims 含 celebrate）就直接庆祝；在波动内就夸他的坚持，讲具体进展和何时复测，不把数字夸成变好。\n   只有 allowed_claims 含 younger 时才能说\"年轻了\"。不写\"你真棒\"\"加油哦\"这类空话。\n3. suggestions 2–4 条：每条是此人今天真会点的一句话（写成他会发给 LongPi 的原话，放在 prompt_zh），彼此不同、不重复 last_shown_suggestions、\n   不碰 memory_digest 里\"不要\"的事；优先对应 candidates（填 action_id）。\n4. 数字只能来自 numbers 或 top_facts；不写剂量；不建议开始、停止或调整处方药，也不建议补铁或任何补剂；不出现工具名、英文或技能 id；不写人名，称呼用\"你\"。\n5. 长度：greeting ≤ 30 字，status ≤ 60 字，next.text_zh ≤ 40 字，next.detail_zh ≤ 80 字，每条建议 ≤ 24 字。\n调用 emit 一次返回，不要输出别的文字。";
 //#endregion
 //#region src/agents/memory_distiller.d.ts
 declare const DISTILL_PREFILTER: RegExp;
@@ -5150,17 +5222,24 @@ interface ExportBoard {
   limitations_zh: string | null;
   skipped_reason_zh: string | null;
 }
+type Executor = 'member' | 'nutritionist' | 'physician';
 interface ExportItem {
   category: string;
   title: string;
   detail: string;
   markers: string[];
+  /** Who the analysis assigned the item to; null in an export written before the field existed. */
+  executor: Executor | null;
+  /** The analysis's own category (diet, supplement, test, referral, …), finer than category. */
+  kind: string;
+  evidence_grade: string | null;
 }
 interface LaExport {
   schema: string;
   generated_at: string;
   generation: string;
   member: {
+    id?: string;
     age?: number;
     sex?: string;
     sample_date?: string;
@@ -5169,6 +5248,10 @@ interface LaExport {
     html: string;
     sha256: string;
   };
+  twin: {
+    path: string;
+    sha256: string;
+  } | null;
   readouts: ExportReadout[];
   organs: ExportOrgan[];
   board: ExportBoard[];
@@ -5185,21 +5268,33 @@ interface LaExport {
   boundary_zh: string;
 }
 /**
+ * Where an analysis item goes in LongPi. There is no nutritionist here, so the person carries out the member's and the
+ * nutritionist's items (diet has no other executor); the physician's items and the doctor-only kinds go to the brief.
+ */
+declare function itemRoute(item: Pick<ExportItem, 'executor' | 'kind'>): 'plan' | 'doctor';
+declare function doctorItems(value: LaExport): ExportItem[];
+/**
  * Check an export like any outside file and rebuild it from known fields only (anything else is dropped).
  * Returns the rebuilt value and the report bytes read once, or the problems.
  */
 declare function checkExport(raw: unknown, run: AnalysisRun): {
   value: LaExport | null;
   html: Buffer | null;
+  twin: Buffer | null;
   problems: string[];
 };
 declare function readExport(run: AnalysisRun): {
   value: LaExport | null;
   html: Buffer | null;
+  twin: Buffer | null;
   problems: string[];
 };
-/** Replace the imported result in one step: a new folder is written whole, then swapped in. */
-declare function importRun(dataDir: string, run: AnalysisRun, value: LaExport, html: Buffer, now?: Date): ImportedMeta;
+/**
+ * Replace the imported result in one step: a new folder is written whole, then swapped in.
+ * The twin of the analysis being replaced is kept beside the new one (prev-twin.json), so the two can be compared;
+ * importing the same run again keeps the earlier pair.
+ */
+declare function importRun(dataDir: string, run: AnalysisRun, value: LaExport, html: Buffer, now?: Date, twin?: Buffer | null): ImportedMeta;
 declare function currentImport(dataDir: string): {
   meta: ImportedMeta;
   value: LaExport;
@@ -5207,11 +5302,13 @@ declare function currentImport(dataDir: string): {
 /**
  * The plan in the shape save_intervention_plan / normalizePlan take, marked as coming from the analysis. Items carry
  * no id: normalizePlan continues an item by its title or gives it a new id, so one analysis's check-ins never land on
- * another analysis's item.
+ * another analysis's item. Items for a doctor are left out (doctorItems).
  */
 declare function planInput(value: LaExport, today: string): Record<string, unknown>;
 //#endregion
 //#region src/analysis/service.d.ts
+/** The analyst's member id for a person: fixed, so twins from two runs can be compared (la.py refuses two members). */
+declare function memberIdFor(personId: string): string;
 declare function analystSkillPath(): string;
 /** The installed skill's version, and whether its harness has the commands this bridge uses. */
 declare function analystSkillVersion(): {
@@ -5289,7 +5386,7 @@ declare function startRun(deps: CoreDeps, opts: {
 declare function abandon(deps: CoreDeps, runId: string): boolean;
 declare function statusNow(deps: CoreDeps): Promise<{
   runs: {
-    trigger: "ai" | "member";
+    trigger: "member" | "ai";
     reason_zh: string;
     id: string;
     started_at: string;
@@ -5309,6 +5406,7 @@ declare function statusNow(deps: CoreDeps): Promise<{
     imported_at: string;
     plan_accepted_version: number | null;
     member: {
+      id?: string;
       age?: number;
       sex?: string;
       sample_date?: string;
@@ -5332,11 +5430,19 @@ declare function statusNow(deps: CoreDeps): Promise<{
       note: string;
       items: ExportItem[];
     };
+    doctor_items: {
+      title: string;
+      detail: string;
+      kind: string;
+      kind_zh: string;
+      markers: string[];
+    }[];
     retests: {
       what: string;
       after_weeks: number;
       due: string;
     }[];
+    compare: unknown;
     boundary_zh: string;
   } | null;
   blockers: {
@@ -5350,6 +5456,7 @@ declare function currentSummary(dataDir: string): {
   imported_at: string;
   plan_accepted_version: number | null;
   member: {
+    id?: string;
     age?: number;
     sex?: string;
     sample_date?: string;
@@ -5373,13 +5480,62 @@ declare function currentSummary(dataDir: string): {
     note: string;
     items: ExportItem[];
   };
+  doctor_items: {
+    title: string;
+    detail: string;
+    kind: string;
+    kind_zh: string;
+    markers: string[];
+  }[];
   retests: {
     what: string;
     after_weeks: number;
     due: string;
   }[];
+  compare: unknown;
   boundary_zh: string;
 } | null;
+declare function doctorRow(item: ExportItem): {
+  title: string;
+  detail: string;
+  kind: string;
+  kind_zh: string;
+  markers: string[];
+};
+/** One judged row of la.py twin compare, as LongPi shows it. */
+interface CompareRow {
+  marker: string;
+  prev: unknown;
+  cur: unknown;
+  unit: string;
+  change_pct: number | null;
+  verdict: string;
+  why: string | null;
+  caveat: string | null;
+}
+type TwinCompare = {
+  ok: true;
+  compared_at: string;
+  prev_run_id: string;
+  prev_imported_at: string;
+  prev_sample_date: string | null;
+  alerts: string[];
+  rows: CompareRow[];
+  not_judged: number;
+} | {
+  ok: false;
+  compared_at: string;
+  prev_run_id: string;
+  error_zh: string;
+};
+/**
+ * Compare the twin of the analysis just imported with the one it replaced, with the analyst's own `la.py twin compare`
+ * (the reference change value from published within-person variation), and keep the result beside the import.
+ */
+declare function compareAnalyses(dataDir: string, config: {
+  pythonBin?: string;
+  skillsHome?: string;
+}, now?: Date): TwinCompare | null;
 type ImportResult = {
   ok: true;
   run_id: string;
@@ -5387,7 +5543,9 @@ type ImportResult = {
   organs: number;
   board: number;
   plan_items: number;
+  doctor_items: number;
   retests: number;
+  compare: TwinCompare | null;
   read_back: PlanReadBack;
 } | {
   ok: false;
@@ -5407,6 +5565,8 @@ interface PlanReadBack {
     detail: string;
     markers: string[];
   }>;
+  /** Items the analysis gave to a doctor: never saved in the plan; they go into the doctor brief. */
+  doctor_items: Array<ReturnType<typeof doctorRow>>;
   warnings: string[];
   errors: string[];
   plan: Record<string, unknown> | null;
@@ -5613,4 +5773,4 @@ declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { ABDOMINAL_CT_SKILL, AGENT_DEFAULTS, AGENT_PROFILE_IDS, AUTO_MIN_DAYS, type ActionKind, type AgentConfig, type AgentProfile, type AgentProfileId, type AgentRoute, type AgentRunRecord, type AskedTopicItem, BASE_RULES, BRIEF_PROMPT_ZH, BUDGET_DEFAULTS, type BindingInput, type BindingIssue, type BindingIssueKind, type BindingProposal, type BindingValidation, type BootstrapResult, type Bus, CHANGES_NOTE_ZH, CIVIL_TZ, COACH_PROMPT, COACH_SCHEMA, CONNECTION_FILE, CONNECTION_TEST_MS, CONNECTION_UNAVAILABLE, CONSENT_HOLD_ZH, CONSENT_VERSION, COST_ZH, type CandidateProvider, type CareItem, type Claim, type CodexCard, type ConditionFlag, type ConditionItem, type ConditionRow, Config, type ConnectionGuard, type ConnectionSource, type ConnectionStatus, type ConnectionTest, type Consent, type ConsentRecord, type CoreDeps, DATA_FILES, DEFAULT_FOLLOWUP, DEMO_ID, DISTILL_PREFILTER, DOCTOR_PROMPT_ZH, DRAFT_CATEGORIES, type DistributiveOmit, type DoctorBrief, type DraftCategory, type DraftItem, type DrawGrant, type DrawResult, type DropTable, type DrugClass, EMPTY_PROFILE, EVENT_OWNERS, EXPORT_SCHEMA, type EvidenceGrade, type ExclusionItem, FACT_PRIORITY_RANK, FISH_OIL_CAUTION, FOCUS, FOCUS_ZH, FOLLOWUP_DAMAGED, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type FactPack, type FactPriority, type FamilyHistoryItem, type FeedbackMessage, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, GROUP_KEYS, GROUP_ZH, type GoalItem, type GroupKey, HARNESS_SKILLS, HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH, type HealthEvent, type HealthEventPayloads, type HealthEventSource, type HealthEventType, type Id, type IndicatorChange, type IndicatorDetail, type IndicatorEntry, type IndicatorSource, type IndicatorsResponse, type IsoDay, type IsoTime, type Journey, LIBRARY_PROVIDER, LIBRARY_SKILL_RANK, type LibraryHooks, type LifeEventItem, type LlmCall, type LocalStatResult, MANDATORY_PROVIDERS, MEMORY_VERSION, MODULES, type MedicationItem, type MemoryApi, type MemoryApplyResult, type MemoryItem, type MemoryKind, type MemoryOp, type MethodInputUsed, type MethodOutput, type MethodResult, type MethylationRow, type ModuleId, NO_READ_BACK, type NewMemoryItem, type NextBestAction, type NoteItem, type NumberRef, ORCHESTRATOR_RULES, type ObjectJsonSchema, PHENOAGE_SKILL, PRODUCT_VERSION, PROFILE_DAMAGED, PROMPT_SECTIONS, type PageState, type PersonMemory, type PlanBrief, type PlanDraft, type PlanDraftItem, type PlanDraftV2, type PlanPrefs, type PreferenceItem, type PreferenceKey, type Profile, type ProteinRow, type Provenance, type ProvenanceKind, type Quest, type QuestKind, READ_BACK_MS, RENEW_AFTER_MS, REPORT_CSP, RESERVED_ROUTES, RESERVED_SKILLS, RESERVED_TOOL_NAMES, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type Rarity, type RecordChange, type RecordSnapshot, type RecordStatus, type RecordsSummary, type ResultLabel, type RiskFact, type RouteHandler, SAFETY_CONDITION_FLAGS, SAFETY_DRUG_CLASSES, SELF, SELF_ALIASES, SELF_KEYS, SELF_SPEC, STALE_MS, SURFACES_DEFAULTS, type SavedConnection, type ScienceMode, type Season, type SelfKey, type SelfRow, type SendResult, type SkillIndexEntry, type Specialists, type Stage, type StopHit, type StopResult, type StoreKind, type StoreRows, type StreakState, type StudyManifest, type SurfaceCard, type SurfaceKind, type SurfaceSet, TOOL_NAMES, type TaxaRow, type TokenUsage, type TopFact, type TransparencyLogEntry, type TriageFinding, type UnjudgedChange, type Unlock, VISIT_PROMPT_ZH, type ValidatorRule, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, WRITE_TOOLS, type WorkspaceLike, type WorkspaceRegistryLike, abandon as abandonAnalysis, acceptPlan, acceptedPlan, activePerson, addCheckIns, addDays, addPerson, addSelf, adherenceFor, affirmsBooking, agentConfig, allowedNumbers, readiness as analysisReadiness, readinessLine as analysisReadinessLine, analystSkillPath, analystSkillVersion, anchorOf, appendFollowupLog, appendJsonl, apply, asJson, assessBinding, autoEnabled, bindPrivacy, bindRecord, bootstrapWorkspace, bridgeEnv, briefOptionsOf, buildBoard, buildBrief, buildCalendar, buildChanges, buildDoctorFirst, buildIndicators, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, candidateProviders, candidatesFor, careFor, careItems, careState, catalogDescription, cellNumber, checkDay, checkExport, checkinStatus, checkupMarkerFor, chooseSurfaces, clearConnection, clinicalStop, coachFallback, coachInflight, coachInput, coachProfile, collectCandidates, collectMethodResults, collectOnJourney, commandExcerpt, computeSafety, conditionFlagsOf, connectionKey, connectionSource, connectionTokenProblem, connectionUrlProblem, createBudget, createBus, createHttp, createLlmCall, createManagedMember, createMemory, createRun, createSse, currentBus, currentImport, currentMethodResults, currentPlan, currentSummary, currentSurfaces, dateSaid, daysBetween, decideFollowup, deepseekConsentPending, deleteLocalStore, deleteSelf, demoRecord, deniesBooking, describeItem, describePlan, desktopCommand, desktopSupported, detectIntents, distillerProfile, domainSummary, dosePattern, draftPlan, drinkingFromText, drugClassesOf, effectiveConfig, effectsFor, ensureDemoPerson, ensureMemberLink, escapeText, estimatedAge, evaluateMarker, evaluatePlan, exclusionsFromText, expandMarkerNames, expectedText, factorFor, fallbackSurfaces, findingsFrom, firstJsonObject, fixScheduleText, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, forgetExclusion, goalProblems, greetingZh, groupOf, guardRoute, hardKeyOf, hasDose, healthWorkspacePaths, heldUntil, hitRefs, holdPlanDraft, holderAuth, homeBloodPressure, hypoglycaemiaNow, importLatest, importRun, inQuiet, indicatorDetail, indicatorFor, specsOf as indicatorSpecsForTest, indicatorsFromTable, inject, insideWorkspace, invalidateIndicators, invalidateRecords, invalidateTracking, isCoronaryName, isDemo, isJsonRequest, isoDay, isoWeek, isoWeekday, itemFrom, journeyCandidates, lastPersonText, latestOutputs, latestSelf, leadsWithHypoFirstStep, lifeAreaOf, listEntries, listRuns, listSkillIndex, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, logCareVisit, manifestSummary, markAsked, markerFor, markerGroupKeys, maskMcpUrl, maskUrl, matchSkills, matchesInputName, medicationClasses, memoryFor, mentionedEntities, mergeProfile, mergeSelf, methodResults, methodsOnPage, migrateLegacy, mintMemberLink, modelEgress, modelGoals, mountLibraryLanes, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, numberKeysIn, oddsSumToOne, openDemo, orchestratorPrompt, organismOf, organismsAsked, overviewSlice, packFp, packFrom, pageMethodResults, pageStateOf, parseCompact, parseFrontmatter, parseNumber, parseReadme, patterns, personDir, personaLines, planApprovalReason, planDraftHeld, planInput, planKey, planReadBack, pluginMessage, presentMedications, profileComplete, proposeFromRecord, proposedRowKind, publicFollowup, publishMethodResults, pushToMirobody, queryArgsForView, quoteIn, rangeFlag, rankActions, rankTopFacts, rcvBand, readBrief, readCheckIns, readConnection, readExport, readFailed, readFollowup, readFollowupLog, readHistory, readJson, readJsonl, readPageState, readPlanPrefs, readPlans, readProfile, readReceipts, readRegistry, readResultFile, readSelf, readStatements, readStore, readiness$1 as readiness, recordConsent, recordMethodResult, recordOutputs, recordReadable, recordSurfaces, recordsSummary, redactText, regenerate, registerApprovals, registerCandidates, registerLibraryHooks, registerLibraryMount, registerModules, registerOrchestrator, registerValidator, registeredMethodResults, releasePlanDraft, rememberExclusions, rememberFromWords, rememberPersonText, removePerson, replyForDraft, reportExcerpt, resetCoachCache, resetQuerySchema, resetReadBacks, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveRootDir, resolveSkillsHome, retestDay, retestsOf, runReady, runRegistered, runSkill, runStatus, runValidators, runnableFrom, sameMeasure, sanitizeReport, saveConnection, saveMemberLink, savePlan, screeningTopics, seenNotes, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, sessionKey, setActive, setActivePersonResolver, setAutoEnabled, setBus, setCoach, setConsent, setDrinking, setFamilyNames, setFollowupDeps, setMethodResults, setPlanExclusion, settleDraft, skillEnv, snapshotText, softHoldDraft, specKind, stageMeasurements, stageNow, startBlockers, startFollowup, startRun, statusLine, statusNow, stripDoses, suggestNext, summarizeIndicators, summarizeMedications, supplementFieldInputs, tableOf, testConnection, togetherZh, tokenKey, trackingGeneration, triageCandidates, triageFindings, unansweredOf, unitFactor, useBindingView, validateBinding, validateCoach, validateDistilled, validatorRules, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, whenToUseOf, within, writeFollowup, writeJsonAtomic, writeProfile, writeStats, youngerAllowed };
+export { ABDOMINAL_CT_SKILL, AGENT_DEFAULTS, AGENT_PROFILE_IDS, AUTO_MIN_DAYS, type ActionKind, type AgentConfig, type AgentProfile, type AgentProfileId, type AgentRoute, type AgentRunRecord, type AskedTopicItem, BASE_RULES, BRIEF_PROMPT_ZH, BUDGET_DEFAULTS, type BindingInput, type BindingIssue, type BindingIssueKind, type BindingProposal, type BindingValidation, type BootstrapResult, type Bus, CHANGES_NOTE_ZH, CIVIL_TZ, COACH_PROMPT, COACH_SCHEMA, CONNECTION_FILE, CONNECTION_TEST_MS, CONNECTION_UNAVAILABLE, CONSENT_HOLD_ZH, CONSENT_VERSION, COST_ZH, type CandidateProvider, type CareItem, type Claim, type CoachTone, type CodexCard, type CommitmentItem, type ConditionFlag, type ConditionItem, type ConditionRow, Config, type ConnectionGuard, type ConnectionSource, type ConnectionStatus, type ConnectionTest, type Consent, type ConsentRecord, type CoreDeps, DATA_FILES, DEFAULT_FOLLOWUP, DEMO_ID, DISTILL_PREFILTER, DOCTOR_PROMPT_ZH, DRAFT_CATEGORIES, type DistributiveOmit, type DoctorBrief, type DraftCategory, type DraftItem, type DrawGrant, type DrawResult, type DropTable, type DrugClass, EMPTY_PROFILE, EVENT_OWNERS, EXPORT_SCHEMA, type EvidenceGrade, type ExclusionItem, FACT_PRIORITY_RANK, FISH_OIL_CAUTION, FOCUS, FOCUS_ZH, FOLLOWUP_DAMAGED, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type FactPack, type FactPriority, type FamilyHistoryItem, type FeedbackMessage, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, GROUP_KEYS, GROUP_ZH, type GoalItem, type GroupKey, HARNESS_SKILLS, HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH, type HealthEvent, type HealthEventPayloads, type HealthEventSource, type HealthEventType, type Id, type IndicatorChange, type IndicatorDetail, type IndicatorEntry, type IndicatorSource, type IndicatorsResponse, type IsoDay, type IsoTime, type Journey, LIBRARY_PROVIDER, LIBRARY_SKILL_RANK, type LibraryHooks, type LifeEventItem, type LlmCall, type LocalStatResult, MANDATORY_PROVIDERS, MEMORY_VERSION, MODULES, type MedicationItem, type MemoryApi, type MemoryApplyResult, type MemoryItem, type MemoryKind, type MemoryOp, type MethodInputUsed, type MethodOutput, type MethodResult, type MethylationRow, type ModuleId, type MotivationItem, NO_READ_BACK, type NewMemoryItem, type NextBestAction, type NoteItem, type NumberRef, ORCHESTRATOR_RULES, type ObjectJsonSchema, PHENOAGE_SKILL, PRODUCT_VERSION, PROFILE_DAMAGED, PROMPT_SECTIONS, type PageState, type PersonMemory, type PlanBrief, type PlanDraft, type PlanDraftItem, type PlanDraftV2, type PlanPrefs, type PreferenceItem, type PreferenceKey, type Profile, type ProteinRow, type Provenance, type ProvenanceKind, type Quest, type QuestKind, READ_BACK_MS, RENEW_AFTER_MS, REPORT_CSP, RESERVED_ROUTES, RESERVED_SKILLS, RESERVED_TOOL_NAMES, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type Rarity, type RecordChange, type RecordSnapshot, type RecordStatus, type RecordsSummary, type ResultLabel, type RiskFact, type RouteHandler, SAFETY_CONDITION_FLAGS, SAFETY_DRUG_CLASSES, SELF, SELF_ALIASES, SELF_KEYS, SELF_SPEC, STALE_MS, SURFACES_DEFAULTS, type SavedConnection, type ScienceMode, type Season, type SelfKey, type SelfRow, type SendResult, type SkillIndexEntry, type Specialists, type Stage, type StopHit, type StopResult, type StoreKind, type StoreRows, type StreakState, type StudyManifest, type StyleItem, type SurfaceCard, type SurfaceKind, type SurfaceSet, TOOL_NAMES, type TaxaRow, type TokenUsage, type TopFact, type TransparencyLogEntry, type TriageFinding, type UnjudgedChange, type Unlock, VISIT_PROMPT_ZH, type ValidatorRule, type VisionItem, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, WRITE_TOOLS, type WinItem, type WorkspaceLike, type WorkspaceRegistryLike, abandon as abandonAnalysis, acceptPlan, acceptedPlan, activePerson, addCheckIns, addDays, addPerson, addSelf, adherenceFor, affirmsBooking, agentConfig, allowedNumbers, readiness as analysisReadiness, readinessLine as analysisReadinessLine, analystSkillPath, analystSkillVersion, anchorOf, appendFollowupLog, appendJsonl, apply, asJson, assessBinding, autoEnabled, bindPrivacy, bindRecord, bootstrapWorkspace, bridgeEnv, briefOptionsOf, buildBoard, buildBrief, buildCalendar, buildChanges, buildDoctorFirst, buildIndicators, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, candidateProviders, candidatesFor, careFor, careItems, careState, catalogDescription, cellNumber, checkDay, checkExport, checkinStatus, checkupMarkerFor, chooseSurfaces, clearConnection, clinicalStop, coachEnabled, coachFallback, coachInflight, coachInput, coachProfile, coachSkillPath, coachSkillVersion, collectCandidates, collectMethodResults, collectOnJourney, commandExcerpt, compareAnalyses, computeSafety, conditionFlagsOf, connectionKey, connectionSource, connectionTokenProblem, connectionUrlProblem, createBudget, createBus, createHttp, createLlmCall, createManagedMember, createMemory, createRun, createSse, currentBus, currentImport, currentMethodResults, currentPlan, currentSummary, currentSurfaces, dateSaid, daysBetween, decideFollowup, deepseekConsentPending, deleteLocalStore, deleteSelf, demoRecord, deniesBooking, describeItem, describePlan, desktopCommand, desktopSupported, detectIntents, distillerProfile, doctorItems, domainSummary, doneCounts, dosePattern, draftPlan, drinkingFromText, drugClassesOf, effectiveConfig, effectsFor, ensureDemoPerson, ensureMemberLink, escapeText, estimatedAge, evaluateMarker, evaluatePlan, exclusionsFromText, expandMarkerNames, expectedText, factorFor, fallbackSurfaces, findingsFrom, firstJsonObject, fixScheduleText, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, forgetExclusion, goalProblems, greetingZh, groupOf, guardRoute, hardKeyOf, hasDose, healthWorkspacePaths, heldUntil, hitRefs, holdPlanDraft, holderAuth, homeBloodPressure, hypoglycaemiaNow, importLatest, importRun, inQuiet, indicatorDetail, indicatorFor, specsOf as indicatorSpecsForTest, indicatorsFromTable, inject, insideWorkspace, invalidateIndicators, invalidateRecords, invalidateTracking, isCoronaryName, isDemo, isJsonRequest, isoDay, isoWeek, isoWeekday, itemFrom, itemRoute, journeyCandidates, lastPersonText, latestOutputs, latestSelf, leadsWithHypoFirstStep, lifeAreaOf, listEntries, listRuns, listSkillIndex, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, logCareVisit, manifestSummary, markAsked, markerFor, markerGroupKeys, maskMcpUrl, maskUrl, matchSkills, matchesInputName, medicationClasses, memberIdFor, memoryFor, mentionedEntities, mergeProfile, mergeSelf, methodResults, methodsOnPage, migrateLegacy, mintMemberLink, modelEgress, modelGoals, mountLibraryLanes, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, numberKeysIn, oddsSumToOne, openDemo, orchestratorPrompt, organismOf, organismsAsked, overviewSlice, packFp, packFrom, pageMethodResults, pageStateOf, parseCompact, parseFrontmatter, parseMemberFile, parseNumber, parseReadme, patterns, personDir, personaLines, piLines, planApprovalReason, planDraftHeld, planInput, planKey, planReadBack, pluginMessage, presentMedications, profileComplete, proposeFromRecord, proposedRowKind, publicFollowup, publishMethodResults, pushToMirobody, queryArgsForView, quoteIn, rangeFlag, rankActions, rankTopFacts, rcvBand, readBrief, readCheckIns, readConnection, readExport, readFailed, readFollowup, readFollowupLog, readHistory, readJson, readJsonl, readPageState, readPlanPrefs, readPlans, readProfile, readReceipts, readRegistry, readResultFile, readSelf, readStatements, readStore, readiness$1 as readiness, recordConsent, recordMethodResult, recordOutputs, recordReadable, recordSurfaces, recordsSummary, redactText, regenerate, registerApprovals, registerCandidates, registerLibraryHooks, registerLibraryMount, registerMemberFile, registerMemoryTools, registerModules, registerOrchestrator, registerValidator, registeredMethodResults, releasePlanDraft, rememberExclusions, rememberFromWords, rememberPersonText, removePerson, renderMemberFile, replyForDraft, reportExcerpt, resetCoachCache, resetQuerySchema, resetReadBacks, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveRootDir, resolveSkillsHome, retestDay, retestsOf, runReady, runRegistered, runSkill, runStatus, runValidators, runnableFrom, sameMeasure, sanitizeReport, saveConnection, saveMemberLink, savePlan, screeningTopics, seenNotes, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, sessionKey, setActive, setActivePersonResolver, setAutoEnabled, setBus, setCoach, setCoachEnabled, setConsent, setDrinking, setFamilyNames, setFollowupDeps, setMethodResults, setPlanExclusion, settleDraft, skillEnv, snapshotText, softHoldDraft, specKind, stageMeasurements, stageNow, startBlockers, startFollowup, startRun, statusLine, statusNow, stripDoses, suggestNext, summarizeIndicators, summarizeMedications, supplementFieldInputs, tableOf, testConnection, togetherZh, tokenKey, trackingGeneration, triageCandidates, triageFindings, unansweredOf, unitFactor, useBindingView, validateBinding, validateCoach, validateDistilled, validatorRules, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, whenToUseOf, within, writeFollowup, writeJsonAtomic, writeProfile, writeStats, youngerAllowed };

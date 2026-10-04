@@ -34,7 +34,7 @@ export const SKILL_NAME = 'longevity-analyst'
 export const MIN_SKILL_VERSION = [0, 7, 0] as const
 
 export function analystSkillPath(): string {
-  return process.env.LONGPI_ANALYST_SKILL || join(homedir(), '.dsh', 'skills', SKILL_NAME, 'SKILL.md')
+  return process.env.LONGPI_ANALYST_SKILL || join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'skills', SKILL_NAME, 'SKILL.md')
 }
 
 /** The installed skill's version, and whether its harness has the commands this bridge uses. */

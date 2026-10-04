@@ -1,7 +1,7 @@
 // LongPi's own workspaces: where its persona, page snapshot and write tools apply. Other workspaces are left as
 // DSH runs them.
 
-import { readFileSync } from 'node:fs'
+import { readFileSync, realpathSync } from 'node:fs'
 import { join, sep } from 'node:path'
 import { WORKSPACE_MARKER, WORKSPACE_TITLE } from './workspace.ts'
 
@@ -30,9 +30,21 @@ export function healthWorkspacePaths(dataDir: string, workspaces: readonly Works
   return [...out]
 }
 
-/** Whether a session's working directory is the workspace or inside it. */
-export function insideWorkspace(cwd: string, root: string): boolean {
-  if (!cwd || !root) return false
+function within(cwd: string, root: string): boolean {
   const base = root.length > 1 && root.endsWith(sep) ? root.slice(0, -1) : root
   return cwd === base || cwd.startsWith(base.endsWith(sep) ? base : `${base}${sep}`)
+}
+
+function real(path: string): string {
+  try {
+    return realpathSync(path)
+  } catch {
+    return path
+  }
+}
+
+/** Whether a session's working directory is the workspace or inside it, also through symlinks (macOS /var, /tmp). */
+export function insideWorkspace(cwd: string, root: string): boolean {
+  if (!cwd || !root) return false
+  return within(cwd, root) || within(real(cwd), real(root))
 }

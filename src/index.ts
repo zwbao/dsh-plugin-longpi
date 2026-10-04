@@ -38,7 +38,7 @@ import { setActivePersonResolver, registerRoutes } from './routes.ts'
 import { registerTools } from './tools.ts'
 import { registerTrackingTools } from './tools-tracking.ts'
 import { registerFollowupTools } from './tools-followup.ts'
-import { markAsked, readiness, readinessLine } from './analysis/service.ts'
+import { markAsked, readiness, readinessLine, startBlockers } from './analysis/service.ts'
 import { activePerson, readRegistry } from './people/store.ts'
 import { renewActiveMember } from './people/mirobody.ts'
 import { ensureLocalPairing } from './mirobody-account.ts'
@@ -188,7 +188,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     }
   }
   // Saving a plan, starting a deep analysis: DSH asks the person first.
-  registerApprovals(ctx)
+  registerApprovals(ctx, { analysisBlocked: () => startBlockers(resolveDataDir(source().dataDir), source()) !== null })
   // Reminders follow the person selected on the page (their store holds their plan and settings); a family member's say whose.
   startFollowup(ctx, () => {
     const who = activePerson(resolveRootDir(config.dataDir))

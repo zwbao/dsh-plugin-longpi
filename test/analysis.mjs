@@ -330,6 +330,19 @@ function exportFor(run, over = {}) {
   assert.equal(ready.auto_allowed, true, ready.why_zh)
 }
 
+// ---- approval: a person-started run is put to them; one LongPi would refuse anyway (demo, no analyst, no age) is not
+{
+  let blocked = true
+  const listeners = []
+  mod.registerApprovals({ on: (name, fn) => { if (name === 'tools/pre-execute') listeners.push(fn) } }, { analysisBlocked: () => blocked })
+  const decide = (args) => listeners[0]({ name: 'run_deep_analysis', arguments: args }, async () => ({ kind: 'allow' }))
+  assert.equal((await decide({ trigger: 'member', reason_zh: 'x' })).kind, 'allow', 'the tool runs and says why it cannot start')
+  blocked = false
+  const asked = await decide({ trigger: 'member', reason_zh: 'x' })
+  assert.equal(asked.kind, 'ask'); assert.match(asked.reason, /token/)
+  assert.equal((await decide({ trigger: 'ai', reason_zh: 'x' })).kind, 'allow', 'an automatic start is gated by the switch, not by a prompt')
+}
+
 // ---- the report is served with a CSP that forbids scripts and network
 assert.match(mod.REPORT_CSP, /default-src 'none'/)
 assert.match(mod.REPORT_CSP, /sandbox/)

@@ -63,14 +63,16 @@ export function resetReadBacks(): void {
   readBacks.clear()
 }
 
-export function registerApprovals(ctx: Context): void {
+export function registerApprovals(ctx: Context, opts: { analysisBlocked?: () => boolean } = {}): void {
   // After every other listener allowed it: a confirmed save needs a fresh read-back and then the person's yes.
   ctx.on('tools/pre-execute', async (exec, next) => {
     const decision = await next()
     if (decision.kind !== 'allow') return decision
     // A deep analysis the person asks for costs about half a million tokens: DSH asks them, so "member" is their yes,
     // never only the model's word. An automatic start ("ai") is allowed only with the page switch on (checked in M12).
+    // A start LongPi would refuse anyway (the demo profile, no analyst, no age) is not put to them: the tool says why.
     if (exec.name === 'run_deep_analysis' && record(exec.arguments).trigger !== 'ai') {
+      if (opts.analysisBlocked?.()) return decision
       return { kind: 'ask', reason: `开始一次深度分析？${COST_ZH}。` }
     }
     if (exec.name !== SAVE_TOOL || record(exec.arguments).confirm !== true) return decision
