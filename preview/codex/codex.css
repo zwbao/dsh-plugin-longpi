@@ -133,6 +133,26 @@ body::after { content: ""; position: fixed; inset: 0; pointer-events: none; z-in
 .bob { animation: bob 3s ease-in-out infinite; animation-delay: var(--d, 0s); }
 @keyframes bob { 0%, 100% { transform: translateY(0) rotate(-.6deg); } 50% { transform: translateY(-4px) rotate(.6deg); } }
 
+.pc .rstamp { position: absolute; z-index: 2; left: calc(var(--u) * 8); right: calc(var(--u) * 8); top: calc(var(--u) * 34); height: calc(var(--u) * 7); display: grid; place-items: center; background: var(--red); color: #fff; box-shadow: 0 0 0 2px var(--ink), 0 3px 0 2px var(--ink); transform: rotate(-6deg); text-shadow: 0 1px 0 rgba(0, 0, 0, .4); }
+.pc.s6 .rstamp { font-size: 24px; }
+.pc .rstamp.calm { background: #4b5d64; transform: none; }
+.box code { font-family: var(--mono, monospace); background: rgba(0, 0, 0, .08); padding: 0 4px; }
+
+/* The stand-up prompt lives in DSH's own style, not the Codex's pixel style. */
+.dsh-mock { display: grid; grid-template-columns: 1fr 300px; max-width: 920px; background: #fff; color: rgb(15, 17, 21); border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 1px rgba(0, 0, 0, .1), 0 12px 32px rgba(0, 0, 0, .3); font: 14px/22px -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif; letter-spacing: 0; -webkit-font-smoothing: antialiased; }
+.dsh-chat { padding: 16px 20px; display: grid; gap: 12px; align-content: start; min-height: 240px; border-right: 1px solid rgba(0, 0, 0, .08); }
+.dsh-bar { font-size: 12px; color: rgb(129, 133, 140); }
+.dsh-msg { background: rgba(38, 49, 72, .05); border-radius: 10px; padding: 10px 12px; justify-self: end; max-width: 80%; }
+.dsh-run { font-size: 13px; color: rgb(97, 102, 107); }
+.dsh-side { padding: 12px 14px; display: grid; gap: 12px; align-content: start; background: #fafafa; }
+.dsh-tabs { display: flex; gap: 14px; font-size: 13px; color: rgb(129, 133, 140); border-bottom: 1px solid rgba(0, 0, 0, .08); padding-bottom: 8px; }
+.dsh-tabs .on { color: rgb(15, 17, 21); font-weight: 600; }
+.dsh-nudge { background: #fff; border: 1px solid rgba(0, 0, 0, .08); border-radius: 10px; padding: 10px 12px; display: grid; gap: 8px; font-size: 13px; line-height: 20px; }
+.dsh-nudge div { display: flex; gap: 8px; }
+.dsh-nudge button { height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid rgb(15, 17, 21); background: rgb(15, 17, 21); color: #fff; font: 12px -apple-system, "PingFang SC", sans-serif; }
+.dsh-nudge button.ghost { background: transparent; color: rgb(97, 102, 107); border-color: rgba(0, 0, 0, .14); }
+.dsh-note { font-size: 12px; line-height: 18px; color: rgb(129, 133, 140); }
+
 /* ---- info panel (hover tooltip and detail) -------------------------------------------- */
 .tip { position: fixed; z-index: 70; width: 268px; pointer-events: none; }
 .info { background: var(--panel-2); padding: 12px; display: grid; gap: 10px; text-align: center;

@@ -168,6 +168,7 @@
     tool:      { l: '#9fc0ea', b: '#4a72a8', d: '#22385c' },
     milestone: { l: '#f4d8a4', b: '#c9925a', d: '#7a4f26' },
     back:      { l: '#6fd3c4', b: '#2a9d8f', d: '#1b6159' },
+    experiment: { l: '#8fe8be', b: '#2fa874', d: '#1a6646' },
   }
   const PAPER = { light: '#f4ead5', shade: '#d8c9a8', dark: '#1a1d24', darkShade: '#2a2f3a' }
   const CHAPTERS = {
@@ -578,6 +579,38 @@
     return B.blit(L.outline(), 0, 0)
   }
 
+  // ---- experiments --------------------------------------------------------------
+
+  const EXP = { bg: '#163d33', bg2: '#1d4a3e', fg: '#e6f8ec', mid: '#8fe8be', acc: '#ffd166' }
+  const EXP_ICONS = {
+    walk(L) { L.poly([[9, 22], [13, 12], [19, 12], [21, 18], [31, 20], [32, 25], [9, 25]], EXP.fg); L.rect(9, 25, 24, 2, EXP.mid); L.line(14, 15, 18, 15, EXP.mid); L.line(13, 18, 19, 18, EXP.mid); L.thick(28, 8, 34, 8, EXP.acc, 1.4); L.thick(30, 5, 35, 5, EXP.acc, 1.4) },
+    alarm(L) { L.disc(20, 17, 9, EXP.fg); L.ring(20, 17, 9, EXP.mid); L.disc(12, 8, 3, EXP.acc); L.disc(28, 8, 3, EXP.acc); L.line(20, 17, 20, 11, '#0d0f12'); L.line(20, 17, 24, 19, '#0d0f12'); L.line(14, 26, 12, 29, EXP.mid); L.line(26, 26, 28, 29, EXP.mid) },
+    moon(L) { L.disc(19, 16, 10, EXP.acc); L.disc(24, 12, 9, null); for (const [x, y] of [[31, 7], [34, 15], [29, 24]]) { L.set(x, y, EXP.fg); L.set(x + 1, y, EXP.fg); L.set(x, y + 1, EXP.fg) } },
+    chair(L) { L.rect(8, 8, 3, 18, EXP.mid); L.rect(8, 17, 14, 3, EXP.mid); L.rect(19, 20, 3, 6, EXP.mid); L.poly([[29, 6], [34, 13], [31, 13], [31, 24], [27, 24], [27, 13], [24, 13]], EXP.acc) },
+    bp(L) { L.rect(6, 12, 15, 9, EXP.fg); L.rect(8, 14, 11, 5, EXP.mid); L.disc(29, 16, 7, EXP.fg); L.ring(29, 16, 7, EXP.mid); L.line(29, 16, 32, 12, '#e5484d'); L.thick(21, 17, 22, 17, EXP.mid, 2) },
+    cup(L) { L.poly([[11, 8], [27, 8], [25, 27], [13, 27]], EXP.fg); L.rect(12, 12, 14, 3, EXP.acc); L.thick(19, 3, 23, 8, EXP.mid, 1.6); L.thick(28, 10, 36, 24, '#e5484d', 2.4); L.thick(36, 10, 28, 24, '#e5484d', 2.4) },
+    bowl(L) { L.poly([[6, 16], [26, 16], [23, 24], [9, 24]], EXP.fg); L.rect(10, 13, 12, 3, EXP.acc); L.disc(31, 10, 6, EXP.fg); L.line(31, 10, 31, 6, '#0d0f12'); L.line(31, 10, 34, 11, '#0d0f12') },
+  }
+  function experimentFace(exp, days) {
+    return cached(`exp:${exp.id}:${(days || []).join('')}`, () => {
+      const r = frame('experiment', false)
+      const B = new Raster(W, H, EXP.bg)
+      B.each((x, y) => { if ((x + y) % 4 === 0 && (x * 3 + y) % 7 === 0) B.set(x, y, EXP.bg2) })
+      const L = new Raster(W, H)
+      ;(EXP_ICONS[exp.icon] || EXP_ICONS.walk)(L)
+      r.blit(B.blit(L.outline(), 0, 0), WIN.x, WIN.y)
+      // 14 days as two rows of seven: done = bright, missed = dark, ahead = outline
+      for (let i = 0; i < 14; i += 1) {
+        const x = 5 + (i % 7) * 4
+        const y = 45 + Math.floor(i / 7) * 2
+        const state = (days || [])[i] || 'f'
+        r.rect(x, y, 3, 1, state === 'd' ? FRAMES.experiment.b : state === 'm' ? '#3b4048' : '#cfc2a3')
+        if (state === 'd') r.set(x, y, FRAMES.experiment.l)
+      }
+      return toURL(r)
+    })
+  }
+
   // ---- card frame -----------------------------------------------------------
 
   function frame(kind, dark) {
@@ -735,7 +768,9 @@
     care(L, p) { L.rect(10, 9, 11, 14, p.fg); L.rect(13, 7, 5, 3, p.acc); for (const y of [13, 16, 19]) L.rect(12, y, 7, 1, '#8a5cd6') },
     pick(L, p) { L.rect(6, 11, 7, 10, p.fg); L.rect(12, 9, 7, 10, p.acc); L.rect(18, 11, 7, 10, p.fg) },
   }
-  function pack(kind) {
+  const PACK_ALIAS = { experiment: 'pick', recheck: 'care' }
+  function pack(kindIn) {
+    const kind = PACK_ALIAS[kindIn] || kindIn
     return cached(`pack:${kind}`, () => {
       const p = PACKS[kind] || PACKS.daily
       const w = 30
@@ -790,5 +825,5 @@
     setInterval(frameOnce, 80)
   }
 
-  root.PixelArt = { studyFace, speciesFace, toolFace, milestoneFace, back, gem, seal, emblem, pack, swirl, FRAMES, CHAPTERS, PACKS, CARD_W, CARD_H }
+  root.PixelArt = { studyFace, speciesFace, toolFace, milestoneFace, experimentFace, back, gem, seal, emblem, pack, swirl, FRAMES, CHAPTERS, PACKS, CARD_W, CARD_H }
 })(globalThis)
