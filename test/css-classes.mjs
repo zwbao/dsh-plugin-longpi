@@ -58,7 +58,8 @@ for (const [file, text] of Object.entries(styles)) {
 const offScale = []
 for (const [file, text] of Object.entries(styles)) {
   if (file === 'tokens.ts') continue
-  for (const m of text.matchAll(/#[0-9a-fA-F]{3,8}\b/g)) if (!['#fff', '#ffffff'].includes(m[0].toLowerCase())) offScale.push(`${file}: color ${m[0]}`)
+  // codex.ts holds the 长寿图鉴 palette as --lp-codex-* variables (docs/codex-design.md §5.5): hex there is by design.
+  if (file !== 'codex.ts') for (const m of text.matchAll(/#[0-9a-fA-F]{3,8}\b/g)) if (!['#fff', '#ffffff'].includes(m[0].toLowerCase())) offScale.push(`${file}: color ${m[0]}`)
   for (const m of text.matchAll(/font-size:\s*([\d.]+)px/g)) if (![12, 13, 14, 15, 17, 24, 36].includes(Number(m[1]))) offScale.push(`${file}: font-size ${m[1]}px`)
 }
 

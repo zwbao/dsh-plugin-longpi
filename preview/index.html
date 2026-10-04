@@ -144,6 +144,8 @@
     followup: (DATA && DATA.followup) || readSync('fixtures/followup.json'),
     indicators: (DATA && DATA.indicators) || readSync('fixtures/indicators.json'),
     connection: (DATA && DATA.connection) || readSync('fixtures/connection.json'),
+    codex: (DATA && DATA.codex) || readSync('fixtures/codex.json'),
+    codexLibrary: (DATA && DATA.codexLibrary) || readSync('fixtures/codex-library.json'),
   }
   // ?tab=: open the page on a tab (the page remembers the tab in localStorage).
   if (params.get('tab')) { try { localStorage.setItem('dsh-plugin-longpi.page-tab', params.get('tab')) } catch {} }
@@ -294,6 +296,141 @@
   state.self = clone(base.self)
   if (STAGE && ['consent', 'profile', 'records'].includes(STAGE)) state.self.rows = []
 
+  // --- 长寿图鉴 (?view=codex): the CodexView fixture and a small stand-in for the server's actions ------------
+  // ?codex=first | first-nowrist | off | minor | simple | still | member | closed | emptylib picks a starting state.
+  const CODEX = (() => {
+    if (!base.codex) return null
+    const view = clone(base.codex)
+    const mock = view._mock
+    delete view._mock
+    const library = clone(base.codexLibrary || { ok: true, revision: null, note_zh: '', chapters: [], species: [], pending: 0, studies: [] })
+    const variant = params.get('codex') || ''
+    if (variant.startsWith('first')) {
+      Object.assign(view, { started: false, season: null, packs: [], running: [], ready: [], deck: [], reserve: [], footprints: [], pane_zh: null })
+      view.intro = { ...view.intro, wristband: variant !== 'first-nowrist', standup: false }
+      view.devices.wristband = view.intro.wristband
+      library.studies.forEach((card) => { card.read = false })
+      library.species.forEach((row) => { row.met = false })
+    }
+    if (variant === 'off') Object.assign(view, { enabled: false, reason: 'opt_out', reason_zh: '长寿图鉴已关闭，随时可以重新打开。', season: null, packs: [], running: [], ready: [], deck: [], reserve: [], footprints: [] })
+    if (variant === 'minor') Object.assign(view, { enabled: false, reason: 'minor', reason_zh: '长寿图鉴只对成年人开放。', season: null, packs: [], running: [], ready: [], deck: [], reserve: [], footprints: [] })
+    if (variant === 'simple') view.prefs.simple = true
+    if (variant === 'still') view.prefs.presentation = true
+    if (variant === 'member') view.member = { label_zh: '妈妈', note_zh: '长寿图鉴是你自己的。陪妈妈看医生或复查，会记一张足迹卡。' }
+    if (variant === 'closed') view.season = { ...view.season, status: 'closed', week: 8 }
+    if (variant === 'emptylib') { library.studies = []; library.pending = 169 }
+    return { view, mock, library }
+  })()
+  const addDay = (day, n) => { const d = new Date(`${day}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10) }
+  function codexCounts() {
+    const v = CODEX.view
+    const lib = CODEX.library
+    v.library = { ...v.library, size: lib.studies.length, read: lib.studies.filter((s) => s.read).length, chapters: v.library.chapters.map((c) => ({ ...c, read: lib.studies.filter((s) => s.chapter === c.id && s.read).length })) }
+    v.species = { met: lib.species.filter((s) => s.met).length, total: lib.species.length }
+  }
+  function codexAct(body) {
+    const v = CODEX.view
+    const m = CODEX.mock
+    const ok = (extra = {}) => { codexCounts(); return [200, { ok: true, ...extra, view: clone(v) }] }
+    const fail = (error) => [400, { ok: false, error, view: clone(v) }]
+    const seasonPack = (source) => {
+      const id = `pk-${Date.now()}`
+      m.pack_options[id] = clone(m.pack_options['pk-exp'] || [])
+      v.packs.push({ id, kind: 'experiment', source_zh: source, granted: v.today, opened: null, options: [], results: [], empty_zh: null })
+    }
+    if (body.action === 'prefs') {
+      if (typeof body.codex === 'boolean') Object.assign(v, body.codex ? { enabled: true, reason: null, reason_zh: '' } : { enabled: false, reason: 'opt_out', reason_zh: '长寿图鉴已关闭，随时可以重新打开。' })
+      for (const key of ['simple', 'presentation', 'season_mode', 'standup']) if (key in body && body[key] != null) v.prefs[key] = body[key]
+      if (body.my_day) v.prefs.my_day = { ...body.my_day }
+      return ok()
+    }
+    if (!v.enabled) return fail(v.reason_zh)
+    if (body.action === 'start') {
+      Object.assign(v, { started: true, season: { id: 'sn-new', mode: body.season_mode || '8w', start: v.today, end: addDay(v.today, 55), week: 1, weeks: body.season_mode === 'retest' ? 16 : 8, status: 'active' } })
+      v.prefs = { ...v.prefs, my_day: { ...body.my_day }, season_mode: body.season_mode || '8w', standup: body.standup === true }
+      seasonPack('赛季开始')
+      return ok()
+    }
+    if (body.action === 'next_season') {
+      if (!v.season || v.season.status !== 'closed') return fail('这个赛季还没有结束。')
+      v.season = { id: 'sn-next', mode: v.prefs.season_mode, start: v.today, end: addDay(v.today, 55), week: 1, weeks: 8, status: 'active' }
+      seasonPack('赛季开始')
+      return ok()
+    }
+    if (body.action === 'open_pack') {
+      const pack = v.packs.find((p) => p.id === body.pack_id)
+      if (!pack) return fail('没有这个包。')
+      pack.opened = pack.opened || v.today
+      if (pack.kind === 'retest') {
+        v.packs = v.packs.filter((p) => p !== pack)
+        return ok({ pack: { id: pack.id, kind: pack.kind, source_zh: pack.source_zh, results: clone(m.pack_results[pack.id] || []) } })
+      }
+      pack.options = clone(m.pack_options[pack.id] || [])
+      return ok()
+    }
+    if (body.action === 'begin') {
+      const pack = body.pack_id ? v.packs.find((p) => p.id === body.pack_id && p.opened) : null
+      let option = (pack ? pack.options : v.reserve).find((o) => o.id === body.experiment_id)
+      if (!option) return fail('只能从拆开的实验包或待选里开始。')
+      if (v.running.filter((r) => r.status === 'running').length >= 2) return fail('同时最多做 2 个实验。先做完一个，或者停下一个。')
+      let note
+      for (const [q, yes] of Object.entries(body.answers || {})) {
+        const to = yes && m.swaps[option.id] && m.swaps[option.id][q]
+        if (to) { note = `按你的回答，换成了「${to.title_zh}」。`; option = clone(to); break }
+      }
+      const randomized = body.randomized === true && option.randomizable
+      const run = {
+        id: `rn-${Date.now()}`, experiment_id: option.id, title_zh: option.title_zh, do_zh: option.do_zh, icon: option.icon, checkin_zh: m.checkin[option.id] || '',
+        start: v.today, end: addDay(v.today, option.days - 1), extended_to: null, day: 1, days: option.days, cells: Array(14).fill('f'), done_today: false, done_count: 0,
+        status: 'running', randomized, today_zh: randomized ? '今天：做' : null, threshold_zh: m.thresholds[option.id] || '', primary_zh: option.primary_zh,
+        progress_zh: `${option.title_zh} · 第 1/${option.days} 天`, result: null,
+      }
+      v.running.push(run)
+      if (pack) {
+        for (const other of pack.options) if (other.id !== body.experiment_id && !v.reserve.some((r) => r.id === other.id)) v.reserve.push(other)
+        v.packs = v.packs.filter((p) => p !== pack)
+      }
+      v.reserve = v.reserve.filter((r) => r.id !== body.experiment_id && r.id !== option.id)
+      return ok({ run: clone(run), ...(note ? { note_zh: note } : {}) })
+    }
+    if (body.action === 'read') {
+      const card = CODEX.library.studies.find((s) => s.id === body.card_id)
+      if (!card) return fail('没有这张卡。')
+      card.read = true
+      const met = []
+      for (const key of card.meet || []) {
+        const row = CODEX.library.species.find((s) => s.key === key)
+        if (row && !row.met) { row.met = true; met.push(key) }
+      }
+      return ok({ met })
+    }
+    const all = [...v.running, ...v.ready, ...v.deck]
+    const run = all.find((r) => r.id === body.run_id)
+    if (!run) return fail('没有这个实验。')
+    if (body.action === 'checkin') {
+      if (run.status !== 'running') return fail('这个实验今天不能记。')
+      const on = body.done !== false
+      if (on !== run.done_today) run.done_count += on ? 1 : -1
+      run.done_today = on
+      run.cells[run.day - 1] = on ? 'd' : 'f'
+      return ok()
+    }
+    if (body.action === 'stop') {
+      v.running = v.running.filter((r) => r !== run)
+      return ok({ note_zh: '已停下，不算失败，也不扣任何东西。' })
+    }
+    if (body.action === 'reveal') {
+      if (run.status !== 'ready') return fail(run.status === 'revealed' ? '这张卡已经翻开了。' : '还没到揭晓的时候。')
+      run.status = 'revealed'
+      run.result = clone(m.run_results[run.id] || null)
+      v.ready = v.ready.filter((r) => r !== run)
+      v.deck.unshift(run)
+      if (v.season && v.season.status === 'active') seasonPack(`做完「${run.title_zh}」`)
+      return ok({ run: clone(run) })
+    }
+    return fail('不能识别的操作。')
+  }
+
   // --- the plugin's routes, answered locally -----------------------------------------------
   const HOLD = params.get('loading') === '1'
   const FAIL = params.get('fail') === '1'
@@ -414,6 +551,13 @@
       j.followup = { enabled: f.enabled, channels: [f.desktop ? 'desktop' : null, f.webhook ? 'webhook' : null].filter(Boolean), next_at: state.followup.next.checkin }
       return json({ ok: true, ...state.followup })
     }
+    if (CODEX && path.endsWith('/codex/library')) return json(clone(CODEX.library))
+    if (CODEX && path.endsWith('/codex/slot')) return json({ ok: true, enabled: CODEX.view.enabled && CODEX.view.started, slot: CODEX.view.slot, pane_zh: CODEX.view.pane_zh, presentation: CODEX.view.prefs.presentation, ready: CODEX.view.ready.length })
+    if (CODEX && path.endsWith('/api/longpi/codex')) {
+      if (method === 'GET') { codexCounts(); return json(clone(CODEX.view)) }
+      const [status, out] = codexAct(body || {})
+      return json(out, status)
+    }
     if (path.endsWith('/season') || path.endsWith('/codex')) {
       const quiet = params.get('persona') === 'ux2'
       const view = {
@@ -493,6 +637,8 @@
   window.__ModuleLoader__ = { load({ id, factory }) { registry[id] = factory((name) => SHARED[name]) } }
 </script>
 <script src="client.js"></script>
+<!-- The 长寿图鉴 page on its own (preview/dev.mjs bundles src/client/engage/codex-page.ts into codex.js). -->
+<script src="codex.js"></script>
 <script>
   const seats = {}
   let setView = () => {}
@@ -504,6 +650,7 @@
       register: (options, component) => {
         const entry = { options, component }
         if (options.key) seats[`${options.name}:${options.key}`] = entry
+        if (options.id) seats[`${options.name}#${options.id}`] = entry
         if (!seats[options.name]) seats[options.name] = entry
       },
     },
@@ -624,6 +771,55 @@
           : h('div', { key: index, className: 'pv-callrow' }, h(Seat, { name: 'tool.call.toolview', slotKey: kind, owner: { callId: value.callId, toolName: kind, block: value, openFile: () => {}, loadImage: () => '' } })))),
       h('div', { className: 'pv-composer-seat composerSeat' }, h(ComposerStack, { hero: false, session: true })))
   }
+  // ?view=codex: the 长寿图鉴 page inside a LongPi page frame (the same scrolling root and width the health page uses).
+  // ?ctab=library|deck|species|footprints|settings opens a tab; ?cdo=pack|pick|begin|checkin|retest|reveal|result|study|hover|stop
+  // clicks through.
+  function CodexSeat() {
+    const mod = registry['longpi-codex-preview']
+    if (!mod || !mod.CodexPage) return h('div', { style: { padding: 24 } }, '缺少 codex.js：先运行 node preview/dev.mjs。')
+    return h('div', { className: 'lp lp-page-root', style: { paddingTop: 16 } }, h('div', { className: 'lp-page' }, h(mod.CodexPage, { onNotice: () => {} })))
+  }
+  if (VIEW === 'codex') {
+    const find = (selector, text) => [...document.querySelectorAll(selector)].find((el) => !text || el.textContent.includes(text))
+    const click = (selector, text) => { const el = find(selector, text); if (el) el.click(); return Boolean(el) }
+    const steps = []
+    const at = (ms, fn) => steps.push([ms, fn])
+    const tab = params.get('ctab')
+    const labels = { library: '图书馆', deck: '牌组', species: '物种志', footprints: '足迹', settings: '设置' }
+    if (tab && labels[tab]) at(900, () => click('.lp-codex-tab', labels[tab]))
+    const doing = params.get('cdo')
+    if (doing === 'pack' || doing === 'pick') {
+      at(1000, () => click('.lp-codex-pack', '实验包'))
+      at(1300, () => click('.lp-codex-ovpack'))
+      if (doing === 'pick') at(3200, () => click('.lp-codex-stage .lp-codex-slot .lp-codex-pc'))
+    }
+    if (doing === 'begin') {
+      at(1000, () => click('.lp-codex-pack', '实验包'))
+      at(1300, () => click('.lp-codex-ovpack'))
+      at(3200, () => { const cards = document.querySelectorAll('.lp-codex-stage .lp-codex-slot .lp-codex-pc'); if (cards[1]) cards[1].click() })
+      at(3500, () => click('.lp-codex-stage .lp-codex-btn', '开始这个实验'))
+    }
+    if (doing === 'checkin') at(1000, () => click('.lp-codex-btn', '今天饭后走了'))
+    if (doing === 'retest') { at(1000, () => click('.lp-codex-pack', '复查包')); at(1300, () => click('.lp-codex-ovpack')) }
+    if (doing === 'reveal') { at(1000, () => click('.lp-codex-btn', '翻开')); at(1300, () => click('.lp-codex-stage .lp-codex-btn', '翻开')) }
+    if (doing === 'result') { at(900, () => click('.lp-codex-tab', '牌组')); at(1200, () => click('.lp-codex-pc.lp-codex-live')) }
+    if (doing === 'study') { at(900, () => click('.lp-codex-tab', '图书馆')); at(1300, () => click('.lp-codex-pc.lp-codex-live', '睡')) }
+    if (doing === 'stop') at(1000, () => click('.lp-codex-btn', '停下'))
+    if (doing === 'hover') {
+      at(900, () => click('.lp-codex-tab', '图书馆'))
+      at(1300, () => {
+        const card = find('.lp-codex-pc.lp-codex-live')
+        if (!card) return
+        const r = card.getBoundingClientRect()
+        const opts = { bubbles: true, clientX: r.left + r.width * 0.8, clientY: r.top + r.height * 0.25, pointerType: 'mouse' }
+        card.dispatchEvent(new PointerEvent('pointerover', opts))
+        card.dispatchEvent(new PointerEvent('pointerenter', { ...opts, bubbles: false }))
+        card.dispatchEvent(new PointerEvent('pointermove', opts))
+      })
+    }
+    for (const [ms, fn] of steps) setTimeout(fn, ms)
+  }
+
   function SettingsPanel() {
     return h('div', { className: 'pv-settings-mask' },
       h('div', { className: 'pv-settings', role: 'dialog', 'aria-label': '设置' },
@@ -660,13 +856,20 @@
     else if (view === 'onboarding') main = h(Hero)
     else if (view === 'chat') main = h(ChatCards)
     else if (view === 'settings') main = h(Hero)
+    else if (view === 'codex') main = h(CodexSeat)
+    // ?view=pane: the 健康 tab of DSH's right column (numbers folded by default; ?shown=1 clicks 显示).
+    else if (view === 'pane') main = h('div', { className: 'pv-pane-col', style: { width: '380px', marginLeft: 'auto', borderLeft: '1px solid #e5e7eb', minHeight: '100vh', background: 'var(--dsw-layer-1, #fff)' } }, h(Seat, { name: 'sidebar.right.pane.tab' }))
     else main = h(Chat)
     const step = params.get('step')
     return h('div', { className: 'pv-frame' },
       params.get('chrome') === '0' ? null : h(Sidebar, { active: view === 'page' }),
       h('main', { className: 'pv-main' },
         main,
-        h('div', { className: 'pv-overlay', 'data-shell-overlay': true }, view === 'pill' ? h(Seat, { name: 'shell.overlay' }) : null)),
+        h('div', { className: 'pv-overlay', 'data-shell-overlay': true },
+          view === 'pill' ? h(Seat, { name: 'shell.overlay' }) : null,
+          // ?view=slot: the bottom-right prompt bar (the reveal notice from the fixture's slot).
+          view === 'slot' ? h(Seat, { name: 'shell.overlay#longpi-codex-slot' }) : null,
+          view === 'slot' || view === 'pane' ? null : null)),
       view === 'onboarding' && !done ? h(Seat, {
         name: 'settings.onboarding',
         owner: { stepId: 'longpi', complete: () => setDone(true), openSection: () => {}, initialStep: step ? Number(step) - 1 : undefined, explicit: params.get('explicit') === '1' },
@@ -674,6 +877,7 @@
       view === 'settings' ? h(SettingsPanel) : null,
       done ? h('div', { className: 'pv-done' }, 'onboarding complete()') : null)
   }
+  if (params.get('shown') === '1') setTimeout(() => { const btn = [...document.querySelectorAll('.lp-pane button')].find((b) => b.textContent === '显示'); if (btn) btn.click() }, 1500)
   ReactDOM.createRoot(document.getElementById('root')).render(h(App))
 </script>
 </body>

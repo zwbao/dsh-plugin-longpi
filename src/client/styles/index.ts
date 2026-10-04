@@ -10,8 +10,9 @@ import { ANALYSIS } from './analysis.ts'
 import { SETTINGS } from './settings.ts'
 import { ONBOARDING } from './onboarding.ts'
 import { CHAT } from './chat.ts'
+import { CODEX } from './codex.ts'
 
-export const CSS = [TOKENS, BASE, SHELL, OVERVIEW, INDICATORS, PLAN, ANALYSIS, SETTINGS, ONBOARDING, CHAT].join('\n')
+export const CSS = [TOKENS, BASE, SHELL, OVERVIEW, INDICATORS, PLAN, ANALYSIS, SETTINGS, ONBOARDING, CHAT, CODEX].join('\n')
 
 export function injectStyles(): void {
   const id = 'dsh-plugin-longpi-style'

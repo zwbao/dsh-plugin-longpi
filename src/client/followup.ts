@@ -413,31 +413,11 @@ function ReminderSwitch(props: { data: FollowupResponse; onNotice: Notify }): Re
     error ? h('p', { className: 'lp-form-error', role: 'alert' }, error) : null)
 }
 
-const SEASON_DEFAULT = '没有方案时，仅在有待补的检查或本赛季小目标时每周提醒一次；否则不发送。'
-
-/**
- * The season's weekly reminder, said against the real state of the switch above (the same read as the
- * engage module's note): with no consent yet, only the season part waits, not the check-in reminder.
- */
-function SeasonNote(props: { enabled: boolean }): React.ReactElement | null {
-  // The journey the rest of LongPi already holds: whether a plan exists decides if the no-plan line applies.
-  const { journey } = useJourney()
-  const [view, setView] = React.useState<{ reminder_zh?: string | null; needs_consent?: boolean } | null>(null)
-  React.useEffect(() => {
-    let live = true
-    void getJson<{ reminder_zh?: string | null; needs_consent?: boolean }>('/api/longpi/season').then((row) => { if (live) setView(row) }).catch(() => { /* the default line stays */ })
-    return () => { live = false }
-  }, [])
-  const line = view?.reminder_zh
-    ? view.reminder_zh
-    : view?.needs_consent
-      ? props.enabled ? '打卡提醒已开启。赛季每周提醒将在你同意使用说明后开始。' : '你尚未同意使用说明，赛季每周提醒暂未开始。'
-      // 「没有方案时…」 only says something when there is no plan (and only once we know).
-      : journey && !journey.plan.exists ? SEASON_DEFAULT : null
-  if (!line) return null
+/** The Codex sends no reminder of its own (docs/codex-design.md §2): one prompt slot while working, set in the Codex. */
+function SeasonNote(_props: { enabled: boolean }): React.ReactElement | null {
   return h('div', { className: 'lp-callout lp-callout-info' },
     h(Icon, { name: 'info', size: 14 }),
-    h('div', { className: 'lp-callout-body' }, h('p', null, line)))
+    h('div', { className: 'lp-callout-body' }, h('p', null, '长寿图鉴不发送提醒。工作时它只占右侧健康栏的一个提示位（起身提醒和揭晓通知），可以在图鉴的设置里关掉。')))
 }
 
 /** 随访提醒 on the settings page: the switch, then 更多设置 with the whole form and the log. */

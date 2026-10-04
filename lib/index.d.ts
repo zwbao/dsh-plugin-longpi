@@ -221,7 +221,7 @@ declare const RESERVED_TOOL_NAMES: {
   readonly M0: readonly ["read_person_memory", "remember_for_me", "note_page_issue", "consult_longpi_specialist"];
   readonly M1: readonly ["read_care_navigation", "prepare_doctor_brief", "log_care_visit"];
   readonly M4: readonly ["read_progress_feedback"];
-  readonly M6: readonly ["log_life_event", "read_season", "propose_personal_season", "run_drawn_method"];
+  readonly M6: readonly ["log_life_event", "read_season"];
   readonly M7: readonly ["forward_report", "record_condition", "read_narrative_findings"];
   readonly M8: readonly ["list_studies", "explain_study", "design_n_of_1", "log_n_of_1_outcome", "record_study_consent", "withdraw_from_study"];
 };
@@ -231,7 +231,7 @@ declare const RESERVED_ROUTES: {
   readonly M1: readonly ["GET /api/longpi/triage", "GET /api/longpi/brief", "POST /api/longpi/brief", "POST /api/longpi/care-visit"];
   readonly M4: readonly ["GET /api/longpi/feedback"];
   readonly M5: readonly ["GET /api/longpi/surfaces"];
-  readonly M6: readonly ["GET /api/longpi/season", "POST /api/longpi/season", "POST /api/longpi/streak-freeze", "GET /api/longpi/schedule", "POST /api/longpi/schedule", "GET /api/longpi/codex", "GET /api/longpi/codex/odds", "POST /api/longpi/codex/draw", "POST /api/longpi/codex/run", "GET /api/longpi/weekly", "POST /api/longpi/nudges"];
+  readonly M6: readonly ["GET /api/longpi/codex", "POST /api/longpi/codex", "GET /api/longpi/codex/library", "GET /api/longpi/codex/slot", "GET /api/longpi/schedule", "POST /api/longpi/schedule"];
   readonly M7: readonly ["POST /api/longpi/upload", "GET /api/longpi/findings", "GET /api/longpi/meds", "POST /api/longpi/meds", "GET /api/longpi/conditions", "POST /api/longpi/conditions", "GET /api/longpi/stores"];
   readonly M8: readonly ["GET /api/longpi/science/studies", "POST /api/longpi/science/consent", "POST /api/longpi/science/withdraw", "POST /api/longpi/science/run", "GET /api/longpi/science/translog", "GET /api/longpi/science/community", "GET /api/longpi/science/registry", "GET /api/longpi/science/transparency", "POST /api/longpi/science/n-of-1", "POST /api/longpi/science/export", "GET /api/longpi/science/invite", "POST /api/longpi/science/invite", "POST /api/longpi/science/preference"];
   readonly M11: readonly ["GET /api/longpi/privacy", "POST /api/longpi/privacy/consent", "GET /api/longpi/privacy/export", "POST /api/longpi/privacy/delete"];
@@ -251,7 +251,7 @@ declare const PROMPT_SECTIONS: {
 };
 //#endregion
 //#region src/catalog.d.ts
-type Tier = 'A' | 'B' | 'C' | 'tool' | '';
+type Tier$1 = 'A' | 'B' | 'C' | 'tool' | '';
 interface InputSpec {
   key: string;
   label_zh: string;
@@ -309,7 +309,7 @@ interface SkillCard {
   lead: string;
   script: string | null;
   kind: string;
-  tier: Tier;
+  tier: Tier$1;
   species: string[];
   intents: string[];
   inputsStatus: 'none' | 'draft' | 'verified';
@@ -580,7 +580,7 @@ interface MountState {
 //#endregion
 //#region src/tools.d.ts
 declare function manifestSummary(card: SkillCard): {
-  tier: Tier;
+  tier: Tier$1;
   kind: string;
   species: string[];
   intents: string[];
@@ -1231,7 +1231,7 @@ interface Conversion {
   to: string;
   line_zh: string;
 }
-interface RunResult {
+interface RunResult$1 {
   ok: boolean;
   error_kind?: string;
   error?: string;
@@ -1307,7 +1307,7 @@ declare function reportExcerpt(text: string): string;
  */
 declare function skillEnv(runDir: string): Record<string, string>;
 declare function readReceipts(dataDir: string, limit?: number): Receipt[];
-declare function runSkill(request: RunRequest): Promise<RunResult>;
+declare function runSkill(request: RunRequest): Promise<RunResult$1>;
 //#endregion
 //#region src/paths.d.ts
 declare function resolveSkillsHome(configured: string): string;
@@ -3026,16 +3026,13 @@ interface FactPack {
   memory_digest_zh: string;
   /** Topic keys asked in the last 7 days. */
   asked_recent: string[];
-  /** days_total is what is said (cumulative, never resets); streak stays for older readers and is not shown. */
+  /** 长寿图鉴: the season week, experiments running, packs waiting, and whether a card can be turned. No values. */
   engagement: {
-    season_title_zh: string | null;
-    week: number | null;
-    days_total: number;
-    next_milestone: number;
-    streak: number;
-    freezes_left: number;
-    open_quests: number;
-    draws_available: number;
+    season_week: number | null;
+    season_weeks: number | null;
+    experiments_running: string[];
+    reveal_ready: boolean;
+    packs_waiting: number;
   } | null;
   science: {
     mode: ScienceMode;
@@ -3173,7 +3170,7 @@ interface ValidatorRule {
 }
 //#endregion
 //#region src/contracts/surfaces.d.ts
-type ActionKind = 'emergency' | 'see_doctor' | 'prepare_brief' | 'log_visit_outcome' | 'screening_topic' | 'book_addon_test' | 'self_measure' | 'answer_profile' | 'connect_records' | 'upload_report' | 'checkin' | 'retest' | 'review_verdict' | 'draft_plan' | 'adjust_plan' | 'read_result' | 'learn' | 'season_quest' | 'claim_draw' | 'study_consent' | 'rest';
+type ActionKind = 'emergency' | 'see_doctor' | 'prepare_brief' | 'log_visit_outcome' | 'screening_topic' | 'book_addon_test' | 'self_measure' | 'answer_profile' | 'connect_records' | 'upload_report' | 'checkin' | 'retest' | 'review_verdict' | 'draft_plan' | 'adjust_plan' | 'read_result' | 'learn' | 'codex_experiment' | 'codex_reveal' | 'study_consent' | 'rest';
 interface NextBestAction {
   id: Id;
   kind: ActionKind;
@@ -3496,140 +3493,226 @@ declare function stageNow(profile: Profile, mcpConfigured: boolean): {
 };
 //#endregion
 //#region src/contracts/codex.d.ts
-type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
-interface CodexCard {
+/** 铜 cell · 银 animal · 紫 human (incl. RCT post-hoc) · 金 an RCT's pre-specified primary outcome. */
+type Tier = 'cell' | 'animal' | 'human' | 'trial';
+/** The only three verdict words: 超出平时波动 · 在平时波动内 · 数据不够. */
+type Outcome = 'outside' | 'inside' | 'insufficient';
+type PackKind = 'experiment' | 'retest';
+type FootprintKind = 'care_brief' | 'retest' | 'addon' | 'first_experiment' | 'season' | 'family';
+interface StudyCard {
   id: Id;
-  family: 'method' | 'species' | 'insight' | 'utility';
+  skill: string;
+  no: string;
+  chapter: string;
+  tier: Tier;
+  tier_reason_zh: string;
   title_zh: string;
-  body_zh: string;
-  rarity: Rarity;
-  /** Method cards: from skill.json tier. */
-  evidence_tier?: 'human_rct' | 'human_obs' | 'animal' | 'cell';
-  skill?: string;
-  species?: string;
-  utility?: 'streak_freeze' | 'deep_dive' | 'doctor_questions';
-  /** Generated per person by the coach, never rarity-by-biomarker. */
-  insight?: {
-    min_days_of_data: number;
-  };
-  hidden: boolean;
-  set_id: Id;
+  line_zh: string;
+  about_zh: string;
+  species: string[];
+  /** Species from the species log this study uses (first read = met). */
+  meet: string[];
   source: {
+    first_author: string;
+    et_al: boolean;
+    journal: string;
+    year: number | null;
     doi?: string;
-    skill?: string;
+    preprint: boolean;
+    coi_zh?: string | null;
+  };
+  /** Needs a research-only assay; 「和你的关系」 is never shown. */
+  research_assay: boolean;
+  /** The health page computes a result with this very method. */
+  feature_zh?: string | null;
+  art: {
+    motif: string;
+    seed: number;
   };
 }
-interface DropTable {
-  id: Id;
-  version: number;
-  season_id: Id | null;
-  /** Sums to 1; shown verbatim on the page. */
-  odds: Record<Rarity, number>;
-  pity: {
-    after_draws: number;
-    min_rarity: Rarity;
-  };
-  daily_cap: number;
-  /** Care actions guarantee at least this (rare). */
-  care_guarantee: Rarity;
-  pools: Record<Rarity, Id[]>;
-  money: 'none';
-  trading: 'none';
-  biomarker_linked_rarity: false;
+interface ChapterInfo {
+  id: string;
+  no: number;
+  title_zh: string;
+  motif: string;
+  intro_zh: string;
+  size: number;
 }
-interface DrawResult {
+interface SpeciesInfo {
   id: Id;
-  grant_id: Id;
-  card_id: Id;
-  rarity: Rarity;
-  duplicate: boolean;
-  pity_before: number;
-  rng: {
-    algo: 'sha256-counter';
-    seed_commitment: string;
-    counter: number;
+  key: string;
+  no: string;
+  name_zh: string;
+  latin: string;
+  lifespan_zh: string;
+  lifespan_years: number;
+  hook_zh: string;
+  body_zh: string;
+  studies: Id[];
+}
+interface LibraryPack {
+  version: 3;
+  library: {
+    revision: string | null;
+    skills: number;
   };
+  chapters: ChapterInfo[];
+  studies: StudyCard[];
+  species: SpeciesInfo[];
+  /** Skills whose card has not passed review (待上架). */
+  pending: string[];
+}
+type MetricKey = 'rhr' | 'hrv' | 'sleep' | 'onset' | 'wakings' | 'steps' | 'sbp' | 'weight' | 'waist' | 'glucose' | 'ldl';
+interface MetricSpec {
+  key: MetricKey;
+  label_zh: string;
+  unit_zh: string;
+  better: 'lower' | 'higher' | 'none';
+  /** personal: the person's own day-to-day spread (two-sample t) plus a minimal meaningful difference; rcv: reference change value on the means; lab: reference change value on two results. */
+  method: 'personal' | 'rcv' | 'lab';
+  /** Minimal meaningful difference in unit_zh (personal only). Owner-reviewable defaults. */
+  mid?: number;
+  mid_note?: string;
+  /** biological_variation.json key (rcv, lab). */
+  marker?: string;
+  /** Mirobody device series, in order of preference. */
+  names: string[];
+  /** LongPi's own self-measurement key. */
+  self?: 'sbp' | 'weight' | 'waist';
+  decimals: number;
+}
+interface ExperimentQuestion {
+  id: string;
+  text_zh: string;
+  /** On yes: run a variant of this experiment, or offer another experiment instead. */
+  yes: {
+    variant?: string;
+    swap?: string;
+  };
+}
+interface ExperimentSpec {
+  id: string;
+  icon: 'walk' | 'alarm' | 'moon' | 'chair' | 'bp' | 'cup' | 'bowl';
+  title_zh: string;
+  do_zh: string;
+  days: number;
+  /** Alternatives in order; the first one the person has data for becomes the primary outcome. */
+  primary: MetricKey[];
+  also: MetricKey[];
+  adherence: 'checkin' | 'sleep_longer' | 'wake_fixed' | 'bp_reading' | 'standup';
+  checkin_zh: string;
+  needs: Array<'wristband' | 'bp_cuff' | 'scale' | 'retest_window'>;
+  randomizable: boolean;
+  questions: ExperimentQuestion[];
+  variants: Record<string, {
+    title_zh: string;
+    do_zh: string;
+    scope?: 'weekdays';
+  }>;
+  exclude: {
+    drug_classes: string[];
+    conditions: string[];
+    findings: string[];
+  };
+  relevance: {
+    words: string[];
+    focus: string[];
+  };
+  source_zh: string;
+  cards: string[];
+  /** Long experiments: the outcome is a lab, revealed in the retest pack. */
+  retest_markers?: string[];
+}
+interface MetricResult {
+  key: MetricKey;
+  label_zh: string;
+  unit_zh: string;
+  before: number | null;
+  after: number | null;
+  outcome: Outcome;
+  direction: 'better' | 'worse' | 'flat' | null;
+  text_zh: string;
+}
+interface RunResult {
+  outcome: Outcome;
+  primary: MetricResult;
+  also: MetricResult[];
+  done_days: number;
+  effective_days: number;
+  window_days: number;
+  how_zh: string;
+  /** Decision 12: a good result outside the usual variation is said plainly, never attributed. */
+  praise_zh: string | null;
   at: IsoTime;
 }
-declare function oddsSumToOne(table: Pick<DropTable, 'odds'>): boolean;
-//#endregion
-//#region src/contracts/engagement.d.ts
-interface Season {
+interface ExperimentRun {
   id: Id;
-  kind: 'personal' | 'community';
+  experiment_id: string;
+  variant: string | null;
   title_zh: string;
-  theme: {
-    focus: Focus$1 | 'care' | 'data';
-    marker_keys: string[];
-  };
-  /** 56–84 days; end aligned to the recommended retest. */
+  do_zh: string;
+  checkin_zh: string;
+  icon: ExperimentSpec['icon'];
+  primary: MetricKey;
+  also: MetricKey[];
+  /** The public threshold, fixed before the start. */
+  threshold_zh: string;
   start: IsoDay;
+  /** Last planned day. */
   end: IsoDay;
-  retest_day: IsoDay | null;
-  status: 'upcoming' | 'active' | 'retest_window' | 'closed';
-  chapters: Array<{
-    week: number;
-    title_zh: string;
-  }>;
-  quest_ids: Id[];
-  unlock_ids: Id[];
-  codex_set_id?: Id;
-  study_id?: string;
-}
-type QuestKind = 'care' | 'data' | 'behaviour' | 'learn' | 'retest' | 'reflect' | 'science_n_of_1';
-interface Quest {
-  id: Id;
-  season_id: Id;
-  kind: QuestKind;
-  title_zh: string;
-  criteria: {
-    event: HealthEventType;
-    where?: Record<string, string | number | boolean>;
-    count: number;
-    within_days?: number;
+  /** Up to 7 more days when fewer than 10 days had data. */
+  extended_to: IsoDay | null;
+  baseline: {
+    from: IsoDay;
+    to: IsoDay;
   };
-  progress: number;
-  status: 'open' | 'done' | 'expired' | 'waived';
-  reward: {
-    draws: number;
-    guaranteed_min_rarity?: Rarity;
-    unlock_id?: Id;
-  };
-  /** The coach may phrase or choose among rule templates, never invent criteria. */
-  origin: 'rule' | 'coach';
+  randomized: boolean;
+  /** Randomized version: the day's assignment (true = do it today). */
+  schedule: Record<IsoDay, boolean> | null;
+  scope: 'all' | 'weekdays';
+  answers: Record<string, boolean>;
+  /** 做到 days the person ticked (check-in experiments) or LongPi saw (sleep, wake time, readings, stand-ups). */
+  done: IsoDay[];
+  /** 8-week lab experiment: the result on file when it started. */
+  lab_before?: {
+    value: number;
+    unit: string;
+    date: IsoDay;
+  } | null;
+  status: 'running' | 'ready' | 'revealed' | 'retest_wait' | 'stopped';
+  result: RunResult | null;
+  revealed_at: IsoTime | null;
 }
-interface Unlock {
+interface ResultCard {
   id: Id;
-  /** 'bioage' | 'cvd_risk' | 'trend_chart' | 'doctor_brief' | 'n_of_1' | a skill name … */
   key: string;
-  /** Replaces "还差 N 项检查". */
   title_zh: string;
-  teaser_zh: string;
-  requires: Array<{
-    kind: 'input' | 'event' | 'quest';
-    key: string;
-    label_zh: string;
-  }>;
-  status: 'locked' | 'unlocked';
-  unlocked_at?: IsoTime;
+  value_zh: string | null;
+  compare_zh: string;
+  outcome: Outcome | null;
+  tier: Tier;
+  /** A worse result: plain flip, no celebration. */
+  plain: boolean;
+  note_zh: string | null;
 }
-interface StreakState {
-  current: number;
-  best: number;
-  freezes_available: number;
-  frozen: Array<{
-    day: IsoDay;
-    reason: 'sick' | 'travel' | 'other';
-    event_id: Id;
-  }>;
-  last_active: IsoDay | null;
-}
-interface DrawGrant {
+interface Pack {
   id: Id;
-  kind: 'standard' | 'care_guaranteed';
-  earned_by: Id;
+  kind: PackKind;
+  source_zh: string;
   granted: IsoDay;
-  used_by?: Id;
+  opened: IsoDay | null;
+  /** Experiment pack: the three experiments shown when opened. */
+  options: string[];
+  chosen: string | null;
+  /** Retest pack: result cards fixed when the pack was granted. */
+  results: ResultCard[];
+}
+interface Footprint {
+  id: Id;
+  kind: FootprintKind;
+  day: IsoDay;
+  title_zh: string;
+  text_zh: string;
 }
 //#endregion
 //#region src/contracts/events.d.ts
@@ -3706,10 +3789,6 @@ interface HealthEventPayloads {
     from: IsoDay;
     to: IsoDay | null;
   };
-  'streak.frozen': {
-    day: IsoDay;
-    reason: 'sick' | 'travel' | 'other';
-  };
   'retest.due': {
     marker_key: string;
     day: IsoDay;
@@ -3734,26 +3813,28 @@ interface HealthEventPayloads {
   };
   'season.ended': {
     season_id: Id;
-    completed_quests: number;
+    experiments_done: number;
   };
-  'quest.completed': {
-    quest_id: Id;
-    season_id: Id;
-    kind: QuestKind;
+  /** A pack exists because something real happened: a season began, an experiment ended, a retest arrived. */
+  'codex.pack_granted': {
+    pack_id: Id;
+    kind: PackKind;
+    source: string;
   };
-  'unlock.granted': {
-    unlock_id: Id;
-    key: string;
+  'codex.experiment_started': {
+    run_id: Id;
+    experiment_id: string;
+    randomized: boolean;
   };
-  'codex.draw_earned': {
-    grant_id: Id;
-    kind: DrawGrant['kind'];
-    by_event: Id;
+  /** The outcome word only (outside / inside / insufficient); never the values. */
+  'codex.experiment_revealed': {
+    run_id: Id;
+    experiment_id: string;
+    outcome: Outcome;
   };
-  'codex.drawn': {
-    draw_id: Id;
-    card_id: Id;
-    rarity: Rarity;
+  'codex.footprint': {
+    footprint_id: Id;
+    kind: FootprintKind;
   };
   'study.consented': {
     study_id: string;
@@ -3796,7 +3877,8 @@ interface HealthEventPayloads {
   };
   'nudge.shown': {
     nudge_id: Id;
-    where: 'overlay' | 'dock' | 'notification';
+    where: 'overlay' | 'dock' | 'notification' | 'pane';
+    kind?: 'standup' | 'reveal';
   };
 }
 type HealthEventType = keyof HealthEventPayloads;
@@ -3901,6 +3983,17 @@ interface PlanDraftV2 {
   /** The co-designer's own words; validated. */
   rationale_zh?: string;
   source: 'rules' | 'co_designer';
+}
+//#endregion
+//#region src/contracts/engagement.d.ts
+interface Season {
+  id: Id;
+  mode: '8w' | 'retest';
+  start: IsoDay;
+  /** Planned end; a season in retest mode also ends when a new checkup arrives. */
+  end: IsoDay;
+  status: 'active' | 'closed';
+  closed: IsoDay | null;
 }
 //#endregion
 //#region src/contracts/index.d.ts
@@ -5386,7 +5479,7 @@ declare function startRun(deps: CoreDeps, opts: {
 declare function abandon(deps: CoreDeps, runId: string): boolean;
 declare function statusNow(deps: CoreDeps): Promise<{
   runs: {
-    trigger: "member" | "ai";
+    trigger: "ai" | "member";
     reason_zh: string;
     id: string;
     started_at: string;
@@ -5773,4 +5866,4 @@ declare const name = "dsh-plugin-longpi";
 declare const inject: string[];
 declare function apply(ctx: Context, config: Config): Promise<void>;
 //#endregion
-export { ABDOMINAL_CT_SKILL, AGENT_DEFAULTS, AGENT_PROFILE_IDS, AUTO_MIN_DAYS, type ActionKind, type AgentConfig, type AgentProfile, type AgentProfileId, type AgentRoute, type AgentRunRecord, type AskedTopicItem, BASE_RULES, BRIEF_PROMPT_ZH, BUDGET_DEFAULTS, type BindingInput, type BindingIssue, type BindingIssueKind, type BindingProposal, type BindingValidation, type BootstrapResult, type Bus, CHANGES_NOTE_ZH, CIVIL_TZ, COACH_PROMPT, COACH_SCHEMA, CONNECTION_FILE, CONNECTION_TEST_MS, CONNECTION_UNAVAILABLE, CONSENT_HOLD_ZH, CONSENT_VERSION, COST_ZH, type CandidateProvider, type CareItem, type Claim, type CoachTone, type CodexCard, type CommitmentItem, type ConditionFlag, type ConditionItem, type ConditionRow, Config, type ConnectionGuard, type ConnectionSource, type ConnectionStatus, type ConnectionTest, type Consent, type ConsentRecord, type CoreDeps, DATA_FILES, DEFAULT_FOLLOWUP, DEMO_ID, DISTILL_PREFILTER, DOCTOR_PROMPT_ZH, DRAFT_CATEGORIES, type DistributiveOmit, type DoctorBrief, type DraftCategory, type DraftItem, type DrawGrant, type DrawResult, type DropTable, type DrugClass, EMPTY_PROFILE, EVENT_OWNERS, EXPORT_SCHEMA, type EvidenceGrade, type ExclusionItem, FACT_PRIORITY_RANK, FISH_OIL_CAUTION, FOCUS, FOCUS_ZH, FOLLOWUP_DAMAGED, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type FactPack, type FactPriority, type FamilyHistoryItem, type FeedbackMessage, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, GROUP_KEYS, GROUP_ZH, type GoalItem, type GroupKey, HARNESS_SKILLS, HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH, type HealthEvent, type HealthEventPayloads, type HealthEventSource, type HealthEventType, type Id, type IndicatorChange, type IndicatorDetail, type IndicatorEntry, type IndicatorSource, type IndicatorsResponse, type IsoDay, type IsoTime, type Journey, LIBRARY_PROVIDER, LIBRARY_SKILL_RANK, type LibraryHooks, type LifeEventItem, type LlmCall, type LocalStatResult, MANDATORY_PROVIDERS, MEMORY_VERSION, MODULES, type MedicationItem, type MemoryApi, type MemoryApplyResult, type MemoryItem, type MemoryKind, type MemoryOp, type MethodInputUsed, type MethodOutput, type MethodResult, type MethylationRow, type ModuleId, type MotivationItem, NO_READ_BACK, type NewMemoryItem, type NextBestAction, type NoteItem, type NumberRef, ORCHESTRATOR_RULES, type ObjectJsonSchema, PHENOAGE_SKILL, PRODUCT_VERSION, PROFILE_DAMAGED, PROMPT_SECTIONS, type PageState, type PersonMemory, type PlanBrief, type PlanDraft, type PlanDraftItem, type PlanDraftV2, type PlanPrefs, type PreferenceItem, type PreferenceKey, type Profile, type ProteinRow, type Provenance, type ProvenanceKind, type Quest, type QuestKind, READ_BACK_MS, RENEW_AFTER_MS, REPORT_CSP, RESERVED_ROUTES, RESERVED_SKILLS, RESERVED_TOOL_NAMES, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type Rarity, type RecordChange, type RecordSnapshot, type RecordStatus, type RecordsSummary, type ResultLabel, type RiskFact, type RouteHandler, SAFETY_CONDITION_FLAGS, SAFETY_DRUG_CLASSES, SELF, SELF_ALIASES, SELF_KEYS, SELF_SPEC, STALE_MS, SURFACES_DEFAULTS, type SavedConnection, type ScienceMode, type Season, type SelfKey, type SelfRow, type SendResult, type SkillIndexEntry, type Specialists, type Stage, type StopHit, type StopResult, type StoreKind, type StoreRows, type StreakState, type StudyManifest, type StyleItem, type SurfaceCard, type SurfaceKind, type SurfaceSet, TOOL_NAMES, type TaxaRow, type TokenUsage, type TopFact, type TransparencyLogEntry, type TriageFinding, type UnjudgedChange, type Unlock, VISIT_PROMPT_ZH, type ValidatorRule, type VisionItem, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, WRITE_TOOLS, type WinItem, type WorkspaceLike, type WorkspaceRegistryLike, abandon as abandonAnalysis, acceptPlan, acceptedPlan, activePerson, addCheckIns, addDays, addPerson, addSelf, adherenceFor, affirmsBooking, agentConfig, allowedNumbers, readiness as analysisReadiness, readinessLine as analysisReadinessLine, analystSkillPath, analystSkillVersion, anchorOf, appendFollowupLog, appendJsonl, apply, asJson, assessBinding, autoEnabled, bindPrivacy, bindRecord, bootstrapWorkspace, bridgeEnv, briefOptionsOf, buildBoard, buildBrief, buildCalendar, buildChanges, buildDoctorFirst, buildIndicators, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, candidateProviders, candidatesFor, careFor, careItems, careState, catalogDescription, cellNumber, checkDay, checkExport, checkinStatus, checkupMarkerFor, chooseSurfaces, clearConnection, clinicalStop, coachEnabled, coachFallback, coachInflight, coachInput, coachProfile, coachSkillPath, coachSkillVersion, collectCandidates, collectMethodResults, collectOnJourney, commandExcerpt, compareAnalyses, computeSafety, conditionFlagsOf, connectionKey, connectionSource, connectionTokenProblem, connectionUrlProblem, createBudget, createBus, createHttp, createLlmCall, createManagedMember, createMemory, createRun, createSse, currentBus, currentImport, currentMethodResults, currentPlan, currentSummary, currentSurfaces, dateSaid, daysBetween, decideFollowup, deepseekConsentPending, deleteLocalStore, deleteSelf, demoRecord, deniesBooking, describeItem, describePlan, desktopCommand, desktopSupported, detectIntents, distillerProfile, doctorItems, domainSummary, doneCounts, dosePattern, draftPlan, drinkingFromText, drugClassesOf, effectiveConfig, effectsFor, ensureDemoPerson, ensureMemberLink, escapeText, estimatedAge, evaluateMarker, evaluatePlan, exclusionsFromText, expandMarkerNames, expectedText, factorFor, fallbackSurfaces, findingsFrom, firstJsonObject, fixScheduleText, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, forgetExclusion, goalProblems, greetingZh, groupOf, guardRoute, hardKeyOf, hasDose, healthWorkspacePaths, heldUntil, hitRefs, holdPlanDraft, holderAuth, homeBloodPressure, hypoglycaemiaNow, importLatest, importRun, inQuiet, indicatorDetail, indicatorFor, specsOf as indicatorSpecsForTest, indicatorsFromTable, inject, insideWorkspace, invalidateIndicators, invalidateRecords, invalidateTracking, isCoronaryName, isDemo, isJsonRequest, isoDay, isoWeek, isoWeekday, itemFrom, itemRoute, journeyCandidates, lastPersonText, latestOutputs, latestSelf, leadsWithHypoFirstStep, lifeAreaOf, listEntries, listRuns, listSkillIndex, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, logCareVisit, manifestSummary, markAsked, markerFor, markerGroupKeys, maskMcpUrl, maskUrl, matchSkills, matchesInputName, medicationClasses, memberIdFor, memoryFor, mentionedEntities, mergeProfile, mergeSelf, methodResults, methodsOnPage, migrateLegacy, mintMemberLink, modelEgress, modelGoals, mountLibraryLanes, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, numberKeysIn, oddsSumToOne, openDemo, orchestratorPrompt, organismOf, organismsAsked, overviewSlice, packFp, packFrom, pageMethodResults, pageStateOf, parseCompact, parseFrontmatter, parseMemberFile, parseNumber, parseReadme, patterns, personDir, personaLines, piLines, planApprovalReason, planDraftHeld, planInput, planKey, planReadBack, pluginMessage, presentMedications, profileComplete, proposeFromRecord, proposedRowKind, publicFollowup, publishMethodResults, pushToMirobody, queryArgsForView, quoteIn, rangeFlag, rankActions, rankTopFacts, rcvBand, readBrief, readCheckIns, readConnection, readExport, readFailed, readFollowup, readFollowupLog, readHistory, readJson, readJsonl, readPageState, readPlanPrefs, readPlans, readProfile, readReceipts, readRegistry, readResultFile, readSelf, readStatements, readStore, readiness$1 as readiness, recordConsent, recordMethodResult, recordOutputs, recordReadable, recordSurfaces, recordsSummary, redactText, regenerate, registerApprovals, registerCandidates, registerLibraryHooks, registerLibraryMount, registerMemberFile, registerMemoryTools, registerModules, registerOrchestrator, registerValidator, registeredMethodResults, releasePlanDraft, rememberExclusions, rememberFromWords, rememberPersonText, removePerson, renderMemberFile, replyForDraft, reportExcerpt, resetCoachCache, resetQuerySchema, resetReadBacks, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveRootDir, resolveSkillsHome, retestDay, retestsOf, runReady, runRegistered, runSkill, runStatus, runValidators, runnableFrom, sameMeasure, sanitizeReport, saveConnection, saveMemberLink, savePlan, screeningTopics, seenNotes, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, sessionKey, setActive, setActivePersonResolver, setAutoEnabled, setBus, setCoach, setCoachEnabled, setConsent, setDrinking, setFamilyNames, setFollowupDeps, setMethodResults, setPlanExclusion, settleDraft, skillEnv, snapshotText, softHoldDraft, specKind, stageMeasurements, stageNow, startBlockers, startFollowup, startRun, statusLine, statusNow, stripDoses, suggestNext, summarizeIndicators, summarizeMedications, supplementFieldInputs, tableOf, testConnection, togetherZh, tokenKey, trackingGeneration, triageCandidates, triageFindings, unansweredOf, unitFactor, useBindingView, validateBinding, validateCoach, validateDistilled, validatorRules, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, whenToUseOf, within, writeFollowup, writeJsonAtomic, writeProfile, writeStats, youngerAllowed };
+export { ABDOMINAL_CT_SKILL, AGENT_DEFAULTS, AGENT_PROFILE_IDS, AUTO_MIN_DAYS, type ActionKind, type AgentConfig, type AgentProfile, type AgentProfileId, type AgentRoute, type AgentRunRecord, type AskedTopicItem, BASE_RULES, BRIEF_PROMPT_ZH, BUDGET_DEFAULTS, type BindingInput, type BindingIssue, type BindingIssueKind, type BindingProposal, type BindingValidation, type BootstrapResult, type Bus, CHANGES_NOTE_ZH, CIVIL_TZ, COACH_PROMPT, COACH_SCHEMA, CONNECTION_FILE, CONNECTION_TEST_MS, CONNECTION_UNAVAILABLE, CONSENT_HOLD_ZH, CONSENT_VERSION, COST_ZH, type CandidateProvider, type CareItem, type ChapterInfo, type Claim, type CoachTone, type CommitmentItem, type ConditionFlag, type ConditionItem, type ConditionRow, Config, type ConnectionGuard, type ConnectionSource, type ConnectionStatus, type ConnectionTest, type Consent, type ConsentRecord, type CoreDeps, DATA_FILES, DEFAULT_FOLLOWUP, DEMO_ID, DISTILL_PREFILTER, DOCTOR_PROMPT_ZH, DRAFT_CATEGORIES, type DistributiveOmit, type DoctorBrief, type DraftCategory, type DraftItem, type DrugClass, EMPTY_PROFILE, EVENT_OWNERS, EXPORT_SCHEMA, type EvidenceGrade, type ExclusionItem, type ExperimentQuestion, type ExperimentRun, type ExperimentSpec, FACT_PRIORITY_RANK, FISH_OIL_CAUTION, FOCUS, FOCUS_ZH, FOLLOWUP_DAMAGED, FOLLOWUP_MAX_PER_DAY, FOLLOWUP_TEST_TEXT, type FactPack, type FactPriority, type FamilyHistoryItem, type FeedbackMessage, type Focus, type FollowupDeps, type FollowupLogRow, type FollowupSettings, type FollowupState, type Footprint, type FootprintKind, GROUP_KEYS, GROUP_ZH, type GoalItem, type GroupKey, HARNESS_SKILLS, HYPO_AWAKE_ZH, HYPO_UNCONSCIOUS_ZH, type HealthEvent, type HealthEventPayloads, type HealthEventSource, type HealthEventType, type Id, type IndicatorChange, type IndicatorDetail, type IndicatorEntry, type IndicatorSource, type IndicatorsResponse, type IsoDay, type IsoTime, type Journey, LIBRARY_PROVIDER, LIBRARY_SKILL_RANK, type LibraryHooks, type LibraryPack, type LifeEventItem, type LlmCall, type LocalStatResult, MANDATORY_PROVIDERS, MEMORY_VERSION, MODULES, type MedicationItem, type MemoryApi, type MemoryApplyResult, type MemoryItem, type MemoryKind, type MemoryOp, type MethodInputUsed, type MethodOutput, type MethodResult, type MethylationRow, type MetricKey, type MetricResult, type MetricSpec, type ModuleId, type MotivationItem, NO_READ_BACK, type NewMemoryItem, type NextBestAction, type NoteItem, type NumberRef, ORCHESTRATOR_RULES, type ObjectJsonSchema, type Outcome, PHENOAGE_SKILL, PRODUCT_VERSION, PROFILE_DAMAGED, PROMPT_SECTIONS, type Pack, type PackKind, type PageState, type PersonMemory, type PlanBrief, type PlanDraft, type PlanDraftItem, type PlanDraftV2, type PlanPrefs, type PreferenceItem, type PreferenceKey, type Profile, type ProteinRow, type Provenance, type ProvenanceKind, READ_BACK_MS, RENEW_AFTER_MS, REPORT_CSP, RESERVED_ROUTES, RESERVED_SKILLS, RESERVED_TOOL_NAMES, RISK_FACTS, RISK_FACT_ZH, RISK_SKILL, type RecordChange, type RecordSnapshot, type RecordStatus, type RecordsSummary, type ResultCard, type ResultLabel, type RiskFact, type RouteHandler, type RunResult, SAFETY_CONDITION_FLAGS, SAFETY_DRUG_CLASSES, SELF, SELF_ALIASES, SELF_KEYS, SELF_SPEC, STALE_MS, SURFACES_DEFAULTS, type SavedConnection, type ScienceMode, type Season, type SelfKey, type SelfRow, type SendResult, type SkillIndexEntry, type Specialists, type SpeciesInfo, type Stage, type StopHit, type StopResult, type StoreKind, type StoreRows, type StudyCard, type StudyManifest, type StyleItem, type SurfaceCard, type SurfaceKind, type SurfaceSet, TOOL_NAMES, type TaxaRow, type Tier, type TokenUsage, type TopFact, type TransparencyLogEntry, type TriageFinding, type UnjudgedChange, VISIT_PROMPT_ZH, type ValidatorRule, type VisionItem, WEBHOOK_KINDS, WORKSPACE_DIR, WORKSPACE_MARKER, WORKSPACE_TITLE, WRITE_TOOLS, type WinItem, type WorkspaceLike, type WorkspaceRegistryLike, abandon as abandonAnalysis, acceptPlan, acceptedPlan, activePerson, addCheckIns, addDays, addPerson, addSelf, adherenceFor, affirmsBooking, agentConfig, allowedNumbers, readiness as analysisReadiness, readinessLine as analysisReadinessLine, analystSkillPath, analystSkillVersion, anchorOf, appendFollowupLog, appendJsonl, apply, asJson, assessBinding, autoEnabled, bindPrivacy, bindRecord, bootstrapWorkspace, bridgeEnv, briefOptionsOf, buildBoard, buildBrief, buildCalendar, buildChanges, buildDoctorFirst, buildIndicators, buildJourney, buildJourneyFull, buildPlanBrief, buildReport, buildStats, buildTracking, candidateProviders, candidatesFor, careFor, careItems, careState, catalogDescription, cellNumber, checkDay, checkExport, checkinStatus, checkupMarkerFor, chooseSurfaces, clearConnection, clinicalStop, coachEnabled, coachFallback, coachInflight, coachInput, coachProfile, coachSkillPath, coachSkillVersion, collectCandidates, collectMethodResults, collectOnJourney, commandExcerpt, compareAnalyses, computeSafety, conditionFlagsOf, connectionKey, connectionSource, connectionTokenProblem, connectionUrlProblem, createBudget, createBus, createHttp, createLlmCall, createManagedMember, createMemory, createRun, createSse, currentBus, currentImport, currentMethodResults, currentPlan, currentSummary, currentSurfaces, dateSaid, daysBetween, decideFollowup, deepseekConsentPending, deleteLocalStore, deleteSelf, demoRecord, deniesBooking, describeItem, describePlan, desktopCommand, desktopSupported, detectIntents, distillerProfile, doctorItems, domainSummary, doneCounts, dosePattern, draftPlan, drinkingFromText, drugClassesOf, effectiveConfig, effectsFor, ensureDemoPerson, ensureMemberLink, escapeText, estimatedAge, evaluateMarker, evaluatePlan, exclusionsFromText, expandMarkerNames, expectedText, factorFor, fallbackSurfaces, findingsFrom, firstJsonObject, fixScheduleText, foldLine, foldName, followupApprovalReason, followupArmed, followupResponse, followupStateOf, followupSummary, followupTextProblem, followupTick, forgetExclusion, goalProblems, greetingZh, groupOf, guardRoute, hardKeyOf, hasDose, healthWorkspacePaths, heldUntil, hitRefs, holdPlanDraft, holderAuth, homeBloodPressure, hypoglycaemiaNow, importLatest, importRun, inQuiet, indicatorDetail, indicatorFor, specsOf as indicatorSpecsForTest, indicatorsFromTable, inject, insideWorkspace, invalidateIndicators, invalidateRecords, invalidateTracking, isCoronaryName, isDemo, isJsonRequest, isoDay, isoWeek, isoWeekday, itemFrom, itemRoute, journeyCandidates, lastPersonText, latestOutputs, latestSelf, leadsWithHypoFirstStep, lifeAreaOf, listEntries, listRuns, listSkillIndex, loadCatalog, loadCourses, loadDoseLog, loadEvidenceLexicon, loadRecords, loadReference, loadSeries, logCareVisit, manifestSummary, markAsked, markerFor, markerGroupKeys, maskMcpUrl, maskUrl, matchSkills, matchesInputName, medicationClasses, memberIdFor, memoryFor, mentionedEntities, mergeProfile, mergeSelf, methodResults, methodsOnPage, migrateLegacy, mintMemberLink, modelEgress, modelGoals, mountLibraryLanes, name, nameVariants, nextTimes, normalizePlan, normalizeProfile, normalizeUnit, numberKeysIn, openDemo, orchestratorPrompt, organismOf, organismsAsked, overviewSlice, packFp, packFrom, pageMethodResults, pageStateOf, parseCompact, parseFrontmatter, parseMemberFile, parseNumber, parseReadme, patterns, personDir, personaLines, piLines, planApprovalReason, planDraftHeld, planInput, planKey, planReadBack, pluginMessage, presentMedications, profileComplete, proposeFromRecord, proposedRowKind, publicFollowup, publishMethodResults, pushToMirobody, queryArgsForView, quoteIn, rangeFlag, rankActions, rankTopFacts, rcvBand, readBrief, readCheckIns, readConnection, readExport, readFailed, readFollowup, readFollowupLog, readHistory, readJson, readJsonl, readPageState, readPlanPrefs, readPlans, readProfile, readReceipts, readRegistry, readResultFile, readSelf, readStatements, readStore, readiness$1 as readiness, recordConsent, recordMethodResult, recordOutputs, recordReadable, recordSurfaces, recordsSummary, redactText, regenerate, registerApprovals, registerCandidates, registerLibraryHooks, registerLibraryMount, registerMemberFile, registerMemoryTools, registerModules, registerOrchestrator, registerValidator, registeredMethodResults, releasePlanDraft, rememberExclusions, rememberFromWords, rememberPersonText, removePerson, renderMemberFile, replyForDraft, reportExcerpt, resetCoachCache, resetQuerySchema, resetReadBacks, resolveDataDir, resolveMarkers, resolveMirobodyPlugin, resolveRootDir, resolveSkillsHome, retestDay, retestsOf, runReady, runRegistered, runSkill, runStatus, runValidators, runnableFrom, sameMeasure, sanitizeReport, saveConnection, saveMemberLink, savePlan, screeningTopics, seenNotes, selfIndicators, selfSeries, sendFollowup, sendNow, sentToday, seriesOf, sessionKey, setActive, setActivePersonResolver, setAutoEnabled, setBus, setCoach, setCoachEnabled, setConsent, setDrinking, setFamilyNames, setFollowupDeps, setMethodResults, setPlanExclusion, settleDraft, skillEnv, snapshotText, softHoldDraft, specKind, stageMeasurements, stageNow, startBlockers, startFollowup, startRun, statusLine, statusNow, stripDoses, suggestNext, summarizeIndicators, summarizeMedications, supplementFieldInputs, tableOf, testConnection, togetherZh, tokenKey, trackingGeneration, triageCandidates, triageFindings, unansweredOf, unitFactor, useBindingView, validateBinding, validateCoach, validateDistilled, validatorRules, versionCheck, webhookAnswer, webhookRequest, webhookUrlProblem, whenToUseOf, within, writeFollowup, writeJsonAtomic, writeProfile, writeStats, youngerAllowed };

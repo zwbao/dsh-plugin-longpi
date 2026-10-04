@@ -40,10 +40,36 @@ function write() {
   const data = {
     board: { ...read('board.json'), version }, tracking: read('tracking.json'), journey: { ...read('journey.json'), version }, self: read('self.json'),
     planDraft: read('plan-draft.json'), followup: read('followup.json'), indicators: read('indicators.json'), connection: read('connection.json'),
+    codex: read('codex.json'), codexLibrary: read('codex-library.json'),
   }
   const template = readFileSync(join(here, 'index.html'), 'utf8')
   const payload = JSON.stringify(data).replace(/</g, '\\u003c')
   writeFileSync(join(out, 'index.html'), template.replace('/*__DATA__*/null', payload))
+}
+
+/**
+ * The 长寿图鉴 page on its own, for ?view=codex: src/client/engage/codex-page.ts bundled like lib/client.js (React
+ * from the host's module loader), so the preview can show it before the health page links it in.
+ */
+async function bundleCodex() {
+  const { rolldown } = await import('rolldown')
+  const bundle = await rolldown({
+    input: join(here, '..', 'src', 'client', 'engage', 'codex-page.ts'),
+    platform: 'browser',
+    external: ['react', 'react-dom'],
+    logLevel: 'warn',
+  })
+  try {
+    await bundle.write({
+      file: join(out, 'codex.js'),
+      format: 'cjs',
+      banner: 'window.__ModuleLoader__.load({ id: "longpi-codex-preview", factory: (require) => {',
+      footer: 'return module.exports; } });',
+      intro: 'var module = { exports: {} }; var exports = module.exports;',
+    })
+  } finally {
+    await bundle.close()
+  }
 }
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.map': 'application/json' }
@@ -131,6 +157,38 @@ const SHOTS = [
   ['dock', 'view=dock&stage=routine', 1280, 800],
   ['dock-first_result', 'view=dock&stage=first_result', 1280, 800],
   ['pill', 'view=pill&stage=routine', 1280, 800],
+  // 长寿图鉴 (docs/codex-design.md §5): the page at 1280 × 800 and in a narrow pane (headless Chrome's narrowest
+  // window is 500 px), then each moment.
+  ['codex-experiments', 'view=codex', 1280, 800],
+  ['pane-folded', 'view=pane&stage=routine', 1280, 800],
+  ['pane-shown', 'view=pane&stage=routine&shown=1', 1280, 800],
+  ['pane-presentation', 'view=pane&stage=routine&codex=still', 1280, 800],
+  ['slot-bar', 'view=slot&stage=routine', 1280, 800],
+  ['codex-experiments-full', 'view=codex', 1280, 2200],
+  ['codex-experiments-narrow', 'view=codex&chrome=0', 520, 2600],
+  ['codex-experiments-900', 'view=codex', 900, 1000],
+  ['codex-pack', 'view=codex&cdo=pack', 1280, 1000],
+  ['codex-pick', 'view=codex&cdo=pick', 1280, 1500],
+  ['codex-pick-narrow', 'view=codex&cdo=pick&chrome=0', 520, 2400],
+  ['codex-begin', 'view=codex&cdo=begin', 1280, 2400],
+  ['codex-checkin', 'view=codex&cdo=checkin', 1280, 1500],
+  ['codex-retest', 'view=codex&cdo=retest', 1280, 1000],
+  ['codex-reveal', 'view=codex&cdo=reveal', 1280, 1000],
+  ['codex-result', 'view=codex&cdo=result', 1280, 900],
+  ['codex-library', 'view=codex&ctab=library', 1280, 800],
+  ['codex-library-full', 'view=codex&ctab=library', 1280, 2400],
+  ['codex-library-narrow', 'view=codex&ctab=library&chrome=0', 520, 1800],
+  ['codex-library-hover', 'view=codex&cdo=hover', 1280, 1100],
+  ['codex-study', 'view=codex&cdo=study', 1280, 1100],
+  ['codex-deck', 'view=codex&ctab=deck', 1280, 900],
+  ['codex-species', 'view=codex&ctab=species', 1280, 1700],
+  ['codex-footprints', 'view=codex&ctab=footprints', 1280, 1000],
+  ['codex-settings', 'view=codex&ctab=settings', 1280, 1100],
+  ['codex-first-open', 'view=codex&codex=first', 1280, 900],
+  ['codex-first-open-nowrist', 'view=codex&codex=first-nowrist&chrome=0', 520, 1100],
+  ['codex-off', 'view=codex&codex=off', 1280, 700],
+  ['codex-simple', 'view=codex&codex=simple&ctab=library', 1280, 1200],
+  ['codex-stop', 'view=codex&cdo=stop', 1280, 900],
 ]
 
 // Chrome loads the written page from disk: spawnSync blocks this process, so an
@@ -163,6 +221,7 @@ async function shots(dir) {
 }
 
 write()
+await bundleCodex()
 const shotDir = arg('--shots')
 const port = arg('--serve')
 if (shotDir) await shots(shotDir)

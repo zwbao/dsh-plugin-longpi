@@ -1,0 +1,613 @@
+{
+ "ok": true,
+ "today": "2026-10-04",
+ "needs_consent": false,
+ "enabled": true,
+ "reason": null,
+ "reason_zh": "",
+ "member": null,
+ "started": true,
+ "intro": {
+  "my_day": {
+   "start": "09:30",
+   "end": "22:30"
+  },
+  "season_mode": "8w",
+  "standup": true,
+  "wristband": true
+ },
+ "season": {
+  "id": "sn-2",
+  "mode": "8w",
+  "start": "2026-09-16",
+  "end": "2026-11-10",
+  "week": 3,
+  "weeks": 8,
+  "status": "active"
+ },
+ "packs": [
+  {
+   "id": "pk-exp",
+   "kind": "experiment",
+   "source_zh": "做完「睡前 2 小时少喝水」",
+   "granted": "2026-09-14",
+   "opened": null,
+   "options": [],
+   "results": [],
+   "empty_zh": null
+  },
+  {
+   "id": "pk-retest",
+   "kind": "retest",
+   "source_zh": "新的体检结果到了",
+   "granted": "2026-10-03",
+   "opened": null,
+   "options": [],
+   "results": [],
+   "empty_zh": null
+  }
+ ],
+ "reserve": [
+  {
+   "id": "no-sugary-drinks",
+   "title_zh": "戒掉含糖饮料",
+   "do_zh": "两周不喝奶茶、可乐等含糖饮料。",
+   "icon": "cup",
+   "days": 14,
+   "primary_zh": "体重",
+   "also_zh": [
+    "腰围"
+   ],
+   "randomizable": false,
+   "questions": [],
+   "source_zh": "来自你的方案",
+   "needs_retest": false
+  },
+  {
+   "id": "early-dinner",
+   "title_zh": "晚饭提前",
+   "do_zh": "晚饭离睡觉至少 3 小时。",
+   "icon": "bowl",
+   "days": 14,
+   "primary_zh": "静息心率",
+   "also_zh": [
+    "睡眠时长",
+    "体重"
+   ],
+   "randomizable": true,
+   "questions": [],
+   "source_zh": "来自你的方案；研究卡「什么时候吃，也算数」（小鼠，仅作背景）",
+   "needs_retest": false
+  }
+ ],
+ "running": [
+  {
+   "id": "rn-walk",
+   "experiment_id": "walk-after-meal",
+   "title_zh": "饭后走 10 分钟",
+   "do_zh": "午饭或晚饭后走 10 分钟。",
+   "icon": "walk",
+   "checkin_zh": "今天饭后走了 10 分钟",
+   "start": "2026-09-26",
+   "end": "2026-10-09",
+   "extended_to": null,
+   "day": 9,
+   "days": 14,
+   "cells": [
+    "d",
+    "d",
+    "d",
+    "m",
+    "d",
+    "d",
+    "m",
+    "d",
+    "f",
+    "f",
+    "f",
+    "f",
+    "f",
+    "f"
+   ],
+   "done_today": false,
+   "done_count": 6,
+   "status": "running",
+   "randomized": true,
+   "today_zh": "今天：做",
+   "threshold_zh": "比较做的日子和不做的日子的静息心率。平均差别至少 2 次/分，并且超出按你自己每天的浮动算出的范围，才算「超出平时波动」。",
+   "primary_zh": "静息心率",
+   "progress_zh": "饭后走 10 分钟 · 第 9/14 天",
+   "result": null
+  }
+ ],
+ "ready": [
+  {
+   "id": "rn-wake",
+   "experiment_id": "fixed-wake",
+   "title_zh": "起床时间固定",
+   "do_zh": "工作日起床时间前后不超过 30 分钟，周末不超过 60 分钟。",
+   "icon": "alarm",
+   "checkin_zh": "",
+   "start": "2026-09-18",
+   "end": "2026-10-01",
+   "extended_to": null,
+   "day": 14,
+   "days": 14,
+   "cells": [
+    "d",
+    "d",
+    "d",
+    "d",
+    "m",
+    "d",
+    "d",
+    "d",
+    "d",
+    "d",
+    "d",
+    "m",
+    "d",
+    "d"
+   ],
+   "done_today": false,
+   "done_count": 12,
+   "status": "ready",
+   "randomized": false,
+   "today_zh": null,
+   "threshold_zh": "比较开始前两周和这两周的入睡时间的波动。平均差别至少 15 分钟，并且超出按你自己每天的浮动算出的范围，才算「超出平时波动」。",
+   "primary_zh": "入睡时间的波动",
+   "progress_zh": "起床时间固定 · 可以翻了",
+   "result": null
+  }
+ ],
+ "deck": [
+  {
+   "id": "rn-water",
+   "experiment_id": "less-water",
+   "title_zh": "睡前 2 小时少喝水",
+   "do_zh": "睡前 2 小时内不喝大杯水和汤。",
+   "icon": "cup",
+   "checkin_zh": "今天睡前 2 小时没喝大杯水和汤",
+   "start": "2026-08-31",
+   "end": "2026-09-13",
+   "extended_to": null,
+   "day": 14,
+   "days": 14,
+   "cells": [
+    "d",
+    "d",
+    "d",
+    "d",
+    "d",
+    "d",
+    "d",
+    "m",
+    "d",
+    "d",
+    "d",
+    "d",
+    "d",
+    "d"
+   ],
+   "done_today": false,
+   "done_count": 13,
+   "status": "revealed",
+   "randomized": false,
+   "today_zh": null,
+   "threshold_zh": "比较开始前两周和这两周的夜间醒来次数。平均差别至少 0.5 次，并且超出按你自己每天的浮动算出的范围，才算「超出平时波动」。",
+   "primary_zh": "夜间醒来次数",
+   "progress_zh": "睡前 2 小时少喝水 · 第 14/14 天",
+   "result": {
+    "outcome": "outside",
+    "primary": {
+     "key": "wakings",
+     "label_zh": "夜间醒来次数",
+     "unit_zh": "次",
+     "before": 1.8,
+     "after": 0.9,
+     "outcome": "outside",
+     "direction": "better",
+     "text_zh": "主要结果 · 夜间醒来次数：1.8 → 0.9 次，超出你的平时波动。"
+    },
+    "also": [
+     {
+      "key": "sleep",
+      "label_zh": "睡眠时长",
+      "unit_zh": "小时",
+      "before": 6.5,
+      "after": 6.7,
+      "outcome": "inside",
+      "direction": "better",
+      "text_zh": "顺便看 · 睡眠时长：6.5 → 6.7 小时，在你的平时波动内。"
+     }
+    ],
+    "done_days": 13,
+    "effective_days": 14,
+    "window_days": 14,
+    "how_zh": "你开始前两周，夜间醒来次数每天上下浮动约 0.7 次；这两周的平均比之前低 0.9 次，超过了按你自己的浮动算出来的范围。",
+    "praise_zh": "你的夜间醒来次数比平时低，超出了平时波动——这是实打实的进步。",
+    "at": "2026-09-14T00:40:00.000Z"
+   }
+  },
+  {
+   "id": "rn-bp",
+   "experiment_id": "home-bp",
+   "title_zh": "早晚量血压",
+   "do_zh": "每天早上起床后、晚上睡前各量一次家庭血压。做饭少放盐；吃食堂和外卖时选少盐的菜，不喝汤。",
+   "icon": "bp",
+   "checkin_zh": "",
+   "start": "2026-08-15",
+   "end": "2026-08-28",
+   "extended_to": null,
+   "day": 14,
+   "days": 14,
+   "cells": [
+    "d",
+    "d",
+    "m",
+    "d",
+    "d",
+    "d",
+    "m",
+    "d",
+    "d",
+    "m",
+    "d",
+    "d",
+    "d",
+    "d"
+   ],
+   "done_today": false,
+   "done_count": 11,
+   "status": "revealed",
+   "randomized": false,
+   "today_zh": null,
+   "threshold_zh": "比较开始前两周和这两周的家庭收缩压的平均。变化超过约 ±9%，才算「超出平时波动」。这个范围来自同一个人反复测量时的正常起伏。",
+   "primary_zh": "家庭收缩压",
+   "progress_zh": "早晚量血压 · 第 14/14 天",
+   "result": {
+    "outcome": "inside",
+    "primary": {
+     "key": "sbp",
+     "label_zh": "家庭收缩压",
+     "unit_zh": "mmHg",
+     "before": 128,
+     "after": 126,
+     "outcome": "inside",
+     "direction": "better",
+     "text_zh": "主要结果 · 家庭收缩压：128 → 126 mmHg，在你的平时波动内。"
+    },
+    "also": [
+     {
+      "key": "weight",
+      "label_zh": "体重",
+      "unit_zh": "公斤",
+      "before": 58.2,
+      "after": 57.9,
+      "outcome": "inside",
+      "direction": "better",
+      "text_zh": "顺便看 · 体重：58.2 → 57.9 公斤，在你的平时波动内。"
+     }
+    ],
+    "done_days": 11,
+    "effective_days": 12,
+    "window_days": 14,
+    "how_zh": "同一个人反复测家庭收缩压，单是测量误差和身体的日常起伏，前后就能差到约 ±9%。这两周的平均比之前低 1.6%，还在这个范围内。",
+    "praise_zh": null,
+    "at": "2026-08-29T00:30:00.000Z"
+   }
+  }
+ ],
+ "library": {
+  "size": 169,
+  "read": 8,
+  "pending": 0,
+  "chapters": [
+   {
+    "id": "clock",
+    "no": 1,
+    "title_zh": "身体的钟",
+    "size": 26,
+    "read": 5
+   },
+   {
+    "id": "organ",
+    "no": 2,
+    "title_zh": "器官与代谢",
+    "size": 28,
+    "read": 1
+   },
+   {
+    "id": "brain",
+    "no": 3,
+    "title_zh": "大脑与心理",
+    "size": 23,
+    "read": 0
+   },
+   {
+    "id": "immune",
+    "no": 4,
+    "title_zh": "免疫与炎症",
+    "size": 15,
+    "read": 0
+   },
+   {
+    "id": "repair",
+    "no": 5,
+    "title_zh": "细胞的维修",
+    "size": 21,
+    "read": 0
+   },
+   {
+    "id": "tissue",
+    "no": 6,
+    "title_zh": "组织与再生",
+    "size": 22,
+    "read": 0
+   },
+   {
+    "id": "gene",
+    "no": 7,
+    "title_zh": "生殖与基因",
+    "size": 16,
+    "read": 0
+   },
+   {
+    "id": "span",
+    "no": 8,
+    "title_zh": "寿命与节律",
+    "size": 18,
+    "read": 2
+   }
+  ]
+ },
+ "species": {
+  "met": 2,
+  "total": 9
+ },
+ "footprints": [
+  {
+   "id": "fp-4",
+   "kind": "season",
+   "day": "2026-09-15",
+   "title_zh": "走完一个赛季",
+   "text_zh": "从开始到结束，走完了一个赛季，做了 2 个实验。"
+  },
+  {
+   "id": "fp-3",
+   "kind": "first_experiment",
+   "day": "2026-08-29",
+   "title_zh": "做完第一个实验",
+   "text_zh": "做完了第一个两周小实验：早晚量血压。"
+  },
+  {
+   "id": "fp-2",
+   "kind": "care_brief",
+   "day": "2026-08-12",
+   "title_zh": "带着简报就诊",
+   "text_zh": "拿着整理好的问题去见了医生。"
+  },
+  {
+   "id": "fp-1",
+   "kind": "family",
+   "day": "2026-07-30",
+   "title_zh": "陪妈妈复查",
+   "text_zh": "带着简报陪妈妈看了医生。"
+  }
+ ],
+ "footprints_note_zh": "只记你做了什么，不代表指标好坏。",
+ "prefs": {
+  "simple": false,
+  "presentation": false,
+  "my_day": {
+   "start": "09:30",
+   "end": "22:30"
+  },
+  "season_mode": "8w",
+  "standup": true
+ },
+ "devices": {
+  "wristband": true,
+  "bp_cuff": true,
+  "scale": true
+ },
+ "slot": {
+  "standup": false,
+  "standups_left": 2,
+  "reveal": {
+   "ref": "rn-wake",
+   "text_zh": "有一张实验卡可以翻了。"
+  },
+  "quiet": null
+ },
+ "pane_zh": "饭后走 10 分钟 · 第 9/14 天；起床时间固定 · 可以翻了",
+ "rules_zh": [
+  "长寿图鉴免费，没有付费，不能交易。",
+  "未满 18 岁不开放，可以随时关闭。",
+  "卡包只来自真实发生的事：赛季开始、做完一个实验、你自己复查。",
+  "颜色表示研究是怎么做的，不表示和你多相关。",
+  "结果只说「超出平时波动」「在平时波动内」或「数据不够」，不说是实验带来的。"
+ ],
+ "_mock": {
+  "pack_options": {
+   "pk-exp": [
+    {
+     "id": "sleep-plus-30",
+     "title_zh": "睡眠多 30 分钟",
+     "do_zh": "每晚比前两周的平均多睡 30 分钟。",
+     "icon": "moon",
+     "days": 14,
+     "primary_zh": "心率变异性",
+     "also_zh": [
+      "静息心率",
+      "睡眠时长",
+      "白天步数"
+     ],
+     "randomizable": false,
+     "questions": [
+      {
+       "id": "nocturia",
+       "text_zh": "夜里常要起夜吗？"
+      }
+     ],
+     "source_zh": "来自你的方案",
+     "needs_retest": false
+    },
+    {
+     "id": "stand-90",
+     "title_zh": "每坐 90 分钟起身一次",
+     "do_zh": "起身提醒出现时站起来走两分钟。",
+     "icon": "chair",
+     "days": 14,
+     "primary_zh": "静息心率",
+     "also_zh": [
+      "血糖仪读数的日均值"
+     ],
+     "randomizable": false,
+     "questions": [],
+     "source_zh": "来自你的方案",
+     "needs_retest": false
+    },
+    {
+     "id": "lipid-diet-8w",
+     "title_zh": "8 周降脂饮食",
+     "do_zh": "每天一份燕麦或豆类，用坚果替代零食，少吃肥肉和油炸。",
+     "icon": "bowl",
+     "days": 56,
+     "primary_zh": "LDL 胆固醇（「坏」胆固醇）",
+     "also_zh": [],
+     "randomizable": false,
+     "questions": [],
+     "source_zh": "来自你的方案",
+     "needs_retest": true
+    }
+   ]
+  },
+  "pack_results": {
+   "pk-retest": [
+    {
+     "id": "rc-1",
+     "key": "bioage",
+     "title_zh": "表型年龄（用 9 项化验算的生物年龄）",
+     "value_zh": "36.8 岁",
+     "compare_zh": "和上次（2026-03-02）比：37.9 → 36.8 岁，在平时波动内。",
+     "outcome": "inside",
+     "tier": "human",
+     "plain": false,
+     "note_zh": null
+    },
+    {
+     "id": "rc-2",
+     "key": "ldl",
+     "title_zh": "LDL 胆固醇",
+     "value_zh": "3.1 mmol/L",
+     "compare_zh": "和上次（2026-03-02）比：3.6 → 3.1 mmol/L，超出平时波动。",
+     "outcome": "outside",
+     "tier": "human",
+     "plain": false,
+     "note_zh": null
+    },
+    {
+     "id": "rc-3",
+     "key": "uric_acid",
+     "title_zh": "尿酸",
+     "value_zh": "412 μmol/L",
+     "compare_zh": "和上次（2026-03-02）比：386 → 412 μmol/L，在平时波动内。",
+     "outcome": "inside",
+     "tier": "human",
+     "plain": true,
+     "note_zh": null
+    },
+    {
+     "id": "rc-4",
+     "key": "risk",
+     "title_zh": "十年心血管风险（China-PAR）",
+     "value_zh": null,
+     "compare_zh": "这个公式要用到血压和是否吸烟，档案里还没有，这次没有算。",
+     "outcome": null,
+     "tier": "human",
+     "plain": true,
+     "note_zh": "这个公式要用到血压和是否吸烟，档案里还没有，这次没有算。"
+    }
+   ]
+  },
+  "run_results": {
+   "rn-wake": {
+    "outcome": "outside",
+    "primary": {
+     "key": "onset",
+     "label_zh": "入睡时间的波动",
+     "unit_zh": "分钟",
+     "before": 48.2,
+     "after": 27.5,
+     "outcome": "outside",
+     "direction": "better",
+     "text_zh": "主要结果 · 入睡时间的波动：48 → 28 分钟，超出你的平时波动。"
+    },
+    "also": [
+     {
+      "key": "sleep",
+      "label_zh": "睡眠时长",
+      "unit_zh": "小时",
+      "before": 6.6,
+      "after": 6.9,
+      "outcome": "inside",
+      "direction": "better",
+      "text_zh": "顺便看 · 睡眠时长：6.6 → 6.9 小时，在你的平时波动内。"
+     },
+     {
+      "key": "hrv",
+      "label_zh": "心率变异性",
+      "unit_zh": "毫秒",
+      "before": 38,
+      "after": 41,
+      "outcome": "inside",
+      "direction": "better",
+      "text_zh": "顺便看 · 心率变异性：38 → 41 毫秒，在你的平时波动内。"
+     }
+    ],
+    "done_days": 12,
+    "effective_days": 13,
+    "window_days": 14,
+    "how_zh": "你开始前两周，入睡时间的波动每天上下浮动约 14.0 分钟；这两周的平均比之前低 21 分钟，超过了按你自己的浮动算出来的范围。",
+    "praise_zh": "你的入睡时间的波动比平时低，超出了平时波动——这是实打实的进步。",
+    "at": "2026-10-02T01:10:00.000Z"
+   }
+  },
+  "swaps": {
+   "sleep-plus-30": {
+    "nocturia": {
+     "id": "less-water",
+     "title_zh": "睡前 2 小时少喝水",
+     "do_zh": "睡前 2 小时内不喝大杯水和汤。",
+     "icon": "cup",
+     "days": 14,
+     "primary_zh": "夜间醒来次数",
+     "also_zh": [
+      "睡眠时长"
+     ],
+     "randomizable": true,
+     "questions": [],
+     "source_zh": "来自你的方案",
+     "needs_retest": false
+    }
+   }
+  },
+  "thresholds": {
+   "sleep-plus-30": "比较开始前两周和这两周的心率变异性。平均差别至少 3 毫秒，并且超出按你自己每天的浮动算出的范围，才算「超出平时波动」。",
+   "stand-90": "比较开始前两周和这两周的静息心率。平均差别至少 2 次/分，并且超出按你自己每天的浮动算出的范围，才算「超出平时波动」。",
+   "lipid-diet-8w": "比较开始前最近一次和 8 周后复查的LDL 胆固醇（「坏」胆固醇）。变化超过约 ±18%，才算「超出平时波动」。这个范围来自同一个人反复测量时的正常起伏。",
+   "no-sugary-drinks": "比较开始前两周和这两周的体重的平均。变化超过约 ±2%，才算「超出平时波动」。这个范围来自同一个人反复测量时的正常起伏。",
+   "early-dinner": "比较开始前两周和这两周的静息心率。平均差别至少 2 次/分，并且超出按你自己每天的浮动算出的范围，才算「超出平时波动」。",
+   "less-water": "比较开始前两周和这两周的夜间醒来次数。平均差别至少 0.5 次，并且超出按你自己每天的浮动算出的范围，才算「超出平时波动」。"
+  },
+  "checkin": {
+   "sleep-plus-30": "",
+   "stand-90": "",
+   "lipid-diet-8w": "今天吃了燕麦或豆类，没吃油炸",
+   "no-sugary-drinks": "今天没喝含糖饮料",
+   "early-dinner": "今天晚饭离睡觉超过 3 小时",
+   "less-water": "今天睡前 2 小时没喝大杯水和汤"
+  }
+ }
+}
