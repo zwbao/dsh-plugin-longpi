@@ -198,4 +198,7 @@ assert.ok(CODEX_FONT_CSS.length < 200_000, `the subset stays small (${CODEX_FONT
 assert.ok(existsSync(new URL('../data/codex/v3/fonts/OFL.txt', import.meta.url)), 'the OFL ships with the font')
 assert.match(read('data/codex/v3/fonts/OFL.txt'), /SIL OPEN FONT LICENSE/i)
 
+const pageSource = readFileSync(new URL('../src/client/engage/codex-page.ts', import.meta.url), 'utf8')
+assert.match(pageSource, /function goodResult\(/, 'foil and the gold stamp follow the direction of the result')
+assert.doesNotMatch(pageSource, /outcome === 'outside' && props\.foil/, 'no foil for a result that moved the wrong way')
 console.log(`codex client ok (${faces.length} faces 50×70, deterministic seeds, 14-day cells, swirl disposer, ${bodies.length} bodies through parseAction, scoped stylesheet, font ${Math.round(CODEX_FONT_CSS.length / 1024)} KB)`)

@@ -52,6 +52,11 @@ const TIERS: Record<Tier, { metal: string; label: string; key: string }> = {
 }
 const TIER_ORDER: Tier[] = ['cell', 'animal', 'human', 'trial']
 const OUTCOME_STAMP = { outside: '超出波动', inside: '波动内', insufficient: '数据不够' } as const
+
+/** Foil, shards and the gold stamp only for a primary result that moved the good way beyond the usual variation. */
+function goodResult(result: RunResult | null | undefined): boolean {
+  return result?.outcome === 'outside' && result.primary.direction === 'better'
+}
 const OBJECT_ZH: Record<string, string> = { human: '人', cell_line: '细胞', multi_species: '多种动物', other: '其他动物' }
 const SHARD_GOLD = ['#f2b53a', '#ffe896', '#ffffff']
 const SHARD_FOIL = ['#ff5e5e', '#ffd166', '#5eead4', '#60a5fa', '#c084fc']
@@ -241,8 +246,8 @@ function ExpCard(props: { info: ExpCardInfo; size?: Size; live?: boolean; flippe
     h('span', { className: 'lp-codex-t lp-codex-tier lp-codex-tier-r' }, `${info.days} 天`),
     h('span', { className: nameClass(info.title, size) }, info.title),
     h('span', { className: 'lp-codex-t lp-codex-sub' }, h('span', null, info.status), h('span', null, info.right)),
-    outcome === 'outside' && props.foil ? h('div', { className: 'lp-codex-holo', 'aria-hidden': true }) : null,
-    outcome ? h('span', { className: cx('lp-codex-stamp', outcome !== 'outside' && 'lp-codex-calm') }, OUTCOME_STAMP[outcome]) : null,
+    goodResult(info.result) && props.foil ? h('div', { className: 'lp-codex-holo', 'aria-hidden': true }) : null,
+    outcome ? h('span', { className: cx('lp-codex-stamp', goodResult(info.result) ? 'lp-codex-good' : 'lp-codex-calm') }, OUTCOME_STAMP[outcome]) : null,
     info.waiting ? h('span', { className: 'lp-codex-stamp lp-codex-calm' }, '等复查') : null)
 }
 
@@ -314,7 +319,7 @@ function ResultInfo(props: { run: RunView; result: RunResult }): React.ReactElem
     h('p', { className: 'lp-codex-result-main' }, result.primary.text_zh),
     result.praise_zh ? h('p', { className: 'lp-codex-praise' }, result.praise_zh) : null,
     ...result.also.map((row) => h('p', { key: row.key, className: 'lp-codex-also' }, row.text_zh)),
-    h('p', null, `${result.window_days} 天里做到了 ${result.done_days} 天。`),
+    h('p', null, result.done_zh ?? `${result.window_days} 天里做到了 ${result.done_days} 天。`),
     run.randomized ? h('p', { className: 'lp-codex-cap' }, '这是随机版：比较的是做的日子和不做的日子。') : null,
     h('details', { className: 'lp-codex-fold' }, h('summary', null, '怎么算的'), h('p', null, result.how_zh)),
     null)
@@ -381,6 +386,7 @@ function ChoosePanel(props: { option: ExperimentOption; busy: boolean; onStart: 
     h(OptionText, { option: o }),
     h('p', { className: 'lp-codex-cap' }, `来源：${o.source_zh}`),
     o.needs_retest ? h('p', { className: 'lp-codex-cap' }, '这个实验的结果要靠化验，等下次复查时在复查包里揭晓。') : null,
+    o.lead_in ? h('p', { className: 'lp-codex-cap' }, '开始前两周量得还不多。开始后先量 7 天当对照，再做 14 天。') : null,
     o.questions.length > 0 ? h('div', { className: 'lp-codex-ask' },
       h('p', { className: 'lp-codex-h3' }, '开始前问一句'),
       ...o.questions.map((q) => h('div', { key: q.id, className: 'lp-codex-ask-q' },
@@ -609,7 +615,7 @@ export function CodexPage(props: { onNotice?: (text: string) => void }): React.R
     setOv({ kind: 'reveal', run, phase: 'turning' })
     await wait(flipAnim ? 380 : 0)
     setOv((now) => (now && now.kind === 'reveal' ? { ...now, phase: 'done' } : now))
-    if (run.result?.outcome === 'outside') later(40, () => burst(stage.current?.querySelector('.lp-codex-pc') ?? null, SHARD_FOIL, 34))
+    if (goodResult(run.result)) later(40, () => burst(stage.current?.querySelector('.lp-codex-pc') ?? null, SHARD_FOIL, 34))
   }
 
   // ---- library ----
@@ -904,7 +910,7 @@ export function CodexPage(props: { onNotice?: (text: string) => void }): React.R
           h('button', { type: 'button', className: 'lp-codex-item-btn lp-codex-item', onClick: () => openOverlay({ kind: 'result', run }) },
             h('img', { src: toDataURL(experimentFace({ id: run.experiment_id, icon: run.icon }, run.cells)), alt: '' }),
             h('span', { className: 'lp-codex-item-main' }, h('b', null, run.title_zh), h('span', null, run.result?.primary.text_zh ?? ''), h('span', { className: 'lp-codex-cap' }, `${dayZh(run.start)}–${dayZh(run.end)}`)),
-            h('span', { className: run.result?.outcome === 'outside' ? 'lp-codex-k-red' : 'lp-codex-cap' }, run.result ? OUTCOME_STAMP[run.result.outcome] : '')))))
+            h('span', { className: goodResult(run.result) ? 'lp-codex-k-gold' : 'lp-codex-cap' }, run.result ? OUTCOME_STAMP[run.result.outcome] : '')))))
         : h('div', { className: 'lp-codex-hand' }, ...v.deck.map((run) => h('div', { key: run.id, className: 'lp-codex-stack' },
           h(ExpCard, { info: runInfo(run), live: true, foil: true, tilt: anim, onOpen: () => openOverlay({ kind: 'result', run }) }),
           h('p', { className: 'lp-codex-cap' }, `${dayZh(run.start)}–${dayZh(run.end)}${run.randomized ? ' · 随机版' : ''}`)))))

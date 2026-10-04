@@ -40,10 +40,10 @@ export function markerOf(biovar: Biovar | null, key: string | undefined): Biovar
 }
 
 /** The public threshold, fixed when the experiment starts. */
-export function thresholdZh(spec: MetricSpec, biovar: Biovar | null, opts: { randomized: boolean; lab?: boolean } = { randomized: false }): string {
-  const what = opts.randomized ? `做的日子和不做的日子的${spec.label_zh}` : `开始前两周和这两周的${spec.label_zh}`
+export function thresholdZh(spec: MetricSpec, biovar: Biovar | null, opts: { randomized: boolean; lab?: boolean; leadIn?: boolean } = { randomized: false }): string {
+  const what = opts.randomized ? `做的日子和不做的日子的${spec.label_zh}` : opts.leadIn ? `先量的 7 天和之后 14 天的${spec.label_zh}` : `开始前两周和这两周的${spec.label_zh}`
   if (spec.method === 'personal') {
-    return `比较${what}。平均差别至少 ${fmt(spec.mid ?? 0, spec.decimals > 0 ? 1 : 0)} ${spec.unit_zh}，并且超出按你自己每天的浮动算出的范围，才算「超出平时波动」。`
+    return `拿${what}比。平均至少差 ${fmt(spec.mid ?? 0, spec.decimals > 0 ? 1 : 0)} ${spec.unit_zh}，而且超出你自己平时每天的起伏，才算「超出平时波动」。`
   }
   const marker = markerOf(biovar, spec.marker)
   const band = marker ? rcvBand(marker, biovar?.z ?? 1.96) : null
@@ -78,6 +78,8 @@ export function judgeMetric(spec: MetricSpec, first: readonly number[], second: 
   compare?: 'before_after' | 'off_on'
   minFirst?: number
   minSecond?: number
+  /** Who the baseline is in the sentences: 「你开始前两周」 or 「你先量的 7 天里」. */
+  reference?: string
 }): Judged {
   const compare = opts.compare ?? 'before_after'
   const minFirst = opts.minFirst ?? (spec.method === 'personal' ? MIN_SECONDARY_DAYS : MIN_RCV_DAYS)
@@ -87,7 +89,7 @@ export function judgeMetric(spec: MetricSpec, first: readonly number[], second: 
   const base: Omit<Judged, 'outcome' | 'text_zh' | 'how_zh' | 'direction'> = { key: spec.key, label_zh: spec.label_zh, unit_zh: spec.unit_zh, before, after }
   const insufficient = (how: string): Judged => ({ ...base, outcome: 'insufficient', direction: null, text_zh: sentence(opts.role, spec, before, after, 'insufficient', compare), how_zh: how })
   if (first.length < minFirst || second.length < minSecond || before == null || after == null) {
-    return insufficient(`有数据的日子不够：${compare === 'off_on' ? '不做的日子' : '开始前两周'} ${first.length} 天、${compare === 'off_on' ? '做的日子' : '这两周'} ${second.length} 天。`)
+    return insufficient(`有数据的日子不够：${compare === 'off_on' ? '不做的日子' : (opts.reference ?? '开始前两周').replace(/^你/, '')} ${first.length} 天、${compare === 'off_on' ? '做的日子' : '这两周'} ${second.length} 天。`)
   }
   const diff = after - before
   if (spec.method === 'personal') {
@@ -97,13 +99,15 @@ export function judgeMetric(spec: MetricSpec, first: readonly number[], second: 
     const separated = post.ci95[0] > 0 || post.ci95[1] < 0
     const outcome: Outcome = separated && Math.abs(diff) >= mid ? 'outside' : 'inside'
     const spread = sd(first)
-    const moved = `${diff < 0 ? '低' : '高'} ${fmt(Math.abs(diff), spec.decimals > 0 ? spec.decimals : 0)} ${spec.unit_zh}`
-    const reference = compare === 'off_on' ? '不做的日子' : '你开始前两周'
+    const moved = `${diff < 0 ? '低了' : '高了'} ${fmt(Math.abs(diff), spec.decimals > 0 ? spec.decimals : 0)} ${spec.unit_zh}`
+    const reference = compare === 'off_on' ? '不做的日子' : (opts.reference ?? '你开始前两周')
+    const spreadZh = `${reference}，${spec.label_zh}每天上下浮动 ${fmt(spread ?? 0, spec.decimals > 0 ? 1 : 0)} ${spec.unit_zh}左右`
+    const later = compare === 'off_on' ? '做的日子' : '这两周'
     const how = outcome === 'outside'
-      ? `${reference}，${spec.label_zh}每天上下浮动约 ${fmt(spread ?? 0, spec.decimals > 0 ? 1 : 0)} ${spec.unit_zh}；${compare === 'off_on' ? '做的日子' : '这两周'}的平均比之前${moved}，超过了按你自己的浮动算出来的范围。`
+      ? `${spreadZh}；${later}的平均比之前${moved}，超出了这个起伏能解释的范围。`
       : Math.abs(diff) < mid
-        ? `${compare === 'off_on' ? '做的日子' : '这两周'}的平均比之前${moved}，小于事先定好的 ${fmt(mid, spec.decimals > 0 ? 1 : 0)} ${spec.unit_zh}。`
-        : `${reference}，${spec.label_zh}每天上下浮动约 ${fmt(spread ?? 0, spec.decimals > 0 ? 1 : 0)} ${spec.unit_zh}；${compare === 'off_on' ? '做的日子' : '这两周'}的平均比之前${moved}，还在按你自己的浮动算出来的范围内。`
+        ? `${later}的平均比之前${moved}，没到事先定好的 ${fmt(mid, spec.decimals > 0 ? 1 : 0)} ${spec.unit_zh}。`
+        : `${spreadZh}；${later}的平均比之前${moved}，还在这个起伏能解释的范围内。`
     return { ...base, outcome, direction: direction(spec, diff), text_zh: sentence(opts.role, spec, before, after, outcome, compare), how_zh: how }
   }
   const marker = markerOf(biovar, spec.marker)
@@ -116,9 +120,17 @@ export function judgeMetric(spec: MetricSpec, first: readonly number[], second: 
   return { ...base, outcome, direction: direction(spec, diff), text_zh: sentence(opts.role, spec, before, after, outcome, compare), how_zh: how }
 }
 
+/** The done days, affirmed when most days were done (decision 12: completed behaviour is always acknowledged). */
+export function doneZh(done: number, window: number): string {
+  const base = `${window} 天里做到了 ${done} 天`
+  if (window > 0 && done / window >= 0.8) return `${base}，坚持得不错。`
+  if (window > 0 && done / window >= 0.5) return `${base}，大多数日子都做到了。`
+  return `${base}。`
+}
+
 /** Decision 12: said plainly when the primary outcome moved the good way beyond the usual variation. Never attributed. */
 export function praiseZh(primary: MetricResult): string | null {
   if (primary.outcome !== 'outside' || primary.direction !== 'better') return null
   const way = primary.after != null && primary.before != null && primary.after < primary.before ? '低' : '高'
-  return `你的${primary.label_zh}比平时${way}，超出了平时波动——这是实打实的进步。`
+  return `你的${primary.label_zh}比平时${way}了，而且超出了平时的波动——这是实打实的进步。`
 }

@@ -222,6 +222,8 @@ export const CODEX = `
 .lp-codex .lp-codex-stamp { position: absolute; z-index: 2; left: calc(var(--u) * 8); right: calc(var(--u) * 8); top: calc(var(--u) * 34); height: calc(var(--u) * 7); display: grid; place-items: center; background: var(--lp-codex-red); color: var(--lp-codex-white); white-space: nowrap; box-shadow: 0 0 0 2px var(--lp-codex-ink), 0 3px 0 2px var(--lp-codex-ink); transform: rotate(-6deg); text-shadow: 0 1px 0 var(--lp-codex-shade); }
 .lp-codex .lp-codex-s6 .lp-codex-stamp { font-size: 24px; }
 .lp-codex .lp-codex-stamp.lp-codex-calm { background: var(--lp-codex-grey); transform: none; }
+/* A good result outside the usual variation: gold, never the red of an abnormal lab value. */
+.lp-codex .lp-codex-stamp.lp-codex-good { background: var(--lp-codex-gold); color: var(--lp-codex-gold-ink); text-shadow: none; }
 .lp-codex .lp-codex-bob { animation: lp-codex-bob 3s ease-in-out infinite; animation-delay: var(--d, 0s); }
 @keyframes lp-codex-bob { 0%, 100% { transform: translateY(0) rotate(-.6deg); } 50% { transform: translateY(-4px) rotate(.6deg); } }
 

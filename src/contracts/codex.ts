@@ -112,6 +112,8 @@ export interface RunResult {
   primary: MetricResult
   also: MetricResult[]
   done_days: number
+  /** 「14 天里做到了 12 天，坚持得不错。」 */
+  done_zh: string
   effective_days: number
   window_days: number
   how_zh: string

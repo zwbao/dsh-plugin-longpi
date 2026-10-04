@@ -61,24 +61,25 @@ try {
   assert.equal(rhr.outcome, 'outside', 'a 3.5/min drop beyond the person\'s own spread and the 2/min threshold')
   assert.equal(rhr.direction, 'better')
   assert.match(rhr.text_zh, /^主要结果 · 静息心率：64 → 61 次\/分，超出你的平时波动。$/)
-  assert.match(rhr.how_zh, /按你自己的浮动/)
-  assert.match(praiseZh(rhr), /比平时低，超出了平时波动——这是实打实的进步/)
+  assert.match(rhr.how_zh, /起伏能解释的范围/)
+  assert.equal(praiseZh(rhr), '你的静息心率比平时低了，而且超出了平时的波动——这是实打实的进步。')
   const small = judgeMetric(metrics.rhr, flat, flat.map((v) => v - 1), biovar, { role: 'primary', minFirst: 7, minSecond: 10 })
   assert.equal(small.outcome, 'inside', 'a 1/min move is under the pre-set 2/min even when it is consistent')
   assert.equal(praiseZh(small), null, 'no praise and no consolation inside the usual variation')
   const few = judgeMetric(metrics.rhr, flat, lower.slice(0, 6), biovar, { role: 'primary', minFirst: 7, minSecond: 10 })
   assert.equal(few.outcome, 'insufficient')
   assert.match(few.text_zh, /数据不够/)
-  if (biovar) {
-    const bpFlat = Array.from({ length: 10 }, () => 132)
-    const bpInside = judgeMetric(metrics.sbp, bpFlat, Array.from({ length: 10 }, () => 125), biovar, { role: 'primary', minFirst: 3, minSecond: 10 })
-    assert.equal(bpInside.outcome, 'inside', 'home BP is judged by the reference change value (≈ ±12%), not the person\'s spread')
-    assert.match(bpInside.how_zh, /±12%/)
-    const bpOutside = judgeMetric(metrics.sbp, bpFlat, Array.from({ length: 10 }, () => 114), biovar, { role: 'primary', minFirst: 3, minSecond: 10 })
-    assert.equal(bpOutside.outcome, 'outside')
-    assert.match(thresholdZh(metrics.sbp, biovar), /约 ±12%/)
-  }
-  assert.match(thresholdZh(metrics.rhr, biovar), /至少 2 次\/分/)
+  // Home blood pressure, measured most days: the person's own spread plus 5 mmHg (not a single-reading RCV on a mean).
+  const bpBase = Array.from({ length: 10 }, (_, i) => 136 + (i % 3) - 1)
+  const bpDown = judgeMetric(metrics.sbp, bpBase, Array.from({ length: 10 }, (_, i) => 129 + (i % 3) - 1), biovar, { role: 'primary', minFirst: 7, minSecond: 10 })
+  assert.equal(bpDown.outcome, 'outside', 'a 7 mmHg fall beyond the day-to-day spread counts')
+  assert.equal(bpDown.direction, 'better')
+  const bpSmall = judgeMetric(metrics.sbp, bpBase, Array.from({ length: 10 }, (_, i) => 133 + (i % 3) - 1), biovar, { role: 'primary', minFirst: 7, minSecond: 10 })
+  assert.equal(bpSmall.outcome, 'inside', 'a 3 mmHg fall is under the pre-set 5 mmHg')
+  assert.match(thresholdZh(metrics.sbp, biovar), /至少差 5 mmHg/)
+  assert.match(thresholdZh(metrics.sbp, biovar, { randomized: false, leadIn: true }), /先量的 7 天和之后 14 天/)
+  assert.equal(metrics.ldl.method, 'lab', 'two lab results keep the reference change value')
+  assert.match(thresholdZh(metrics.rhr, biovar), /至少差 2 次\/分/)
   for (const judged of [rhr, small, few]) {
     assert.doesNotMatch(`${judged.text_zh}${judged.how_zh}`, /真实变化|有效|带来的|因为/, 'only the three verdict words; never cause')
   }
@@ -212,6 +213,7 @@ try {
   const result = revealed.view.deck[0].result
   assert.equal(result.outcome, 'outside')
   assert.match(result.primary.text_zh, /静息心率：64 → 61 次\/分，超出你的平时波动/)
+  assert.match(result.done_zh, /^\d+ 天里做到了 \d+ 天/)
   assert.ok(result.praise_zh, 'a good result outside the usual variation is said plainly')
   assert.ok(revealed.view.footprints.some((row) => row.kind === 'first_experiment'))
   assert.equal(revealed.view.packs.filter((pack) => pack.kind === 'experiment' && !pack.opened).length, 1, 'a finished experiment brings the next pack')
@@ -238,6 +240,26 @@ try {
   assert.match(cards[0].compare_zh, /37\.9 → 36\.2 岁，超出平时波动/)
   assert.equal(cards[1].plain, true, 'a worse result flips plainly, without celebration')
   assert.ok(view.footprints.some((row) => row.kind === 'retest'))
+
+  // A cuff with only a few readings: the BP experiment is offered with 7 days of measuring first.
+  const cuff = tempDir()
+  profile(cuff)
+  bindRuntime({ dataDir: () => cuff, rootDir: () => cuff })
+  const cuffDays = Object.fromEntries(['2026-09-20', '2026-09-24', '2026-09-27'].map((day, i) => [day, 134 + i]))
+  writeSeriesCache(cuff, { at: null, sources: {}, device_latest: null, days: { sbp: cuffDays } })
+  noteCodexContext(cuff, context(), at('2026-09-28'))
+  const cuffStart = actCodex({ action: 'start' }, at('2026-09-29'))
+  const cuffPack = actCodex({ action: 'open_pack', pack_id: cuffStart.view.packs[0].id }, at('2026-09-29')).view.packs[0]
+  const bpOption = cuffPack.options.find((row) => row.id === 'home-bp')
+  assert.ok(bpOption, 'offered although the two weeks before have only 3 readings')
+  assert.equal(bpOption.lead_in, true)
+  const bpRun = actCodex({ action: 'begin', pack_id: cuffPack.id, experiment_id: 'home-bp' }, at('2026-09-29'))
+  assert.equal(bpRun.ok, true, bpRun.error)
+  assert.match(bpRun.note_zh, /先量 7 天当对照/)
+  assert.equal(bpRun.view.running[0].start, '2026-10-06', 'the 14 days start after 7 days of measuring')
+  assert.match(bpRun.view.running[0].threshold_zh, /先量的 7 天和之后 14 天/)
+  assert.match(bpRun.view.pane_zh, /先量 7 天 · 第 1\/7 天/)
+  assert.equal(bpRun.view.pane_neutral_zh, '1 个实验正在量对照')
 
   // The very first checkup after the Codex started brings a pack too.
   const fresh = tempDir()

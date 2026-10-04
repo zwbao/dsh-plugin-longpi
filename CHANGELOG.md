@@ -24,8 +24,10 @@ English
 - Codex 1.2 (docs/codex-design.md): src/engage rewritten. engage/state.json v2 lives in the holder's home and v1
   migrates once (owned method cards → read, unused draws → the opening experiment pack; the seed and draws.jsonl are
   kept). Experiment catalogue and metrics in data/codex/v3/experiments.zh.json; three-pick by safety → data →
-  relevance → recency; verdicts by the person's own spread plus a minimal difference (wristband) or the reference
-  change value (BP, weight, glucose, LDL); ≥10 days with data, up to 7 more. Retest packs from the holder's new
+  relevance → recency; verdicts by the person's own spread plus a minimal difference (wristband, home BP, weight,
+  meter glucose; 7 days of measuring first when the two weeks before have too few readings) or the reference change
+  value (two lab results, LDL); foil and the gold stamp only for a result that moved the good way; ≥10 days with data,
+  up to 7 more. Retest packs from the holder's new
   checkup; family events give footprints only. Daily series cached in engage/series.json, refreshed after journey
   builds and from the slot poll.
 - Routes: `GET/POST /api/longpi/codex`, `GET /api/longpi/codex/library`, `GET /api/longpi/codex/slot`. Removed:

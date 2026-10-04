@@ -66,6 +66,20 @@ export function primaryFor(spec: ExperimentSpec, ctx: Pick<EligibilityContext, '
   return null
 }
 
+/**
+ * A home cuff or scale is there, but the two weeks before have too few readings: the experiment can still start,
+ * with 7 days of measuring first as its own baseline.
+ */
+export function leadInFor(spec: ExperimentSpec, ctx: Pick<EligibilityContext, 'today' | 'series' | 'ldlOnFile'>): MetricKey | null {
+  if (primaryFor(spec, ctx)) return null
+  const have = devices(ctx.series, ctx.today)
+  for (const key of spec.primary) {
+    if (key === 'sbp' && have.bp_cuff) return key
+    if ((key === 'weight' || key === 'waist') && have.scale) return key
+  }
+  return null
+}
+
 /** Why an experiment is left out, or null when it may be shown. */
 export function blockedBy(spec: ExperimentSpec, ctx: EligibilityContext): string | null {
   if (ctx.pregnant) return 'pregnancy'
@@ -81,7 +95,7 @@ export function blockedBy(spec: ExperimentSpec, ctx: EligibilityContext): string
     if (need === 'retest_window' && !ctx.retestIn8to12Weeks) return 'no_retest'
   }
   if (spec.adherence === 'standup' && !ctx.standupOn) return 'standup_off'
-  if (!primaryFor(spec, ctx)) return 'no_data'
+  if (!primaryFor(spec, ctx) && !leadInFor(spec, ctx)) return 'no_data'
   return null
 }
 
@@ -97,7 +111,7 @@ export function eligible(ctx: EligibilityContext): Candidate[] {
   const out: Candidate[] = []
   for (const spec of experiments) {
     if (blockedBy(spec, ctx)) continue
-    const primary = primaryFor(spec, ctx)
+    const primary = primaryFor(spec, ctx) ?? leadInFor(spec, ctx)
     if (!primary) continue
     out.push({ spec, primary, score: relevance(spec, ctx) - (ctx.recent.has(spec.id) ? 10 : 0), randomizable: spec.randomizable })
   }

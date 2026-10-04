@@ -17,11 +17,11 @@ import { readProfile } from '../profile.ts'
 import { loadReference, type Biovar } from '../reference.ts'
 import { careItems } from '../triage/care.ts'
 import { codexBlock, codexBlockZh, experimentById, loadCatalog, loadLibrary, type CodexBlock } from './data.ts'
-import { blockedBy, devices, eligible, pickThree, primaryFor, randomSchedule, type EligibilityContext } from './eligibility.ts'
+import { blockedBy, devices, eligible, leadInFor, pickThree, primaryFor, randomSchedule, type EligibilityContext } from './eligibility.ts'
 import { DEFAULT_MY_DAY, laterReveal, markRevealShown, settleAcks, slotView, standupDays, validClock, type SlotView } from './nudge.ts'
 import { readSeriesCache, refreshSeries, stepsOnDay, valuesIn, type SeriesCache } from './series.ts'
 import { emptyState, newId, readState, saveState, type CodexContext, type State } from './state.ts'
-import { judgeMetric, MIN_BASELINE_DAYS, MIN_TRIAL_DAYS, OUTCOME_ZH, praiseZh, thresholdZh } from './verdict.ts'
+import { doneZh, judgeMetric, MIN_BASELINE_DAYS, MIN_TRIAL_DAYS, OUTCOME_ZH, praiseZh, thresholdZh } from './verdict.ts'
 
 export const SEASON_DAYS = 56
 const MAX_RUNNING = 2
@@ -233,9 +233,11 @@ function judgeRun(run: ExperimentRun, state: State, cache: SeriesCache, today: I
     }
     const base = metricValues(key, cache, baselineDays(run).filter((day) => !lifeDays(state).has(day))).map((row) => row.value)
     const trial = metricValues(key, cache, trialDays).map((row) => row.value)
+    // A run that measured 7 days first has those days as its baseline.
+    const reference = run.baseline.from === addDays(run.start, -7) ? '你先量的 7 天里' : undefined
     return judgeMetric(metric, base, trial, bv, role === 'primary'
-      ? { role, minFirst: metric.method === 'personal' ? MIN_BASELINE_DAYS : 3, minSecond: MIN_TRIAL_DAYS }
-      : { role })
+      ? { role, minFirst: metric.method === 'personal' ? MIN_BASELINE_DAYS : 3, minSecond: MIN_TRIAL_DAYS, reference }
+      : { role, reference })
   }
   const primary = judged(run.primary, 'primary')
   const also = run.also.filter((key) => metrics[key] && metrics[key].method !== 'lab').map((key) => judged(key, 'also'))
@@ -246,6 +248,7 @@ function judgeRun(run: ExperimentRun, state: State, cache: SeriesCache, today: I
     primary: first,
     also: also.map(({ how_zh: _how, ...rest }) => rest),
     done_days: done.size,
+    done_zh: doneZh(done.size, trialDays.length),
     effective_days: effective,
     window_days: trialDays.length,
     how_zh: how,
@@ -268,6 +271,7 @@ function judgeLab(run: ExperimentRun, after: { value: number; date: IsoDay }, no
     primary: { ...first, text_zh: text },
     also: [],
     done_days: run.done.length,
+    done_zh: doneZh(run.done.length, daysBetween(run.start, run.end) + 1),
     effective_days: 1,
     window_days: daysBetween(run.start, run.end) + 1,
     how_zh: how,
@@ -321,7 +325,7 @@ function closeSeason(state: State, day: IsoDay): void {
   const row = state.seasons.find((item) => item.id === season.id)
   if (row) row.closed = day
   const finished = state.runs.filter((run) => run.status === 'revealed' && run.start >= season.start).length
-  addFootprint(state, 'season', day, finished > 0 ? `从开始到结束，走完了一个赛季，做了 ${finished} 个实验。` : '从开始到结束，走完了一个赛季。')
+  addFootprint(state, 'season', day, finished > 0 ? `这个赛季走完了，一共做了 ${finished} 个实验。` : '这个赛季走完了。')
   emit('season.ended', { season_id: season.id, experiments_done: finished })
 }
 
@@ -430,7 +434,7 @@ function reduce(state: State, world: World, cache: SeriesCache): void {
       }
       grantPack(state, 'retest', today, first ? '第一次体检的结果到了' : '新的体检结果到了', results)
       const due = ctx.retests.some((row) => Math.abs(daysBetween(row.date, latest)) <= 30)
-      addFootprint(state, 'retest', today, due ? '在该复查的时候做了复查。' : '做了一次复查，新的结果进了档案。', due ? '按时复测' : '做了一次复查')
+      addFootprint(state, 'retest', today, due ? '到了该复查的时候，按时去复查了。' : '做了一次复查，新的结果进了档案。', due ? '按时复测' : '做了一次复查')
       if (state.season?.status === 'active' && state.season.mode === 'retest') closeSeason(state, today)
     }
   }
@@ -443,7 +447,7 @@ function reduce(state: State, world: World, cache: SeriesCache): void {
   for (const key of ['hscrp', 'waist'] as const) {
     if (ctx.labs[key] && !state.seen.labs[key]) {
       state.seen.labs[key] = true
-      addFootprint(state, 'addon', today, key === 'hscrp' ? '补上了超敏 C 反应蛋白这一项检查。' : '量了腰围，补上了这一项。')
+      addFootprint(state, 'addon', today, key === 'hscrp' ? '补查了超敏 C 反应蛋白。' : '量了腰围，这一项补上了。')
     }
   }
   // Experiments: a 14-day run becomes ready when 10 days had data; else it runs on for up to 7 more days.
@@ -481,6 +485,8 @@ export interface ExperimentOption {
   questions: Array<{ id: string; text_zh: string }>
   source_zh: string
   needs_retest: boolean
+  /** 7 days of measuring first, because the two weeks before have too few readings. */
+  lead_in: boolean
 }
 
 export interface RunView {
@@ -505,6 +511,8 @@ export interface RunView {
   primary_zh: string
   progress_zh: string
   result: RunResult | null
+  /** Today, for the folded pane's line. */
+  today_day: IsoDay
 }
 
 export interface CodexView {
@@ -542,10 +550,10 @@ const RULES_ZH = [
   '未满 18 岁不开放，可以随时关闭。',
   '卡包只来自真实发生的事：赛季开始、做完一个实验、你自己复查。',
   '颜色表示研究是怎么做的，不表示和你多相关。',
-  '结果只说「超出平时波动」「在平时波动内」或「数据不够」，不说是实验带来的。',
+  '结果只用三种说法：「超出平时波动」「在平时波动内」「数据不够」。',
 ]
 
-function optionOf(spec: ExperimentSpec, primary: MetricKey | null): ExperimentOption {
+function optionOf(spec: ExperimentSpec, primary: MetricKey | null, leadIn = false): ExperimentOption {
   const { metrics } = loadCatalog()
   const main = primary ?? spec.primary[0]
   const also = [...spec.primary.filter((key) => key !== main), ...spec.also].filter((key, i, all) => all.indexOf(key) === i)
@@ -561,6 +569,7 @@ function optionOf(spec: ExperimentSpec, primary: MetricKey | null): ExperimentOp
     questions: spec.questions.map((row) => ({ id: row.id, text_zh: row.text_zh })),
     source_zh: spec.source_zh,
     needs_retest: Boolean(spec.retest_markers?.length) && spec.days > 14,
+    lead_in: leadIn,
   }
 }
 
@@ -591,8 +600,11 @@ function runView(run: ExperimentRun, state: State, cache: SeriesCache, today: Is
     today_zh: assignment === undefined ? null : assignment ? '今天：做' : '今天：不做（照常生活）',
     threshold_zh: run.threshold_zh,
     primary_zh: metrics[run.primary]?.label_zh ?? '',
-    progress_zh: waiting ? `${run.title_zh} · 等复查` : run.status === 'ready' ? `${run.title_zh} · 可以翻了` : `${run.title_zh} · 第 ${day}/${total} 天`,
+    progress_zh: waiting ? `${run.title_zh} · 等复查` : run.status === 'ready' ? `${run.title_zh} · 可以翻了`
+      : today < run.start ? `${run.title_zh} · 先量 7 天 · 第 ${Math.max(1, daysBetween(run.baseline.from, today) + 1)}/7 天`
+        : `${run.title_zh} · 第 ${day}/${total} 天`,
     result: run.status === 'revealed' ? run.result : null,
+    today_day: today,
   }
 }
 
@@ -631,7 +643,9 @@ function viewOf(state: State, world: World, cache: SeriesCache): CodexView {
   const ctx = eligibilityContext(state, today, cache)
   const options = (ids: string[]) => ids.flatMap((id) => {
     const spec = experimentById(id)
-    return spec ? [optionOf(spec, primaryFor(spec, ctx))] : []
+    if (!spec) return []
+    const ready = primaryFor(spec, ctx)
+    return [optionOf(spec, ready ?? leadInFor(spec, ctx), !ready && Boolean(leadInFor(spec, ctx)))]
   })
   const runs = state.runs.map((run) => runView(run, state, cache, today))
   const season = state.season
@@ -705,7 +719,7 @@ function neutralLine(active: RunView[]): string | null {
   const ready = active.filter((run) => run.status === 'ready').length
   const running = active.filter((run) => run.status === 'running')
   const parts: string[] = []
-  if (running.length === 1) parts.push(`1 个实验进行中 · 第 ${running[0]!.day}/${running[0]!.days} 天`)
+  if (running.length === 1) parts.push(running[0]!.start > running[0]!.today_day ? '1 个实验正在量对照' : `1 个实验进行中 · 第 ${running[0]!.day}/${running[0]!.days} 天`)
   else if (running.length > 1) parts.push(`${running.length} 个实验进行中`)
   if (ready > 0) parts.push('有一张卡可以翻了')
   if (active.some((run) => run.status === 'retest_wait')) parts.push('1 个实验等复查')
@@ -862,7 +876,7 @@ function revealRun(state: State, run: ExperimentRun, world: World): void {
   run.revealed_at = world.now.toISOString() as IsoTime
   state.nudge.reveal[run.id] = { first: state.nudge.reveal[run.id]?.first ?? world.today, later: null, done: true }
   emit('codex.experiment_revealed', { run_id: run.id, experiment_id: run.experiment_id, outcome: run.result?.outcome ?? 'insufficient' })
-  if (state.runs.filter((row) => row.status === 'revealed').length === 1) addFootprint(state, 'first_experiment', world.today, `做完了第一个两周小实验：${run.title_zh}。`)
+  if (state.runs.filter((row) => row.status === 'revealed').length === 1) addFootprint(state, 'first_experiment', world.today, `做完了第一个小实验：${run.title_zh}。`)
   if (state.season?.status === 'active') grantPack(state, 'experiment', world.today, `做完「${run.title_zh}」`)
 }
 
@@ -886,12 +900,15 @@ function begin(state: State, world: World, cache: SeriesCache, input: Extract<Co
   }
   const ctx = eligibilityContext(state, world.today, cache)
   const blocked = blockedBy(spec, ctx)
-  if (blocked) return fail(blocked === 'no_data' ? '这个实验需要开始前两周的数据，现在还不够。' : '这个实验现在不适合你。')
-  const primary = primaryFor(spec, ctx) as MetricKey
+  if (blocked) return fail(blocked === 'no_data' ? '这个实验要用到开始前两周的数据，现在还不够。' : '这个实验现在不适合你。')
+  const ready = primaryFor(spec, ctx)
+  const primary = (ready ?? leadInFor(spec, ctx)) as MetricKey
+  const leadIn = !ready
   const { metrics } = loadCatalog()
   const randomized = input.randomized === true && spec.randomizable
   const days = spec.days
-  const start = world.today
+  // Too few readings before today: measure for 7 days first; those days are the baseline.
+  const start = leadIn ? addDays(world.today, 7) : world.today
   const v = variant ? spec.variants[variant] : null
   const run: ExperimentRun = {
     id: newId('rn'),
@@ -903,11 +920,11 @@ function begin(state: State, world: World, cache: SeriesCache, input: Extract<Co
     icon: spec.icon,
     primary,
     also: [...spec.primary.filter((key) => key !== primary), ...spec.also].filter((key, i, all) => all.indexOf(key) === i && key !== primary),
-    threshold_zh: thresholdZh(metrics[primary], biovar(), { randomized, lab: metrics[primary].method === 'lab' }),
+    threshold_zh: thresholdZh(metrics[primary], biovar(), { randomized, lab: metrics[primary].method === 'lab', leadIn }),
     start,
     end: addDays(start, days - 1),
     extended_to: null,
-    baseline: { from: addDays(start, -14), to: addDays(start, -1) },
+    baseline: leadIn ? { from: world.today, to: addDays(world.today, 6) } : { from: addDays(start, -14), to: addDays(start, -1) },
     randomized,
     schedule: randomized ? randomSchedule(start, days, `${state.seed_hex}:${start}:${spec.id}`) : null,
     scope: v?.scope === 'weekdays' ? 'weekdays' : 'all',
@@ -927,7 +944,11 @@ function begin(state: State, world: World, cache: SeriesCache, input: Extract<Co
   }
   state.reserve = state.reserve.filter((id) => id !== input.experiment_id && id !== spec!.id).slice(-6)
   emit('codex.experiment_started', { run_id: run.id, experiment_id: spec.id, randomized })
-  return done({ run: runView(run, state, cache, world.today), note_zh: spec.id !== input.experiment_id ? `按你的回答，换成了「${spec.title_zh}」。` : undefined })
+  const notes = [
+    spec.id !== input.experiment_id ? `按你的回答，换成了「${spec.title_zh}」。` : '',
+    leadIn ? '开始前两周量得还不多，先量 7 天当对照，再开始这 14 天。' : '',
+  ].filter(Boolean).join('')
+  return done({ run: runView(run, state, cache, world.today), note_zh: notes || undefined })
 }
 
 function nudgeEvent(state: State, input: Extract<CodexAction, { action: 'nudge' }>, now: Date, done: (extra?: Partial<ActResult>) => ActResult): ActResult {
