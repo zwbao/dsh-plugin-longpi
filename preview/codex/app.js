@@ -25,13 +25,13 @@
 
   // The experiment catalogue of docs/codex-design.md §3.2 (first batch).
   const EXPERIMENTS = [
-    { id: 'x-walk', icon: 'walk', title: '饭后走 10 分钟', do: '午饭或晚饭后走 10 分钟，手环识别到就自动记上。', look: '晚间静息心率、体重；有血糖仪时加上餐后 1 小时血糖。', from: '来自你的方案' },
-    { id: 'x-wake', icon: 'alarm', title: '每天同一时间起床', do: '每天起床时间前后不超过 30 分钟，周末也一样。', look: '入睡时间的规律性、睡眠时长、静息心率、心率变异性。', from: '研究卡「作息乱与衰弱」「七天手环看节律」' },
-    { id: 'x-sleep', icon: 'moon', title: '睡眠多 30 分钟', do: '比开始前两周的平均多睡 30 分钟。', look: '睡眠时长、心率变异性、白天步数。', from: '研究卡「睡少了老，睡多了也老」' },
-    { id: 'x-sit', icon: 'chair', title: '每坐 90 分钟起身', do: '起身提醒出现时站起来走两分钟，手环确认后自动计入。', look: '久坐时长、晚间静息心率。', from: '来自你的方案' },
-    { id: 'x-bp', icon: 'bp', title: '早晚量血压少放盐', do: '早上起床后、晚上睡前各量一次家庭血压；做饭少放一勺盐。', look: '两周的家庭血压均值，和开始前两周比。', from: '来自你的方案' },
-    { id: 'x-sugar', icon: 'cup', title: '戒掉含糖饮料', do: '两周不喝含糖饮料，每天一键打卡。', look: '体重、腰围；下次复查时的尿酸、甘油三酯。', from: '来自你的方案' },
-    { id: 'x-dinner', icon: 'bowl', title: '晚饭提前到睡前 3 小时', do: '记录晚饭时间，离睡觉至少 3 小时。', look: '夜间静息心率、睡眠、体重。', from: '来自你的方案；研究卡「什么时候吃，也算数」（小鼠）' },
+    { id: 'x-walk', icon: 'walk', title: '饭后走 10 分钟', do: '午饭或晚饭后走 10 分钟，手环识别到就自动记上。可选随机版：每天早上告诉你今天走不走。', look: '主要结果：有血糖仪时看餐后 1 小时血糖，否则看晚间静息心率。顺便看：体重。', from: '来自你的方案' },
+    { id: 'x-wake', icon: 'alarm', title: '起床时间固定', do: '工作日起床时间不超过 ±30 分钟，周末不超过 ±60 分钟。', look: '主要结果：入睡时间的规律性。顺便看：睡眠时长、心率变异性。', from: '研究卡「作息乱与衰弱」「七天手环看节律」' },
+    { id: 'x-water', icon: 'moon', title: '睡前 2 小时少喝水', do: '睡前 2 小时内不喝大杯水和汤。可选随机版。', look: '主要结果：夜间醒来次数。顺便看：睡眠时长。', from: '来自你的方案' },
+    { id: 'x-sit', icon: 'chair', title: '每坐 90 分钟起身', do: '起身提醒出现时站起来走两分钟，手环确认后计入做到情况。', look: '主要结果：晚间静息心率；有血糖仪时为午后血糖。做到情况单独显示，不当作结果。', from: '来自你的方案' },
+    { id: 'x-bp', icon: 'bp', title: '早晚量血压', do: '每天早晚各量一次家庭血压；吃食堂外卖时选少盐菜、不喝汤。', look: '主要结果：两周的家庭血压均值，和开始前两周比。', from: '来自你的方案' },
+    { id: 'x-sugar', icon: 'cup', title: '戒掉含糖饮料', do: '两周不喝奶茶、可乐等含糖饮料，每天一键打卡。', look: '主要结果：体重。顺便看：腰围。尿酸、甘油三酯在下次复查时由复查包补上。', from: '来自你的方案' },
+    { id: 'x-ldl', icon: 'bowl', title: '8 周降脂饮食', do: '每天一份燕麦或豆类，用坚果替代零食，少吃肥肉和油炸。', look: '主要结果：LDL 胆固醇，在复查包里揭晓。', from: '来自你的方案（只在 8–12 周内有复查时出现）' },
   ]
   const expById = new Map(EXPERIMENTS.map((row) => [row.id, row]))
 
@@ -39,12 +39,6 @@
     if (card.tier === 'cell' || card.tier === 'animal') return { kind: 'evidence', text: `${card.species_zh.split('、')[0]}研究证据，不用你的数据` }
     if (!card.use_zh) return { kind: 'evidence', text: '这项研究没有个人报告' }
     return card.art.seed % 3 === 0 ? { kind: 'unlock', text: '补上相关检查后可以计算' } : { kind: 'run', text: '可以用你的记录计算' }
-  }
-
-  function sparks(n, seed) {
-    let s = seed
-    const next = () => { s = (s * 9301 + 49297) % 233280; return s / 233280 }
-    return Array.from({ length: n }, (_, i) => `<i class="spark" style="left:calc(var(--u)*${Math.round(6 + next() * 36)});top:calc(var(--u)*${Math.round(12 + next() * 30)});animation-delay:${(next() * 1.6).toFixed(2)}s"></i>`).join('')
   }
 
   function frontOf(id, o) {
@@ -60,7 +54,6 @@
         <span class="t tierlabel">${P.tiers[c.tier].label_zh}</span>
         <span class="t name${width(name) > 10 ? ' long' : ''}">${esc(name)}</span>
         <span class="t sub"><span>${esc(c.species_zh.split('、')[0])}</span><span>${c.source.year || ''}</span></span>
-        ${c.tier === 'trial' ? `<div class="foil"></div>${sparks(5, c.art.seed % 1000)}` : ''}
         ${o.ran ? '<div class="holo"></div>' : ''}
         ${o.read ? `<img class="seal read" src="${A.seal('read')}" alt="读过">` : ''}${o.ran ? `<img class="seal ran" src="${A.seal('ran')}" alt="算过">` : ''}`
     }
@@ -85,7 +78,7 @@
         <span class="t tierlabel" style="left:calc(var(--u)*34)">14 天</span>
         <span class="t name${width(x.title) > 10 ? ' long' : ''}">${esc(x.title)}</span>
         <span class="t sub"><span>${status}</span><span>${o.result ? '已揭晓' : ''}</span></span>
-        ${o.result === '真实变化' ? '<div class="holo"></div>' : ''}${o.result ? `<span class="rstamp${o.result === '真实变化' ? '' : ' calm'}">${esc(o.result)}</span>` : ''}`
+        ${o.result === '超出波动' ? '<div class="holo"></div>' : ''}${o.result ? `<span class="rstamp${o.result === '超出波动' ? '' : ' calm'}">${esc(o.result)}</span>` : ''}`
     }
     const m = mileById.get(id)
     if (o.locked) return `<img class="face" src="${A.back()}" alt=""><span class="lockno">No.${m.no}</span><span class="lockq">足迹</span>`
@@ -154,9 +147,9 @@
     }
     if (family === 'experiment') {
       const x = expById.get(id)
-      const lines = (o.lines || []).map(([label, change, verdict]) => `<p>${esc(label)}：${esc(change)}　<span class="${verdict === '真实变化' ? 'k-green' : 'caption'}">${esc(verdict)}</span></p>`).join('')
+      const lines = (o.lines || []).map(([label, change, verdict]) => `<p>${esc(label)}：${esc(change)}　<span class="${verdict === '超出平时波动' ? 'k-green' : 'caption'}">${esc(verdict)}</span></p>`).join('')
       return `<div class="info"><h4 class="${width(x.title) > 10 ? 'long' : ''}">${esc(x.title)}</h4><div class="desc">${esc(x.do)}</div><div class="pills"><span class="chip" style="--c:#2fa874;--cd:#1a6646">实验 · 14 天</span></div>
-        <div class="more"><p><b>看什么</b><br>${esc(x.look)}</p><p><b>从哪来</b><br>${esc(x.from)}</p>${lines ? `<p><b>揭晓：拿实验前两周和这两周比</b></p>${lines}` : ''}</div></div>`
+        <div class="more"><p><b>看什么</b><br>${esc(x.look)}</p><p><b>从哪来</b><br>${esc(x.from)}</p>${lines ? `<p><b>揭晓：拿开始前两周和这两周比</b></p><p class="caption">你开始前两周，晚间静息心率每天上下浮动约 2 次/分；这两周的平均低了 3 次/分，超过了按你自己的浮动算出的范围。</p>${lines}` : ''}</div></div>`
     }
     const m = mileById.get(id)
     return `<div class="info"><h4>${esc(m.title_zh)}</h4><div class="desc">${esc(o.locked ? '还没走到这一步。' : m.hook_zh)}</div><div class="pills"><span class="chip f-milestone">足迹</span>${o.date ? `<span class="chip">${esc(o.date)}</span>` : ''}</div>${o.full ? `<div class="caveat">${esc(m.caveat_zh)}</div>` : ''}</div>`
@@ -270,18 +263,18 @@
       return `<tr><td>${chapterChip(ch.id)}</td><td><span class="swatches">${[p.bg, p.bg2, p.fg, p.mid, p.acc].map((c) => `<i style="background:${c}"></i>`).join('')}</span></td></tr>`
     }).join('')}</tbody></table>`
     const motion = `<div class="row">${TIERS.map((t) => `<button class="btn ${({ cell: '', animal: 'grey', human: 'violet', trial: 'gold' })[t]}" data-demo="${t}">拆一包：${P.tiers[t].metal_zh}卡</button>`).join('')}<button class="btn" data-demo="pick">目标袋：三选一</button><button class="btn blue" data-demo="species">遇见物种</button><button class="btn green" data-demo="chapter">集齐一章</button></div>`
-    const offer = ['x-walk', 'x-wake', 'x-bp'].map((id) => `<figure>${card(id, { live: true, bob: true })}<figcaption>${esc(expById.get(id).look)}</figcaption></figure>`).join('')
+    const offer = ['x-walk', 'x-water', 'x-bp'].map((id) => `<figure>${card(id, { live: true, bob: true })}<figcaption>${esc(expById.get(id).look)}</figcaption></figure>`).join('')
     const activeDays = 'dddmdddddf'.split('').concat(['f', 'f', 'f', 'f'])
     const doneDays = 'ddddmddddddmdd'.split('')
-    const resultLines = [['晚间静息心率', '64 → 61 次/分', '真实变化'], ['体重', '58.2 → 57.9 公斤', '正常波动内']]
+    const resultLines = [['主要结果 · 晚间静息心率', '64 → 61 次/分', '超出平时波动'], ['顺便看 · 体重', '58.2 → 57.9 公斤', '在平时波动内']]
     const experiments = `
       <h3 class="h3">实验包：三选一</h3><p class="lead">赛季开始和每做完一个实验，拿到一个实验包。三张都按你的数据、方案和限制挑出来；没选的两张留在「待选」。</p><div class="hand">${offer}</div>
       <h3 class="h3" style="margin-top:28px">进行中</h3><p class="lead">底部 14 格是 14 天：亮的是做到的天，暗的是断掉的天，空的是还没到的天。有效天数够 10 天就能揭晓，断几天不算失败。</p>
       <div class="row" style="align-items:flex-start;gap:28px">${card('x-walk', { size: 's6', live: true, days: activeDays })}<div style="width:300px">${info('x-walk', {})}</div></div>
-      <h3 class="h3" style="margin-top:28px">揭晓</h3><p class="lead">实验结束时翻面。有「真实变化」时卡变镭射版、盖红章；全部在波动内时只翻面，不庆祝。</p>
-      <div class="row" style="align-items:flex-start;gap:28px">${card('x-walk', { size: 's6', live: true, days: doneDays, result: '真实变化' })}<div style="width:300px">${info('x-walk', { lines: resultLines })}</div>
+      <h3 class="h3" style="margin-top:28px">揭晓</h3><p class="lead">实验结束时翻面。只看开始前定好的一个主要结果：超出你的平时波动时卡变镭射版、盖红章；在波动内或数据不够时只翻面、盖灰章，不庆祝。只说「超出平时波动」，不说「真实变化」。</p>
+      <div class="row" style="align-items:flex-start;gap:28px">${card('x-walk', { size: 's6', live: true, days: doneDays, result: '超出波动' })}<div style="width:300px">${info('x-walk', { lines: resultLines })}</div>
         ${card('x-wake', { size: 's6', live: true, days: 'ddddddmddddddd'.split(''), result: '波动内' })}</div>`
-    const packs2 = `<div class="hand" style="gap:48px">${[['experiment', '实验包', '赛季开始；每做完一个实验', '三张实验卡，选一张开始'], ['recheck', '复查包', '本人复查或补检查后', '这次能算出的结果卡，写明和上次比是真实变化还是波动']].map(([k, name, from, inside]) => `<figure class="pack"><img src="${A.pack(k)}" alt=""><span class="pname">${name}</span><span class="prule">${from}<br><span class="k-gold">${inside}</span></span></figure>`).join('')}</div>`
+    const packs2 = `<div class="hand" style="gap:48px">${[['experiment', '实验包', '赛季开始；每做完一个实验', '三张实验卡，选一张开始'], ['recheck', '复查包', '本人复查或补检查后', '这次能算出的结果卡，写明和上次比是否超出平时波动']].map(([k, name, from, inside]) => `<figure class="pack"><img src="${A.pack(k)}" alt=""><span class="pname">${name}</span><span class="prule">${from}<br><span class="k-gold">${inside}</span></span></figure>`).join('')}</div>`
     const nudge = `<div class="dsh-mock"><div class="dsh-chat"><div class="dsh-bar">工作区 · api-refactor</div><div class="dsh-msg">把 order 服务的重试逻辑改成指数退避，并补上单测。</div><div class="dsh-run">● Agent 运行中 · 正在执行 npm test（已 2 分 14 秒）</div></div>
       <div class="dsh-side"><div class="dsh-tabs"><span>文件</span><span class="on">健康</span></div><div class="dsh-nudge"><p>已经坐了 1 小时 40 分。起来走两分钟？</p><div><button>好</button><button class="ghost">今天别提醒了</button></div></div><p class="dsh-note">右侧健康栏顶部一行；没打开健康栏时是右下角一个小条。没有数字，没有时间承诺，跑完的任务不影响它。打字时、会议中、演示模式下、「我的白天」以外都不出现。</p></div></div>`
     return `
