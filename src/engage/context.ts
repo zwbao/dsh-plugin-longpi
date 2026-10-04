@@ -61,7 +61,8 @@ export interface JourneyPieces {
 function riskApplicability(age: number | null, conditions: ReadonlySet<string>): { applicable: boolean; reason_zh: string } {
   if (conditions.has('cvd') || conditions.has('stent')) return { applicable: false, reason_zh: '已有冠心病，风险评估请以医生为准。' }
   if (age == null) return { applicable: false, reason_zh: '档案里没有年龄，这个公式算不了。' }
-  if (age < 35 || age > 74) return { applicable: false, reason_zh: '这个公式不适用：超出了建模年龄（35–74 岁）。' }
+  if (age < 35) return { applicable: false, reason_zh: '这个公式不适用：你还不到建模年龄（35–74 岁），健康页不出这个数。' }
+  if (age > 74) return { applicable: false, reason_zh: '这个公式不适用：超出了建模年龄（35–74 岁），健康页不出这个数。' }
   return { applicable: true, reason_zh: '' }
 }
 

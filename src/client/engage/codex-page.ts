@@ -394,7 +394,7 @@ function ChoosePanel(props: { option: ExperimentOption; busy: boolean; onStart: 
       h('p', { className: 'lp-codex-cap' }, '随机版：每天早上由 LongPi 随机定今天做还是不做，两种日子各 7 天，最后比较两种日子。比前后比较更能排除天气和忙闲的影响。')) : null,
     h('div', { className: 'lp-codex-row' },
       h(Btn, { tone: 'green', disabled: props.busy || unanswered, onClick: () => props.onStart(answers, randomized) }, '开始这个实验'),
-      props.onBack ? h(Btn, { tone: 'grey', onClick: props.onBack }, '换一张') : null),
+      props.onBack ? h(Btn, { tone: 'grey', onClick: props.onBack }, '回到三张') : null),
     unanswered ? h('p', { className: 'lp-codex-cap' }, '先回答上面的问题。') : null)
 }
 
@@ -776,7 +776,7 @@ export function CodexPage(props: { onNotice?: (text: string) => void }): React.R
     if (v.packs.length > 0) {
       top.push(h('section', { key: 'packs', className: 'lp-codex-box lp-codex-section' },
         h('h3', { className: 'lp-codex-h2' }, '等你拆开的包'),
-        h('p', { className: 'lp-codex-lead' }, '实验包里是三个两周的小实验，选一个开始；复查包里是这次体检能算出的结果卡。包会一直留着。'),
+        h('p', { className: 'lp-codex-lead' }, '实验包里有三个小实验（多数是两周），选一个开始；复查包里是这次体检能算出的结果卡。包会一直留着。'),
         h('div', { className: 'lp-codex-shelf' }, ...v.packs.map((pack, i) => h('button', { key: pack.id, type: 'button', className: 'lp-codex-pack', onClick: () => openPack(pack), 'aria-label': `${pack.kind === 'experiment' ? '实验包' : '复查包'}：${pack.source_zh}，点开拆` },
           h('img', { src: toDataURL(packSprite(pack.kind)), alt: '', className: anim ? 'lp-codex-bob' : undefined, style: { '--d': `${-i * 0.9}s` } as React.CSSProperties }),
           h('span', { className: 'lp-codex-pname' }, pack.kind === 'experiment' ? '实验包' : '复查包'),
@@ -1054,7 +1054,7 @@ export function CodexPage(props: { onNotice?: (text: string) => void }): React.R
       // The chosen card with its questions; the other two step back, on their way to 待选.
       const rest = o.options.filter((row) => row.id !== chosen.id)
       return h(React.Fragment, null,
-        h('p', { className: 'lp-codex-ov-line lp-codex-big' }, '就这个？'),
+        h('p', { className: 'lp-codex-ov-line lp-codex-big' }, '选这张？'),
         h('div', { className: 'lp-codex-ov-row' },
           h('div', { key: chosen.id, className: 'lp-codex-slot lp-codex-picked' },
             h(ExpCard, { info: optionInfo(chosen), live: true, onOpen: () => pick(chosen.id) })),
@@ -1066,7 +1066,7 @@ export function CodexPage(props: { onNotice?: (text: string) => void }): React.R
     }
     return h(React.Fragment, null,
       h('p', { className: 'lp-codex-ov-line lp-codex-big' }, '三选一'),
-      h('p', { className: 'lp-codex-ov-line' }, '三个两周的小实验，都是按你的数据和方案挑的。点一张看详情；都不想做也可以，包会留着。'),
+      h('p', { className: 'lp-codex-ov-line' }, '三个小实验，都是按你的数据和方案挑的。点一张看详情；都不想做也可以，包会留着。'),
       h('div', { className: 'lp-codex-ov-row' }, ...o.options.map((option, i) => h('div', {
         key: option.id, 'data-slot': i, className: cx('lp-codex-slot', !o.dealt && 'lp-codex-deal'), style: { '--d': `${i * 0.12}s` } as React.CSSProperties,
       },

@@ -89,7 +89,10 @@ export function libraryView(now: Date = new Date()) {
     species: lib.species.map((row) => ({ ...row, met: Boolean(state?.met[row.key]) })),
     pending: lib.pending.length,
     studies: lib.studies.map((card) => {
-      const relation = card.research_assay ? null : (results.get(card.skill) ?? card.feature_zh ?? null)
+      const risk = state?.context.results.risk
+      // A model that does not apply to this person says so instead of claiming a link (China-PAR outside 35–74).
+      const unfit = card.skill.startsWith('china-par') && risk && !risk.applicable ? risk.reason_zh : null
+      const relation = card.research_assay ? null : (unfit ?? results.get(card.skill) ?? card.feature_zh ?? null)
       return { ...card, read: Boolean(state?.read[card.id]), relation_zh: relation }
     }),
   }
@@ -127,7 +130,7 @@ export function mountEngageRoutes(register: (path: string, handler: Handler) => 
     try {
       const view = syncCodex()
       if (view.enabled && view.started) kickRefresh()
-      sendJson(res, 200, { ok: true, enabled: view.enabled && view.started, slot: view.slot, pane_zh: view.pane_zh, presentation: view.prefs.presentation, ready: view.ready.length + view.packs.filter((pack) => pack.kind === 'retest').length })
+      sendJson(res, 200, { ok: true, enabled: view.enabled && view.started, slot: view.slot, pane_zh: view.pane_zh, pane_neutral_zh: view.pane_neutral_zh, presentation: view.prefs.presentation, ready: view.ready.length + view.packs.filter((pack) => pack.kind === 'retest').length })
     } catch (error) { fail(res, error) }
   })
 

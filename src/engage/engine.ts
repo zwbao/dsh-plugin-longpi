@@ -417,9 +417,10 @@ function reduce(state: State, world: World, cache: SeriesCache): void {
   // A new checkup of the holder: a retest pack and a footprint; a season in retest mode ends with it.
   const latest = ctx.latest_checkup
   if (latest && !state.seen.checkups.includes(latest)) {
-    const known = state.seen.checkups.length > 0
+    const first = state.seen.checkups.length === 0
     state.seen.checkups.push(latest)
-    if (known && state.started && latest >= state.started) {
+    // Any checkup that arrives after the Codex started counts, the very first one included.
+    if (state.started && latest >= state.started) {
       const results = resultCards(ctx)
       for (const run of state.runs) {
         if (run.status !== 'retest_wait' || !ctx.ldl || ctx.ldl.date < addDays(run.start, 42)) continue
@@ -427,7 +428,7 @@ function reduce(state: State, world: World, cache: SeriesCache): void {
         run.status = 'ready'
         results.unshift({ id: newId('rc'), key: `run:${run.id}`, title_zh: run.title_zh, value_zh: null, compare_zh: run.result.primary.text_zh, outcome: run.result.outcome, tier: 'human', plain: run.result.primary.direction !== 'better', note_zh: null })
       }
-      grantPack(state, 'retest', today, '新的体检结果到了', results)
+      grantPack(state, 'retest', today, first ? '第一次体检的结果到了' : '新的体检结果到了', results)
       const due = ctx.retests.some((row) => Math.abs(daysBetween(row.date, latest)) <= 30)
       addFootprint(state, 'retest', today, due ? '在该复查的时候做了复查。' : '做了一次复查，新的结果进了档案。', due ? '按时复测' : '做了一次复查')
       if (state.season?.status === 'active' && state.season.mode === 'retest') closeSeason(state, today)
@@ -529,8 +530,10 @@ export interface CodexView {
   prefs: { simple: boolean; presentation: boolean; my_day: { start: string; end: string }; season_mode: '8w' | 'retest'; standup: boolean }
   devices: { wristband: boolean; bp_cuff: boolean; scale: boolean }
   slot: SlotView
-  /** The neutral line for the right pane: 「饭后走 10 分钟 · 第 9/14 天」. No result, no metric value. */
+  /** The page's in-flow line: 「饭后走 10 分钟 · 第 9/14 天」. No result, no metric value. */
   pane_zh: string | null
+  /** The folded pane's line: no experiment name either (a name like 降脂 or 量血压 says too much on a shared screen). */
+  pane_neutral_zh: string | null
   rules_zh: string[]
 }
 
@@ -692,8 +695,21 @@ function viewOf(state: State, world: World, cache: SeriesCache): CodexView {
     devices: have,
     slot,
     pane_zh: shown && active.length > 0 ? active.map((run) => run.progress_zh).join('；') : null,
+    pane_neutral_zh: shown ? neutralLine(active) : null,
     rules_zh: RULES_ZH,
   }
+}
+
+function neutralLine(active: RunView[]): string | null {
+  if (active.length === 0) return null
+  const ready = active.filter((run) => run.status === 'ready').length
+  const running = active.filter((run) => run.status === 'running')
+  const parts: string[] = []
+  if (running.length === 1) parts.push(`1 个实验进行中 · 第 ${running[0]!.day}/${running[0]!.days} 天`)
+  else if (running.length > 1) parts.push(`${running.length} 个实验进行中`)
+  if (ready > 0) parts.push('有一张卡可以翻了')
+  if (active.some((run) => run.status === 'retest_wait')) parts.push('1 个实验等复查')
+  return parts.join(' · ') || null
 }
 
 function emptyPackZh(ctx: EligibilityContext): string {

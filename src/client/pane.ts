@@ -13,7 +13,7 @@ import { requestView, useJourney, usePaneShown, useTracking, type PageTab, type 
 import { PaneSlot } from './engage/slot.ts'
 import { useSlot } from './engage/slot-store.ts'
 import type { Face } from './types.ts'
-import { Btn, Skeleton, useNotice } from './ui.ts'
+import { Btn, readPref, Skeleton, useNotice, writePref } from './ui.ts'
 
 const h = React.createElement
 
@@ -55,6 +55,8 @@ export function paneDefinition(icon: (props: { size?: number }) => React.ReactEl
     guide: [{ order: 20, title: () => PANE_TITLE, description: () => '今天的打卡、身体年龄、心血管风险和值得注意的变化', icon }],
   }
 }
+
+const EXPLAIN_KEY = 'dsh-plugin-longpi.pane-explained'
 
 /** How long 显示 keeps the numbers open (design §2.2). */
 export const SHOW_MS = 60_000
@@ -107,6 +109,12 @@ function PaneBody(props: Partial<Face> & { visible: boolean }): React.ReactEleme
   const [notice, notify] = useNotice()
   const slot = useSlot()
   const [open, show, fold] = useShown(props.visible)
+  // The explanation is said a few times, then the folded pane is one neutral line.
+  const [explain] = React.useState(() => {
+    const seen = Number(readPref(EXPLAIN_KEY) ?? '0')
+    writePref(EXPLAIN_KEY, String(seen + 1))
+    return seen < 3
+  })
   // On screen, the pane gets live updates like the page (store.ts opens the change stream only then).
   const root = React.useRef<HTMLDivElement>(null)
   usePaneShown(root)
@@ -130,8 +138,8 @@ function PaneBody(props: Partial<Face> & { visible: boolean }): React.ReactEleme
     body = h('div', { className: 'lp-card lp-pane-mask', role: 'status' }, h('p', { className: 'lp-pane-mask-text' }, '演示模式中'))
   } else if (!open) {
     body = h('div', { className: 'lp-card lp-pane-mask' },
-      h('p', { className: 'lp-pane-mask-text' }, slot.pane_zh ? `今天的实验：${slot.pane_zh}` : '健康数据已收起。'),
-      h('p', { className: 'lp-caption' }, '为了投屏和开会时不露出健康信息，这里默认不显示数字。点「显示」后展开 60 秒。'),
+      h('p', { className: 'lp-pane-mask-text' }, slot.pane_neutral_zh ?? '已收起'),
+      explain ? h('p', { className: 'lp-caption' }, '这里默认收起，投屏时不露出健康信息。点「显示」展开 60 秒。') : null,
       h('div', { className: 'lp-actions' },
         h(Btn, { size: 'sm', variant: 'outline', onClick: show }, '显示')))
   } else {
@@ -149,5 +157,5 @@ function PaneBody(props: Partial<Face> & { visible: boolean }): React.ReactEleme
     h(PaneSlot, { openCodex }),
     notice && open ? h('div', { className: 'lp-notice-slot' }, notice) : null,
     body,
-    h('p', { className: 'lp-caption lp-pane-foot' }, journey?.boundary_zh || BOUNDARY_FALLBACK))
+    open ? h('p', { className: 'lp-caption lp-pane-foot' }, journey?.boundary_zh || BOUNDARY_FALLBACK) : null)
 }

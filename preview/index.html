@@ -552,7 +552,7 @@
       return json({ ok: true, ...state.followup })
     }
     if (CODEX && path.endsWith('/codex/library')) return json(clone(CODEX.library))
-    if (CODEX && path.endsWith('/codex/slot')) return json({ ok: true, enabled: CODEX.view.enabled && CODEX.view.started, slot: CODEX.view.slot, pane_zh: CODEX.view.pane_zh, presentation: CODEX.view.prefs.presentation, ready: CODEX.view.ready.length })
+    if (CODEX && path.endsWith('/codex/slot')) return json({ ok: true, enabled: CODEX.view.enabled && CODEX.view.started, slot: CODEX.view.slot, pane_zh: CODEX.view.pane_zh, pane_neutral_zh: CODEX.view.pane_neutral_zh ?? '1 个实验进行中 · 第 9/14 天 · 有一张卡可以翻了', presentation: CODEX.view.prefs.presentation, ready: CODEX.view.ready.length })
     if (CODEX && path.endsWith('/api/longpi/codex')) {
       if (method === 'GET') { codexCounts(); return json(clone(CODEX.view)) }
       const [status, out] = codexAct(body || {})

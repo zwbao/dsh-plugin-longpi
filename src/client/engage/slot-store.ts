@@ -8,11 +8,12 @@ export interface SlotState {
   enabled: boolean
   slot: { standup: boolean; standups_left: number; reveal: null | { ref: string; text_zh: string }; quiet: null | 'presentation' | 'outside_my_day' | 'off' }
   pane_zh: string | null
+  pane_neutral_zh: string | null
   presentation: boolean
   ready: number
 }
 
-const EMPTY: SlotState = { enabled: false, slot: { standup: false, standups_left: 0, reveal: null, quiet: null }, pane_zh: null, presentation: false, ready: 0 }
+const EMPTY: SlotState = { enabled: false, slot: { standup: false, standups_left: 0, reveal: null, quiet: null }, pane_zh: null, pane_neutral_zh: null, presentation: false, ready: 0 }
 
 let current: SlotState = EMPTY
 let version = 0
@@ -29,7 +30,7 @@ export async function refreshSlot(): Promise<void> {
   try {
     const next = await getJson<SlotState & { ok?: boolean }>('/api/longpi/codex/slot')
     if (next && typeof next === 'object' && next.slot) {
-      current = { enabled: next.enabled === true, slot: next.slot, pane_zh: next.pane_zh ?? null, presentation: next.presentation === true, ready: next.ready ?? 0 }
+      current = { enabled: next.enabled === true, slot: next.slot, pane_zh: next.pane_zh ?? null, pane_neutral_zh: next.pane_neutral_zh ?? null, presentation: next.presentation === true, ready: next.ready ?? 0 }
       emit()
     }
   } catch { /* the last state stays */ }

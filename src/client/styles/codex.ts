@@ -283,7 +283,7 @@ export const CODEX = `
 .lp-codex .lp-codex-shard { position: absolute; width: 8px; height: 8px; background: var(--c, var(--lp-codex-white)); box-shadow: 0 0 0 2px var(--lp-codex-ink); animation: lp-codex-burst .8s cubic-bezier(.1, .8, .3, 1) forwards; }
 @keyframes lp-codex-burst { to { transform: translate(var(--dx), var(--dy)); opacity: 0; } }
 .lp-codex .lp-codex-slot { appearance: none; border: 0; background: none; padding: 0; color: inherit; text-align: left; cursor: pointer; display: grid; gap: 12px; justify-items: center; width: 220px; transition: transform .25s steps(5), opacity .25s steps(5); }
-.lp-codex .lp-codex-slot.lp-codex-out { opacity: .3; transform: translateY(12px) scale(.92); }
+.lp-codex .lp-codex-slot.lp-codex-out { opacity: .3; transform: translateY(12px); }
 .lp-codex .lp-codex-slot.lp-codex-picked { width: auto; }
 .lp-codex .lp-codex-slot-sm { width: auto; }
 .lp-codex .lp-codex-ov-rest { align-items: center; }

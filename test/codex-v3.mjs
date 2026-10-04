@@ -192,6 +192,7 @@ try {
   assert.match(run.view.running[0].threshold_zh, /超出平时波动/, 'the threshold is public before the start')
   assert.match(run.view.pane_zh, /· 第 1\/14 天$/, 'the pane line shows days only')
   assert.doesNotMatch(run.view.pane_zh, /\d+\s*(次\/分|mmHg|公斤)/)
+  assert.equal(run.view.pane_neutral_zh, '1 个实验进行中 · 第 1/14 天', 'the folded pane names no experiment')
   const runId = run.view.running[0].id
   // Days 1–14 with 9 days of resting heart rate: not enough at the end → extended, not a failure.
   const trialDays = (n, value) => Object.fromEntries(Array.from({ length: n }, (_, i) => [addDays(start, i), value + (i % 2 ? 0.5 : -0.5)]))
@@ -237,6 +238,16 @@ try {
   assert.match(cards[0].compare_zh, /37\.9 → 36\.2 岁，超出平时波动/)
   assert.equal(cards[1].plain, true, 'a worse result flips plainly, without celebration')
   assert.ok(view.footprints.some((row) => row.kind === 'retest'))
+
+  // The very first checkup after the Codex started brings a pack too.
+  const fresh = tempDir()
+  profile(fresh)
+  bindRuntime({ dataDir: () => fresh, rootDir: () => fresh })
+  noteCodexContext(fresh, context({ latest_checkup: null }), at('2026-08-31'))
+  actCodex({ action: 'start' }, at('2026-09-01'))
+  noteCodexContext(fresh, context({ latest_checkup: '2026-09-12' }), at('2026-09-13'))
+  const firstPack = syncCodex(at('2026-09-13')).packs.find((pack) => pack.kind === 'retest')
+  assert.equal(firstPack?.source_zh, '第一次体检的结果到了', 'a first-ever checkup is not ignored')
 
   // China-PAR outside 35–74 gives no number.
   const old = tempDir()
