@@ -10,7 +10,7 @@ import { isCovered, type Covered } from './overview-facts.ts'
 import { Btn } from './ui.ts'
 import { dateZh, fmtAuto } from './charts.ts'
 import { prettyUnits } from './changes.ts'
-import { insightSentence, SCIENCE_INTRO, SEASON_INTRO, suggestedQuestions, buildTimeline, OUTBOX_ZH } from '../ux/plain.ts'
+import { insightSentence, SCIENCE_INTRO, suggestedQuestions, buildTimeline, OUTBOX_ZH } from '../ux/plain.ts'
 
 const h = React.createElement
 
@@ -164,9 +164,9 @@ export function InsightCard(props: { journey: Journey; covered?: Covered }): Rea
   const [text, setText] = React.useState<string | null>(null)
   React.useEffect(() => {
     let live = true
-    void getJson<{ pressure?: boolean }>('/api/longpi/season').then(async (season) => {
+    void getJson<{ enabled?: boolean }>('/api/longpi/codex/slot').then(async (season) => {
       if (!live) return
-      if (season.pressure !== true) { setText(null); return }
+      if (season.enabled !== true) { setText(null); return }
       const indicators = await getJson<{ groups?: Array<{ indicators?: Array<{ label_zh?: string; source?: string; latest?: { value?: number | null } }> }> }>('/api/longpi/indicators').catch(() => null)
       let sleep: number | null = null
       let steps: number | null = null
@@ -211,6 +211,3 @@ export function ScienceIntro(props: { goTab: (tab: PageTab) => void }): React.Re
       h(Btn, { variant: 'outline', onClick: later }, '以后再说')))
 }
 
-export function SeasonLink(props: { onOpen: () => void }): React.ReactElement {
-  return h('button', { type: 'button', className: 'lp-textbtn', onClick: props.onOpen }, `赛季 · ${SEASON_INTRO}`)
-}

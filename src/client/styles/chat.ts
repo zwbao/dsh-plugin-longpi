@@ -128,4 +128,27 @@ export const CHAT = `
   margin: 0; max-height: 55vh; overflow: auto; padding: 12px 16px; border-radius: var(--lp-radius-ctl); border: 1px solid var(--lp-line);
   background: var(--lp-well); color: var(--lp-ink); font-family: inherit; font-size: 13px; line-height: 20px; white-space: pre-wrap;
 }
+
+/* --- the prompt slot (docs/codex-design.md §2): DSH's own look, 13 px, no dot, no motion, never takes focus ---- */
+.lp-slot { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 13px; line-height: 20px; color: var(--lp-ink); }
+.lp-slot-text { min-width: 0; }
+.lp-slot-actions { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; }
+.lp-slot-pane { padding: 8px 12px; border-radius: var(--lp-radius-card); background: var(--lp-well); }
+.lp-slot-wrap {
+  position: absolute; right: 20px; bottom: 136px; z-index: 1; pointer-events: auto; max-width: min(420px, calc(100vw - 40px));
+  padding: 4px 4px 4px 12px; border-radius: var(--lp-radius-card); background: var(--lp-layer-2); box-shadow: var(--lp-shadow-pop);
+}
+.lp-slot-bar { min-height: 32px; }
+/* 演示模式 at DSH's sidebar foot. */
+.lp-present-btn {
+  display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 8px; border: 0; border-radius: var(--lp-radius-ctl);
+  background: transparent; color: var(--lp-ink-2); font: inherit; font-size: 12px; line-height: 16px; cursor: pointer;
+}
+.lp-present-btn:hover { background: var(--lp-hover); color: var(--lp-ink); }
+.lp-present-on { background: var(--lp-well); color: var(--lp-ink); }
+/* The pane folds personal numbers by default (§2.2). */
+.lp-pane-mask { display: grid; gap: 8px; }
+.lp-pane-mask-text { margin: 0; font-size: 13px; line-height: 20px; color: var(--lp-ink); }
+.lp-pane-shown { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.lp-set-row { margin-top: 8px; }
 `

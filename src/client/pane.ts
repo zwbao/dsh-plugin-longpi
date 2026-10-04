@@ -9,7 +9,9 @@ import { BOUNDARY_FALLBACK } from './constants.ts'
 import { Icon } from './icons.ts'
 import { Overview } from './overview.ts'
 import type { ResultTarget } from './results.ts'
-import { requestView, useJourney, useLiveShown, useTracking, type PageTab, type ViewRequest } from './store.ts'
+import { requestView, useJourney, usePaneShown, useTracking, type PageTab, type ViewRequest } from './store.ts'
+import { PaneSlot } from './engage/slot.ts'
+import { useSlot } from './engage/slot-store.ts'
 import type { Face } from './types.ts'
 import { Btn, Skeleton, useNotice } from './ui.ts'
 
@@ -54,13 +56,60 @@ export function paneDefinition(icon: (props: { size?: number }) => React.ReactEl
   }
 }
 
-export function HealthPane(props: Partial<Face>): React.ReactElement {
+/** How long 显示 keeps the numbers open (design §2.2). */
+export const SHOW_MS = 60_000
+
+type TabInfoHook = (select: (info: { tab?: { visible?: boolean } }) => boolean) => boolean
+
+/**
+ * Personal numbers, indicator names and diagnosis words stay folded in the pane until 显示 (60 s, and folded at once
+ * when the window loses focus or the tab is hidden): a browser cannot see a system screen share, and an unplanned
+ * meeting is not on any calendar. The full 健康 page, which the person opens themselves, shows everything.
+ */
+function useShown(visible: boolean): [boolean, () => void, () => void] {
+  const [until, setUntil] = React.useState(0)
+  const [, tick] = React.useState(0)
+  React.useEffect(() => {
+    if (until === 0) return undefined
+    const left = until - Date.now()
+    if (left <= 0) { setUntil(0); return undefined }
+    const timer = window.setTimeout(() => { setUntil(0); tick((n) => n + 1) }, left)
+    return () => window.clearTimeout(timer)
+  }, [until])
+  React.useEffect(() => {
+    const fold = () => setUntil(0)
+    const onVisibility = () => { if (document.visibilityState === 'hidden') fold() }
+    window.addEventListener('blur', fold)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      window.removeEventListener('blur', fold)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [])
+  React.useEffect(() => { if (!visible) setUntil(0) }, [visible])
+  return [until > Date.now(), () => setUntil(Date.now() + SHOW_MS), () => setUntil(0)]
+}
+
+function PaneTabVisible(props: { useTabInfo: TabInfoHook; children: (visible: boolean) => React.ReactElement }): React.ReactElement {
+  const visible = props.useTabInfo((info) => info.tab?.visible !== false)
+  return props.children(visible)
+}
+
+export function HealthPane(props: Partial<Face> & { useTabInfo?: TabInfoHook }): React.ReactElement {
+  // The tab's own visibility (DSH's useTabInfo) folds the numbers when the person switches tabs or workspaces.
+  if (typeof props.useTabInfo === 'function') return h(PaneTabVisible, { useTabInfo: props.useTabInfo, children: (visible: boolean) => h(PaneBody, { ...props, visible }) })
+  return h(PaneBody, { ...props, visible: true })
+}
+
+function PaneBody(props: Partial<Face> & { visible: boolean }): React.ReactElement {
   const { journey, loading, error, refresh } = useJourney()
   const tracking = useTracking()
   const [notice, notify] = useNotice()
+  const slot = useSlot()
+  const [open, show, fold] = useShown(props.visible)
   // On screen, the pane gets live updates like the page (store.ts opens the change stream only then).
   const root = React.useRef<HTMLDivElement>(null)
-  useLiveShown(root)
+  usePaneShown(root)
   // Everything that needs more room than the column opens the page there.
   const toPage = (tab: PageTab, request?: Omit<ViewRequest, 'tab'>) => {
     requestView({ tab, ...request })
@@ -77,14 +126,28 @@ export function HealthPane(props: Partial<Face>): React.ReactElement {
     body = h('div', { className: 'lp-card lp-failed', role: 'alert' },
       h('p', { className: 'lp-muted' }, `未能读取数据：${error ?? '未返回数据'}。`),
       h(Btn, { variant: 'outline', onClick: () => { void refresh(true) } }, h(Icon, { name: 'refresh', size: 14 }), '重试'))
+  } else if (slot.presentation) {
+    body = h('div', { className: 'lp-card lp-pane-mask', role: 'status' }, h('p', { className: 'lp-pane-mask-text' }, '演示模式中'))
+  } else if (!open) {
+    body = h('div', { className: 'lp-card lp-pane-mask' },
+      h('p', { className: 'lp-pane-mask-text' }, slot.pane_zh ? `今天的实验：${slot.pane_zh}` : '健康数据已收起。'),
+      h('p', { className: 'lp-caption' }, '为了投屏和开会时不露出健康信息，这里默认不显示数字。点「显示」后展开 60 秒。'),
+      h('div', { className: 'lp-actions' },
+        h(Btn, { size: 'sm', variant: 'outline', onClick: show }, '显示')))
   } else {
-    body = h(Overview, { journey, tracking: tracking.data, onNotice: notify, onAction, goTab: toPage, openOnboarding: () => toPage('overview') })
+    body = h(React.Fragment, null,
+      h('div', { className: 'lp-pane-shown' },
+        h('span', { className: 'lp-caption' }, '60 秒后自动收起'),
+        h('button', { type: 'button', className: 'lp-textbtn', onClick: fold }, '收起')),
+      h(Overview, { journey, tracking: tracking.data, onNotice: notify, onAction, goTab: toPage, openOnboarding: () => toPage('overview') }))
   }
+  const openCodex = () => toPage('codex' as PageTab)
   return h('div', { className: 'lp lp-pane', ref: root },
     h('div', { className: 'lp-pane-head' },
       h('h2', { className: 'lp-h3 lp-pane-title' }, h(Icon, { name: 'health', size: 14 }), PANE_TITLE),
       props.openPage ? h('button', { type: 'button', className: 'lp-textbtn', onClick: props.openPage }, '打开健康页 →') : null),
-    notice ? h('div', { className: 'lp-notice-slot' }, notice) : null,
+    h(PaneSlot, { openCodex }),
+    notice && open ? h('div', { className: 'lp-notice-slot' }, notice) : null,
     body,
     h('p', { className: 'lp-caption lp-pane-foot' }, journey?.boundary_zh || BOUNDARY_FALLBACK))
 }

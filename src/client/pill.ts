@@ -3,7 +3,8 @@
 // shell's click-through overlay, bottom-right, says that today's check-ins
 // are still open. It stays out of the way: only from 18:00, only while an item
 // has no answer yet, never while the LongPi page or the home greeting (whose
-// row lists the same items) is on screen, and × hides it until tomorrow.
+// row lists the same items) is on screen, and × hides it until tomorrow. Off by default (docs/codex-design.md
+// §2.2: it read like an attendance clock); the LongPi settings page turns it on. Presentation mode hides it.
 
 import React from 'react'
 import { checkStateOf } from './checkin.ts'
@@ -13,10 +14,13 @@ import { Icon, Mark } from './icons.ts'
 import { useHeroShowing, useJourney, usePageShowing, useStoreVersion } from './store.ts'
 import type { Face } from './types.ts'
 import { readPref, writePref } from './ui.ts'
+import { useSlot } from './engage/slot-store.ts'
 
 const h = React.createElement
 
 const HIDE_KEY = 'dsh-plugin-longpi.pill-hidden-on'
+/** '1' when the person turned the evening pill on. */
+export const PILL_ON_KEY = 'dsh-plugin-longpi.pill-on'
 /** Local hour from which open check-ins are worth a nudge. */
 const EVENING_HOUR = 18
 
@@ -44,8 +48,10 @@ function Pill(props: PillProps & { pageShowing: boolean }): React.ReactElement |
   React.useEffect(() => { setDismissed(readPref(HIDE_KEY) === today) }, [today])
   const heroShowing = useHeroShowing()
   const evening = useEvening()
+  const slot = useSlot()
+  const on = readPref(PILL_ON_KEY) === '1'
   const open = journey ? journey.plan.checkin_items.filter((item) => checkStateOf(journey, item.id) === null) : []
-  if (!journey || open.length === 0 || !evening || dismissed || props.pageShowing || heroShowing) return null
+  if (!on || slot.presentation || !journey || open.length === 0 || !evening || dismissed || props.pageShowing || heroShowing) return null
   const summary = open.map((item) => item.title).join('、')
   return h('div', { className: 'lp lp-pill-wrap', role: 'status' },
     h('button', { type: 'button', className: 'lp-pill-main', onClick: () => props.openPage?.(), title: summary, 'aria-label': `LongPi：今天还有 ${open.length} 项未打卡：${summary}。打开健康页` },

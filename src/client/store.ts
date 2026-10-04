@@ -62,15 +62,18 @@ let pageUsers = 0
 let liveUsers = 0
 let bridges = 0
 let heroUsers = 0
+/** The right 健康 pane on screen: the prompt slot shows there instead of the bottom-right bar. */
+let paneUsers = 0
 let pending: { text: string; at: number; origin: PromptOrigin } | null = null
 let promptNote: { text: string; id: number } | null = null
 let viewRequest: ViewRequest | null = null
 let settingsOpener: ((id: string) => void) | null = null
 
-export type PageTab = 'overview' | 'indicators' | 'labs' | 'sleep' | 'training' | 'calendar' | 'ask' | 'plan' | 'profile' | 'season' | 'science' | 'analysis'
+export type PageTab = 'overview' | 'indicators' | 'labs' | 'sleep' | 'training' | 'calendar' | 'ask' | 'plan' | 'profile' | 'codex' | 'science' | 'analysis'
 
 export function canonTab(tab: string): PageTab {
   if (tab === 'indicators') return 'labs'
+  if (tab === 'season') return 'codex'
   return tab as PageTab
 }
 export type IndicatorFilter = 'all' | 'changed' | 'plan' | 'device'
@@ -375,7 +378,7 @@ export function useLiveShown(ref: React.RefObject<HTMLElement>): void {
   useShown(ref, false)
 }
 
-function useShown(ref: React.RefObject<HTMLElement>, page: boolean): void {
+function useShown(ref: React.RefObject<HTMLElement>, page: boolean, pane = false): void {
   React.useEffect(() => {
     const node = ref.current
     let shown = false
@@ -383,6 +386,7 @@ function useShown(ref: React.RefObject<HTMLElement>, page: boolean): void {
       if (next === shown) return
       shown = next
       if (page) pageUsers += next ? 1 : -1
+      if (pane) paneUsers += next ? 1 : -1
       liveUsers += next ? 1 : -1
       syncLive()
       emit()
@@ -397,7 +401,7 @@ function useShown(ref: React.RefObject<HTMLElement>, page: boolean): void {
       observer.disconnect()
       set(false)
     }
-  }, [ref, page])
+  }, [ref, page, pane])
 }
 
 /** The home greeting counts itself while mounted: its row already lists today's check-ins, so the pill stays away. */
@@ -415,6 +419,16 @@ export function useHeroShown(): void {
 export function useHeroShowing(): boolean {
   React.useSyncExternalStore(subscribe, () => version, () => version)
   return heroUsers > 0
+}
+
+/** The pane counts itself while on screen (and keeps the change stream open like useLiveShown). */
+export function usePaneShown(ref: React.RefObject<HTMLElement>): void {
+  useShown(ref, false, true)
+}
+
+export function usePaneShowing(): boolean {
+  React.useSyncExternalStore(subscribe, () => version, () => version)
+  return paneUsers > 0
 }
 
 export function usePageShowing(): boolean {

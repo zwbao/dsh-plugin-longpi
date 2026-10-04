@@ -20,7 +20,8 @@ import { Overview } from './overview.ts'
 import { PlanTab } from './plan.ts'
 import { registerClientModules } from './modules.ts'
 import { ProfileTab } from './profile-tab.ts'
-import { SeasonBar } from './engage/index.ts'
+import { SeasonBar } from './engage/slot.ts'
+import './engage/index.ts'
 import { AskTab, CalendarTab, SleepTab, TrainingTab } from './life.ts'
 import { AnalysisTab } from './analysis.ts'
 import { DemoInvite, PeoplePicker, PersonNotice } from './people.ts'
@@ -50,7 +51,7 @@ const TABS: Array<TabSpec<PageTab>> = [
 const SECONDARY: Array<{ key: PageTab; label: string }> = [
   { key: 'plan', label: '方案' },
   { key: 'profile', label: '档案' },
-  { key: 'season', label: '赛季' },
+  { key: 'codex', label: '长寿图鉴' },
   { key: 'science', label: '研究' },
 ]
 
@@ -61,7 +62,7 @@ const SCROLL_WAIT_MS = 2000
 function storedTab(extra: readonly string[]): PageTab {
   const saved = readPref(TAB_KEY)
   const key = saved ? canonTab(saved) : 'overview'
-  if (saved && (TABS.some((tab) => tab.key === key) || extra.includes(key) || key === 'plan' || key === 'profile' || key === 'season' || key === 'science')) return key
+  if (saved && (TABS.some((tab) => tab.key === key) || extra.includes(key) || key === 'plan' || key === 'profile' || key === 'codex' || key === 'science')) return key
   return 'overview'
 }
 
@@ -324,7 +325,7 @@ export function LongPiPage(props: Partial<Face>): React.ReactElement {
       h(PersonNotice),
       h(DemoInvite, { empty: Boolean(journey) && (journey?.records.indicator_count ?? 0) === 0 }),
       notice ? h('div', { className: 'lp-notice-slot' }, notice) : null,
-      journey ? h(SeasonBar, { onOpen: () => setTab('season') }) : null,
+      journey ? h(SeasonBar, { onOpen: () => setTab('codex') }) : null,
       body,
       // One line (#37): the boundary, then where the data stays.
       h('footer', { className: 'lp-footer' },

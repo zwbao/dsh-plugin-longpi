@@ -13,12 +13,20 @@ import { MethodsSection } from './methods.ts'
 import { settingsSections } from './registry.ts'
 import { useBoard, useConnection, useJourney } from './store.ts'
 import type { Face } from './types.ts'
-import { LinkButton, Switch, useNotice } from './ui.ts'
+import { LinkButton, readPref, Switch, useNotice, writePref } from './ui.ts'
+import { PILL_ON_KEY } from './pill.ts'
 
 const h = React.createElement
 
-/** Registered settings sections this page covers itself (提醒 shows its own season note; 研究 is the 一起研究 block). */
-const PLACED = new Set(['season-reminder', 'science'])
+/** Registered settings sections this page covers itself (研究 is the 一起研究 block). */
+const PLACED = new Set(['science'])
+
+/** The evening pill for open check-ins (bottom right, after 18:00). Off unless turned on here. */
+function PillSwitch(): React.ReactElement {
+  const [on, setOn] = React.useState(() => readPref(PILL_ON_KEY) === '1')
+  return h('div', { className: 'lp-set-row' },
+    h(Switch, { id: 'lp-set-pill', checked: on, label: '晚上 6 点后，在右下角提示还没打卡的项目', onChange: (next) => { writePref(PILL_ON_KEY, next ? '1' : '0'); setOn(next) } }))
+}
 
 function Block(props: { id: string; title: string; hint?: string; children?: React.ReactNode }): React.ReactElement {
   return h('section', { className: 'lp-set-block', id: props.id, 'aria-labelledby': `${props.id}-title` },
@@ -94,7 +102,7 @@ export function LongPiSettings(props: SettingsPageProps): React.ReactElement {
       h('h2', { className: 'lp-h2' }, 'LongPi'),
       props.openPage ? h('button', { type: 'button', className: 'lp-textbtn', onClick: () => { props.close?.(); props.openPage?.() } }, '打开健康页 →') : null),
     notice ? h('div', { className: 'lp-notice-slot' }, notice) : null,
-    h(Block, { id: 'lp-set-followup', title: '提醒', hint: '默认关闭。关闭此窗口后不会发送提醒。' }, h(FollowupPanel, { onNotice: notify })),
+    h(Block, { id: 'lp-set-followup', title: '提醒', hint: '默认关闭。关闭此窗口后不会发送提醒。' }, h(FollowupPanel, { onNotice: notify }), h(PillSwitch)),
     // Paired automatically; the manual form is for whoever installs LongPi against another Mirobody.
     h(Block, { id: 'lp-set-connection', title: '数据连接' }, h(Connection)),
     h(Block, { id: 'lp-set-science', title: '一起研究' }, h(ScienceSwitch)),

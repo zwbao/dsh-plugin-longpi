@@ -163,8 +163,8 @@ try {
 
   const client = readFileSync(join(root, 'src/client/page.ts'), 'utf8')
   for (const label of ['总览', '化验', '睡眠', '运动', '日程', '问 LongPi']) assert.match(client, new RegExp(label))
-  assert.match(readFileSync(join(root, 'src/client/engage/season-tab.ts'), 'utf8'), /本赛季 · 第/)
-  assert.match(readFileSync(join(root, 'src/client/engage/codex.ts'), 'utf8'), /概率说明/)
+  assert.match(readFileSync(join(root, 'src/client/engage/slot-rules.ts'), 'utf8'), /起来走两分钟？/)
+  assert.doesNotMatch(readFileSync(join(root, 'src/client/engage/slot-rules.ts'), 'utf8'), /正好跑完|回来正好/, 'no time promise in the stand-up line')
   assert.doesNotMatch(readFileSync(join(root, 'src/client/page.ts'), 'utf8'), /Mirobody/)
   assert.doesNotMatch(readFileSync(join(root, 'src/client/constants.ts'), 'utf8'), /Mirobody/)
 

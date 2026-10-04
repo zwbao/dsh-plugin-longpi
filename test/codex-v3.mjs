@@ -17,6 +17,8 @@ import { addDays } from '../src/interventions.ts'
 import { loadReference } from '../src/reference.ts'
 import { copyProblems } from '../scripts/build-codex.mjs'
 import { skillsHome } from './lib/skills-home.mjs'
+import { nextPrompt, sittingZh } from '../src/client/engage/slot-rules.ts'
+import { BREAK_MS, noteInput } from '../src/client/engage/activity.ts'
 
 const home = skillsHome('data/biological_variation.json')
 const biovar = home ? loadReference(home).biovar : null
@@ -300,6 +302,19 @@ try {
   assert.ok(readFileSync(join(legacy, 'engage', 'state.v1.json'), 'utf8').includes('"version":1'))
   assert.equal(migrated.packs.filter((pack) => pack.kind === 'experiment').length, 1, 'unused draws become one opening experiment pack')
   assert.equal(JSON.stringify(stored).includes('streak'), false, 'the streak and its freeze are gone')
+
+  // ---- the client side of the slot: sitting time, a running turn, typing ----------------------------------
+  const base2 = { enabled: true, presentation: false, standup: true, reveal: null, sitting: 100, turnMs: 70_000, typing: false, now: 1 }
+  assert.equal(nextPrompt(base2)?.text, '已经坐了 1 小时 40 分。起来走两分钟？')
+  assert.equal(nextPrompt({ ...base2, sitting: 80 }), null, 'under 90 minutes of continuous use')
+  assert.equal(nextPrompt({ ...base2, turnMs: 30_000 }), null, 'only while a turn has run for 60 s (the person is waiting)')
+  assert.equal(nextPrompt({ ...base2, typing: true }), null, 'not while typing')
+  assert.equal(nextPrompt({ ...base2, presentation: true }), null, 'never in presentation mode')
+  assert.equal(nextPrompt({ ...base2, reveal: { ref: 'rn1', text_zh: '有一张实验卡可以翻了。' } })?.kind, 'reveal', 'a reveal day\'s notice uses the same slot')
+  assert.equal(sittingZh(60), '1 小时')
+  const sat = noteInput(1000 + 30 * 60_000, { since: 1000, last: 1000 + 29 * 60_000 })
+  assert.equal(sat.since, 1000, 'continuous use keeps the sitting')
+  assert.equal(noteInput(1000 + BREAK_MS + 10, { since: 1000, last: 1000 }).since, 1000 + BREAK_MS + 10, 'a 5-minute pause starts a new sitting')
 
   // ---- copy checks (build gate) ----------------------------------------------------------------------------
   const rules = JSON.parse(readFileSync(new URL('../data/codex/v3/content.zh.json', import.meta.url), 'utf8')).rules

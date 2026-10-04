@@ -26,6 +26,8 @@ import { toolViewList } from './registry.ts'
 import { TOOL_VIEWS } from './toolviews.ts'
 import { longPiTurnDefinition, selectLongPiTail } from './turn-data.ts'
 import { LongPiTurnTail } from './turn-tail.ts'
+import { CodexOverlay, installPresentationShortcut, presentationCommand, PresentationButton } from './engage/slot.ts'
+import { installActivity } from './engage/activity.ts'
 import type { Face } from './types.ts'
 
 const h = React.createElement
@@ -100,6 +102,10 @@ export function apply(ctx: ClientContext): void {
     ctx.slots.inject('tool.call.toolview', () => ctx.slots.register({ name: 'tool.call.toolview', key: view.tool, inject: face }, view.Component))
   }
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'longpi-reminders', order: 50, inject: face }, ReminderPill))
+  // The one prompt slot when the 健康 pane is not on screen (the stand-up line, or a reveal day's notice).
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'longpi-codex-slot', order: 45, inject: face }, CodexOverlay))
+  // 演示模式 beside DSH's settings at the sidebar foot (root-scoped, always on screen); also ⌘⌥P / Ctrl+Alt+P.
+  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({ name: 'sidebar.footer.action', id: 'longpi-presentation', order: 50 }, PresentationButton))
   // The one-time welcome after installing: non-blocking, dismissible, points at the 健康 entry.
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({ name: 'shell.overlay', id: 'longpi-intro', order: 40, inject: face }, IntroCard))
   // Under a finished turn that left something to do: DSH folds the turn's cards, so their actions come back here.
@@ -113,6 +119,12 @@ export function apply(ctx: ClientContext): void {
     // A plugin reload or unload gives back the change stream, the poll and the listeners (F-5).
     ctx.inject(['slots'], (sub) => {
       sub.effect?.(() => () => stopTimers(), 'longpi: store timers')
+      sub.effect?.(() => installActivity(), 'longpi: activity clock')
+      sub.effect?.(() => installPresentationShortcut(), 'longpi: presentation shortcut')
+    })
+    ctx.inject(['commandUi'], (sub) => {
+      const commands = (sub as { commandUi?: { register?: (command: ReturnType<typeof presentationCommand>) => () => void } }).commandUi
+      if (commands?.register) sub.effect?.(() => commands.register!(presentationCommand()), 'longpi: /演示模式')
     })
     // Each turn's LongPi calls, published as the turn's data for the quick actions.
     ctx.inject(['uiConversation'], (sub) => {
