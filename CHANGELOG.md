@@ -1,5 +1,37 @@
 # Changelog
 
+## 0.8.0
+
+给使用者
+
+- 去掉了安全守卫。对话不再逐条判断是否急症、不再附加「安全提示」、不再在回复后补写或更正，也不再插入事先写好的标准回答。急症时建议拨打 120、不给个人用药剂量等基本原则仍写在 LongPi 的角色设定中，由模型遵循。保存方案、发起深度分析之前，仍需要你在 DeepSeek Harness 中确认。
+- LongPi 只在「健康对话」工作区中起作用。其他工作区的对话即使谈到健康，也不会附加 LongPi 的说明或健康页内容。
+- 「下载完整档案」只包含你本人的档案、方案、打卡、自测、用药、记下的事项、简报和深度分析结果，不再包含连接健康数据服务的账号、密码和链接，也不含提醒渠道设置和家人的档案。
+- 「添加家人」此前在本机的健康数据服务上始终失败，现已修复。
+- 在对话中提到「我妈」「我爸」，不再把你本人的档案改为家人的档案。
+- 安装和更新不再隐藏 DeepSeek Harness 自己的名称标识；从旧版本更新时会自动恢复。
+- 同时打开多个 DeepSeek Harness 标签页时，健康页不再停在加载状态；读取超过 25 秒会给出提示。只有健康页或右侧「健康」栏显示在屏幕上时，LongPi 才保持实时更新。
+- 档案页和设置页不再显示填写地址、令牌、邮箱和密码的表单（安装人员可在浏览器中设置 longpi.dev = 1 后使用）。
+
+English
+
+- The safety guard is removed (owner decision): no message labels, rule layer, emergency scripts, answer cards
+  (playbook, OWNER_HINT), completeness corrections, dose check, advise_on_substance, GET /api/longpi/advice, or the
+  evidence_explainer agent. Plan-save and deep-analysis approvals stay (tools-approval.ts, decoupled). Without the
+  DeepSeek consent, egress still holds health text; the local first-aid replacement is gone. `guardScope` is still
+  accepted in config and ignored; the installer no longer writes it.
+- The orchestrator injects persona, rules and the page snapshot only in LongPi's own workspace and never into a
+  sub-agent (C-08). remember-rules no longer writes profile.subject from 我妈 / 我爸 (H-03).
+- Export is an allowlist of the person's records; the link, token, account email and password are scrubbed from
+  every kept file; local date in the file name (A-01).
+- Managed members are created at /api/user/virtual (H-01).
+- Installer: no `ui-brand-official` row in LongPi's block (an older one is removed on the next install or update);
+  Mirobody logs under umask 077, 0600 (F-13, J-07, F-9).
+- Client: the change stream and the 10-minute poll run only while the page or the 健康 pane is on screen in a
+  visible tab; reads time out after 25 s; stopTimers on unload; the manual connection form needs localStorage
+  longpi.dev = 1 (F-1, F-3, F-5, E-21).
+- Persona: crisis lines 12356 / 400-161-9995; no "paste the MCP address"; no guard-note instructions.
+
 ## 0.7.0
 
 给使用者

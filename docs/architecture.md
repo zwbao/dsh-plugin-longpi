@@ -18,11 +18,8 @@ LongPi is the personal layer. Three pieces stay separate.
 | `runner.ts` | Stage files, pick the interpreter by runtime, fill profile flags, check argument paths, run the script with a short environment, read `out/report.md`, `out/result.json` and `out/problems.json`, write the receipt (no report text). |
 | `history.ts` | Earlier readouts (declared outputs only), for before-and-after skills and the board. |
 | `stats.ts` | Weekly anonymous counts per skill: runs, failures, missing input keys. |
-| `guardrails.ts` | The guard's rule layer (used when the model call fails), its guidance notes and the deterministic reply check. |
-| `guard-llm.ts` | The guard: the host model labels each new message and judges the reply before a turn closes, through DSH's LLM runtime with a 4 s deadline; one note appended, at most one correction steered; counts in `guard-stats.json`. |
-| `guard-scope.ts` | Where the guard asks the model: LongPi's workspace, and elsewhere messages that touch health (a recall-first word list holding the rule layer's words) and the rest of their session. |
-| `guard-dose.ts` | Dose amounts for the reply check (a local copy until the shared `dose.ts` merges). |
-| `tools-approval.ts` | A plan saved from chat needs a fresh read-back of the same plan and then the person's approval; no skill runs in a turn flagged as an emergency. |
+| `guard-scope.ts` | LongPi's own workspaces (the one it created, or titled 健康对话 / 健康): where its persona, page snapshot and write tools apply. |
+| `tools-approval.ts` | A plan saved from chat needs a fresh read-back of the same plan and then the person's approval; a deep analysis the person asks for needs their approval. |
 | `compact.ts` | Parse Mirobody's compact pipe tables (hoisted constants, single-row answers, refusals, the meta line). |
 | `records.ts` | Read the record over MCP with a one-minute cache: catalogue and latest values, dated series, the dose log in windows under Mirobody's row cap, and medication courses. |
 | `reference.ts` | Read `data/biological_variation.json` and `data/effects.jsonl` from the skills checkout; reference change values (symmetric, or log-normal for skewed markers). |

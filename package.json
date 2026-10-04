@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-longpi",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "Personal longevity harness for DeepSeek Harness: dispatch longevity-skills by intent from one person's Mirobody record, convert and check measurement units before a skill runs, look up collected evidence, and show a health board.",
   "repository": {
     "type": "git",
