@@ -17,6 +17,7 @@ import { newId, readJson, writeJsonAtomic } from '../core/store.ts'
 import { currentBus } from '../core/bus.ts'
 import type { CareState } from './care.ts'
 import { patterns } from './rules.ts'
+import { currentImport, doctorItems } from '../analysis/store.ts'
 
 /** 「9 月 10 日」, with the year when it is not this year. */
 function dayZhT(iso: string | null | undefined): string {
@@ -117,6 +118,9 @@ function markdownOf(brief: DoctorBrief, person: { age: number | null; sex: strin
   } else {
     lines.push('（本次未读取到历次结果，请携带纸质或电子体检报告。）')
   }
+  if (brief.analysis_zh?.length) {
+    lines.push('', '## 深度分析建议由医生评估的事项', '> 来自多组学深度分析，是建议，不是诊断；是否需要、怎么做，请医生决定。', '', ...brief.analysis_zh.map((line) => `- ${line}`))
+  }
   lines.push('', '## 目前在用的药和补剂', ...(brief.meds_zh.length > 0 ? brief.meds_zh.map((line) => `- ${line}`) : ['- 记录中无']))
   if (brief.conditions_zh.length > 0) lines.push('', '## 本人说过的情况', ...brief.conditions_zh.map((line) => `- ${line}`))
   lines.push('', '## 想问医生的问题', ...brief.questions_zh.map((line, index) => `${index + 1}. ${line}`))
@@ -129,9 +133,18 @@ function briefDir(dataDir: string): string {
   return join(dataDir, 'briefs')
 }
 
+/** The current deep analysis's items for a doctor, one line each, and the day it was imported. */
+function analysisLines(dataDir: string): { lines: string[]; day: string | null } {
+  const cur = currentImport(dataDir)
+  if (!cur) return { lines: [], day: null }
+  const lines = doctorItems(cur.value).map((item) => `${item.title}${item.detail && item.detail !== item.title ? `：${item.detail}` : ''}`)
+  return { lines, day: cur.meta.imported_at?.slice(0, 10) ?? null }
+}
+
 export async function buildBrief(input: BriefInput): Promise<BriefResult | null> {
   const findings = [...input.care.findings.filter((row) => row.status !== 'visited'), ...input.care.findings.filter((row) => row.status === 'visited')]
-  if (findings.length === 0) return null
+  const analysis = analysisLines(input.dataDir)
+  if (findings.length === 0 && analysis.lines.length === 0) return null
   const keys = [...new Set(findings.flatMap((finding) => patterns().find((row) => `finding-${row.id}` === finding.id)?.trend_markers ?? []))]
   const trend = await trendOf(input, keys)
   const memory = memoryFor(input.dataDir)
@@ -147,12 +160,19 @@ export async function buildBrief(input: BriefInput): Promise<BriefResult | null>
     trend,
     meds_zh: meds,
     conditions_zh: conditions,
-    questions_zh: [...new Set(findings.flatMap((row) => row.questions_zh))],
+    questions_zh: [...new Set([
+      ...findings.flatMap((row) => row.questions_zh),
+      ...(analysis.lines.length ? ['深度分析建议的这几项（见上）适合我吗？哪些需要先做检查？'] : []),
+    ])],
     tests_zh: [...new Set(findings.flatMap((row) => row.tests_to_request_zh))],
-    summary_zh: findings.map((row) => `${row.title_zh}（建议看${row.department_zh}）`).join('；'),
+    ...(analysis.lines.length ? { analysis_zh: analysis.lines } : {}),
+    summary_zh: [...findings.map((row) => `${row.title_zh}（建议看${row.department_zh}）`), ...(analysis.lines.length ? [`深度分析建议由医生评估 ${analysis.lines.length} 项`] : [])].join('；'),
     source: 'template',
   }
-  const reasons = findings.map((row) => `${row.text_zh}。建议看${row.department_zh}。`)
+  const reasons = [
+    ...findings.map((row) => `${row.text_zh}。建议看${row.department_zh}。`),
+    ...(analysis.lines.length ? [`深度分析${analysis.day ? `（${dayZhT(analysis.day)}导入）` : ''}建议有 ${analysis.lines.length} 项由医生评估，见下文。`] : []),
+  ]
   const seen = input.care.seen.map(({ finding, care }) => `已看过医生${care.visit_date ? `（${dayZhT(care.visit_date)}）` : ''}：${finding.title_zh}${care.outcome_zh ? `，医生说：${care.outcome_zh}` : ''}`)
   const markdown = markdownOf(brief, { age: input.records.profile.age, sex: input.records.profile.sex }, reasons, seen)
   const dir = briefDir(input.dataDir)

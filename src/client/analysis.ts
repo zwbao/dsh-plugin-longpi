@@ -6,6 +6,7 @@ import React from 'react'
 import { getJson, postJson } from './api.ts'
 import { Btn, Section, Switch, type NoticeTone } from './ui.ts'
 import { Icon } from './icons.ts'
+import { BriefModal, type BriefAnswer } from './triage/care-card.ts'
 
 const h = React.createElement
 
@@ -15,12 +16,20 @@ interface Run { id: string; started_at: string; stages: Stage[]; done: number; r
 interface Readiness { why_zh: string; auto_on: boolean; auto_allowed: boolean; last_analysis: string | null; newest_record: string | null; newest_file: string | null; folder: string | null }
 interface BoardRow { id: string; title_zh: string; verdict_zh: string; confidence: string | null; summary_zh: string | null; next_step_zh: string | null; limitations_zh?: string | null }
 interface OrganRow { organ: string; label_zh: string; measured: Readout[]; indices: Readout[]; ai_age: Readout | null; ai_risks: Readout[]; overrides: Array<{ disease: string; message_zh: string }> }
+interface DoctorItem { title: string; detail: string; kind_zh: string }
+interface CompareRow { marker: string; prev: unknown; cur: unknown; unit: string; change_pct: number | null; verdict: string; caveat: string | null }
+type Compare =
+  | { ok: true; prev_imported_at: string; prev_sample_date: string | null; alerts: string[]; rows: CompareRow[]; not_judged: number }
+  | { ok: false; error_zh: string }
 interface Current {
   run_id: string; imported_at: string; plan_accepted_version: number | null
   readouts: Readout[]; organs: OrganRow[]; board: BoardRow[]
+  doctor_items?: DoctorItem[]; compare?: Compare | null
   retests: Array<{ what: string; after_weeks: number; due: string }>; boundary_zh: string
 }
 interface ReadBack { ok: boolean; run_id: string | null; plan_key: string | null; title: string; items: Array<{ id: string; category: string; title: string; detail: string; markers: string[] }>; warnings: string[]; errors: string[] }
+
+const VERDICT_ZH: Record<string, string> = { increase_beyond_noise: '升高，超出正常波动', decrease_beyond_noise: '降低，超出正常波动', within_noise: '在正常波动内' }
 interface Status { ok: boolean; runs: Run[]; current: Current | null; plan_read_back: ReadBack | null; blockers: { reply_zh: string; missing: string } | null; readiness: Readiness | null; cost_zh: string }
 
 const CONF_ZH: Record<string, string> = { low: '低', moderate: '中' }
@@ -108,6 +117,7 @@ export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone
   const [status, setStatus] = React.useState<Status | null>(null)
   const [busy, setBusy] = React.useState('')
   const [error, setError] = React.useState('')
+  const [brief, setBrief] = React.useState<BriefAnswer | null>(null)
   const load = React.useCallback(() => {
     void getJson<Status>('/api/longpi/analysis').then((s) => { setStatus(s); setError('') })
       .catch((e: unknown) => setError(errText(e, '读取深度分析状态失败')))
@@ -149,6 +159,11 @@ export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone
     const res = await postJson<{ version?: number }>('/api/longpi/analysis/plan-accept', { run_id: back.run_id, plan_key: back.plan_key })
     notice(`方案已保存（第 ${t(res.version)} 版），复测提醒会按方案里的指标安排。`, 'good')
   }, '保存失败')
+  const openBrief = () => act('brief', async () => {
+    const answer = await postJson<BriefAnswer>('/api/longpi/brief', {})
+    if (!answer.ok) throw new Error(answer.error || '生成失败')
+    setBrief(answer)
+  }, '简报生成失败')
 
   if (!status) return h('div', { className: 'lp-tab-body' }, h('p', { className: 'lp-muted', role: error ? 'alert' : undefined }, error || '读取中…'))
   const cur = status.current
@@ -219,7 +234,41 @@ export function AnalysisTab(props: { onNotice?: (text: string, tone?: NoticeTone
             ? h('span', { className: 'lp-badge lp-badge-good' }, h(Icon, { name: 'check', size: 12 }), `已保存为第 ${t(cur.plan_accepted_version)} 版`)
             : h('span', { className: 'lp-caption' }, '确认后才生效'),
           cur.plan_accepted_version ? null
-            : h(Btn, { onClick: () => { void accept(back) }, disabled: disabled || !back.ok }, '我已阅读，接受方案')))) : null)
+            : h(Btn, { onClick: () => { void accept(back) }, disabled: disabled || !back.ok }, '我已阅读，接受方案')))) : null,
+
+    cur?.doctor_items?.length ? h(Section, { title: '交给医生的事项' },
+      h('div', { className: 'lp-card' },
+        h('p', { className: 'lp-caption' }, '补剂、检查和转诊由医生决定，不放进方案打卡；它们会写进医生简报。'),
+        h('ul', { className: 'lp-rows' }, ...cur.doctor_items.map((i, n) => h('li', { key: n, className: 'lp-row lp-row-stack' },
+          h('span', null, h('span', { className: 'lp-badge lp-badge-neutral' }, t(i.kind_zh)), ' ', h('span', { className: 'lp-strong' }, t(i.title))),
+          i.detail && i.detail !== i.title ? h('span', { className: 'lp-muted' }, t(i.detail)) : null))),
+        h('div', { className: 'lp-card-foot' },
+          h(Btn, { variant: 'outline', onClick: () => { void openBrief() }, disabled }, busy === 'brief' ? '正在整理…' : '医生简报（可打印）')))) : null,
+
+    cur?.compare ? h(Section, { title: '和上次深度分析相比' }, h(CompareCard, { compare: cur.compare })) : null,
+
+    brief ? h(BriefModal, { answer: brief, onClose: () => setBrief(null) }) : null)
+}
+
+/** The two analyses side by side: only a change beyond the reference change value is a change. */
+function CompareCard(props: { compare: Compare }): React.ReactElement {
+  const c = props.compare
+  if (!c.ok) return h('div', { className: 'lp-card' }, h('p', { className: 'lp-muted' }, t(c.error_zh)))
+  const beyond = c.rows.filter((r) => r.verdict !== 'within_noise')
+  const within = c.rows.filter((r) => r.verdict === 'within_noise')
+  const since = c.prev_sample_date || c.prev_imported_at
+  return h('div', { className: 'lp-card' },
+    ...c.alerts.map((a, i) => h('div', { key: `a${i}`, className: 'lp-callout lp-callout-bad', role: 'alert' }, h(Icon, { name: 'warn', size: 16 }), h('div', { className: 'lp-callout-body' }, t(a)))),
+    h('p', { className: 'lp-caption' }, `与${since ? ` ${dateZh(t(since))} 的` : '上一次'}分析比较。超出个人正常波动（参考变化值）才算真实变化；在波动内的还看不出变化。`),
+    beyond.length ? h('ul', { className: 'lp-rows' }, ...beyond.map((r, i) => h('li', { key: i, className: 'lp-row lp-row-stack' },
+      h('span', null, h('span', { className: 'lp-strong' }, t(r.marker)), ' ', h('span', { className: 'lp-num' }, `${t(r.prev)} → ${t(r.cur)}${r.unit ? ` ${t(r.unit)}` : ''}`)),
+      h('span', { className: 'lp-caption' }, `${VERDICT_ZH[r.verdict] ?? t(r.verdict)}${r.change_pct !== null ? `（${r.change_pct > 0 ? '+' : '−'}${num(Math.abs(r.change_pct))}%）` : ''}`),
+      r.caveat ? h('span', { className: 'lp-caption lp-warn-ink' }, t(r.caveat)) : null)))
+      : h('p', { className: 'lp-muted' }, '没有超出正常波动的变化。'),
+    h('p', { className: 'lp-small lp-muted' }, [
+      within.length ? `${within.length} 项在正常波动内（${within.slice(0, 6).map((r) => t(r.marker)).join('、')}${within.length > 6 ? ' 等' : ''}）` : '',
+      c.not_judged ? `${c.not_judged} 项没有个人波动数据或条件不足，只能并排看，不判断变好变坏` : '',
+    ].filter(Boolean).join('；')))
 }
 
 /** One card for where things stand: a run in progress, a stopped run, a finished run to import, or why not yet. */

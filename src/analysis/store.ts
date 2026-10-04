@@ -198,19 +198,44 @@ export function sanitizeReport(html: string): string {
 export interface ExportReadout { id: string; label_zh: string; value: unknown; unit?: string; kind?: string; group?: string; low?: number; high?: number; horizon_years?: number }
 export interface ExportOrgan { organ: string; label_zh: string; measured: string[]; indices: string[]; ai_age: string | null; ai_risks: string[]; overrides: Array<{ disease: string; message_zh: string }> }
 export interface ExportBoard { id: string; title_zh: string; hypothesis_zh: string; verdict: string | null; verdict_zh: string; confidence: string | null; summary_zh: string | null; next_step_zh: string | null; limitations_zh: string | null; skipped_reason_zh: string | null }
-export interface ExportItem { category: string; title: string; detail: string; markers: string[] }
+export type Executor = 'member' | 'nutritionist' | 'physician'
+export interface ExportItem {
+  category: string; title: string; detail: string; markers: string[]
+  /** Who the analysis assigned the item to; null in an export written before the field existed. */
+  executor: Executor | null
+  /** The analysis's own category (diet, supplement, test, referral, …), finer than category. */
+  kind: string
+  evidence_grade: string | null
+}
 export interface LaExport {
   schema: string
   generated_at: string
   generation: string
-  member: { age?: number; sex?: string; sample_date?: string }
+  member: { id?: string; age?: number; sex?: string; sample_date?: string }
   report: { html: string; sha256: string }
+  twin: { path: string; sha256: string } | null
   readouts: ExportReadout[]
   organs: ExportOrgan[]
   board: ExportBoard[]
   plan: { title: string; note: string; items: ExportItem[] }
   retests: Array<{ what: string; after_weeks: number; due: string }>
   boundary_zh: string
+}
+
+export const EXECUTORS: readonly Executor[] = ['member', 'nutritionist', 'physician']
+/** Kinds a doctor decides whatever the executor says: a supplement is confirmed with a doctor, a test is ordered, a referral is made. */
+const DOCTOR_KINDS = new Set(['supplement', 'test', 'referral'])
+
+/**
+ * Where an analysis item goes in LongPi. There is no nutritionist here, so the person carries out the member's and the
+ * nutritionist's items (diet has no other executor); the physician's items and the doctor-only kinds go to the brief.
+ */
+export function itemRoute(item: Pick<ExportItem, 'executor' | 'kind'>): 'plan' | 'doctor' {
+  return item.executor === 'physician' || DOCTOR_KINDS.has(item.kind) ? 'doctor' : 'plan'
+}
+
+export function doctorItems(value: LaExport): ExportItem[] {
+  return value.plan.items.filter((item) => itemRoute(item) === 'doctor')
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => Boolean(v) && typeof v === 'object' && !Array.isArray(v)
@@ -224,7 +249,7 @@ const num = (v: unknown): number | undefined => typeof v === 'number' && Number.
  * Check an export like any outside file and rebuild it from known fields only (anything else is dropped).
  * Returns the rebuilt value and the report bytes read once, or the problems.
  */
-export function checkExport(raw: unknown, run: AnalysisRun): { value: LaExport | null; html: Buffer | null; problems: string[] } {
+export function checkExport(raw: unknown, run: AnalysisRun): { value: LaExport | null; html: Buffer | null; twin: Buffer | null; problems: string[] } {
   const problems: string[] = []
   const x = isObj(raw) ? raw : {}
   if (x.schema !== EXPORT_SCHEMA) problems.push(`schema must be ${EXPORT_SCHEMA}`)
@@ -266,7 +291,9 @@ export function checkExport(raw: unknown, run: AnalysisRun): { value: LaExport |
   else plan.items.forEach((it, i) => {
     const markers = isObj(it) ? strList(it.markers, 12, 60) : null
     if (!isObj(it) || typeof it.title !== 'string' || !it.title.trim() || !markers) { problems.push(`plan.items[${i}] has the wrong shape`); return }
-    items.push({ category: s(it.category, 20), title: it.title.slice(0, 60), detail: s(it.detail, 300), markers })
+    if (it.executor !== undefined && it.executor !== null && !EXECUTORS.includes(it.executor as Executor)) { problems.push(`plan.items[${i}].executor must be one of ${EXECUTORS.join(', ')}`); return }
+    items.push({ category: s(it.category, 20), title: it.title.slice(0, 60), detail: s(it.detail, 300), markers,
+      executor: (it.executor as Executor | undefined) ?? null, kind: s(it.kind, 20), evidence_grade: sOrNull(it.evidence_grade, 20) })
   })
   const retests = Array.isArray(x.retests) ? x.retests.filter(isObj).slice(0, 30).map((r) => ({ what: s(r.what, 120), after_weeks: num(r.after_weeks) ?? 0, due: s(r.due, 10) })) : []
   const report = isObj(x.report) ? x.report : null
@@ -284,36 +311,59 @@ export function checkExport(raw: unknown, run: AnalysisRun): { value: LaExport |
       if (!report || sha256(html) !== report.sha256) problems.push('report.html changed after the report was written')
     }
   }
-  if (problems.length) return { value: null, html: null, problems }
+  // The twin is optional; one the export names must be the run's own work/twin/twin.json, unchanged since.
+  let twin: Buffer | null = null
+  const twinRef = isObj(x.twin) ? x.twin : null
+  const twinPath = twinRef ? s(twinRef.path, 4096) : ''
+  if (twinRef && ws) {
+    const real = join(ws, 'work', 'twin', 'twin.json')
+    if (twinPath !== real && twinPath !== join(run.workspace, 'work', 'twin', 'twin.json')) problems.push('twin.json must be the run workspace\'s work/twin/twin.json')
+    else if (!regularFile(real)) problems.push('twin.json is not a regular file')
+    else if (statSync(real).size > EXPORT_CAP) problems.push('twin.json is too large')
+    else {
+      twin = readFileSync(real)
+      if (sha256(twin) !== twinRef.sha256) problems.push('twin.json changed after the report was written')
+    }
+  }
+  if (problems.length) return { value: null, html: null, twin: null, problems }
   const member = isObj(x.member) ? x.member : {}
   return {
     value: {
       schema: EXPORT_SCHEMA, generated_at: s(x.generated_at, 40), generation: s(x.generation, 80),
-      member: { ...(num(member.age) !== undefined ? { age: num(member.age) } : {}), sex: s(member.sex, 10), sample_date: s(member.sample_date, 10) },
-      report: { html: path, sha256: s(report?.sha256, 64) }, readouts, organs, board,
+      member: { ...(typeof member.id === 'string' ? { id: member.id.slice(0, 40) } : {}), ...(num(member.age) !== undefined ? { age: num(member.age) } : {}), sex: s(member.sex, 10), sample_date: s(member.sample_date, 10) },
+      report: { html: path, sha256: s(report?.sha256, 64) },
+      twin: twin && twinRef ? { path: twinPath, sha256: s(twinRef.sha256, 64) } : null,
+      readouts, organs, board,
       plan: { title: s(plan?.title, 60) || '深度分析干预方案', note: s(plan?.note, 500), items }, retests, boundary_zh: s(x.boundary_zh, 300),
     },
-    html, problems: [],
+    html, twin, problems: [],
   }
 }
 
-export function readExport(run: AnalysisRun): { value: LaExport | null; html: Buffer | null; problems: string[] } {
+export function readExport(run: AnalysisRun): { value: LaExport | null; html: Buffer | null; twin: Buffer | null; problems: string[] } {
   const ws = ownWorkspace(run)
-  if (!ws) return { value: null, html: null, problems: ['the run workspace is not the run\'s own folder'] }
+  if (!ws) return { value: null, html: null, twin: null, problems: ['the run workspace is not the run\'s own folder'] }
   const path = join(ws, 'deliver', 'la-export.json')
-  if (!regularFile(path)) return { value: null, html: null, problems: ['the report is not done yet (deliver/la-export.json is missing)'] }
-  if (statSync(path).size > EXPORT_CAP) return { value: null, html: null, problems: ['la-export.json is too large'] }
+  if (!regularFile(path)) return { value: null, html: null, twin: null, problems: ['the report is not done yet (deliver/la-export.json is missing)'] }
+  if (statSync(path).size > EXPORT_CAP) return { value: null, html: null, twin: null, problems: ['la-export.json is too large'] }
   let raw: unknown
   try {
     raw = JSON.parse(readFileSync(path, 'utf8'))
   } catch {
-    return { value: null, html: null, problems: ['la-export.json is not JSON'] }
+    return { value: null, html: null, twin: null, problems: ['la-export.json is not JSON'] }
   }
   return checkExport(raw, run)
 }
 
-/** Replace the imported result in one step: a new folder is written whole, then swapped in. */
-export function importRun(dataDir: string, run: AnalysisRun, value: LaExport, html: Buffer, now: Date = new Date()): ImportedMeta {
+/** What the previous imported analysis left for a comparison: its twin and when it was imported. */
+export interface PreviousTwin { run_id: string; imported_at: string; sample_date: string | null }
+
+/**
+ * Replace the imported result in one step: a new folder is written whole, then swapped in.
+ * The twin of the analysis being replaced is kept beside the new one (prev-twin.json), so the two can be compared;
+ * importing the same run again keeps the earlier pair.
+ */
+export function importRun(dataDir: string, run: AnalysisRun, value: LaExport, html: Buffer, now: Date = new Date(), twin: Buffer | null = null): ImportedMeta {
   const dir = dirOf(dataDir)
   const previous = currentImport(dataDir)
   const same = previous && previous.meta.run_id === run.id && previous.meta.report_sha256 === value.report.sha256
@@ -325,6 +375,16 @@ export function importRun(dataDir: string, run: AnalysisRun, value: LaExport, ht
   writeJsonAtomic(join(next, 'la-export.json'), value)
   writeJsonAtomic(join(next, 'meta.json'), meta)
   const cur = join(dir, 'current')
+  if (twin) writeFileSync(join(next, 'twin.json'), twin, { mode: 0o600 })
+  if (previous && previous.meta.run_id !== run.id && regularFile(join(cur, 'twin.json'))) {
+    writeFileSync(join(next, 'prev-twin.json'), readFileSync(join(cur, 'twin.json')), { mode: 0o600 })
+    const prev: PreviousTwin = { run_id: previous.meta.run_id, imported_at: previous.meta.imported_at, sample_date: previous.value.member?.sample_date || null }
+    writeJsonAtomic(join(next, 'prev-meta.json'), prev)
+  } else if (previous && previous.meta.run_id === run.id) {
+    for (const name of ['prev-twin.json', 'prev-meta.json', 'twin-compare.json']) {
+      if (regularFile(join(cur, name))) writeFileSync(join(next, name), readFileSync(join(cur, name)), { mode: 0o600 })
+    }
+  }
   const old = join(dir, `current.old-${process.pid}-${Date.now()}`)
   if (existsSync(cur)) renameSync(cur, old)
   renameSync(next, cur)
@@ -360,15 +420,44 @@ export function currentReportHtml(dataDir: string): string | null {
 /**
  * The plan in the shape save_intervention_plan / normalizePlan take, marked as coming from the analysis. Items carry
  * no id: normalizePlan continues an item by its title or gives it a new id, so one analysis's check-ins never land on
- * another analysis's item.
+ * another analysis's item. Items for a doctor are left out (doctorItems).
  */
 export function planInput(value: LaExport, today: string): Record<string, unknown> {
   return {
     title: value.plan.title || '深度分析干预方案',
     source: 'analysis',
     note: value.plan.note,
-    items: value.plan.items.map((item) => ({ category: item.category, title: item.title, detail: item.detail, start: today, markers: item.markers })),
+    items: value.plan.items.filter((item) => itemRoute(item) === 'plan')
+      .map((item) => ({ category: item.category, title: item.title, detail: item.detail, start: today, markers: item.markers })),
     goals: [],
+  }
+}
+
+/** The previous analysis's twin beside the current one, when there is a pair to compare. */
+export function twinPair(dataDir: string): { prev: string; cur: string; previous: PreviousTwin } | null {
+  const dir = join(dataDir, 'analysis', 'current')
+  const prev = join(dir, 'prev-twin.json')
+  const cur = join(dir, 'twin.json')
+  if (!regularFile(prev) || !regularFile(cur)) return null
+  try {
+    const previous = JSON.parse(readFileSync(join(dir, 'prev-meta.json'), 'utf8')) as PreviousTwin
+    return typeof previous?.run_id === 'string' ? { prev, cur, previous } : null
+  } catch {
+    return null
+  }
+}
+
+export function writeTwinCompare(dataDir: string, value: unknown): void {
+  writeJsonAtomic(join(dataDir, 'analysis', 'current', 'twin-compare.json'), value)
+}
+
+export function readTwinCompare(dataDir: string): unknown {
+  const path = join(dataDir, 'analysis', 'current', 'twin-compare.json')
+  if (!regularFile(path)) return null
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'))
+  } catch {
+    return null
   }
 }
 

@@ -15,11 +15,31 @@ const tmp = (p) => mkdtempSync(join(tmpdir(), `longpi-analysis-${p}-`))
 const sha = (bytes) => createHash('sha256').update(bytes).digest('hex')
 process.env.LONGPI_ANALYSES_HOME = tmp('home')
 
+// A stand-in for the analyst's harness: the two subcommands the version check looks for, and `twin compare`
+// answering like the real one (rows by marker, an error on stderr for two members).
+const FAKE_LA = `# s = sub.add_parser("export")
+# s = sub.add_parser("mirobody")
+import json, sys
+a = sys.argv[1:]
+if a[:2] == ["twin", "compare"]:
+    prev = json.load(open(a[a.index("--prev") + 1])); cur = json.load(open(a[a.index("--cur") + 1]))
+    if prev["member"]["id"] != cur["member"]["id"]:
+        print("error: the two twin snapshots belong to different members", file=sys.stderr); sys.exit(3)
+    p = {o["marker"]: o["value"] for o in prev["observations"]}
+    rows = []
+    for o in cur["observations"]:
+        if o["marker"] not in p: continue
+        ch = round(100 * (o["value"] - p[o["marker"]]) / p[o["marker"]], 1)
+        v = "not_judged" if o["marker"] == "X" else "decrease_beyond_noise" if ch < -20 else "increase_beyond_noise" if ch > 20 else "within_noise"
+        rows.append({"marker": o["marker"], "prev": p[o["marker"]], "cur": o["value"], "unit": "mmol/L", "change_pct": ch, "verdict": v})
+    print(json.dumps({"alerts": [], "rows": rows}))
+`
+
 function skill(version, withBridge = true) {
   const dir = tmp('skill')
   mkdirSync(join(dir, 'scripts'))
   writeFileSync(join(dir, 'SKILL.md'), `---\nname: longevity-analyst\nmetadata:\n  version: "${version}"\n---\n`)
-  writeFileSync(join(dir, 'scripts', 'la.py'), withBridge ? 's = sub.add_parser("export")\ns = sub.add_parser("mirobody")\n' : 'pass\n')
+  writeFileSync(join(dir, 'scripts', 'la.py'), withBridge ? FAKE_LA : 'pass\n')
   return join(dir, 'SKILL.md')
 }
 const GOOD_SKILL = skill('0.7.0')
@@ -44,6 +64,13 @@ function readyMember(tag, config = {}) {
   return { dataDir, deps: depsFor(dataDir, config) }
 }
 
+function twinFor(run, memberId, values) {
+  mkdirSync(join(run.workspace, 'work', 'twin'), { recursive: true })
+  const path = join(run.workspace, 'work', 'twin', 'twin.json')
+  writeFileSync(path, JSON.stringify({ schema: 'la-twin/1', member: { id: memberId }, observations: Object.entries(values).map(([marker, value]) => ({ t: '2026-09-10', marker, value })), readouts: [] }))
+  return { path, sha256: sha(readFileSync(path)) }
+}
+
 function exportFor(run, over = {}) {
   mkdirSync(join(run.workspace, 'deliver'), { recursive: true })
   const html = join(run.workspace, 'deliver', 'report.html')
@@ -58,8 +85,9 @@ function exportFor(run, over = {}) {
              { organ: 'metabolic', label_zh: '代谢', measured: [], indices: [], ai_age: null, ai_risks: [], overrides: [{ disease: '2 型糖尿病', message_zh: '单次空腹血糖已达糖尿病诊断阈值；需另日复查' }] }],
     board: [{ id: 'Q1', title_zh: 'LDL 高是遗传的吗', hypothesis_zh: '', verdict: 'supported', verdict_zh: '证据支持', confidence: 'moderate', summary_zh: 'LDLR 致病变异。', next_step_zh: '遗传咨询。', limitations_zh: '单次测量。' }],
     plan: { title: '深度分析干预方案', note: '营养师审核后生效', items: [
-      { id: 'la-i1', category: 'diet', title: '减少饱和脂肪', detail: '以鱼和豆类替代红肉', markers: ['低密度脂蛋白胆固醇'] },
-      { id: 'la-i2', category: 'other', title: '到心内科做家族性高胆固醇血症评估', detail: '', markers: [] }] },
+      { id: 'la-i1', category: 'diet', title: '减少饱和脂肪', detail: '以鱼和豆类替代红肉', markers: ['低密度脂蛋白胆固醇'], executor: 'nutritionist', kind: 'diet', evidence_grade: 'A' },
+      { id: 'la-i2', category: 'other', title: '到心内科做家族性高胆固醇血症评估', detail: '', markers: [], executor: 'physician', kind: 'referral', evidence_grade: 'B' },
+      { id: 'la-i3', category: 'supplement', title: '与医生讨论是否补充维生素 D', detail: '25(OH)D 偏低', markers: [], executor: 'nutritionist', kind: 'supplement', evidence_grade: 'B' }] },
     retests: [{ what: '低密度脂蛋白胆固醇', after_weeks: 12, due: '2026-12-23' }],
     boundary_zh: '不是诊断。',
     ...over,
@@ -147,6 +175,16 @@ function exportFor(run, over = {}) {
   const cleaned = mod.checkExport({ ...good, board: [{ ...good.board[0], confidence: '__proto__', extra: { x: 1 } }] }, run).value
   assert.equal(cleaned.board[0].confidence, '__proto__')
   assert.ok(!('extra' in cleaned.board[0]), 'unknown fields are dropped')
+  assert.equal(cleaned.plan.items[1].executor, 'physician', 'the executor survives the rebuild')
+  assert.match(check({ plan: { items: [{ ...good.plan.items[0], executor: 'robot' }] } }), /executor must be one of/)
+  assert.equal(mod.checkExport({ ...good, plan: { items: [{ title: 'x', markers: [] }] } }, run).value.plan.items[0].executor, null, 'an older export without executors still imports')
+  assert.match(check({ twin: { path: join(tmp('elsewhere'), 'twin.json'), sha256: 'x' } }), /work\/twin\/twin.json/)
+  // routing: the physician's items and the doctor-only kinds go to the doctor, whoever carries them out
+  assert.equal(mod.itemRoute({ executor: 'member', kind: 'exercise' }), 'plan')
+  assert.equal(mod.itemRoute({ executor: 'nutritionist', kind: 'diet' }), 'plan')
+  assert.equal(mod.itemRoute({ executor: 'physician', kind: 'lifestyle' }), 'doctor')
+  assert.equal(mod.itemRoute({ executor: 'nutritionist', kind: 'test' }), 'doctor')
+  assert.equal(mod.itemRoute({ executor: null, kind: '' }), 'plan')
 
   // import, read-back, accept (only what was read back)
   const imp = await mod.importLatest(deps)
@@ -157,7 +195,9 @@ function exportFor(run, over = {}) {
   assert.match(report, /href="#s1"/)
   const back = imp.read_back
   assert.equal(back.ok, true, back.errors.join())
-  assert.deepEqual(back.items.map((i) => i.category), ['diet', 'other'])
+  assert.deepEqual(back.items.map((i) => i.title), ['减少饱和脂肪'], 'the nutritionist\'s diet item is the person\'s to do; the referral and the supplement are not')
+  assert.deepEqual(back.doctor_items.map((i) => i.kind_zh), ['转诊', '补剂'])
+  assert.equal(imp.plan_items, 1); assert.equal(imp.doctor_items, 2)
   assert.ok(back.items.every((i) => !i.id.startsWith('la-')), 'items get LongPi ids, never the analysis\'s')
   const status = await mod.statusNow(deps)
   assert.equal(status.current.organs[1].overrides[0].disease, '2 型糖尿病')
@@ -185,6 +225,50 @@ function exportFor(run, over = {}) {
   assert.ok(existsSync(run.root))
   mod.deleteLocalStore(dataDir)
   assert.ok(!existsSync(run.root), 'run folders go with the local store')
+}
+
+// ---- two analyses: a fixed member id, the twin kept with each import, the earlier one compared by la.py; the doctor brief
+{
+  const { dataDir, deps } = readyMember('twins')
+  assert.equal(mod.memberIdFor('self'), 'lp-me'); assert.equal(mod.memberIdFor('p01ab'), 'lp-p01ab')
+  const start = await mod.startRun(deps, { trigger: 'member', reasonZh: '用户要求' })
+  assert.match(start.prompt_zh, /--member-id）用：lp-me/)
+  const first = mod.listRuns(dataDir).at(-1)
+  exportFor(first, { twin: twinFor(first, 'lp-me', { LDL: 4.2, HDL: 1.1, X: 3 }) })
+  const one = await mod.importLatest(deps, first.id)
+  assert.equal(one.ok, true, JSON.stringify(one)); assert.equal(one.compare, null, 'nothing to compare with yet')
+  assert.ok(existsSync(join(dataDir, 'analysis', 'current', 'twin.json')))
+
+  // with no triage finding, the analysis's items for a doctor still make a brief
+  const made = await mod.buildBrief({ config: {}, dataDir, records: { indicators: [], medications: [], profile: { age: 58, sex: 'male' } }, today: '2026-09-30', care: { findings: [], seen: [] } })
+  assert.ok(made, 'a brief is made from the analysis alone')
+  assert.deepEqual(made.brief.analysis_zh, ['到心内科做家族性高胆固醇血症评估', '与医生讨论是否补充维生素 D：25(OH)D 偏低'])
+  assert.match(made.markdown, /## 深度分析建议由医生评估的事项[\s\S]*家族性高胆固醇血症/)
+  assert.ok(!/减少饱和脂肪/.test(made.markdown), 'the person\'s own items are not in the brief')
+
+  mod.abandonAnalysis(deps, first.id)
+  await mod.startRun(deps, { trigger: 'member', reasonZh: '复测后再分析' })
+  const second = mod.listRuns(dataDir).at(-1)
+  exportFor(second, { twin: twinFor(second, 'lp-me', { LDL: 3.1, HDL: 1.15, X: 2 }) })
+  const two = await mod.importLatest(deps, second.id)
+  assert.equal(two.ok, true, JSON.stringify(two))
+  assert.equal(two.compare.ok, true, JSON.stringify(two.compare))
+  assert.equal(two.compare.prev_run_id, first.id)
+  assert.deepEqual(two.compare.rows.map((r) => [r.marker, r.verdict]), [['LDL', 'decrease_beyond_noise'], ['HDL', 'within_noise']])
+  assert.equal(two.compare.not_judged, 1, 'a value with no noise model is counted, not judged')
+  assert.equal(mod.currentSummary(dataDir).compare.rows.length, 2)
+  // importing the same run again keeps the pair and the comparison
+  assert.equal((await mod.importLatest(deps, second.id)).compare.prev_run_id, first.id)
+  assert.ok(existsSync(join(dataDir, 'analysis', 'current', 'prev-twin.json')))
+
+  // an older analysis with another member id cannot be compared: said plainly, the import still goes in
+  mod.abandonAnalysis(deps, second.id)
+  await mod.startRun(deps, { trigger: 'member', reasonZh: '再分析一次' })
+  const third = mod.listRuns(dataDir).at(-1)
+  exportFor(third, { twin: twinFor(third, 'member-7f3a', { LDL: 3.0 }) })
+  const three = await mod.importLatest(deps, third.id)
+  assert.equal(three.ok, true)
+  assert.equal(three.compare.ok, false); assert.match(three.compare.error_zh, /会员编号不同/)
 }
 
 // ---- a workspace that is a link out of the analyses root, or a report that is not a regular file, is refused

@@ -14,7 +14,7 @@ import { careDetail } from '../overview-facts.ts'
 const h = React.createElement
 type Notify = (text: string, tone?: 'info' | 'good' | 'bad') => void
 
-interface BriefAnswer { ok: boolean; error?: string; markdown?: string; brief?: { id: string; created: string } }
+export interface BriefAnswer { ok: boolean; error?: string; markdown?: string; brief?: { id: string; created: string } }
 
 function localToday(): string {
   const now = new Date()
@@ -35,7 +35,7 @@ function printText(title: string, text: string): void {
   view.print()
 }
 
-function BriefModal(props: { answer: BriefAnswer; onClose: () => void }): React.ReactElement {
+export function BriefModal(props: { answer: BriefAnswer; onClose: () => void }): React.ReactElement {
   const { answer } = props
   const id = answer.brief?.id ?? ''
   return h(Modal, { open: true, title: '给医生的一页简报', onClose: props.onClose, headless: true, className: 'lp-brief-dialog' },

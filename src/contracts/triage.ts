@@ -17,6 +17,8 @@ export interface DoctorBrief {
   trend: Array<{ label_zh: string; points: NumberRef[] }>
   meds_zh: string[]; conditions_zh: string[]
   questions_zh: string[]; tests_zh: string[]
+  /** Items a deep analysis gave to a doctor (supplements, tests, referrals, the physician's items). */
+  analysis_zh?: string[]
   /** Model prose around refs, validated; the template otherwise. */
   summary_zh: string
   /** dataDir/briefs/<id>.md, printable. */

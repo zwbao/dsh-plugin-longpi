@@ -45,14 +45,14 @@ export function registerAnalysisTools(ctx: Context, deps: CoreDeps): void {
       return asJson({
         ...res,
         plan_for_save: res.read_back.plan,
-        how_to_use: 'Tell the person the result is on the 健康 page under 深度分析. Read the plan items back in plain words (no doses) and ask whether to adopt it; only on a yes, save it through save_intervention_plan with plan_for_save.',
+        how_to_use: 'Tell the person the result is on the 健康 page under 深度分析. Read the plan items back in plain words (no doses) and ask whether to adopt it; only on a yes, save it through save_intervention_plan with plan_for_save. read_back.doctor_items are for a doctor (supplements, tests, referrals): never add them to the plan; say how many there are and offer the doctor brief (prepare_doctor_brief), which lists them. When compare is ok, name only the rows whose verdict is beyond noise, with both values; within_noise means the change cannot be told from normal fluctuation yet; never call a not-judged value better or worse. A compare alert (a genotype that changed) comes first.',
       })
     },
   }))
 
   ctx.tools.register(defineTool({
     name: 'read_deep_analysis',
-    description: 'The imported deep analysis (readouts, organ table, question board with verdicts, the plan and retests) and the progress of any run still going. Read-only. Use when the person asks about their deep analysis report or a question on its board.',
+    description: 'The imported deep analysis (readouts, organ table, question board with verdicts, the plan, the items for a doctor, retests, and the comparison with the previous analysis) and the progress of any run still going. Read-only. Use when the person asks about their deep analysis report, a question on its board, or what changed since the last analysis.',
     parameters: {},
     output: jsonOut,
     timeoutMs: 30_000,
@@ -65,7 +65,7 @@ export function registerAnalysisTools(ctx: Context, deps: CoreDeps): void {
         runs: status.runs.map((r) => ({ id: r.id, started_at: r.started_at, trigger: r.trigger, reason_zh: r.reason_zh, done: `${r.done}/${r.stages.length}`, report_ready: r.report_ready, active: r.active })),
         current,
         plan_read_back: current ? await planReadBack(deps) : null,
-        how_to_read: 'AI 估计 readouts are estimates with ranges, not measurements; a genetic percentile is a tendency, not a diagnosis; a ClinVar finding needs clinical confirmation and genetic counselling. Quote numbers as they are here.',
+        how_to_read: 'AI 估计 readouts are estimates with ranges, not measurements; a genetic percentile is a tendency, not a diagnosis; a ClinVar finding needs clinical confirmation and genetic counselling. Quote numbers as they are here. current.doctor_items are for a doctor, not the plan (offer prepare_doctor_brief). current.compare compares this analysis with the previous one by the reference change value: only increase_beyond_noise or decrease_beyond_noise is a real change; within_noise is not yet; not_judged values are shown side by side, never called better or worse.',
       })
     },
   }))

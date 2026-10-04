@@ -1,19 +1,25 @@
 // M12 deep analysis: the checks and actions the tools and the page share.
 
+import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
-import { activePerson, personDir, readRegistry, rootDir, type Person } from '../people/store.ts'
+import { activePerson, personDir, readRegistry, rootDir, SELF, type Person } from '../people/store.ts'
 import { holderAuth, mintMemberLink, saveMemberLink } from '../people/mirobody.ts'
 import { homedir } from 'node:os'
-import { isAbsolute, join, resolve } from 'node:path'
+import { dirname, isAbsolute, join, resolve } from 'node:path'
 import type { CoreDeps } from '../contracts/index.ts'
 import { currentPlan, normalizePlan, savePlan } from '../interventions.ts'
 import { personMinor } from '../privacy/index.ts'
 import { readProfile } from '../profile.ts'
 import { planKey } from '../tools-approval.ts'
 import {
-  abandonRun, createRun, currentImport, importRun, listRuns, markPlanAccepted, newestFileDate, planInput, readExport,
-  registerFolder, registeredFolder, runStatus, type AnalysisRun, type RunStatus,
+  abandonRun, createRun, currentImport, doctorItems, importRun, listRuns, markPlanAccepted, newestFileDate, planInput, readExport,
+  readTwinCompare, registerFolder, registeredFolder, runStatus, twinPair, writeTwinCompare, type AnalysisRun, type ExportItem, type RunStatus,
 } from './store.ts'
+
+/** The analyst's member id for a person: fixed, so twins from two runs can be compared (la.py refuses two members). */
+export function memberIdFor(personId: string): string {
+  return `lp-${personId === SELF ? 'me' : personId}`.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 40)
+}
 
 /** 「9 月 10 日」, with the year when it is not this year. */
 function dayZhA(iso: string | null | undefined): string {
@@ -232,6 +238,7 @@ export async function startRun(deps: CoreDeps, opts: { dataFolder?: string | nul
   const lines = [
     `请用 ${SKILL_NAME} 为${them}做一次深度分析：生物学年龄、各器官状况、以后的疾病风险，再给一份能照着做的干预方案。`,
     who.person ? `${who.label_zh} ${profile.age} 岁，${sex}。这份分析是${who.label_zh}的，不是我自己的。` : `我 ${profile.age} 岁，${sex}。`,
+    `会员编号（--member-id）用：${memberIdFor(who.id)}，每次分析都用这个，下次复测才能和这次对比。`,
     folder.path ? `检测文件在：${run.data_dir}` : `没有另外的检测文件，只用健康页里已有的数据。数据文件夹用：${run.data_dir}`,
     `工作目录用：${run.workspace}`,
     `方法库在：${config.skillsHome || '~/longpi/longevity-skills'}`,
@@ -289,9 +296,70 @@ export function currentSummary(dataDir: string) {
     })),
     board: v.board,
     plan: v.plan,
+    doctor_items: doctorItems(v).map(doctorRow),
     retests: v.retests,
+    compare: readTwinCompare(dataDir),
     boundary_zh: v.boundary_zh,
   }
+}
+
+const KIND_ZH: Record<string, string> = { supplement: '补剂', test: '检查', referral: '转诊' }
+
+function doctorRow(item: ExportItem) {
+  return { title: item.title, detail: item.detail, kind: item.kind, kind_zh: KIND_ZH[item.kind] ?? '医生评估', markers: item.markers }
+}
+
+// ---------------------------------------------------------------- two analyses side by side
+
+/** One judged row of la.py twin compare, as LongPi shows it. */
+export interface CompareRow { marker: string; prev: unknown; cur: unknown; unit: string; change_pct: number | null; verdict: string; why: string | null; caveat: string | null }
+export type TwinCompare =
+  | { ok: true; compared_at: string; prev_run_id: string; prev_imported_at: string; prev_sample_date: string | null; alerts: string[]; rows: CompareRow[]; not_judged: number }
+  | { ok: false; compared_at: string; prev_run_id: string; error_zh: string }
+
+const COMPARE_ERRORS: Array<[RegExp, string]> = [
+  [/different members/, '两次分析的会员编号不同（较早的分析没有固定编号），无法自动对比；下次分析起会固定编号。'],
+  [/schema|not JSON|Expecting/i, '其中一次分析的孪生快照无法读取，无法对比。'],
+]
+
+/**
+ * Compare the twin of the analysis just imported with the one it replaced, with the analyst's own `la.py twin compare`
+ * (the reference change value from published within-person variation), and keep the result beside the import.
+ */
+export function compareAnalyses(dataDir: string, config: { pythonBin?: string; skillsHome?: string }, now: Date = new Date()): TwinCompare | null {
+  const pair = twinPair(dataDir)
+  if (!pair) return null
+  const base = { compared_at: now.toISOString(), prev_run_id: pair.previous.run_id }
+  const la = join(dirname(analystSkillPath()), 'scripts', 'la.py')
+  let result: TwinCompare
+  if (!existsSync(la)) {
+    result = { ok: false, ...base, error_zh: '这台电脑上没有深度分析技能，无法对比两次结果。' }
+  } else {
+    try {
+      const out = execFileSync((config.pythonBin ?? '').trim() || 'python3', [la, 'twin', 'compare', '--prev', pair.prev, '--cur', pair.cur], {
+        encoding: 'utf8', timeout: 60_000, maxBuffer: 8 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'],
+        env: { PATH: process.env.PATH ?? '', HOME: homedir(), LANG: 'C.UTF-8', PYTHONNOUSERSITE: '1', ...(config.skillsHome ? { LONGEVITY_SKILLS_HOME: config.skillsHome } : {}) },
+      })
+      const raw = JSON.parse(out) as { alerts?: unknown; rows?: unknown }
+      const rows = (Array.isArray(raw.rows) ? raw.rows : []) as Array<Record<string, unknown>>
+      const judged = rows.filter((r) => typeof r.marker === 'string' && r.verdict !== 'not_judged')
+      result = {
+        ok: true, ...base, prev_imported_at: pair.previous.imported_at, prev_sample_date: pair.previous.sample_date,
+        alerts: (Array.isArray(raw.alerts) ? raw.alerts : []).filter((a): a is string => typeof a === 'string').slice(0, 10),
+        rows: judged.slice(0, 200).map((r) => ({
+          marker: String(r.marker).slice(0, 80), prev: r.prev, cur: r.cur, unit: typeof r.unit === 'string' ? r.unit.slice(0, 30) : '',
+          change_pct: typeof r.change_pct === 'number' ? r.change_pct : null, verdict: String(r.verdict).slice(0, 40),
+          why: typeof r.why === 'string' ? r.why.slice(0, 200) : null, caveat: typeof r.caveat === 'string' ? r.caveat.slice(0, 200) : null,
+        })),
+        not_judged: rows.length - judged.length,
+      }
+    } catch (error) {
+      const text = `${(error as { stderr?: unknown }).stderr ?? ''} ${(error as Error).message ?? ''}`
+      result = { ok: false, ...base, error_zh: COMPARE_ERRORS.find(([re]) => re.test(text))?.[1] ?? '两次分析的对比没有完成。' }
+    }
+  }
+  writeTwinCompare(dataDir, result)
+  return result
 }
 
 function findRun(dataDir: string, runId?: string | null, root?: string): { dir: string; run: AnalysisRun } | null {
@@ -309,7 +377,7 @@ function findRun(dataDir: string, runId?: string | null, root?: string): { dir: 
 }
 
 export type ImportResult =
-  | { ok: true; run_id: string; readouts: number; organs: number; board: number; plan_items: number; retests: number; read_back: PlanReadBack }
+  | { ok: true; run_id: string; readouts: number; organs: number; board: number; plan_items: number; doctor_items: number; retests: number; compare: TwinCompare | null; read_back: PlanReadBack }
   | { ok: false; error_zh: string; problems: string[] }
 
 export async function importLatest(deps: CoreDeps, runId?: string | null): Promise<ImportResult> {
@@ -322,13 +390,17 @@ export async function importLatest(deps: CoreDeps, runId?: string | null): Promi
   const v = checked.value
   // Everything the page and the plan need is built before anything is written.
   const context = await deps.context()
-  const trial = normalizePlan(planInput(v, context.today), { today: context.today, medications: [], previous: null })
-  if (trial.plan.items.length === 0 && v.plan.items.length > 0) return { ok: false, error_zh: '本次分析的方案无法读取，未导入。', problems: trial.errors }
-  importRun(found.dir, run, v, checked.html)
+  const input = planInput(v, context.today)
+  const trial = normalizePlan(input, { today: context.today, medications: [], previous: null })
+  if (trial.plan.items.length === 0 && (input.items as unknown[]).length > 0) return { ok: false, error_zh: '本次分析的方案无法读取，未导入。', problems: trial.errors }
+  const sameRun = currentImport(found.dir)?.meta.run_id === run.id
+  importRun(found.dir, run, v, checked.html, new Date(), checked.twin)
+  const compare = sameRun ? (readTwinCompare(found.dir) as TwinCompare | null) : compareAnalyses(found.dir, deps.config())
   deps.invalidate()
   return {
     ok: true, run_id: run.id, readouts: v.readouts.length, organs: v.organs.length, board: v.board.length,
-    plan_items: v.plan.items.length, retests: v.retests.length, read_back: await planReadBack(deps),
+    plan_items: (input.items as unknown[]).length, doctor_items: doctorItems(v).length, retests: v.retests.length, compare,
+    read_back: await planReadBack(deps),
   }
 }
 
@@ -338,6 +410,8 @@ export interface PlanReadBack {
   plan_key: string | null
   title: string
   items: Array<{ id: string; category: string; title: string; detail: string; markers: string[] }>
+  /** Items the analysis gave to a doctor: never saved in the plan; they go into the doctor brief. */
+  doctor_items: Array<ReturnType<typeof doctorRow>>
   warnings: string[]
   errors: string[]
   plan: Record<string, unknown> | null
@@ -346,7 +420,7 @@ export interface PlanReadBack {
 export async function planReadBack(deps: CoreDeps, fixedDir?: string): Promise<PlanReadBack> {
   const dataDir = fixedDir ?? deps.dataDir()
   const cur = currentImport(dataDir)
-  if (!cur) return { ok: false, run_id: null, plan_key: null, title: '', items: [], warnings: [], errors: ['尚未导入深度分析。'], plan: null }
+  if (!cur) return { ok: false, run_id: null, plan_key: null, title: '', items: [], doctor_items: [], warnings: [], errors: ['尚未导入深度分析。'], plan: null }
   const context = await deps.context()
   const input = planInput(cur.value, context.today)
   const normalized = normalizePlan(input, {
@@ -360,6 +434,7 @@ export async function planReadBack(deps: CoreDeps, fixedDir?: string): Promise<P
     plan_key: planKey(input),
     title: normalized.plan.title,
     items: normalized.plan.items.map((i) => ({ id: i.id, category: i.category, title: i.title, detail: i.detail, markers: i.markers })),
+    doctor_items: doctorItems(cur.value).map(doctorRow),
     warnings: normalized.warnings,
     errors: normalized.errors,
     plan: input,
