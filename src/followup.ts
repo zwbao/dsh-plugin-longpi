@@ -67,7 +67,8 @@ export interface FollowupState {
   checkin_open: string[]
   /** Retest dates from the plan's verdicts: date moves with today once due, first_due does not. */
   retests: Array<{ marker: string; date: string; first_due: string }>
-  week: { pct: number | null; streak: number; next_retest: { marker: string; date: string } | null }
+  /** done_total is said (cumulative check-ins); streak is kept for older state and never said. */
+  week: { pct: number | null; streak: number; done_total?: number; next_retest: { marker: string; date: string } | null }
   /** A weekly line when there is no plan but an unlock or a season task is waiting. */
   plain_reminder_zh?: string | null
 }
@@ -464,7 +465,7 @@ export function decideFollowup(input: { now: Date; settings: FollowupSettings; s
       kind: 'weekly',
       key: `weekly:${isoWeek(now)}`,
       text: full
-        ? `LongPi：${state.week.pct == null ? '本周还没有执行记录' : `本周方案执行率 ${state.week.pct}%`}，连续 ${state.week.streak} 天；下次复测：${next ? `${next.marker} ${monthDay(next.date)}` : '暂无'}。`
+        ? `LongPi：${state.week.pct == null ? '本周还没有执行记录' : `本周方案执行率 ${state.week.pct}%`}，累计打卡 ${state.week.done_total ?? 0} 次；下次复测：${next ? `${next.marker} ${monthDay(next.date)}` : '暂无'}。`
         : 'LongPi 本周小结已更新，请打开健康页查看。',
     })
   }

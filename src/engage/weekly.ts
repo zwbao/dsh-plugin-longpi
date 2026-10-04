@@ -15,8 +15,10 @@ export function weeklyText(input: {
   week: number
   weeks: number
   status: string
-  streak: number
-  frozen: number
+  /** Days with a health action, all time and this season; counts never reset. */
+  days_total: number
+  days_season: number
+  next_milestone: number
   done: number
   total: number
   open: string[]
@@ -25,7 +27,7 @@ export function weeklyText(input: {
 }): string {
   const lines = [
     `第 ${input.week} 周，共 ${input.weeks} 周 · ${input.title}`,
-    `连续记录 ${input.streak} 天。生病或出行冻结 ${input.frozen} 天，这些天不算中断。`,
+    `累计 ${input.days_total} 天做了健康行动（本季 ${input.days_season} 天），到第 ${input.next_milestone} 天会多一次抽卡机会。`,
     input.open.length > 0
       ? `任务完成 ${input.done} / ${input.total}。未完成：${input.open.join('、')}。`
       : `任务完成 ${input.done} / ${input.total}。这一季的任务都做完了。`,

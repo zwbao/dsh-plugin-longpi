@@ -1,7 +1,7 @@
-// The streak line: frozen sick and travel days are bridges, not broken days.
+// The count line: days with a health action, cumulative (a missed day never takes one away), and when the next draw
+// comes. The streak fields stay in the view for older readers and are not shown.
 
 import React from 'react'
-import { Btn } from '../ui.ts'
 
 const h = React.createElement
 
@@ -12,13 +12,12 @@ export interface StreakView {
   frozen: Array<{ day: string; reason: string }>
 }
 
-export function StreakLine(props: { streak: StreakView | null; onFreeze: (reason: 'sick' | 'travel') => void; busy: boolean }): React.ReactElement | null {
-  const streak = props.streak
-  if (!streak) return null
-  const frozen = streak.frozen.length
+export interface CountView { total: number; season: number; next_milestone: number }
+
+export function CountLine(props: { count: CountView | null | undefined }): React.ReactElement | null {
+  const count = props.count
+  if (!count || count.total < 1) return null
   return h('div', { className: 'lp-actions' },
-    h('span', { className: 'lp-small lp-strong' }, `连续 ${streak.current} 天`),
-    h('span', { className: 'lp-caption' }, `最好 ${streak.best} 天 · ${frozen > 0 ? `冻结 ${frozen} 天` : `还可冻结 ${streak.freezes_available} 天`}`),
-    h(Btn, { variant: 'outline', onClick: () => props.onFreeze('sick'), disabled: props.busy }, '今天生病'),
-    h(Btn, { variant: 'outline', onClick: () => props.onFreeze('travel'), disabled: props.busy }, '今天出行'))
+    h('span', { className: 'lp-small lp-strong' }, `累计 ${count.total} 天`),
+    h('span', { className: 'lp-caption' }, `本季 ${count.season} 天 · 第 ${count.next_milestone} 天多一次抽卡机会`))
 }

@@ -102,8 +102,8 @@ cards.push(
   {
     id: 'u-streak-freeze',
     family: 'utility',
-    title_zh: '连续记录冻结',
-    body_zh: '多一天可以记成生病或出行。记上之后，这一天不算中断。不能买卖。',
+    title_zh: '安心休息',
+    body_zh: '生病或出行的日子记一笔，这几天的提醒会放轻；累计的天数本来就不会减少。不能买卖。',
     rarity: 'rare',
     utility: 'streak_freeze',
     hidden: false,
@@ -135,8 +135,8 @@ cards.push(
   {
     id: 'i-three-weeks',
     family: 'insight',
-    title_zh: '连续三周的记录',
-    body_zh: '你已经有至少 21 天自己记下的测量、打卡或就诊。这张卡只说明记录在继续，不说明任何指标变好或变差。',
+    title_zh: '累计三周的记录',
+    body_zh: '你已经累计至少 21 天自己记下的测量、打卡或就诊。这张卡只说明记录在继续，不说明任何指标变好或变差。',
     rarity: 'rare',
     insight: { min_days_of_data: 21 },
     hidden: true,

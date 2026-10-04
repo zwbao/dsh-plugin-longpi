@@ -16,9 +16,9 @@ export const MIN_SEASON_DAYS = 56
 export const MAX_SEASON_DAYS = 84
 
 const HEAD: Record<string, string[]> = {
-  care: ['明确要咨询的问题', '写成一张简报', '预约就诊', '就诊并记录医生答复', '按医嘱执行一周', '中间不必汇报', '补做缺失的检查', '连续记录，生病可以冻结', '回顾本季完成情况', '复测之前留白'],
+  care: ['明确要咨询的问题', '写成一张简报', '预约就诊', '就诊并记录医生答复', '按医嘱执行一周', '中间不必汇报', '补做缺失的检查', '持续记录，生病出行记一笔', '回顾本季完成情况', '复测之前留白'],
   data: ['确认缺失的检查', '它能解锁什么', '测量腰围或预约加测', '记录结果', '解锁对应的结果', '其余时间无需打开', '有记录即可', '生病或出行时记录', '中期查看', '复测之前留白'],
-  generic: ['了解本季主题', '完成一件具体的事', '记录结果', '无需每日打开', '连续记录', '中途查看', '补做缺失项目', '生病可以冻结', '中期查看', '复测之前留白'],
+  generic: ['了解本季主题', '完成一件具体的事', '记录结果', '无需每日打开', '持续记录', '中途查看', '补做缺失项目', '生病出行记一笔', '中期查看', '复测之前留白'],
 }
 
 export function seasonSpan(today: IsoDay, retestHint: IsoDay | null): { start: IsoDay; end: IsoDay; retest_day: IsoDay; days: number; weeks: number } {
@@ -59,15 +59,14 @@ export function recapText(input: {
   weeks: number
   done: number
   total: number
-  best: number
-  frozen: number
+  days: number
   draws: number
   retest: boolean
 }): string {
   return [
     `「${input.title}」从 ${dayZhS(input.start)}到 ${dayZhS(input.end)}，共 ${input.weeks} 周。`,
     `完成了 ${input.done} / ${input.total} 项任务。`,
-    `连续记录最好是 ${input.best} 天。生病或出行冻结了 ${input.frozen} 天，这些天不算中断。`,
+    `这一季累计有 ${input.days} 天做了健康行动，每一天都算数。`,
     `图鉴抽了 ${input.draws} 张。稀有度看的是研究证据，不是检查结果。`,
     input.retest ? '复测窗口内已记录一次复测。' : '复测窗口内尚无新的检查，可在下次体检时补做。',
     '下一季可在你准备好后开始。',

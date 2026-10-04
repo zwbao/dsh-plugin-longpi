@@ -136,6 +136,7 @@ export interface Journey {
     days: number | null
     checkin_items: Array<{ id: string; title: string; done_today: CheckState }>
     streak: number
+    done_total: number
     adherence_pct: number | null
   }
   reminders: Reminder[]

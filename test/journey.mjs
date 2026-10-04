@@ -480,7 +480,8 @@ try {
   const host = fakeHost()
   await mod.apply(host.ctx, configFor(routeDir))
   for (const name of mod.TOOL_NAMES) assert.ok(host.tools.has(name), `tool ${name} is registered`)
-  assert.equal(mod.TOOL_NAMES.length, 28)
+  assert.equal(mod.TOOL_NAMES.length, 29, '0.9 adds import_member_file')
+  assert.ok(host.tools.has('import_member_file'), 'the standalone coach\'s member file can be brought in')
   assert.equal(host.effects, 1, 'the follow-up scheduler runs as one Cordis effect')
   // 0.5.3: the persona is agent-scoped (health sessions only), not a global section.
   assert.equal(host.prompts.some((row) => row.name === 'longpi:persona' || row.name === 'longpi:orchestrator'), false, 'no global persona section')

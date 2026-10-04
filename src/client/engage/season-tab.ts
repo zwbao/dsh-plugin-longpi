@@ -2,7 +2,7 @@
 
 import React from 'react'
 import { CodexPanel, type CodexView } from './codex.ts'
-import { StreakLine, type StreakView } from './streak.ts'
+import { CountLine, type CountView, type StreakView } from './streak.ts'
 import { SEASON_INTRO } from '../../ux/plain.ts'
 import { chineseDate } from '../format.ts'
 import { Icon } from '../icons.ts'
@@ -38,6 +38,7 @@ export interface SeasonView {
   quests: Array<{ id: string; title_zh: string; status: string; progress: number; count: number; reward_zh: string }>
   unlocks: Array<{ key: string; teaser_zh: string; status: string }>
   streak: StreakView
+  count?: CountView
   codex: CodexView
   weekly_zh: string | null
   reminder_zh: string | null
@@ -78,7 +79,7 @@ export function SeasonPanel(props: {
       h('p', { className: 'lp-small lp-muted lp-measure' }, '本赛季暂不推送。如需开始，请点击下方按钮。'),
       h('div', { className: 'lp-actions' },
         h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onAction({ action: 'opt_in' }) }, '开始本赛季')),
-      props.view.streak.frozen.length > 0 ? h(StreakLine, { streak: props.view.streak, onFreeze: props.onFreeze, busy: props.busy }) : null,
+      h(CountLine, { count: props.view.count }),
       note)
   }
   const shown = props.view.quests.slice(0, 5)
@@ -101,7 +102,8 @@ export function SeasonPanel(props: {
             className: 'lp-bar', role: 'progressbar', 'aria-label': '本赛季进度',
             'aria-valuemin': 0, 'aria-valuemax': season.weeks, 'aria-valuenow': season.week, 'aria-valuetext': `第 ${season.week} 周 / 共 ${season.weeks} 周`,
           }, h('span', { style: { width: `${Math.round(ratio * 100)}%` } })),
-          h('p', { className: 'lp-caption lp-measure' }, season.retest_day ? `复测 ${chineseDate(season.retest_day)}` : `${chineseDate(season.start)} → ${chineseDate(season.end)}`))
+          h('p', { className: 'lp-caption lp-measure' }, season.retest_day ? `复测 ${chineseDate(season.retest_day)}` : `${chineseDate(season.start)} → ${chineseDate(season.end)}`),
+          h(CountLine, { count: props.view.count }))
         : h('p', { className: 'lp-small lp-muted lp-measure' }, '本赛季尚未开始。'),
       season?.status === 'closed' || family
         ? h('div', { className: 'lp-actions' },
@@ -109,7 +111,7 @@ export function SeasonPanel(props: {
           family)
         : null,
       h('div', { className: 'lp-card-foot' },
-        h('span', { className: 'lp-caption' }, '生病或出行当天，不计为中断，也不计为完成。'),
+        h('span', { className: 'lp-caption' }, '累计的天数不会减少。生病或出行的日子记一下，提醒会放轻。'),
         h('div', { className: 'lp-actions' },
           h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onFreeze('sick') }, '今天生病'),
           h(Btn, { variant: 'outline', disabled: props.busy, onClick: () => props.onFreeze('travel') }, '今天出行')))),

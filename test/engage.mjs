@@ -201,13 +201,31 @@ try {
   for (const day of ['2026-07-27', '2026-07-28', '2026-07-30']) {
     addSelf(frozen, [{ key: 'weight', value: 60, unit: 'kg', date: day }], { today: '2026-07-30' })
   }
-  assert.equal(syncEngage(frozen, at('2026-07-30')).streak.current, 1)
+  // what is shown and earned is cumulative (0.9): the gap on 7/29 takes nothing away
+  const counted = syncEngage(frozen, at('2026-07-30'))
+  assert.equal(counted.count.total, 3); assert.equal(counted.count.next_milestone, 5)
+  assert.match(counted.weekly_zh ?? '', /累计 3 天做了健康行动/)
+  assert.doesNotMatch(counted.weekly_zh ?? '', /连续|冻结/)
   const iced = freezeEngage(frozen, { reason: 'sick', from: '2026-07-29', to: '2026-07-29' }, at('2026-07-30'))
   assert.equal(iced.ok, true, iced.error)
-  assert.equal(iced.view.streak.current, 3)
-  assert.equal(iced.view.streak.freezes_available, 0)
+  assert.equal(iced.view.count.total, 3, 'a sick day adds nothing and takes nothing')
+  // sick and travel days are never rationed
   const life = freezeEngage(frozen, { reason: 'travel', from: '2026-07-31', to: '2026-07-31' }, at('2026-07-31'))
-  assert.equal(life.ok, false)
+  assert.equal(life.ok, true, life.error)
+
+  // a draw at each cumulative milestone, never one per day; a gap never resets the count
+  const steady = tempDir()
+  profile(steady)
+  syncEngage(steady, at('2026-08-01'))
+  const days = Array.from({ length: 12 }, (_, i) => `2026-08-${String(1 + i * 2).padStart(2, '0')}`)
+  for (const day of days) addSelf(steady, [{ key: 'weight', value: 60, unit: 'kg', date: day }], { today: '2026-08-23' })
+  const after = syncEngage(steady, at('2026-08-23'))
+  assert.equal(after.count.total, 12, 'every other day for three weeks: 12 days, no streak needed')
+  const grants = JSON.parse(readFileSync(join(steady, 'engage', 'state.json'), 'utf8')).codex.grants.map((g) => g.earned_by)
+  for (const m of ['ms1', 'ms5', 'ms10']) assert.ok(grants.includes(m), `milestone ${m}`)
+  assert.ok(!grants.includes('ms20'))
+  assert.ok(!grants.some((g) => /^dy\d{8}$/.test(g)), 'no daily presence draws any more')
+  assert.equal(after.count.next_milestone, 20)
 
   const closed = tempDir()
   profile(closed)

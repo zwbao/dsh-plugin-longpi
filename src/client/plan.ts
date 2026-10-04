@@ -55,7 +55,7 @@ function AdherenceTile(props: { journey: Journey; tracking: Tracking | null }): 
   const known = items.filter((item) => item.adherence && item.adherence.level !== 'unknown' && item.adherence.rate != null)
   const fallback = known.length > 0 ? known.reduce((sum, item) => sum + (item.adherence?.rate ?? 0), 0) / known.length : null
   const rate = props.journey.plan.adherence_pct != null ? props.journey.plan.adherence_pct / 100 : fallback
-  const streak = props.journey.plan.streak || Math.max(0, ...items.map((item) => item.adherence?.streak ?? 0))
+  const total = props.journey.plan.done_total
   // No record yet: an empty state, not an empty ring and a dash.
   if (rate == null || !Number.isFinite(rate)) {
     return h('div', { className: 'lp-card' },
@@ -72,9 +72,9 @@ function AdherenceTile(props: { journey: Journey; tracking: Tracking | null }): 
         h('div', null,
           h('div', { className: 'lp-num-md' }, `${Math.round(rate * 100)}%`),
           h('div', { className: 'lp-caption' }, '近 12 周平均')))),
-    streak > 1
-      ? h('div', { className: 'lp-plan-streak' }, h(Icon, { name: 'flame', size: 14 }), `连续 ${streak} 天`)
-      : h('p', { className: 'lp-caption lp-measure' }, '连续完成两天以上会在这里显示'))
+    total > 0
+      ? h('div', { className: 'lp-plan-streak' }, h(Icon, { name: 'flame', size: 14 }), `累计打卡 ${total} 次`)
+      : h('p', { className: 'lp-caption lp-measure' }, '打卡后，这里会显示累计次数；没做到的日子不会让它减少'))
 }
 
 /** Retest dates as the reminders see them: the earliest date each verdict gives per marker. */

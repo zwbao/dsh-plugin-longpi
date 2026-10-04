@@ -78,7 +78,8 @@ export interface Journey {
   /** Markers not judged because their series read failed or came back cut: unknown, never "no change". */
   changes_unjudged: Array<{ label_zh: string; reason_zh: string }>
   self: { latest: Array<{ key: SelfKey; label_zh: string; value: number; unit: string; date: string; n: number }>; keys: Array<{ key: SelfKey; label_zh: string; unit: string; units: string[] }> }
-  plan: { exists: boolean; title: string; version: number | null; items: number; started: string | null; days: number | null; checkin_items: Array<{ id: string; title: string; done_today: boolean | null }>; streak: number; adherence_pct: number | null }
+  /** done_total: check-ins marked done across the plan, cumulative (what is shown); streak is kept for older readers. */
+  plan: { exists: boolean; title: string; version: number | null; items: number; started: string | null; days: number | null; checkin_items: Array<{ id: string; title: string; done_today: boolean | null }>; streak: number; done_total: number; adherence_pct: number | null }
   reminders: Array<{ kind: 'retest' | 'checkin'; text_zh: string; date: string | null; due: boolean }>
   stage: Stage
   /**
@@ -340,7 +341,7 @@ function addonsOf(bioage: BioAge, risk: Journey['results']['risk'], indicators: 
 
 function planOf(context: TrackingContext, tracking: Tracking): Journey['plan'] {
   const plan = tracking.plan
-  if (!plan) return { exists: false, title: '', version: null, items: 0, started: null, days: null, checkin_items: [], streak: 0, adherence_pct: null }
+  if (!plan) return { exists: false, title: '', version: null, items: 0, started: null, days: null, checkin_items: [], streak: 0, done_total: 0, adherence_pct: null }
   const today = context.today
   // The latest check-in of the day wins: true done, false 没做到, null not checked in (or taken back).
   const status = checkinStatus(readCheckIns(context.dataDir))
@@ -359,6 +360,7 @@ function planOf(context: TrackingContext, tracking: Tracking): Journey['plan'] {
     days: started ? Math.max(0, daysBetween(started, today)) : null,
     checkin_items: checkinItems,
     streak: Math.max(0, ...tracking.items.map((item) => item.adherence.streak)),
+    done_total: plan.items.reduce((sum, item) => sum + [...(status.get(item.id)?.values() ?? [])].filter(Boolean).length, 0),
     adherence_pct: rates.length > 0 ? Math.round((rates.reduce((sum, rate) => sum + rate, 0) / rates.length) * 100) : null,
   }
 }
@@ -641,7 +643,7 @@ export function followupStateOf(journey: Journey, tracking: Tracking): FollowupS
     checkin_items: journey.plan.checkin_items.length,
     checkin_open: journey.plan.checkin_items.filter((item) => item.done_today == null).map((item) => item.title),
     retests,
-    week: { pct: known > 0 ? Math.round((done / known) * 100) : null, streak: journey.plan.streak, next_retest: upcoming ? { marker: upcoming.marker, date: upcoming.date } : null },
+    week: { pct: known > 0 ? Math.round((done / known) * 100) : null, streak: journey.plan.streak, done_total: journey.plan.done_total, next_retest: upcoming ? { marker: upcoming.marker, date: upcoming.date } : null },
   }
 }
 

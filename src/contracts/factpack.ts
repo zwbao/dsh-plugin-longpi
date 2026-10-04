@@ -43,7 +43,8 @@ export interface FactPack {
   memory_digest_zh: string
   /** Topic keys asked in the last 7 days. */
   asked_recent: string[]
-  engagement: { season_title_zh: string | null; week: number | null; streak: number; freezes_left: number; open_quests: number; draws_available: number } | null
+  /** days_total is what is said (cumulative, never resets); streak stays for older readers and is not shown. */
+  engagement: { season_title_zh: string | null; week: number | null; days_total: number; next_milestone: number; streak: number; freezes_left: number; open_quests: number; draws_available: number } | null
   science: { mode: ScienceMode; active_studies: number }
   generations: { records: number; tracking: number; memory_rev: number; plan: number | null; triage_rev: number; season_rev: number }
   /** M1: the findings after visits, the care answers, and the doctor-first stop still open (null when none). */

@@ -49,7 +49,7 @@ function state(extra = {}) {
     checkin_items: 2,
     checkin_open: ['快走', '减盐'],
     retests: [{ marker: '甘油三酯', date: '2026-09-24', first_due: '2026-09-24' }, { marker: '超敏C反应蛋白', date: '2026-09-29', first_due: '2026-09-29' }],
-    week: { pct: 80, streak: 5, next_retest: { marker: '超敏C反应蛋白', date: '2026-09-29' } },
+    week: { pct: 80, streak: 5, done_total: 23, next_retest: { marker: '超敏C反应蛋白', date: '2026-09-29' } },
     ...extra,
   }
 }
@@ -154,7 +154,7 @@ try {
   const sunday = at('2026-09-27', '20:00')
   const weekly = decide(sunday, on(), state({ checkin_open: [] })).find((send) => send.kind === 'weekly')
   assert.deepEqual(weekly, { kind: 'weekly', key: 'weekly:2026-W39', text: 'LongPi 本周小结已更新，请打开健康页查看。' })
-  assert.equal(decide(sunday, on({ detail: 'full' }), state({ checkin_open: [] })).find((send) => send.kind === 'weekly').text, 'LongPi：本周方案执行率 80%，连续 5 天；下次复测：超敏C反应蛋白 9 月 29 日。')
+  assert.equal(decide(sunday, on({ detail: 'full' }), state({ checkin_open: [] })).find((send) => send.kind === 'weekly').text, 'LongPi：本周方案执行率 80%，累计打卡 23 次；下次复测：超敏C反应蛋白 9 月 29 日。')
   assert.equal(kinds(decide(at('2026-09-27', '21:30'), on(), state(), [row('weekly', 'weekly:2026-W39', sunday)])).includes('weekly'), false, 'once per week')
   assert.equal(kinds(decide(at('2026-09-28', '21:30'))).includes('weekly'), false, 'Monday does not back-fill Sunday')
   assert.equal(kinds(decide(at('2026-09-27', '19:59'))).includes('weekly'), false)

@@ -34,7 +34,7 @@ import { effectiveMode } from '../science/index.ts'
 import { nOf1SeasonQuest } from '../science/nof1-model.ts'
 import { commitmentOf } from './rng.ts'
 import { chapterList, MIN_SEASON_DAYS, recapText, seasonSpan, seasonStatus, weekOf } from './seasons.ts'
-import { computeStreak, daysInRange } from './streak.ts'
+import { computeStreak, daysInRange, milestonesUpTo, nextMilestone } from './streak.ts'
 import { makeUnlocks, openUnlock, REMINDER_ZH } from './unlocks.ts'
 import { weeklyText } from './weekly.ts'
 
@@ -499,10 +499,19 @@ function reduce(state: State, world: World, now: Date): void {
       grantedToday = true
     }
   }
-  if (facts.allActive.includes(world.today) && !grantedToday && !state.rewarded.includes(`presence:${world.today}`)) {
-    state.rewarded.push(`presence:${world.today}`)
-    grant(state, world, 'standard', world.today, `dy${world.today.replace(/-/g, '')}`)
+  // A draw at each cumulative milestone of days with a health action. State from before (one draw per active day)
+  // has its milestones up to today counted as given, so an upgrade does not pour out back-dated draws.
+  const total = facts.allActive.length
+  if (!state.rewarded.includes('milestones:v1')) {
+    if (state.rewarded.some((key) => key.startsWith('presence:'))) for (const m of milestonesUpTo(total)) state.rewarded.push(`milestone:${m}`)
+    state.rewarded.push('milestones:v1')
   }
+  for (const m of milestonesUpTo(total)) {
+    if (state.rewarded.includes(`milestone:${m}`)) continue
+    state.rewarded.push(`milestone:${m}`)
+    grant(state, world, 'standard', world.today, `ms${m}`)
+  }
+  void grantedToday
   const computed = computeStreak(facts.allActive, state.streak.frozen.map((row) => row.day), world.today)
   state.streak.current = computed.current
   state.streak.best = Math.max(state.streak.best, computed.current)
@@ -519,8 +528,7 @@ function reduce(state: State, world: World, now: Date): void {
       weeks: season.chapters.length,
       done: state.quests.filter((quest) => quest.status === 'done').length,
       total: state.quests.length,
-      best: state.streak.best,
-      frozen: state.streak.frozen.length,
+      days: facts.activeDays,
       draws: state.codex.counter,
       retest: facts.retestInWindow || state.ended_by_retest,
     })
@@ -534,8 +542,9 @@ function reduce(state: State, world: World, now: Date): void {
     week: weekOf(season, world.today),
     weeks: season.chapters.length,
     status,
-    streak: state.streak.current,
-    frozen: state.streak.frozen.length,
+    days_total: total,
+    days_season: facts.activeDays,
+    next_milestone: nextMilestone(total),
     done: state.quests.filter((quest) => quest.status === 'done').length,
     total: state.quests.length,
     open,
@@ -563,6 +572,8 @@ export interface EngageView {
   quests: Array<{ id: string; title_zh: string; kind: string; status: string; progress: number; count: number; reward_zh: string }>
   unlocks: Array<{ id: string; key: string; title_zh: string; teaser_zh: string; status: string; reminder_zh: string }>
   streak: { current: number; best: number; freezes_available: number; frozen: StreakState['frozen'] }
+  /** What the person sees: days with a health action, cumulative; a draw at each milestone. */
+  count: { total: number; season: number; next_milestone: number }
   codex: {
     enabled: boolean
     hidden: boolean
@@ -639,6 +650,10 @@ function viewOf(state: State, world: World, dataDir = ''): EngageView {
       freezes_available: state.streak.freezes_available,
       frozen: state.streak.frozen,
     },
+    count: (() => {
+      const facts = factsOf(state, world)
+      return { total: facts.allActive.length, season: season ? facts.activeDays : 0, next_milestone: nextMilestone(facts.allActive.length) }
+    })(),
     codex: {
       enabled: !block && Boolean(season),
       hidden: Boolean(block) || !season,
@@ -777,27 +792,18 @@ export function freezeEngage(dataDir: string, input: { reason: 'sick' | 'travel'
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.from) || !/^\d{4}-\d{2}-\d{2}$/.test(input.to) || input.to < input.from) {
     return { ok: false, error: '日期格式须为 YYYY-MM-DD，且结束日期不早于开始日期。', view: synced }
   }
-  if (daysBetween(input.from, input.to) > 13) return { ok: false, error: '一次最多冻结 14 天。', view: synced }
+  if (daysBetween(input.from, input.to) > 13) return { ok: false, error: '一次最多记 14 天。', view: synced }
   const active = new Set(activeDays(state, world))
   const days = daysInRange(input.from, input.to, world.today).filter((day) => !active.has(day) && !state.streak.frozen.some((row) => row.day === day))
-  if (days.length === 0) return { ok: false, error: '这些日期已有记录或尚未到来，无需冻结。', view: synced }
-  if (state.streak.freezes_available < 1) return { ok: false, error: '已无可用的冻结次数。抽到「连续记录冻结」可增加一天。', view: synced }
-  const applied: IsoDay[] = []
+  if (days.length === 0) return { ok: false, error: '这些日期已有记录或尚未到来。', view: synced }
+  // Counts are cumulative, so a sick or travel day costs nothing and is never rationed; it only quiets reminders.
   for (const day of days) {
-    if (state.streak.freezes_available < 1) break
-    state.streak.freezes_available -= 1
     state.streak.frozen.push({ day, reason: input.reason, event_id: `fr${randomBytes(6).toString('hex')}` })
-    applied.push(day)
     emit('streak.frozen', { day, reason: input.reason })
   }
   reduce(state, world, now)
   saveState(dataDir, state)
-  const missed = days.length - applied.length
-  return {
-    ok: true,
-    ...(missed > 0 ? { error: `已冻结 ${applied.length} 天，其余 ${missed} 天因冻结次数不足未冻结。` } : {}),
-    view: viewOf(state, world, dataDir),
-  }
+  return { ok: true, view: viewOf(state, world, dataDir) }
 }
 
 export function prefsEngage(dataDir: string, input: { codex?: boolean; nudge?: boolean; dismiss?: boolean; offerSeen?: boolean; shown?: boolean; pressure?: boolean; family?: boolean; declineInvite?: boolean }, now: Date = new Date()): EngageView {
@@ -1159,6 +1165,8 @@ export function engagementSummary(): FactPack['engagement'] {
     return {
       season_title_zh: view.season.title_zh,
       week: view.season.week,
+      days_total: view.count.total,
+      next_milestone: view.count.next_milestone,
       streak: view.streak.current,
       freezes_left: view.streak.freezes_available,
       open_quests: view.quests.filter((quest) => quest.status === 'open').length,

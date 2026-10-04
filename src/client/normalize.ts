@@ -215,6 +215,7 @@ function planOf(raw: Raw, legacy: boolean): Journey['plan'] {
       .filter((row) => typeof row.id === 'string')
       .map((row) => ({ id: row.id as string, title: str(row.title, row.id as string), done_today: checkStateOf(row.done_today, legacy) })),
     streak: num(raw.streak) ?? 0,
+    done_total: num(raw.done_total) ?? 0,
     adherence_pct: num(raw.adherence_pct),
   }
 }
