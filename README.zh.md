@@ -4,6 +4,7 @@
 
 LongPi 是运行在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 上的个人长寿助手。它把体检报告、化验结果和可穿戴设备数据，与 170 余项经过论文复现的衰老研究方法连接起来：直接从已有检查中计算生物年龄、十年心血管病风险等个人指标，标出历次体检中超出个人正常波动的变化；依据个人结果和临床试验证据起草生活方式干预方案，确认后按时提醒打卡与复测，并依据个体生物变异判断每一项指标的变化是真实改善还是正常波动。每个结果都可以追溯到原始论文，每个方法都注明适用边界。
 
+- **长寿教练 Pi**：LongPi 以 [longevity-coach](https://github.com/zwbao/longevity-coach-skill) 里的教练 Pi 的口吻说话：记得你七八十岁时最想还能做的事，把结果变成你自己选的小承诺（"当…时，我就…"），具体地肯定你做到的每一步，次数累计、不清零；变化还在正常波动里时直说"还看不出来"。
 - **生物年龄与疾病风险**：按表型年龄（Levine）、China-PAR 等已发表模型计算，历次体检自动形成趋势；缺少检查时给出下次体检的加测清单。
 - **记录变化提醒**：历次体检中超出个人正常波动的变化会被单独列出，写明数值、幅度与判断依据，并提示是否需要带着报告咨询医生。
 - **起草与追踪方案**：依据个人结果与收录的试验平均效应起草方案，逐项注明证据；确认后保存，结合手环数据、服药记录和打卡计算执行率。方案不涉及处方药，也不给出任何剂量。
@@ -28,6 +29,8 @@ curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/instal
 ```bash
 curl -fsSL https://raw.githubusercontent.com/zwbao/dsh-plugin-longpi/main/install.sh | bash -s -- --with-mirobody
 ```
+
+安装器默认同时安装教练 Pi 的技能（longevity-coach）；加 `--without-coach` 则不安装，LongPi 用自己原来的口吻说话（更新时会保留这个选择，加 `--with-coach` 可重新打开）。加 `--with-analyst` 会同时安装深度分析技能（longevity-analyst）。
 
 其他选项见 `install.sh --help`；逐步安装说明见 [docs/install.zh.md](docs/install.zh.md)。
 

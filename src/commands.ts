@@ -1,5 +1,6 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { loadCatalog } from './catalog.ts'
+import { coachSkillVersion } from './coach.ts'
 import type { Config } from './config.ts'
 import { matchSkills } from './match.ts'
 import type { MountState } from './mirobody.ts'
@@ -41,6 +42,7 @@ export function registerCommands(ctx: Context, config: () => Config, mount: Moun
           current.mcpUrl.trim() ? 'record server configured' : 'record server not configured',
           `stage ${stage.stage ?? 'unknown'} · next ${stage.title_zh}`,
           `followup ${readFollowup(resolveDataDir(current.dataDir)).enabled ? 'on' : 'off'}`,
+          current.coach === false ? 'coach off (LongPi voice)' : `coach Pi on · skill ${coachSkillVersion() ?? 'not installed'}`,
         ]
         const last = readReceipts(resolveDataDir(current.dataDir), 1)[0]
         if (last) lines.push(`last skill ${last.skill}  ok ${last.ok}`)

@@ -7,6 +7,17 @@ import { join } from 'node:path'
 
 export const COACH_SKILL_NAME = 'longevity-coach'
 
+let enabled: () => boolean = () => true
+
+/** apply() binds this to the config's coach switch (installer --without-coach writes false). */
+export function setCoachEnabled(get: () => boolean): void {
+  enabled = get
+}
+
+export function coachEnabled(): boolean {
+  return enabled()
+}
+
 export function coachSkillPath(): string {
   return process.env.LONGPI_COACH_SKILL || join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'skills', COACH_SKILL_NAME, 'SKILL.md')
 }

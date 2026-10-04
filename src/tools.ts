@@ -13,6 +13,7 @@ import { normalizeProfile, readProfile, writeProfile, estimatedAge, FOCUS, RISK_
 import { loadRecords, readFlags, type RecordSnapshot } from './records.ts'
 import { readReceipts, runSkill } from './runner.ts'
 import { PRODUCT_VERSION } from './version.ts'
+import { coachSkillVersion } from './coach.ts'
 import { discoverPython, runBridgeStatus } from './bridge.ts'
 import { asJson } from './json.ts'
 import { memoryFor } from './core/memory.ts'
@@ -622,6 +623,7 @@ export function registerTools(ctx: Context, config: () => Config, mount: MountSt
         version: PRODUCT_VERSION,
         stage: stage.stage,
         next: stage.title_zh,
+        coach: { on: current.coach !== false, skill_version: coachSkillVersion() },
         skills: {
           found: Boolean(skillsHome),
           revision: catalog.revision,

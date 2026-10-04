@@ -13,6 +13,7 @@ import { movementOf, pickKeyTrends, readerObstacles, FACING_SAMPLES, concreteNex
 import { replyHasThreeParts, shapeReply } from '../src/ux/reply.ts'
 import { calendarEvents, confirmEvent, saveEvent, suggestEvent } from '../src/ux/schedule.ts'
 import { personaLines } from '../src/prompt.ts'
+import { setCoachEnabled } from '../src/coach.ts'
 import { writeProfile } from '../src/profile.ts'
 
 const root = fileURLToPath(new URL('..', import.meta.url))
@@ -136,6 +137,13 @@ try {
   assert.ok(lines.some((line) => /has no headings/.test(line) && line.includes('这周就这一件事')))
   assert.ok(!lines.some((line) => line.includes('数据尚不能说明的')), 'the three headings are gone from the persona')
   assert.ok(lines.some((line) => /Every number you cite comes from a tool result/.test(line)), 'LongPi\'s rules still bound the facts')
+  // installed with --without-coach (coach: false): LongPi's own voice and the three headings come back
+  setCoachEnabled(() => false)
+  const plain = personaLines({ mounted: true, peer: false, error: '', pluginHome: '' })
+  assert.match(plain[0], /^You are LongPi .*a personal longevity harness/)
+  assert.ok(!plain.some((line) => /You are Pi/.test(line)))
+  assert.ok(plain.some((line) => line.includes('数据显示 / 数据尚不能说明的 / 下一步')))
+  setCoachEnabled(() => true)
 
   const scheduleDir = tempDir()
   const suggested = suggestEvent({ date: '2026-12-20', kind: 'retest', title_zh: '复查血红蛋白', brief_zh: '带上简报', questions_zh: ['这次和上次差多少？'] })

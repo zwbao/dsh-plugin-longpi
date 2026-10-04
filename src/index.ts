@@ -13,6 +13,7 @@ import { createHttp } from './core/http.ts'
 import { memoryFor } from './core/memory.ts'
 import { registerMemoryRoutes, registerMemoryTools } from './core/memory-tools.ts'
 import { registerMemberFile } from './member-file.ts'
+import { setCoachEnabled } from './coach.ts'
 import { registerEmitHooks } from './core/emit-hooks.ts'
 import { startTick } from './core/tick.ts'
 import { registerCandidates } from './core/nba-registry.ts'
@@ -86,7 +87,7 @@ export { readiness, runReady, buildReport } from './overview.ts'
 export { normalizePlan, savePlan, currentPlan, readPlans, addCheckIns, readCheckIns, doneCounts, isoDay, addDays, daysBetween, CIVIL_TZ } from './interventions.ts'
 export { renderMemberFile, parseMemberFile, registerMemberFile } from './member-file.ts'
 export { registerMemoryTools } from './core/memory-tools.ts'
-export { coachSkillPath, coachSkillVersion } from './coach.ts'
+export { coachSkillPath, coachSkillVersion, coachEnabled, setCoachEnabled } from './coach.ts'
 export { piLines } from './prompt.ts'
 export { adherenceFor, evaluateMarker, evaluatePlan, resolveMarkers, suggestNext } from './evaluate.ts'
 export { loadReference, markerFor, checkupMarkerFor, rcvBand, effectsFor, markerGroupKeys, expandMarkerNames } from './reference.ts'
@@ -150,6 +151,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // A reload with new settings (another token, another address) must not answer from reads made with the old ones.
   invalidateRecords()
   invalidateTracking()
+  setCoachEnabled(() => config.coach !== false)
   const pluginHome = resolveMirobodyPlugin(config.mirobodyPluginHome)
   // Every module reads the effective configuration: a Mirobody connection saved on the settings page
   // (connection.ts) overrides the configured mcpUrl and mcpToken.

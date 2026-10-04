@@ -62,4 +62,42 @@ const sh = (script, env = {}) => spawnSync('bash', ['-c', `set -eu; LOG=/dev/nul
   const bad = sh(`longpi_home="${tmp('lp2')}"; install_analyst "${tmp('empty')}" "${home}"`)
   assert.notEqual(bad.status, 0, 'a source without the skill fails')
 }
+
+// Pi (0.9, installed by default): the coach skill from its release tag, linked like the analyst; --without-coach
+// removes only the link this installer made; the config keeps the choice so an update does not turn Pi back on
+{
+  const src = tmp('coach-src')
+  mkdirSync(join(src, 'skills', 'longevity-coach'), { recursive: true })
+  writeFileSync(join(src, 'skills', 'longevity-coach', 'SKILL.md'), '---\nname: longevity-coach\nmetadata:\n  version: "0.2.0"\n---\n')
+  const git = (args) => spawnSync('git', args, { cwd: src, encoding: 'utf8' })
+  git(['init', '-q']); git(['add', '.']); git(['-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'x']); git(['tag', 'v0.2.0'])
+  const home = tmp('dsh-coach'); const lp = tmp('lp-coach')
+  const r = sh(`longpi_home="${lp}"; install_coach "${src}" "${home}"`)
+  assert.equal(r.status, 0, r.stderr + r.stdout)
+  const link = join(home, 'skills', 'longevity-coach')
+  assert.equal(readlinkSync(link), join(lp, 'longevity-coach-skill', 'skills', 'longevity-coach'))
+  assert.equal(sh(`longpi_home="${lp}"; remove_coach "${home}"`).status, 0)
+  assert.throws(() => readlinkSync(link), 'the link is gone')
+  assert.ok(statSync(join(lp, 'longevity-coach-skill')).isDirectory(), 'the checkout stays')
+  // a coach skill the person put there by hand is never removed
+  const mine = tmp('dsh-mine'); mkdirSync(join(mine, 'skills', 'longevity-coach'), { recursive: true })
+  sh(`longpi_home="${lp}"; remove_coach "${mine}"`)
+  assert.ok(statSync(join(mine, 'skills', 'longevity-coach')).isDirectory())
+
+  const installer = readFileSync(join(repo, 'install.sh'), 'utf8')
+  const writer = installer.slice(installer.indexOf("WRITE_CONFIG='") + "WRITE_CONFIG='".length, installer.indexOf("'\n\nmain \"$@\""))
+  const dir = tmp('coach-cfg'); const script = join(dir, 'w.py'); writeFileSync(script, writer)
+  const patch = join(dir, 'cordis.patch.yml')
+  // backups are named by the second: one write per second, as an install does
+  const write = (flag) => { spawnSync('sleep', ['1.05']); return spawnSync('python3', [script, patch, '/skills', '/py', '0', '', '', '', '', flag], { encoding: 'utf8' }) }
+  assert.equal(write('').status, 0)
+  assert.match(readFileSync(patch, 'utf8'), /\n {4}coach: true\n/, 'Pi by default')
+  write('0')
+  assert.match(readFileSync(patch, 'utf8'), /\n {4}coach: false\n/, '--without-coach')
+  write('')
+  assert.match(readFileSync(patch, 'utf8'), /\n {4}coach: false\n/, 'an update with no flag keeps the choice')
+  assert.equal(sh(`read_patch_value "${patch}" coach`).stdout.trim(), 'false', 'what the installer reads back to decide')
+  write('1')
+  assert.match(readFileSync(patch, 'utf8'), /\n {4}coach: true\n/, '--with-coach')
+}
 console.log('installer-bridge ok')

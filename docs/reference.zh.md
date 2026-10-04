@@ -22,6 +22,7 @@
 | `dataDir` | 档案、回执、以前的读出、干预方案和打卡。空则是 `~/.dsh/longpi`。 |
 | `maxSkillMatches` | 一个问题最多点名几个技能，默认 `8`。 |
 | `timeoutMs` | Mirobody 桥和 MCP 请求的时限，默认 `30000`。 |
+| `coach` | 由长寿教练 Pi 代表 LongPi 说话：健康对话里用 Pi 的口吻，进度类回答不带小标题，并可打开 longevity-coach 技能（在 `DSH_HOME/skills` 里）使用完整的教练方法。`false`（由 `install.sh --without-coach` 写入）恢复 LongPi 原来的口吻和三段式回答。默认 `true`。 |
 | `bootstrapWorkspace` | DeepSeek Harness 还没有任何工作区时，创建 `<dataDir>/workspace` 并登记为工作区「健康对话」，只做一次，这样会话可以打开，LongPi 首页可以使用（早期版本创建的「健康」工作区保留原名）。已有工作区时不作任何改动；创建之后不再重复创建（`dataDir` 里的 `workspace-bootstrap.json` 记录了这件事，删除的工作区不会再出现）。默认 `true`。 |
 
 **在应用里设置的连接。** 在 DeepSeek Harness 设置的 LongPi 页保存的 Mirobody 地址（需要时连同令牌）存放在 `dataDir/connection.json`（仅本人可读），在清除之前替代 `mcpUrl` 和 `mcpToken`，LongPi 的所有读取都用它，挂载的 Mirobody 工具也一样。只有通过它在 10 秒内成功读取一次记录目录后才会保存；地址须为 `https://`，或指向 `127.0.0.1`、`localhost` 的 `http://`。页面不会拿到令牌，显示的地址会隐去 `/mcp/` 之后的部分。

@@ -1,5 +1,32 @@
 # Changelog
 
+## Unreleased
+
+给使用者
+
+- LongPi 现在由长寿教练 Pi 说话：先肯定你做到的事，一次只讲一件，最后说"这周就这一件事"。Pi 会记住你七八十岁时最想还能做的事、为什么在乎、你的小承诺和小胜利。不想要 Pi，可以用 `--without-coach` 重新运行安装脚本，LongPi 会恢复原来的口吻。
+- 次数都改成累计：打卡和健康行动的天数不会因为某天没做到而清零。图鉴的抽卡机会在累计到 1、5、10、20、50、100 天时发放，之后每 50 天一次；不再按天发放，也不再显示"连续 N 天"。生病或出行的日子随时可以记，不限次数。
+- 深度分析里交给医生的事项（补剂、检查、转诊）不再进入方案打卡，而是写进「医生简报」；只有深度分析也能生成简报。第二次深度分析之后，「深度分析」页会和上一次对比，只有超出个人正常波动的变化才算变化。
+- 「档案」里可以下载会员档案（Pi 记下的画面、小承诺和小胜利）；以前在独立版 Pi 里的档案也可以导入，之前的累计次数会接着算。
+
+English
+
+- Pi, from longevity-coach, speaks for LongPi (config `coach`, default true; `install.sh --without-coach` writes false and
+  removes the skill link, an update keeps the choice, `--with-coach` turns it back on). The installer clones
+  longevity-coach at `LONGPI_COACH_REF` (default v0.2.0) into the LongPi home and links it into `DSH_HOME/skills`;
+  a failed clone only warns. Status replies lose the three headings unless the coach is off.
+- Memory: kinds vision, motivation, win, style and commitment (confidence, plan_item, carried_count, graduated);
+  remember_for_me takes replaces and op graduate; the digest leads with these lines and a commitment's count is its
+  plan item's done check-ins plus any carried count. `GET /api/longpi/member-file` renders the coach's template;
+  `import_member_file` reads a standalone one (no medicines, no measurements).
+- Engagement: draws at cumulative milestones (`milestone:N`), older state's passed milestones counted as given; the
+  season view has `count`; weekly, recap, plan tile and weekly reminder say cumulative counts; freezes are never
+  rationed. Cards u-streak-freeze and i-three-weeks renamed.
+- Deep analysis: la-export `executor`, `kind` and `evidence_grade` are kept; the physician's items and supplements,
+  tests and referrals are left out of the plan and listed in the doctor brief (`analysis_zh`). Each import keeps its
+  `twin.json` and the previous one; `la.py twin compare` judges them (`twin-compare.json`, `compare` in the summary and
+  the import result). Runs get a fixed member id (`lp-me`, `lp-<person>`).
+
 ## 0.8.0
 
 给使用者

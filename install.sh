@@ -47,6 +47,7 @@ main() {
   local plugin_spec="github:zwbao/dsh-plugin-longpi"
   local mcp_url="" mcp_token="" set_mcp=0 with_mirobody=0
   local mirobody_native=0 with_analyst=0 analyst_repo="${LONGPI_ANALYST_REPO:-https://github.com/zwbao/longevity-analyst-skill}"
+  local with_coach="" coach_repo="${LONGPI_COACH_REPO:-https://github.com/zwbao/longevity-coach-skill}"
   local mirror_mode="${LONGPI_MIRROR:-}"
 
   case "${LC_ALL:-${LC_MESSAGES:-${LANG:-}}}" in zh*) ZH=1 ;; *) ZH=0 ;; esac
@@ -67,6 +68,10 @@ main() {
       --with-analyst) with_analyst=1; shift ;;
       --analyst-repo) analyst_repo="$(arg "$@")"; with_analyst=1; shift 2 ;;
       --analyst-repo=*) analyst_repo="${1#*=}"; with_analyst=1; shift ;;
+      --with-coach) with_coach=1; shift ;;
+      --without-coach) with_coach=0; shift ;;
+      --coach-repo) coach_repo="$(arg "$@")"; with_coach=1; shift 2 ;;
+      --coach-repo=*) coach_repo="${1#*=}"; with_coach=1; shift ;;
       --mirror) mirror_mode="$(arg "$@")"; shift 2 ;;
       --mirror=*) mirror_mode="${1#*=}"; shift ;;
       --plugin) plugin_spec="$(arg "$@")"; shift 2 ;;
@@ -292,6 +297,19 @@ main() {
                   "无法从 $analyst_repo 安装 longevity-analyst（私有仓库需要 git 访问权限）。"
   fi
 
+  # 5c. Pi, the longevity coach (default; --without-coach turns it off, and an update keeps that choice) ------
+  if [ -z "$with_coach" ]; then
+    if [ "$(read_patch_value "$profile_dir/cordis.patch.yml" coach 2>/dev/null || true)" = false ]; then with_coach=0; else with_coach=1; fi
+  fi
+  if [ "$with_coach" = 1 ]; then
+    step "Installing Pi, the longevity coach (longevity-coach)" "安装长寿教练 Pi（longevity-coach）"
+    install_coach "$coach_repo" "$dsh_home" \
+      || warn "Could not install longevity-coach from $coach_repo; LongPi still speaks as Pi, without the full coaching method." \
+              "无法从 $coach_repo 安装 longevity-coach；LongPi 仍以 Pi 的口吻说话，只是没有完整的教练方法。"
+  else
+    remove_coach "$dsh_home"
+  fi
+
   # Health data never goes into DeepSeek's session logs: the home layer turns the upload off for every profile.
   ensure_session_log_off "$dsh_home" "$py"
 
@@ -302,7 +320,7 @@ main() {
   strip_brand_rows "$dsh_home" "$py"
   local local_base=""
   [ "$with_mirobody" = 1 ] && local_base="$mirobody_base"
-  result="$("$py" -c "$WRITE_CONFIG" "$patch" "$skills_dir" "$py" "$set_mcp" "$mcp_url" "$mcp_token" "$pin" "$local_base" </dev/null)" \
+  result="$("$py" -c "$WRITE_CONFIG" "$patch" "$skills_dir" "$py" "$set_mcp" "$mcp_url" "$mcp_token" "$pin" "$local_base" "$with_coach" </dev/null)" \
     || die "Could not update $patch; add the dsh-plugin-longpi row by hand (docs/install.md)." "无法更新 ${patch}；请按 docs/install.zh.md 手动添加 dsh-plugin-longpi 配置。"
   ok "$(pretty "$patch")" "$(pretty "$patch")"
   local dump
@@ -394,6 +412,10 @@ Options
                      does not build). Logs and pids in the LongPi home.
   --with-analyst     Also install the deep analysis skill (longevity-analyst) into
                      DSH_HOME/skills; --analyst-repo URL for another source
+  --without-coach    Do not install Pi, the longevity coach (longevity-coach), and
+                     speak with LongPi's own voice. Pi is installed by default; an
+                     update keeps the last choice; --with-coach turns it back on;
+                     --coach-repo URL for another source
   --mirror MODE      cn: mainland mirrors. auto: probe GitHub, npm, PyPI and
                      Docker Hub (short timeout) and mirror only what failed.
                      Omit the flag to keep the public defaults.
@@ -403,14 +425,15 @@ Options
   -h, --help         Show this help
 
 Commands
-  install            Default. dsh, pnpm, this plugin, longevity-skills, Python 3.12
+  install            Default. dsh, pnpm, this plugin, longevity-skills, Pi (longevity-coach), Python 3.12
   update             Newer plugin and the longevity-skills version it depends on.
                      Rebuilds the venv only when requirements-ci.txt changes.
                      Reuses the mirror recorded by the last install.
   status             Pinned skillsVersion against the running catalog. Exit 2
                      when a result cannot be labelled verified.
 
-Environment: DSH_HOME (default ~/.dsh), LONGPI_HOME, LONGPI_MIROBODY_URL, LONGPI_MIRROR, LONGPI_ANALYST_REPO.
+Environment: DSH_HOME (default ~/.dsh), LONGPI_HOME, LONGPI_MIROBODY_URL, LONGPI_MIRROR, LONGPI_ANALYST_REPO,
+  LONGPI_COACH_REPO, LONGPI_COACH_REF (default v0.2.0).
 Mainland mirrors (only when --mirror cn, or auto decides a host is down):
   LONGPI_NPM_REGISTRY       default https://registry.npmmirror.com
   LONGPI_PIP_INDEX          default https://mirrors.cloud.tencent.com/pypi/simple
@@ -1204,6 +1227,36 @@ install_analyst() {
   ok "$(pretty "$target") → $(pretty "$src")" "$(pretty "$target") → $(pretty "$src")"
 }
 
+install_coach() {
+  # Pi's skill goes where dsh discovers skills, like the analyst: a checkout pinned to a release tag in the LongPi
+  # home, linked into DSH_HOME/skills. LongPi's persona speaks as Pi either way; the skill adds the full method.
+  local repo="$1" home="$2" src="$longpi_home/longevity-coach-skill" target ref="${LONGPI_COACH_REF:-v0.2.0}"
+  if [ -d "$src/.git" ]; then
+    (cd "$src" && GIT_TERMINAL_PROMPT=0 git fetch --depth 1 origin "refs/tags/$ref:refs/tags/$ref" && git checkout -q "$ref") </dev/null >>"$LOG" 2>&1 \
+      || warn "Could not update $src to $ref; keeping the copy there." "无法把 $src 更新到 ${ref}，保留现有版本。"
+  else
+    GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "$ref" "$repo" "$src" </dev/null >>"$LOG" 2>&1 || return 1
+  fi
+  [ -f "$src/skills/longevity-coach/SKILL.md" ] || return 1
+  mkdir -p "$home/skills"
+  target="$home/skills/longevity-coach"
+  if [ -L "$target" ] || [ ! -e "$target" ]; then
+    ln -sfn "$src/skills/longevity-coach" "$target"
+  else
+    warn "$target exists and is not a link; left as it is." "$target 已存在且不是链接，未改动。"
+  fi
+  ok "$(pretty "$target") → $(pretty "$src")" "$(pretty "$target") → $(pretty "$src")"
+}
+
+remove_coach() {
+  # --without-coach: the link this installer made is removed (the checkout stays); anything else is left alone.
+  local target="$1/skills/longevity-coach"
+  if [ -L "$target" ] && case "$(readlink "$target")" in "$longpi_home/longevity-coach-skill/"*) true ;; *) false ;; esac; then
+    rm -f "$target"
+    ok "Pi turned off: $(pretty "$target") removed" "已关闭 Pi：已移除 $(pretty "$target")"
+  fi
+}
+
 ensure_session_log_off() {
   # dsh's session-log-deepseek would attach the conversation (health and genetic data) to model requests.
   # Its own default is off; this row keeps it off whatever a profile says. A row the person wrote is kept.
@@ -1512,15 +1565,16 @@ if len(argv) < 6:
 path, skills_home, python_bin, set_mcp, mcp_url, mcp_token = argv[:6]
 skills_version = argv[6] if len(argv) > 6 else ""
 mirobody_base = argv[7] if len(argv) > 7 else ""
+coach_flag = argv[8] if len(argv) > 8 else ""
 BEGIN = "# >>> dsh-plugin-longpi (written by install.sh; keep one value per line) >>>"
 END = "# <<< dsh-plugin-longpi <<<"
 KEYS = ["skillsHome", "skillsVersion", "mirobodyPluginHome", "pythonBin", "mirobodyHome", "mcpUrl", "mcpToken",
         "member", "timeoutMs", "skillPython", "skillTimeoutMs", "skillRuntimes", "dataDir", "maxSkillMatches", "bootstrapWorkspace",
-        "mirobodyUrl"]
+        "mirobodyUrl", "coach"]
 DEFAULTS = {"skillsVersion": "\x27\x27", "mirobodyHome": "\x27\x27", "mcpUrl": "\x27\x27", "mcpToken": "\x27\x27",
             "member": "\x27\x27", "timeoutMs": "30000", "skillTimeoutMs": "120000", "skillRuntimes": "{}",
             "dataDir": "\x27\x27", "maxSkillMatches": "8", "bootstrapWorkspace": "true",
-            "mirobodyUrl": "\x27http://127.0.0.1:18060\x27"}
+            "mirobodyUrl": "\x27http://127.0.0.1:18060\x27", "coach": "true"}
 
 def quote(text):
     return "\x27" + text.replace("\x27", "\x27\x27") + "\x27"
@@ -1564,6 +1618,8 @@ values["skillPython"] = quote(python_bin)
 if skills_version:
     values["skillsVersion"] = quote(skills_version)
 values["mirobodyPluginHome"] = "\x27\x27"
+if coach_flag in ("0", "1"):
+    values["coach"] = "true" if coach_flag == "1" else "false"
 if set_mcp == "1":
     values["mcpUrl"] = quote(mcp_url)
     values["mcpToken"] = quote(mcp_token)

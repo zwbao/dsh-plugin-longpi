@@ -19,6 +19,8 @@ export interface Config {
   skillsVersion: string
   /** On a DSH with no workspace, register <dataDir>/workspace as 「健康对话」 once, so a session can open. */
   bootstrapWorkspace: boolean
+  /** Pi, the longevity coach, speaks for LongPi (default). false: LongPi's own voice and the three-part status reply. */
+  coach: boolean
   /** Accepted for older profiles; the safety guard it scoped was removed in 0.8.0. */
   guardScope: 'health' | 'all'
   /** Per agent profile (AA §2.3): enabled (false = always the deterministic fallback), route and deadline. */
@@ -89,6 +91,7 @@ export const Config: Schema<Config> = Schema.object({
   skillRuntimes: Schema.dict(Schema.string()).default({}),
   skillsVersion: Schema.string().default(''),
   bootstrapWorkspace: Schema.boolean().default(true),
+  coach: Schema.boolean().default(true),
   guardScope: Schema.union([Schema.const('health' as const), Schema.const('all' as const)]).default('health'),
   agents: Schema.object({
     coach: agent('off', 900, 15000),
