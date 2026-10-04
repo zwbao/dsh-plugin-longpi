@@ -107,12 +107,14 @@ export function build() {
       about_zh: card.about_zh,
       species,
       meet: species.filter((name) => SPECIES.has(name)),
+      // Year, authors, journal and DOI come from the library (citation year; two authors as 「A 与 B」); the card keeps
+      // only what the review added: the conflict of interest and the preprint flag.
       source: {
-        first_author: card.source?.first_author ?? String(paper.authors ?? '').replace(/\s*等$/, ''),
-        et_al: card.source?.et_al ?? /等/.test(String(paper.authors ?? '')),
-        journal: card.source?.journal ?? paper.journal ?? '',
-        year: card.source?.year ?? paper.year ?? null,
-        ...(card.source?.doi ?? paper.doi ? { doi: card.source?.doi ?? paper.doi } : {}),
+        first_author: paper.authors ? String(paper.authors).replace(/\s*等$/, '') : (card.source?.first_author ?? ''),
+        et_al: paper.authors ? /等$/.test(String(paper.authors).trim()) : (card.source?.et_al ?? false),
+        journal: paper.journal ?? card.source?.journal ?? '',
+        year: paper.year ?? card.source?.year ?? null,
+        ...(paper.doi ?? card.source?.doi ? { doi: paper.doi ?? card.source?.doi } : {}),
         preprint: card.source?.preprint === true,
         coi_zh: card.source?.coi_zh ?? null,
       },

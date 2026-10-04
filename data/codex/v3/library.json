@@ -682,9 +682,12 @@
    "line_zh": "一种省时省钱的甲基化测法：用 1056 人的血样做出的衰老时钟，估年龄的误差中位数为 3.39 岁。",
    "about_zh": "研究者给每份样本的 DNA 打上标签，把许多样本混在一起测，只读和时钟有关的位点。大部分实验在小鼠的多种组织里做，小鼠时钟能反映饮食等干预的效果；人血时钟是论文的最后一部分。",
    "species": [
-    "human"
+    "human",
+    "mouse"
    ],
-   "meet": [],
+   "meet": [
+    "mouse"
+   ],
    "source": {
     "first_author": "Griffin",
     "et_al": true,
@@ -815,7 +818,7 @@
     "first_author": "Horvath",
     "et_al": true,
     "journal": "Nature Aging",
-    "year": 2021,
+    "year": 2022,
     "doi": "10.1038/s43587-021-00152-1",
     "preprint": false,
     "coi_zh": null
@@ -1324,7 +1327,7 @@
    ],
    "meet": [],
    "source": {
-    "first_author": "Hodgdon",
+    "first_author": "Hodgdon 和 Beckett",
     "et_al": false,
     "journal": "Naval Health Research Center Report No. 84-11",
     "year": 1984,
@@ -1416,7 +1419,7 @@
     "first_author": "Zhu",
     "et_al": true,
     "journal": "Nature Communications",
-    "year": 2025,
+    "year": 2026,
     "doi": "10.1038/s41467-025-67223-4",
     "preprint": false,
     "coi_zh": null
@@ -1476,7 +1479,7 @@
     "first_author": "Wang",
     "et_al": true,
     "journal": "Nature Aging",
-    "year": 2025,
+    "year": 2026,
     "doi": "10.1038/s43587-025-01016-8",
     "preprint": false,
     "coi_zh": null
@@ -1836,7 +1839,7 @@
     "first_author": "Raptis",
     "et_al": true,
     "journal": "Nature Aging",
-    "year": 2025,
+    "year": 2026,
     "doi": "10.1038/s43587-025-01018-6",
     "preprint": false,
     "coi_zh": null
@@ -2070,9 +2073,14 @@
    "about_zh": "自噬是细胞分解、回收自身受损部件的过程。阿尔茨海默病患者的 ULK1 也偏低；在这种病的模型小鼠里提高 ULK1，自噬增强、病变减轻、认知衰退推迟。细胞实验里，两种激活 ULK1 的化合物减少了 tau 蛋白结团，一种抑制剂则让结团加重。",
    "species": [
     "human",
-    "cell_line"
+    "cell_line",
+    "mouse",
+    "c_elegans"
    ],
-   "meet": [],
+   "meet": [
+    "mouse",
+    "c_elegans"
+   ],
    "source": {
     "first_author": "Pan",
     "et_al": true,
@@ -2104,7 +2112,7 @@
    ],
    "meet": [],
    "source": {
-    "first_author": "Hays & DiMatteo",
+    "first_author": "Hays 和 DiMatteo",
     "et_al": false,
     "journal": "Journal of Personality Assessment",
     "year": 1987,
@@ -2301,7 +2309,7 @@
     "first_author": "Buckley",
     "et_al": true,
     "journal": "Nature Aging",
-    "year": 2022,
+    "year": 2023,
     "doi": "10.1038/s43587-022-00335-4",
     "preprint": false,
     "coi_zh": null
@@ -2392,7 +2400,7 @@
    ],
    "meet": [],
    "source": {
-    "first_author": "Kadir",
+    "first_author": "Reskiawan A Kadir",
     "et_al": true,
     "journal": "Brain",
     "year": 2026,
@@ -2631,9 +2639,12 @@
    "line_zh": "老年小鼠巨噬细胞（一种免疫细胞）的线粒体吸钙变弱；吸钙一弱，炎症信号就被放大。",
    "about_zh": "年老小鼠的巨噬细胞吸钙比年轻小鼠少；在小鼠和人的巨噬细胞里去掉或减少负责吸钙的蛋白，炎症反应都变强。700 份人全血样本里，两个与吸钙有关的基因在年长者中偏低，一批炎症基因偏高。",
    "species": [
-    "human"
+    "human",
+    "mouse"
    ],
-   "meet": [],
+   "meet": [
+    "mouse"
+   ],
    "source": {
     "first_author": "Seegren",
     "et_al": true,
@@ -2693,9 +2704,12 @@
    "line_zh": "把人的造血干细胞移植进小鼠，经历炎症再恢复后，有一群干细胞仍带着炎症的分子印记。",
    "about_zh": "研究者给移植了人造血干细胞的小鼠注射引发炎症的物质，恢复后找到一群更少分裂、带着炎症印记的干细胞，印记还会传给它造出的免疫细胞。428 名加拿大成人的血里，较年轻者中印记较多的人，用六项血常规算的死亡风险分偏高；年长组里这种关联很弱。",
    "species": [
-    "human"
+    "human",
+    "mouse"
    ],
-   "meet": [],
+   "meet": [
+    "mouse"
+   ],
    "source": {
     "first_author": "Zeng",
     "et_al": true,
@@ -2822,9 +2836,12 @@
    "species": [
     "human",
     "cell_line",
+    "mouse",
     "other"
    ],
-   "meet": [],
+   "meet": [
+    "mouse"
+   ],
    "source": {
     "first_author": "Tsuji",
     "et_al": true,
@@ -3281,7 +3298,7 @@
     "first_author": "Magkouta",
     "et_al": true,
     "journal": "Nature Aging",
-    "year": 2024,
+    "year": 2025,
     "doi": "10.1038/s43587-024-00747-4",
     "preprint": false,
     "coi_zh": "文中的化合物正在申请专利，涉及包括通讯作者在内的两名作者。"
@@ -3468,9 +3485,14 @@
    "about_zh": "葫芦巴碱是咖啡豆、葫芦巴籽里的一种天然分子，在线虫、小鼠和人的肌肉细胞里能变成 NAD+（细胞产能要用的分子）。老年雄性小鼠吃含它的饲料 12 周，肌肉随年龄变得易疲劳的程度减轻约一半。人群部分是关联：肌少症患者血里的葫芦巴碱偏低。",
    "species": [
     "human",
-    "cell_line"
+    "cell_line",
+    "c_elegans",
+    "mouse"
    ],
-   "meet": [],
+   "meet": [
+    "c_elegans",
+    "mouse"
+   ],
    "source": {
     "first_author": "Membrez",
     "et_al": true,
@@ -4268,7 +4290,7 @@
     "first_author": "Ma",
     "et_al": true,
     "journal": "Nature Aging",
-    "year": 2025,
+    "year": 2026,
     "doi": "10.1038/s43587-025-01027-5",
     "preprint": false,
     "coi_zh": null
@@ -4418,7 +4440,7 @@
     "first_author": "Jin",
     "et_al": true,
     "journal": "Nature Aging",
-    "year": 2024,
+    "year": 2025,
     "doi": "10.1038/s43587-024-00762-5",
     "preprint": false,
     "coi_zh": null
@@ -4631,7 +4653,7 @@
     "first_author": "Yang",
     "et_al": true,
     "journal": "Nature Aging",
-    "year": 2023,
+    "year": 2024,
     "doi": "10.1038/s43587-023-00532-9",
     "preprint": false,
     "coi_zh": null
@@ -4655,9 +4677,14 @@
    "about_zh": "OSER1 受一类和长寿有关的基因开关蛋白 FOXO 调控。多了它的果蝇更扛得住氧化、饥饿和高温。人群部分查了这个基因上的 49 个常见变异，有 2 个和长寿的关联在多重比较校正后仍成立。",
    "species": [
     "human",
-    "multi_species"
+    "c_elegans",
+    "drosophila",
+    "other"
    ],
-   "meet": [],
+   "meet": [
+    "c_elegans",
+    "drosophila"
+   ],
    "source": {
     "first_author": "Song",
     "et_al": true,
@@ -4931,7 +4958,7 @@
    ],
    "meet": [],
    "source": {
-    "first_author": "Adan & Almirall",
+    "first_author": "Adan 和 Almirall",
     "et_al": false,
     "journal": "Personality and Individual Differences",
     "year": 1991,
@@ -5183,7 +5210,7 @@
     "c_elegans"
    ],
    "source": {
-    "first_author": "Zhang & Gems",
+    "first_author": "Zhang 与 Gems",
     "et_al": false,
     "journal": "Nature Communications",
     "year": 2026,
@@ -5304,8 +5331,10 @@
    "body_zh": "实验室小鼠一般活 2 到 3 年。很多抗衰老药物都先在小鼠身上试。",
    "key": "mouse",
    "studies": [
+    "s-time-seq-dna-methylation",
     "s-epigenetic-age-single-cells",
     "s-scepiage-single-cell-ageing",
+    "s-ulk1-autophagy-alzheimers",
     "s-aging-mouse-brain-atlas",
     "s-cilia-autophagy-cognitive-resilience",
     "s-gdf11-neuronal-autophagy",
@@ -5313,10 +5342,13 @@
     "s-neurogenic-aging-clocks",
     "s-spatial-mapping-senolytic-targeting",
     "s-senescent-cells-gene-set",
+    "s-ageing-inflammatory-marker",
     "s-cgas-sting-ageing-inflammation",
+    "s-hsc-inflammatory-memory",
     "s-platelet-factors-ageing-cognition",
     "s-ramanomics-senescence",
     "s-ras-titration-senescent-state",
+    "s-paracrine-senescence-inflammation",
     "s-ampk-aldolase-aldometanib",
     "s-chaperone-autophagy-tissue-aging",
     "s-endothelial-cebpb-aep-nampt",
@@ -5329,6 +5361,7 @@
     "s-sirt1-hepatocyte-nampt",
     "s-sirtuin2-opc-remyelination",
     "s-terpenoid-autophagy-sarcopenia",
+    "s-trigonelline-nad-precursor-muscle",
     "s-senolytic-human-brain-aging",
     "s-aged-skin-il36-osteoarthritis",
     "s-ddx5-cartilage-fibrosis",
@@ -5363,11 +5396,14 @@
    "body_zh": "减弱胰岛素信号能让线虫的寿命成倍延长，这是长寿遗传学的起点之一。",
    "key": "c_elegans",
    "studies": [
+    "s-ulk1-autophagy-alzheimers",
     "s-mitophagy-inducers-alzheimers",
     "s-neuron-aging-clocks",
     "s-ampk-aldolase-aldometanib",
     "s-grainyhead-drug-inducible-lifespan",
     "s-insulin-igf-pten-longevity",
+    "s-trigonelline-nad-precursor-muscle",
+    "s-foxo-oser1-oxidative-lifespan",
     "s-gompertz-celegans-decrepitude"
    ]
   },
@@ -5385,6 +5421,7 @@
     "s-rapamycin-early-adult-autophagy",
     "s-rapamycin-enterocyte-sex",
     "s-senescent-glia-mitochondria-lipid",
+    "s-foxo-oser1-oxidative-lifespan",
     "s-circadian-insulin-peptide-aging"
    ]
   },

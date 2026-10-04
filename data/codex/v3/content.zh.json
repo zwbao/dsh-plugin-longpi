@@ -308,7 +308,7 @@
      "from": "论文正文 Results: \"a 9% increase in the risk of all-cause mortality (HR=1.09, p=3.8E-49)\""
     }
    ],
-   "library_issue_zh": "技能名和 SKILL.md 讲的是 Gao 等 2023（抑郁焦虑与生物年龄），paper 块却是 Levine 等 2018；summary_zh 只写了九项化验的表型年龄，没提这篇的主结果是据此训练的甲基化指标，还夹带面向用户的免责句和内部用语。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-clock",
     "at": "2026-10-04",
@@ -439,7 +439,7 @@
      "from": "claims.md: MCU 和 MICU1 与年龄反向相关"
     }
    ],
-   "library_issue_zh": "skill.json 的 species 只写 human、evidence 写 cross_sectional，但主结论（吸钙随年龄下降、吸钙变弱放大炎症）来自小鼠巨噬细胞实验，应为 animal，species 应加 mouse。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-immune",
     "at": "2026-10-04",
@@ -735,7 +735,7 @@
      "from": "claims.md: 年龄 65 到 90 岁。PRKAG1 与 MPI 负相关"
     }
    ],
-   "library_issue_zh": "skill.json 的 evidence 写 cross_sectional，但主结论来自绿松石鳉实验，应为动物；summary_zh 和 claims.md 写「青鳉鱼」，论文用的是绿松石鳉（Nothobranchius furzeri）。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-repair",
     "at": "2026-10-04",
@@ -1053,7 +1053,7 @@
      "from": "claims.md: 抗酸药对认知的负向关联（−0.235）中，麦角硫因中介 31.5%"
     }
    ],
-   "library_issue_zh": "skill.json 的 evidence 写 cohort，但论文的主分析是在鹿特丹队列里做的横断面比较（摘要写 cross-sectionally）。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-brain",
     "at": "2026-10-04",
@@ -1248,7 +1248,7 @@
      "from": "论文正文: baseline mortality (α), which was 1.98 times higher … the rate of ageing (β) remained unchanged"
     }
    ],
-   "library_issue_zh": "skill.json summary_zh 写「补充花粉并不能单独解释全部差异」，claims.md 里的实验是剥夺花粉（H. hecale 的 α 变为 1.98 倍、β 不变），不是补充花粉。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-span",
     "at": "2026-10-04",
@@ -1302,7 +1302,7 @@
      "from": "claims.md: PC PhenoAge：12 个月 −0.03（−0.19，0.12）…PC GrimAge：12 个月 −0.04（−0.16，0.07）"
     }
    ],
-   "library_issue_zh": "evidence 写的是 rct，但甲基化时钟的结果是随机试验血样的事后分析（论文摘要原文 post hoc analysis），应按紫色人群研究处理。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-clock",
     "at": "2026-10-04",
@@ -1386,7 +1386,7 @@
      "from": "claims.md: 小鼠 2 个月对 8 个月"
     }
    ],
-   "library_issue_zh": "年份不一致：skill.json 写 2023（网络首发 2023-12-21），claims.md 写 Nature Aging 4:110–128（2024）；summary_zh 第一句没写明器官比较是在小鼠里做的。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-gene",
     "at": "2026-10-04",
@@ -1475,7 +1475,7 @@
      "from": "claims.md: 7 类细胞、31 种性状"
     }
    ],
-   "library_issue_zh": "年份不一致：skill.json 写 2025（网络首发 2025-12-17），claims.md 和 SKILL.md 写 Nature Aging 2026（2026 年 1 月卷期）。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-gene",
     "at": "2026-10-04",
@@ -1525,7 +1525,7 @@
      "from": "claims.md: 其中 14 个在 UK Biobank 父母寿命上得到间接验证"
     }
    ],
-   "library_issue_zh": "claims.md 只写「LGP 对照 147 人」，论文表 1 的对照还包括 LonGenity 队列的 273 人（共 420 人），对照人数不完整。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-gene",
     "at": "2026-10-04",
@@ -1700,7 +1700,7 @@
      "from": "SKILL.md: 10% 及以上高危"
     }
    ],
-   "library_issue_zh": "summary_zh 写「用中国四个队列的 2 万多名成人建立」，但 contract.md 记录推导队列只有 InterASIA 和 China MUCA 1998 两个，另两个队列用于验证；这项技能也没有 references/claims.md。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-organ",
     "at": "2026-10-04",
@@ -1952,7 +1952,7 @@
    "research_assay": true,
    "feature_zh": null,
    "numbers": [],
-   "library_issue_zh": "claims.md 没有记录利益冲突：论文声明三位作者就 NMN、NR 新用途申请专利（WO2020262497），两位是 Senju 制药员工，三位获该公司资助；而本文的干预正是 NMN、NR 滴眼。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-span",
     "at": "2026-10-04",
@@ -2035,7 +2035,7 @@
      "from": "claims.md: three sets of terms describing inferred phenotype"
     }
    ],
-   "library_issue_zh": "skill.json 的 evidence 写作 database，这篇论文本身是用德尔菲法做的专家共识（PubMed 类型为 Consensus Statement）。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-gene",
     "at": "2026-10-04",
@@ -2212,7 +2212,7 @@
      "from": "claims.md: 109 proteins at Bonferroni P = 1.7×10^−5 (Figure 5a)"
     }
    ],
-   "library_issue_zh": "SKILL.md 写 Raptis et al. 2026，论文 2025 年 11 月在线发表，skill.json 的 2025 是对的。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-brain",
     "at": "2026-10-04",
@@ -2291,7 +2291,7 @@
      "from": "PDF 摘要: \"a NEU1 inhibitor extended lifespan by up to 17% in wild-type naturally aged mice\""
     }
    ],
-   "library_issue_zh": "skill.json 的 evidence 写成 cohort，但缩短寿命、激活免疫和抑制剂延长寿命这些主结论来自小鼠实验，1068 人的队列只提供碎片随年龄升高的关联。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-tissue",
     "at": "2026-10-04",
@@ -2754,7 +2754,7 @@
      "from": "claims.md: 对照 19 人平均增加 0.78 年（标准差 3.57）"
     }
    ],
-   "library_issue_zh": "evidence 写的是 rct，但生物年龄结果是两项试验血样的二次分析（试验前后比较、只算完成者），应为紫色人群研究；summary_zh 里的「一种临床生物年龄指标」应写明是七项指标的 Klemera-Doubal 生物年龄。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-clock",
     "at": "2026-10-04",
@@ -2793,7 +2793,7 @@
      "from": "claims.md: 其中两个 SNP 来自一个连锁群，P < 0.0024（按 21 次检验校正）"
     }
    ],
-   "library_issue_zh": "skill.json 的 evidence 写作 case_control，但主结论（寿命延长）来自家蚕、线虫和果蝇实验，人群部分只是 OSER1 变异与长寿的关联，应按动物实验归类。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-gene",
     "at": "2026-10-04",
@@ -3009,7 +3009,7 @@
      "from": "claims.md: 个体共 8830 条"
     }
    ],
-   "library_issue_zh": "skill.json paper.authors 写「Zhang 等」，这篇只有两位作者（claims.md 写「Zhang 与 Gems」，Crossref 同）。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-span",
     "at": "2026-10-04",
@@ -3392,7 +3392,7 @@
      "from": "claims.md: 改良风险分用六项血常规的性别特异五年死亡系数"
     }
    ],
-   "library_issue_zh": "skill.json 的 species 只写 human、evidence 写 cross_sectional，但主结论来自把人造血干细胞移植到小鼠后做的炎症—恢复实验（论文摘要：xenograft inflammation–recovery models），应为 animal，species 应加 mouse。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-immune",
     "at": "2026-10-04",
@@ -3444,7 +3444,7 @@
      "from": "claims.md: 放慢与 55–74 岁死亡上升连在一起，德国和法国的大片地区尤其明显"
     }
    ],
-   "library_issue_zh": "skill.json 的 evidence 写作 review，summary_zh 也称它为「综述」，但这是用西欧 450 个地区死亡数据做的原创研究（PubMed 类型为 research-article）。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-gene",
     "at": "2026-10-04",
@@ -3544,7 +3544,7 @@
      "from": "claims.md: 老化相关差异基因数在正文写成 3,455"
     }
    ],
-   "library_issue_zh": "年份不一致：skill.json 写 2024（网络首发 2024-11-22），claims.md 写 Nature Aging 5:275–290（2025）。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-gene",
     "at": "2026-10-04",
@@ -3713,7 +3713,7 @@
      "from": "claims.md: 脑灰质年龄差与痴呆 HR = 1.81"
     }
    ],
-   "library_issue_zh": "summary_zh 只写了仓库克隆不到和截距没印出，没有概括研究发现（器官年龄差与相应器官的疾病和死亡有关）。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-organ",
     "at": "2026-10-04",
@@ -3756,7 +3756,7 @@
      "from": "skill.json paper.title: identifies RUNX1 as a decelerator of T cell senescence（基因名，非数值）"
     }
    ],
-   "library_issue_zh": "skill.json 的 evidence 写 cohort，论文是 230 人血样建时钟的横断面建模研究，宜为 cross_sectional（颜色同为紫）。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-immune",
     "at": "2026-10-04",
@@ -4214,7 +4214,7 @@
      "from": "claims.md: 只解释 CMR 方差的 0.78% 和 2.94%"
     }
    ],
-   "library_issue_zh": "claims.md 写「黑斑羚 196 只…没有癌症」，论文原文是 blackbuck（Antilope cervicapra，印度黑羚）；黑斑羚是 impala，另一个物种。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-span",
     "at": "2026-10-04",
@@ -4453,7 +4453,7 @@
      "from": "PDF: treated the 3xTg AD mice ... via oral gavage for 2 consecutive months"
     }
    ],
-   "library_issue_zh": "skill.json 的 evidence 写 in_vitro，但论文标题和摘要的主结论（改善记忆、减轻病变）来自阿尔茨海默病模型线虫和小鼠；claims.md 只记了线虫的记忆结果，小鼠的记忆改善见论文摘要（nematode and rodent models）和 summary_zh。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-brain",
     "at": "2026-10-04",
@@ -4583,7 +4583,7 @@
      "from": "claims.md: 图 3 列出十个致病变异"
     }
    ],
-   "library_issue_zh": "核基因位点的个数前后说法不一：摘要写 92 个核位点，正文和 claims.md 写 92 个独立信号、分布在 46 个位点；卡片只写「许多」，claims.md 宜注明这一差别。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-repair",
     "at": "2026-10-04",
@@ -4921,7 +4921,7 @@
      "from": "claims.md: 裸鼹鼠 37 年，人 122.5 年"
     }
    ],
-   "library_issue_zh": "技能元数据的年份写 2021，但论文属 Nature Aging 2022 年第 2 卷（2021 年 12 月 23 日在线发表），SKILL.md 和 claims.md 也写 2022；出处年份应统一。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-clock",
     "at": "2026-10-04",
@@ -5119,7 +5119,7 @@
      "from": "PDF: exercise had a small rejuvenation effect in oligodendrocytes (... not significant at the mouse level) and in aNSC-NPCs"
     }
    ],
-   "library_issue_zh": "skill.json 的 year 写 2022（2022 年 12 月在线发表），claims.md 和 SKILL.md 写 2023（卷期年份），两处不一致。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-brain",
     "at": "2026-10-04",
@@ -5861,7 +5861,7 @@
      "from": "claims.md: IFNβ、IL6、TNFα 在第 6 天达到高峰后下降；IL1β 和 IL8 在病毒测不到后仍维持"
     }
    ],
-   "library_issue_zh": "skill.json 的 species 没有 mouse，但论文里清除衰老细胞药物见效的动物实验是在感染的小鼠里做的（仓鼠里没有见效）。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-immune",
     "at": "2026-10-04",
@@ -5976,7 +5976,7 @@
      "from": "claims.md: 三个验证队列 56,123 人、1,028 例，Fig. 2a HR 1.63（1.52–1.74）"
     }
    ],
-   "library_issue_zh": "claims.md 没有记录利益冲突：论文声明作者 J.A.K. 是维护和开发 FRAX 的 Osteoporosis Research 的董事，而 FRAX 是本文的对照工具。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-span",
     "at": "2026-10-04",
@@ -6082,7 +6082,7 @@
      "from": "SKILL.md: LTBP2 潜在转化生长因子结合蛋白 2（蛋白名）"
     }
    ],
-   "library_issue_zh": "summary_zh 写这四种蛋白与痴呆「关联最强」，claims.md 依据正文写的是「关联最一致」。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-brain",
     "at": "2026-10-04",
@@ -6658,7 +6658,7 @@
      "from": "claims.md: CAGGS-NRAS(G12V) 大约在注射后第 12–30 天被清除"
     }
    ],
-   "library_issue_zh": "skill.json 的 evidence 写 in_vitro，但一句话里的主结论（被免疫清除还是长出肿瘤）来自小鼠肝脏实验，应为 animal。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-immune",
     "at": "2026-10-04",
@@ -6884,7 +6884,7 @@
    "research_assay": false,
    "feature_zh": null,
    "numbers": [],
-   "library_issue_zh": "skill.json 的 evidence 写 in_vitro，但论文主结论包括小鼠体内的选择性清除，应为动物；另外 skill.json 年份写 2024（2024 年 12 月在线发表），SKILL.md 和 claims.md 写 2025（2025 年 1 月刊）。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-repair",
     "at": "2026-10-04",
@@ -6930,7 +6930,7 @@
      "from": "claims.md: DunedinPACE −0.09 单位、慢 9%（p = 0.01）"
     }
    ],
-   "library_issue_zh": "evidence 写的是 rct，但表观遗传年龄不是预设终点（claims.md 原话），结果属随机试验的事后探索分析，应为紫色人群研究。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-clock",
     "at": "2026-10-04",
@@ -7251,7 +7251,7 @@
      "from": "claims.md: 807 males × 4350 features"
     }
    ],
-   "library_issue_zh": "skill.json 的 evidence 写 cohort，论文实为汇总多个公开数据集的横断面比较（cross_sectional），颜色同为紫。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-immune",
     "at": "2026-10-04",
@@ -7589,7 +7589,7 @@
    "research_assay": true,
    "feature_zh": null,
    "numbers": [],
-   "library_issue_zh": "claims.md 写「尤其是穹窿」，论文摘要写的是 fimbria（海马伞）；清除衰老细胞后的减少主要在雌性小鼠里报告（正文：雄鼠的转录变化更不一致），claims.md 没有记下这一限定。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-brain",
     "at": "2026-10-04",
@@ -7853,7 +7853,7 @@
      "from": "claims.md: 50多岁莱迪希细胞类固醇代谢改变，巨噬细胞免疫反应改变"
     }
    ],
-   "library_issue_zh": "技能输出把「年龄大于 45 岁并且体质指数至少 30」合成一个切点，但论文图 6c 是年龄（尤其 45 岁以上）和体质指数（30 以上）分别建模，各自是生育力下降的潜在风险因素。",
+   "library_issue_zh": "SKILL.md 和脚本已改成年龄、体质指数分开报告；skill.json 的 triage.reason_zh 和 bmi 输入的 note_zh 仍写「年龄大于 45 且 BMI 至少 30」的合并切点。",
    "review": {
     "by": "reviewer-gene",
     "at": "2026-10-04",
@@ -7892,7 +7892,7 @@
      "from": "claims.md: 测试 R = 0.96，MedAE = 3.39 年（Results）"
     }
    ],
-   "library_issue_zh": "summary_zh 只写了计算步骤，没写研究发现；evidence 写 cohort、species 只写 human，但这篇方法论文的大部分实验在小鼠里做，人血时钟只是其中一部分。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-clock",
     "at": "2026-10-04",
@@ -7973,7 +7973,7 @@
      "from": "PDF: muscle fatiguability was tripled in aged mice but trigonelline prevented approximately 50% of this age-related decline"
     }
    ],
-   "library_issue_zh": "skill.json 的 evidence 写 case_control、species 只列人和细胞系，但补充效果来自线虫和小鼠实验；按补充效果这一主结论应为动物。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-repair",
     "at": "2026-10-04",
@@ -8024,7 +8024,7 @@
      "from": "claims.md: SBI-0206965 有增加 tau 点的趋势；XST-14 在 5 μM 加重聚集"
     }
    ],
-   "library_issue_zh": "skill.json 的 species 只写 human 和 cell_line，论文还用了阿尔茨海默病模型小鼠和线虫。",
+   "library_issue_zh": null,
    "review": {
     "by": "reviewer-brain",
     "at": "2026-10-04",

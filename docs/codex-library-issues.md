@@ -1,6 +1,18 @@
 # 方法库里的错误（长寿图鉴审核时发现）
 
-写卡和审核时发现 39 处方法库（longevity-skills）的 `evidence`、`species`、`summary_zh`、年份或 claims.md 与论文不一致。图鉴按审核后的内容文件显示（docs/codex-design.md §4），这些需要回方法库修。
+写卡和审核时发现 39 处方法库（longevity-skills）的 `evidence`、`species`、`summary_zh`、年份、作者或 claims.md 与论文不一致。
+
+**状态（2026-10-04 核对）**：39 处已在 longevity-skills main 修好（9ca77bf..b992b5e），逐条核对过。图鉴的出处现在直接用方法库的年份、作者、期刊和 DOI。
+
+## 还剩的小问题
+
+| 技能 | 问题 |
+| --- | --- |
+| `testis-transcriptomic-atlas-lifespan` | SKILL.md 和脚本已改成年龄、体质指数分开报告；`skill.json` 的 `triage.reason_zh` 和 bmi 输入的 `note_zh` 仍写「年龄大于 45 且 BMI 至少 30」的合并切点。 |
+| `navy-circumference-body-fat`、`uls8-loneliness-scale`、`rmeq-chronotype` | 两位作者写成「A 和 B」，其他技能（如 `gompertz-celegans-decrepitude`）写「A 与 B」，写法不一致。 |
+| `apoe2-pericyte-lipid` | `paper.authors` 写全名「Reskiawan A Kadir 等」，其他技能只写姓。 |
+
+## 已修复的 39 处（原记录）
 
 | 技能 | 问题 |
 | --- | --- |
