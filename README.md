@@ -124,6 +124,8 @@ The installer writes the configuration. To change it, edit the `dsh-plugin-longp
 git clone https://github.com/zwbao/dsh-plugin-longpi.git && cd dsh-plugin-longpi
 npm ci
 npm test          # needs longevity-skills beside this checkout, or LONGEVITY_SKILLS_HOME
+                  # test/rcv-cases.mjs also reads longevity-analyst-skill/tests/fixtures/rcv_cases.json beside it,
+                  # or LONGEVITY_RCV_CASES; it skips when neither is there
 npm run preview   # renders the home, health page and onboarding with demo data, no DeepSeek Harness needed
 ```
 

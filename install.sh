@@ -1234,6 +1234,11 @@ install_coach() {
   if [ -d "$src/.git" ]; then
     (cd "$src" && GIT_TERMINAL_PROMPT=0 git fetch --depth 1 origin "refs/tags/$ref:refs/tags/$ref" && git checkout -q "$ref") </dev/null >>"$LOG" 2>&1 \
       || warn "Could not update $src to $ref; keeping the copy there." "无法把 $src 更新到 ${ref}，保留现有版本。"
+  elif [ "${USE_GITHUB_MIRROR:-0}" = 1 ] && case "$repo" in *github.com[/:]*) true ;; *) false ;; esac; then
+    # Mirror mode: GitHub is not reached directly, and Pi's skill is not on a mirror yet. Skipped, not fatal.
+    warn "GitHub is not reachable in mirror mode, so longevity-coach was not installed; LongPi still speaks as Pi, without the full coaching method. Pass --coach-repo (or LONGPI_COACH_REPO) a git URL this machine can reach, for example a Gitee import." \
+         "镜像模式下无法直接访问 GitHub，未安装 longevity-coach；LongPi 仍以 Pi 的口吻说话，只是没有完整的教练方法。可用 --coach-repo（或 LONGPI_COACH_REPO）指定这台机器能访问的 git 地址，例如导入 Gitee 后的地址。"
+    return 0
   else
     GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "$ref" "$repo" "$src" </dev/null >>"$LOG" 2>&1 || return 1
   fi

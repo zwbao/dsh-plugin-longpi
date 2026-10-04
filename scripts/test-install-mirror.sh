@@ -599,6 +599,7 @@ unset LONGPI_MIRROR LONGPI_BLOCK LONGPI_NPM_TARBALL LONGPI_SKILLS_TARBALL LONGPI
 HIDE_TOOLS=1
 run_case default
 need "$TRACE" "git clone --quiet https://github.com/zwbao/longevity-skills.git"
+need "$TRACE" "git clone --depth 1 --branch v0.2.0 https://github.com/zwbao/longevity-coach-skill"
 need "$TRACE" "dsh plugin --profile web add github:zwbao/dsh-plugin-longpi"
 need "$TRACE" "npm install -g --no-fund --no-audit --loglevel=error pnpm@10"
 forbid "$TRACE" "--registry"
@@ -633,6 +634,8 @@ forbid "$TRACE" "CURL host=registry.npmjs.org"
 forbid "$TRACE" "CURL host=pypi.org"
 forbid "$TRACE" "CURL host=registry-1.docker.io"
 forbid "$TRACE" "add github:"
+# Pi's skill is only on GitHub: mirror mode skips it with a warning instead of cloning.
+need "$ERR" "--coach-repo"
 
 # --- 3. --mirror auto, official hosts down: same mirrors, probes first ------
 run_case auto-blocked --mirror auto
@@ -763,7 +766,8 @@ printf '%s\n' '{"name":"longevity-skills","version":"2026.39.0"}' >"$PKG/node_mo
 printf '%s\n' '{"schema":"longevity-catalog/1","version":"2026.39.0","skills":[]}' >"$PKG/node_modules/longevity-skills/catalog.json"
 printf '%s\n' 'pytest>=8' >"$PKG/node_modules/longevity-skills/requirements-ci.txt"
 HIDE_TOOLS=
-run_case node-modules --plugin "$PKG"
+# Pi's skill is a git checkout of its own; this case is about the library from node_modules, so it is off here.
+run_case node-modules --plugin "$PKG" --without-coach
 forbid "$TRACE" "git clone"
 forbid "$TRACE" "git -C"
 need "$LONGPI_HOME/longevity-skills/catalog.json" "2026.39.0"
