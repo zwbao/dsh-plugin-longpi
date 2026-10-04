@@ -47,7 +47,9 @@ export function copyProblems(card, rules) {
   if (!TIERS.has(card.tier)) out.push(`tier「${card.tier}」`)
   if (!card.tier_reason_zh) out.push('no tier reason')
   for (const word of rules.forbidden) if (text.includes(word)) out.push(`forbidden「${word}」`)
-  for (const word of rules.internal) if (text.includes(word)) out.push(`internal word「${word}」`)
+  // 「相关系数」 with its scale explained is plain; a model's coefficient names are not.
+  const plain = text.replaceAll('相关系数', '')
+  for (const word of rules.internal) if (plain.includes(word)) out.push(`internal word「${word}」`)
   for (const word of rules.tails) if (text.includes(word)) out.push(`negation tail「${word}」`)
   if (/["“”]/.test(text)) out.push('use 「」 quotes')
   return out

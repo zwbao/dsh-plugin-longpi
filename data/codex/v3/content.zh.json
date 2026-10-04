@@ -261,6 +261,66 @@
   "other": "其他"
  },
  "studies": {
+  "accelerated-biological-aging-risk": {
+   "title_zh": "九项化验算出的身体年龄",
+   "line_zh": "美国全国健康调查的成年人里，九项常规化验加年龄算出的「表型年龄」偏大的人，之后去世的更多。",
+   "about_zh": "研究者用约 1 万名美国成年人的数据，从 42 项化验里挑出白蛋白、肌酐、血糖、C 反应蛋白等九项，和实际年龄合成「表型年龄」。在另一批 6209 人里验证：实际年龄相同的人，表型年龄每大 1 岁，之后 12 年内去世的风险高约 9%。",
+   "tier": "human",
+   "tier_reason_zh": "用美国全国健康调查数据建立并验证的公式，属人群研究。",
+   "source": {
+    "first_author": "Levine",
+    "et_al": true,
+    "journal": "Aging",
+    "year": 2018,
+    "doi": "10.18632/aging.101414",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": false,
+   "feature_zh": "健康页上的「身体年龄」就是用这个公式算的。",
+   "numbers": [
+    {
+     "text": "九项",
+     "from": "claims.md: PhenoAge from albumin, alkaline phosphatase, creatinine, CRP, glucose, mean cell volume, RDW, WBC, lymphocyte proportion"
+    },
+    {
+     "text": "约 1 万",
+     "from": "论文正文 Results（PMC 全文）: \"our analytical sample included 9,926 adults with complete biomarker data\""
+    },
+    {
+     "text": "42 项",
+     "from": "论文正文 Results: \"the hazard of mortality was regressed on forty-two clinical markers and chronological age\""
+    },
+    {
+     "text": "6209",
+     "from": "论文正文 Results: \"up to 12 years of mortality follow-up for n=6,209 national representative US adults\""
+    },
+    {
+     "text": "12 年",
+     "from": "论文正文 Results: \"included up to 12 years of mortality follow-up\""
+    },
+    {
+     "text": "1 岁",
+     "from": "论文正文 Results: \"a one-year increase in phenotypic age is associated with a 9% increase in the risk of all-cause mortality\""
+    },
+    {
+     "text": "9%",
+     "from": "论文正文 Results: \"a 9% increase in the risk of all-cause mortality (HR=1.09, p=3.8E-49)\""
+    }
+   ],
+   "library_issue_zh": "技能名和 SKILL.md 讲的是 Gao 等 2023（抑郁焦虑与生物年龄），paper 块却是 Levine 等 2018；summary_zh 只写了九项化验的表型年龄，没提这篇的主结果是据此训练的甲基化指标，还夹带面向用户的免责句和内部用语。",
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "出处核对：九项化验的表型年龄就是 Levine 等 Aging 2018 的第一步（用 NHANES III 建立、NHANES IV 验证），与方法库 paper 块和健康页「身体年龄」用的系数一致，出处行不改；Gao 等 2023 只是借用它，保留 library_issue",
+     "about_zh 改写：删去「论文随后又用它训练出一种甲基化指标」，让全卡只讲九项表型年龄；补上验证人群里「每大 1 岁，死亡风险高约 9%」等数字，numbers[] 引论文正文（PMC 全文）",
+     "coi_zh 删去：论文的临时专利申请针对的是本文的甲基化衰老指标（DNAm PhenoAge），不是卡上讲的九项化验表型年龄",
+     "颜色紫与一句话一致（全国健康调查数据的公式与关联）；tier_reason 补「并验证」；feature_zh 保留；research_assay=false 正确（常规化验）"
+    ]
+   }
+  },
   "aged-skin-il36-osteoarthritis": {
    "title_zh": "老皮肤拖累关节",
    "line_zh": "雄性小鼠实验：年老皮肤里一种「炎症刹车」蛋白减少，促炎因子进到关节，加重骨关节炎。",
@@ -299,6 +359,56 @@
      "银正确：敲除与微针治疗都在雄性小鼠，line_zh 已写明雄性",
      "coi_zh：论文声明无利益冲突，保持 null",
      "research_assay=true 核实：结果依赖研究用检测（测序/单细胞/组织学/动物或细胞实验读数），技能输入也都是研究数据；feature_zh=null 正确"
+    ]
+   }
+  },
+  "ageing-clocks-digital-twins": {
+   "title_zh": "多次复测，生物年龄稳不稳",
+   "line_zh": "30 名健康人 13 个月里多次检测：各种时钟算的生物年龄人与人差别大，同一个人前后相对稳定。",
+   "about_zh": "研究者给这些人算了 29 种甲基化时钟，以及化验、蛋白和代谢物时钟共 9 种。甲基化时钟在同一个人身上最稳。同一份血样重复测，一种常用甲基化时钟最多相差 2.56 岁。",
+   "tier": "human",
+   "tier_reason_zh": "30 名健康人的随访观察研究。",
+   "source": {
+    "first_author": "Pusparum",
+    "et_al": true,
+    "journal": "npj Digital Medicine",
+    "year": 2025,
+    "doi": "10.1038/s41746-025-01911-9",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "29 种",
+     "from": "claims.md: 计算了 29 个表观遗传、4 个临床生化、2 个蛋白组和 3 个代谢组时钟"
+    },
+    {
+     "text": "9 种",
+     "from": "claims.md: 4 个临床生化、2 个蛋白组和 3 个代谢组时钟（4+2+3）"
+    },
+    {
+     "text": "2.56 岁",
+     "from": "claims.md: Skin & Blood 技术重复的最大绝对差写为 2.56 年"
+    },
+    {
+     "text": "30 名",
+     "from": "论文 Methods（PMC12371080）: \"a unique longitudinal cohort study that ran for 13 months in 30 healthy individuals\""
+    },
+    {
+     "text": "13 个月",
+     "from": "论文 Methods: \"ran for 13 months in 30 healthy individuals\""
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "line_zh「一群多次随访的人」改为具体的「30 名健康人 13 个月里多次检测」（论文 Methods），about_zh 相应改为「这些人」",
+     "核对：结论与摘要 ageing is different between individuals but relatively stable within individuals 一致；29、9、2.56 与 claims.md 一致；作者声明无利益冲突"
     ]
    }
   },
@@ -397,6 +507,45 @@
     ]
    }
   },
+  "aging-biomarker-framework": {
+   "title_zh": "猜岁数和预测死亡，两回事",
+   "line_zh": "在 2 万多人的多个队列里，传统衰老时钟估实际年龄准不准，和它预测死亡准不准没有关联。",
+   "about_zh": "研究者做了一套开源工具，用同一流程评估 39 种衰老指标。估年龄最准的是一种皮肤和血液甲基化时钟；与死亡关联最强的是另一种甲基化时钟，它也最能预测健康寿命。",
+   "tier": "human",
+   "tier_reason_zh": "多个人群队列数据的比较评估。",
+   "source": {
+    "first_author": "Ying",
+    "et_al": true,
+    "journal": "Nature Aging",
+    "year": 2025,
+    "doi": "10.1038/s43587-025-00987-y",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "2 万多",
+     "from": "claims.md: Biolearn 整理 39 个标志物、超过 20,000 人"
+    },
+    {
+     "text": "39 种",
+     "from": "claims.md: Biolearn 整理 39 个标志物"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "coi_zh 删去：三位作者申请的是一项泛指「测量细胞衰老」的专利，其余是检测公司顾问关系，声明没有把作者和本文的开源评估工具或卡上的结论联系起来",
+     "line_zh 补「传统」，与摘要 traditional aging clocks（R = 0.12，P = 0.67）一致",
+     "核对：「估年龄最准的是皮肤和血液时钟」「与死亡关联最强、也最能预测健康寿命的是另一种」出自摘要"
+    ]
+   }
+  },
   "aging-mouse-brain-atlas": {
    "title_zh": "小鼠大脑，白质先老",
    "line_zh": "小鼠 15 个脑区的基因表达图谱：富含白质的区域老得最早、最明显，胼胝体的速度约为皮层 3 倍。",
@@ -447,6 +596,57 @@
    "library_issue_zh": null,
    "review": {
     "by": "reviewer-brain",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": []
+   }
+  },
+  "amino-acid-biological-age": {
+   "title_zh": "血里的氨基酸估年龄",
+   "line_zh": "用 18 种血液氨基酸估年龄；估出的年龄比实际偏大的人，衰弱和年龄相关疾病更常见。",
+   "about_zh": "研究者汇总 1 到 89 岁人群的血液氨基酸数据，用 4,529 人训练、1,130 人测试。测试集里估出的年龄和实际年龄平均差约 7.5 岁；论文还做了只用 8 种氨基酸的简版。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自多个人群队列血样的建模和关联分析。",
+   "source": {
+    "first_author": "Ding",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2026,
+    "doi": "10.1038/s41467-026-73371-y",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "18",
+     "from": "claims.md: AmiAge 用随机森林，18 个氨基酸加 18 个比例"
+    },
+    {
+     "text": "1 到 89",
+     "from": "claims.md: 年龄 1–89 岁"
+    },
+    {
+     "text": "4,529",
+     "from": "claims.md: 训练集 4,529 人（80%）"
+    },
+    {
+     "text": "1,130",
+     "from": "claims.md: 测试集 1,130 人"
+    },
+    {
+     "text": "7.5",
+     "from": "claims.md: Fig. 2c 测试集 … MAE = 7.53"
+    },
+    {
+     "text": "8",
+     "from": "claims.md: 简化模型的 8 个氨基酸是丙氨酸、谷氨酰胺……"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
     "at": "2026-10-04",
     "pass": true,
     "issues": []
@@ -580,6 +780,96 @@
     ]
    }
   },
+  "biological-age-ct-cardiometabolic": {
+   "title_zh": "腹部 CT 里的生物年龄",
+   "line_zh": "12 万多名成人的腹部 CT 里，自动量出的肌肉、脂肪、钙化等，预测生存比只看年龄性别等更准。",
+   "about_zh": "研究者用人工智能从 CT 量出肌肉密度、主动脉钙化、内脏脂肪、骨密度等，建成不用年龄性别的模型，贡献最大的是肌肉密度。校正年龄和性别后，评分最差的四分之一的人，死亡风险是最好四分之一的 8.7 倍。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自 12 万多名成人腹部 CT 的回顾性队列。",
+   "source": {
+    "first_author": "Pickhardt",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2025,
+    "doi": "10.1038/s41467-025-56741-w",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "12 万多",
+     "from": "claims.md: 123,281 名成人，平均年龄 53.6 岁"
+    },
+    {
+     "text": "四分之一",
+     "from": "claims.md: 最高与最低风险四分位的生存 HR"
+    },
+    {
+     "text": "8.7",
+     "from": "claims.md: 年龄和性别校正后 … HR 为 8.73（95% CI 8.14–9.36）"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "coi_zh 改为 null：论文申报的是作者与 GE HealthCare、Nanox-AI、iCAD、飞利浦等公司的顾问或版税关系，论文没有把这些公司和本研究的 CT 工具（由 NIH 和威斯康星大学开发）联系起来；原文「几家医学影像公司」「专利使用费」也是论文以外的转述。",
+     "删除 source.coi_from。"
+    ]
+   }
+  },
+  "biological-aging-generational-shifts": {
+   "title_zh": "越晚出生，生物年龄越偏大",
+   "line_zh": "英国 15 万名 55 岁以下的人里，越晚出生，化验算的生物年龄越偏大；偏大的人早发实体癌更常见。",
+   "about_zh": "研究者用常规化验算的「表型年龄」衡量全身衰老。1965–1974 年出生的人，表型年龄超出实际年龄的幅度比 1950–1954 年出生的人更大。偏大的人，55 岁前得实体癌更常见，主要是肺癌、消化道癌和子宫癌。",
+   "tier": "human",
+   "tier_reason_zh": "英国生物样本库的队列研究。",
+   "source": {
+    "first_author": "Tian",
+    "et_al": true,
+    "journal": "Nature Medicine",
+    "year": 2026,
+    "doi": "10.1038/s41591-026-04448-w",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": false,
+   "feature_zh": "健康页上的「身体年龄」用的也是这种表型年龄。",
+   "numbers": [
+    {
+     "text": "15 万",
+     "from": "claims.md: 英国生物样本库 154,169 名年轻成人中"
+    },
+    {
+     "text": "1965–1974",
+     "from": "claims.md: PhenoAge 年龄差在 1965–1974 年出生者相对 1950–1954 年出生者高"
+    },
+    {
+     "text": "1950–1954",
+     "from": "claims.md: 相对 1950–1954 年出生者高 23% 个标准差"
+    },
+    {
+     "text": "55 岁",
+     "from": "论文 Methods（PMC13472952）: \"A total of 154,169 participants under age 55 years at baseline\"；图注 \"early-onset solid cancers (<55 years)\""
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "line_zh「中青年」改为具体的「55 岁以下的人」（论文 Methods）",
+     "about_zh 写明「早发」指 55 岁前（论文图注 <55 years），癌种出自摘要 driven by lung, gastrointestinal and uterine cancers",
+     "feature_zh 补上：论文用的是 PhenoAge 表型年龄（代码调用 BioAge 的 phenoage），正是健康页「身体年龄」的方法",
+     "核对：队列关联，句式为「……的人更常见/偏大」；作者的利益冲突与本研究无关，coi_zh 保持 null"
+    ]
+   }
+  },
   "biomarker-panels-proteomic-profiling": {
    "title_zh": "脑小血管病的蛋白线索",
    "line_zh": "1,670 人的脑脊液：有白质病变、微出血或脑梗死灶的人，一组与血管壁重塑有关的蛋白都偏高。",
@@ -620,6 +910,107 @@
      "「小梗死」改为「梗死灶」：论文的梗死包括皮层、小脑梗死和皮层下腔隙，不只是小梗死（PDF 图 1c）",
      "「血管壁有关」补成「血管壁重塑有关」，对应摘要 extracellular matrix dysregulation and vascular remodeling",
      "核对 PDF：蛋白在脑脊液里用 Olink 测；竞争利益声明里没有与该平台或脑小血管病产品相关的利益，coi 保持 null"
+    ]
+   }
+  },
+  "blood-based-dna-damage": {
+   "title_zh": "帕金森病人血里的长基因",
+   "line_zh": "帕金森病人血液里较长的基因表达被压低，提示 DNA 损伤；首诊时只见于后来运动症状加重快的人。",
+   "about_zh": "研究者追踪帕金森病人的血液基因表达；DNA 损伤越多，越长的基因越难被完整读出。首诊 3 年后（第 8 次随访），表达下调的 229 个基因中位长度约 4.1 万个碱基对，上调的 1,106 个约 2.6 万。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自帕金森病人随访队列的血样分析。",
+   "source": {
+    "first_author": "Sproviero",
+    "et_al": true,
+    "journal": "Nature Aging",
+    "year": 2025,
+    "doi": "10.1038/s43587-025-00926-x",
+    "preprint": false,
+    "coi_zh": "一位作者是「用血液 DNA 损伤特征判断帕金森病预后」专利申请的发明人。"
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "3",
+     "from": "PDF：a follow-up visit after 36 months (visit 8)"
+    },
+    {
+     "text": "8",
+     "from": "claims.md: Fig. 4b：第 8 次访视上调 1,106 个……"
+    },
+    {
+     "text": "229",
+     "from": "claims.md: 下调 229 个、中位 40,692 bp，P = 0.0011"
+    },
+    {
+     "text": "4.1 万",
+     "from": "claims.md: 下调 229 个、中位 40,692 bp"
+    },
+    {
+     "text": "1,106",
+     "from": "claims.md: 第 8 次访视上调 1,106 个、中位 25,706 bp"
+    },
+    {
+     "text": "2.6 万",
+     "from": "claims.md: 上调 1,106 个、中位 25,706 bp"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "about_zh 给「第 8 次随访」补上时间参照：首诊 3 年后（PDF：follow-up visit after 36 months (visit 8)）。",
+     "coi_zh 保留：论文写明一位作者是「用血液 DNA 损伤特征判断帕金森病预后」专利申请的发明人，与本研究直接相关；删除 source.coi_from。"
+    ]
+   }
+  },
+  "blood-epigenetic-intrinsic-capacity": {
+   "title_zh": "一管血，估身心能力",
+   "line_zh": "血液甲基化估出的身心能力分数，在美国 1680 人的队列里，与死亡的关联强于前两代甲基化时钟。",
+   "about_zh": "研究者先在一个 1014 人的队列里评估认知、行动、心理、视听和活力五个方面，合成衡量身心能力的「内在能力」分数，再从血液 DNA 甲基化里挑出 91 个位点来估它。年纪越大的人，估出的分数越低。",
+   "tier": "human",
+   "tier_reason_zh": "在人群队列中建立、在另一个队列中验证的指标。",
+   "source": {
+    "first_author": "Fuentealba",
+    "et_al": true,
+    "journal": "Nature Aging",
+    "year": 2025,
+    "doi": "10.1038/s43587-025-00883-5",
+    "preprint": false,
+    "coi_zh": "第一作者和通讯作者是本文相关成果一项临时专利申请的共同发明人。"
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "1680",
+     "from": "claims.md: Framingham 1,680 人里全因死亡风险比 1.38"
+    },
+    {
+     "text": "1014",
+     "from": "claims.md: INSPIRE-T 1,014 人"
+    },
+    {
+     "text": "五个方面",
+     "from": "claims.md: MMSE…SPPB…PHQ-9…视力…听力；skill.json summary_zh: 认知、行动、心理、感官和活力五方面"
+    },
+    {
+     "text": "91 个",
+     "from": "claims.md: 弹性网 alpha = 0.9，91 个 CpG"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "coi_zh 只留与本文时钟相关的临时专利（声明 relating to work disclosed in this paper）；通讯作者参与创办的公司用的是另一种炎症衰老指标，与这张卡无关，删去",
+     "about_zh 删去「法国」：claims.md 和正文都没写明队列所在地，只能从作者单位推测",
+     "核对：1680、1014、91 与 claims.md 一致；一句话为队列验证结果 → 紫"
     ]
    }
   },
@@ -717,6 +1108,68 @@
     ]
    }
   },
+  "blood-protein-assessment": {
+   "title_zh": "千种血液蛋白看十年发病",
+   "line_zh": "英国 4.7 万人里，在 24 项常规因素之外加上血液蛋白分数，5 种病和死亡的 10 年预测更准。",
+   "about_zh": "研究者测了每人血浆里的 1468 种蛋白，发现 963 种与 21 种老年常见病或死亡有关联。那 24 项是年龄、性别之外的生活方式、常规化验和体格测量。以 2 型糖尿病为例，蛋白分数区分得病与否的能力，比糖化血红蛋白和多基因风险分都好。",
+   "tier": "human",
+   "tier_reason_zh": "英国生物样本库的队列研究。",
+   "source": {
+    "first_author": "Gadd",
+    "et_al": true,
+    "journal": "Nature Aging",
+    "year": 2024,
+    "doi": "10.1038/s43587-024-00655-7",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "4.7 万",
+     "from": "claims.md: 47,600 人、1,468 个 Olink 蛋白"
+    },
+    {
+     "text": "24 项",
+     "from": "claims.md: 在全部 24 个协变量之上仍有 ROC P < 0.0026"
+    },
+    {
+     "text": "5 种病和死亡",
+     "from": "claims.md: 2 型糖尿病、慢阻肺、死亡、阿尔茨海默病痴呆、缺血性心脏病、帕金森病"
+    },
+    {
+     "text": "10 年",
+     "from": "claims.md: 肌萎缩侧索硬化、子宫内膜异位症、膀胱炎看 5 年，其余看 10 年"
+    },
+    {
+     "text": "1468",
+     "from": "claims.md: 1,468 个 Olink 蛋白"
+    },
+    {
+     "text": "963",
+     "from": "claims.md: 3,209 个关联、963 个蛋白、21 个结局"
+    },
+    {
+     "text": "21",
+     "from": "claims.md: 963 个蛋白、21 个结局"
+    },
+    {
+     "text": "2 型",
+     "from": "claims.md: ProteinScore AUC 0.89，HbA1c 0.85，PRS 0.68"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "about_zh 说明「24 项常规因素」具体指什么（摘要 beyond age, sex and a comprehensive set of 24 lifestyle factors, clinically relevant biomarkers and physical measures）",
+     "核对：6 个蛋白分数（5 种病和死亡）、10 年、4.7 万、1468、963、21 与 claims.md 一致；部分作者受雇于药企和咨询公司，与卡上的蛋白分数无产品关系，coi_zh 保持 null"
+    ]
+   }
+  },
   "bowhead-whale-dna-repair": {
    "title_zh": "弓头鲸修 DNA 更拿手",
    "line_zh": "弓头鲸的细胞修补 DNA 断裂比其他哺乳动物的更强也更准，一种遇冷会增多的蛋白是原因之一。",
@@ -803,6 +1256,62 @@
     "issues": [
      "核对 PDF：177.36 天对 57.67 天、摘要自写「三倍」、941 只、剥夺花粉后基础死亡率 1.98 倍且衰老速率不变，均无误；「三倍」「约翻倍」换算诚实。",
      "保留写作者的 library_issue（summary_zh 把剥夺花粉写成补充花粉）。利益冲突：论文声明无。"
+    ]
+   }
+  },
+  "calerie-methylation-clocks": {
+   "title_zh": "少吃两年，只一个时钟变慢",
+   "line_zh": "随机试验的事后分析：健康人少吃两年，三种衰老时钟里只有衡量每年老多快的那种慢了 2–3%。",
+   "about_zh": "试验让没有肥胖的健康成年人把热量减少四分之一，实际平均只减了约 12%。研究者事后检测血样的 DNA 甲基化：比起照常吃的对照组，衡量衰老速度的指标慢了 2–3%，即每过一年身体少老 2–3%；另外两种估算生物年龄的时钟没有变化。",
+   "tier": "human",
+   "tier_reason_zh": "随机试验血样的事后分析。",
+   "source": {
+    "first_author": "Waziry",
+    "et_al": true,
+    "journal": "Nature Aging",
+    "year": 2023,
+    "doi": "10.1038/s43587-022-00357-y",
+    "preprint": false,
+    "coi_zh": "两位作者（含通讯作者）是文中衡量衰老速度的那种指标的发明人，这项杜克大学和奥塔哥大学的发明已授权给一家商业公司。"
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "两年",
+     "from": "claims.md: DunedinPACE 的意向性治疗 d：…24 个月 −0.25"
+    },
+    {
+     "text": "三种",
+     "from": "claims.md: DunedinPACE…PC PhenoAge…PC GrimAge 三个时钟的 d"
+    },
+    {
+     "text": "2–3%",
+     "from": "claims.md: 对应节奏放慢 2–3%"
+    },
+    {
+     "text": "四分之一",
+     "from": "claims.md: 处方 25% 限食"
+    },
+    {
+     "text": "12%",
+     "from": "claims.md: 实际平均 11.9%（标准误 0.7）"
+    },
+    {
+     "text": "两种",
+     "from": "claims.md: PC PhenoAge：12 个月 −0.03（−0.19，0.12）…PC GrimAge：12 个月 −0.04（−0.16，0.07）"
+    }
+   ],
+   "library_issue_zh": "evidence 写的是 rct，但甲基化时钟的结果是随机试验血样的事后分析（论文摘要原文 post hoc analysis），应按紫色人群研究处理。",
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "about_zh：「不胖的」改为论文原文的「没有肥胖的」（入选 BMI 22.0–27.9，含轻度超重）",
+     "about_zh 写明 2–3% 是和照常吃的对照组相比；「相当于每过一年，身体老化的量少」压缩为「即每过一年身体少老」",
+     "coi_zh 保留：两位作者是 DunedinPACE 的发明人且已授权商业公司，正是卡上报告变慢的那个指标；措辞贴近论文声明",
+     "核对：事后分析（摘要 post hoc analysis）→ 紫，一句话已写明；PhenoAge、GrimAge 两种时钟无变化已写，标题不挑好听的一半"
     ]
    }
   },
@@ -1144,6 +1653,69 @@
     ]
    }
   },
+  "china-par-ascvd-risk": {
+   "title_zh": "中国人的心血管风险公式",
+   "line_zh": "用 35–74 岁中国人群数据建的男女两套公式，按年龄、血压、血脂、腰围等估 10 年心血管病风险。",
+   "about_zh": "研究者用两个中国队列（35–74 岁和 35–59 岁成人）建模，算 10 年内得心梗、冠心病死亡或脑卒中的风险。2019 年中国指南用它分层：低于 5% 为低危，10% 及以上为高危。",
+   "tier": "human",
+   "tier_reason_zh": "风险公式研究，用 35–74 岁中国人群队列建立。",
+   "source": {
+    "first_author": "Yang",
+    "et_al": true,
+    "journal": "Circulation",
+    "year": 2016,
+    "doi": "10.1161/circulationaha.116.022367",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": false,
+   "feature_zh": "健康页上的『10 年心血管风险』就是用这个公式算的。",
+   "numbers": [
+    {
+     "text": "35–74",
+     "from": "SKILL.md：方程由 35–74 岁人群推导"
+    },
+    {
+     "text": "10 年",
+     "from": "SKILL.md: 中国四个队列建立的 10 年动脉粥样硬化性心血管病（心梗、冠心病死亡、脑卒中）风险方程"
+    },
+    {
+     "text": "两个",
+     "from": "contract.md（本技能没有 claims.md）：推导队列是 InterASIA（35–74 岁）和 China MUCA 1998（35–59 岁）"
+    },
+    {
+     "text": "35–74",
+     "from": "contract.md: InterASIA（35–74 岁）"
+    },
+    {
+     "text": "35–59",
+     "from": "contract.md: China MUCA 1998（35–59 岁）"
+    },
+    {
+     "text": "2019",
+     "from": "SKILL.md: 2019 年《中国心血管病风险评估和管理指南》用它做分层"
+    },
+    {
+     "text": "5%",
+     "from": "SKILL.md: 低于 5% 低危"
+    },
+    {
+     "text": "10%",
+     "from": "SKILL.md: 10% 及以上高危"
+    }
+   ],
+   "library_issue_zh": "summary_zh 写「用中国四个队列的 2 万多名成人建立」，但 contract.md 记录推导队列只有 InterASIA 和 China MUCA 1998 两个，另两个队列用于验证；这项技能也没有 references/claims.md。",
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "line_zh 写明公式由 35–74 岁中国人群数据建立（SKILL.md：方程由 35–74 岁人群推导），不暗示适用于所有年龄；为守住字宽，吸烟并入「等」。",
+     "这项技能没有 claims.md：「两个」队列和两个年龄段取自 references/contract.md 的推导记录，numbers 已注明。",
+     "feature_zh 与健康页标签「10 年心血管风险」（src/client/terms.ts）一致。"
+    ]
+   }
+  },
   "chromatin-rna-ageing-brain": {
    "title_zh": "逐个细胞核看脑老化",
    "line_zh": "老年捐献者的大脑里，DNA 近处接触少的细胞核基因表达偏「老」，也与阿尔茨海默病病变相关。",
@@ -1395,6 +1967,47 @@
     ]
    }
   },
+  "ckd-epi-2021-egfr": {
+   "title_zh": "去掉种族的肾功能公式",
+   "line_zh": "去掉种族项后重新拟合的肾功能估算公式里，血肌酐加胱抑素 C 一起算比只用一项更准。",
+   "about_zh": "肾小球滤过率指肾脏每分钟滤过的血浆量，常用血肌酐估算。研究者用 8,254 人和 5,352 人的数据重新拟合公式，在另外 4,050 人里验证；两项一起算时，种族之间的差别也更小。",
+   "tier": "human",
+   "tier_reason_zh": "估算公式研究，用成人测量数据建立并验证。",
+   "source": {
+    "first_author": "Inker",
+    "et_al": true,
+    "journal": "New England Journal of Medicine",
+    "year": 2021,
+    "doi": "10.1056/nejmoa2102953",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": false,
+   "feature_zh": "健康页上的『肾功能 eGFR』（肾小球滤过率估计值）就是用这个公式算的。",
+   "numbers": [
+    {
+     "text": "8,254",
+     "from": "claims.md: 用 2009 年（8254 人）……的开发数据重新拟合"
+    },
+    {
+     "text": "5,352",
+     "from": "claims.md: 2012 年（5352 人）的开发数据"
+    },
+    {
+     "text": "4,050",
+     "from": "claims.md: 在另一批 4050 人里验证"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "feature_zh 保留健康页原标签「肾功能 eGFR」（src/core/method-view.ts），并在括号里用中文解释 eGFR。"
+    ]
+   }
+  },
   "cpic-pharmacogenomics": {
    "title_zh": "药物基因报告的统一用语",
    "line_zh": "药物基因检测报告各家用词不一，一个指南联盟请专家做了五轮问卷，定下「慢代谢型」等统一说法。",
@@ -1521,6 +2134,49 @@
     ]
    }
   },
+  "digital-telomere-measurement-sequencing": {
+   "title_zh": "一条一条量端粒",
+   "line_zh": "用纳米孔测序逐条量血细胞端粒：14 名健康人里，年纪越大的人，长端粒越少、短端粒越多。",
+   "about_zh": "这种方法能把每一条端粒的长度单独读出来。研究者还测了端粒维持基因有缺陷的人（有的还没有症状）：他们的短端粒堆积得更明显，用长度分布训练的模型区分他们和健康人的能力是 0.91（满分 1）。",
+   "tier": "human",
+   "tier_reason_zh": "人血样本的小样本横断面比较，属方法研究。",
+   "source": {
+    "first_author": "Sanchez",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2024,
+    "doi": "10.1038/s41467-024-49007-4",
+    "preprint": false,
+    "coi_zh": "第一作者和通讯作者是这种端粒测量临床用途的一项临时专利申请的发明人。"
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "14 名",
+     "from": "claims.md: 年轻 5 人…中年 6 人…老年 3 人；健康 14 人"
+    },
+    {
+     "text": "0.91",
+     "from": "论文 Results（PMC11189511）: \"healthy donors versus both symptomatic patients and asymptomatic carriers, an AUC of 0.91\""
+    },
+    {
+     "text": "满分 1",
+     "from": "AUC 的取值上限（定义，非论文数字）"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "about_zh 删去「8 名…病人」：正文写 6 人 7 份血样加 1 名病人 2 份样本，图注写 8 名携带者，人数对不上；其中还有没有症状的携带者，不都是病人",
+     "about_zh 用「区分能力 0.91（满分 1）」替代含糊的「能把两组分开」（引自正文，有症状者和无症状携带者合并对健康人）",
+     "coi_zh 保留（临时专利针对本文这种测量的临床用途），措辞微调；14 名健康人核对属实（正文 fourteen healthy human donors）"
+    ]
+   }
+  },
   "dissecting-genetic-proteomic-risk": {
    "title_zh": "谵妄背后的基因和蛋白",
    "line_zh": "带风险型载脂蛋白 E 基因（ε4）的人更常出现谵妄（突发的意识混乱），扣除痴呆的影响后仍如此。",
@@ -1568,6 +2224,47 @@
     "issues": [
      "一句话里的缩写 APOE 换成中文「风险型载脂蛋白 E 基因（ε4）」，正文也去掉 APOE",
      "正文补上遗传分析的规模（约 106 万人、11,931 例，出自 PDF 摘要），numbers 引 PDF"
+    ]
+   }
+  },
+  "divergent-white-matter-metabolic": {
+   "title_zh": "脑白质代谢一降一升",
+   "line_zh": "胼胝体等处的白质糖代谢随年龄下降，放射冠处上升；前者高、后者低的人，之后认知下降更慢。",
+   "about_zh": "研究者分析两个队列 3,142 人、共 15,287 次随访的脑部葡萄糖代谢扫描和磁共振。胼胝体、扣带代谢高的人认知较好，放射冠代谢高的人认知较差，论文认为后者是大脑在代偿。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自两个脑影像队列的纵向关联分析。",
+   "source": {
+    "first_author": "Zhang",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2026,
+    "doi": "10.1038/s41467-026-70707-6",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "两个",
+     "from": "claims.md: 年龄与 EWM 的相关：MCSA r = −0.51，ADNI r = −0.34（两个队列）"
+    },
+    {
+     "text": "3,142",
+     "from": "claims.md: 3,142 人、15,287 次访视"
+    },
+    {
+     "text": "15,287",
+     "from": "claims.md: 3,142 人、15,287 次访视"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "coi_zh 维持 null：论文申报的药企咨询和影像公司科研支持与本研究的白质代谢指标无关。"
     ]
    }
   },
@@ -1705,6 +2402,246 @@
     ]
    }
   },
+  "epigenetic-age-single-cells": {
+   "title_zh": "给单个细胞算岁数",
+   "line_zh": "在小鼠里，一种新方法能从单个细胞稀疏的甲基化数据估出细胞年龄，同一组织的细胞年龄各不相同。",
+   "about_zh": "单个细胞能测到的甲基化位点很少，每个位点只有「有」或「无」两种状态，常规时钟用不上。研究者把它和整块组织的参照数据结合，逐个位点估算。在小鼠肝细胞里（去掉 2 个离群细胞后），估出的年龄与实际月龄相差的中位数约 2.1 个月。",
+   "tier": "animal",
+   "tier_reason_zh": "方法在小鼠组织里建立和验证。",
+   "source": {
+    "first_author": "Trapp",
+    "et_al": true,
+    "journal": "Nature Aging",
+    "year": 2021,
+    "doi": "10.1038/s43587-021-00134-3",
+    "preprint": false,
+    "coi_zh": "全体作者都是这项方法专利申请的发明人。"
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "两种",
+     "from": "claims.md: 单细胞的 0/1 状态"
+    },
+    {
+     "text": "2.1 个月",
+     "from": "claims.md: 去掉两个离群肝细胞后，肝脏时钟 Pearson r = 0.95，中位绝对误差 2.1 个月"
+    },
+    {
+     "text": "2 个",
+     "from": "claims.md: 图二e去掉两个离群肝细胞后，肝脏时钟…中位绝对误差 2.1 个月"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "about_zh 补上 2.1 个月是去掉 2 个离群肝细胞后的结果（claims.md）；「数据很稀疏」改为白话「能测到的位点很少」",
+     "coi_zh 保留（全体作者是本方法临时专利申请的发明人）"
+    ]
+   }
+  },
+  "epigenetic-aging-naked-mole": {
+   "title_zh": "不见老的裸鼹鼠也在老",
+   "line_zh": "死亡率不随年龄上升的裸鼹鼠，血液 DNA 甲基化照样随年龄变化，从甲基化看也在变老。",
+   "about_zh": "研究者测了 107 份裸鼹鼠血样的 300 多万个位点，用 26 个位点造出能估年龄的时钟。从甲基化看，裸鼹鼠变老比小鼠慢得多、比人快得多，和三者的最长寿命（裸鼹鼠 31 年、小鼠 4 年、人 122.5 年）相符。",
+   "tier": "animal",
+   "tier_reason_zh": "主结论来自裸鼹鼠血样。",
+   "source": {
+    "first_author": "Kerepesi",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2022,
+    "doi": "10.1038/s41467-022-27959-9",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "107 份",
+     "from": "claims.md: 血液样本 107 份"
+    },
+    {
+     "text": "300 多万",
+     "from": "claims.md: 共同 CpG 3,089,098 个"
+    },
+    {
+     "text": "26 个",
+     "from": "claims.md: 时钟是 26 个 CpG 的加权甲基化加上截距 3.133 年"
+    },
+    {
+     "text": "31 年、4 年、122.5 年",
+     "from": "claims.md: Fig. 4 把年龄除以最大寿命，三个物种用的是 31、4 和 122.5 年"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "about_zh「表观变老的速度」改为「从甲基化看，……变老」，去掉术语"
+    ]
+   }
+  },
+  "epigenetic-clock-reliability": {
+   "title_zh": "同一管血，测出两个岁数",
+   "line_zh": "同一份血样测两次，几种常用甲基化时钟能差出好几岁；改造后的版本多数差距在 1.5 岁以内。",
+   "about_zh": "研究者比较了 36 对重复测量的全血样本：其中一种甲基化时钟，两次相差的中位数是 2.4 岁，最多 8.6 岁。先把 7.8 万个位点的信息压缩成少数综合指标再训练，这个时钟的中位差降到 0.6 岁。",
+   "tier": "human",
+   "tier_reason_zh": "人血样本重复测量的方法研究。",
+   "source": {
+    "first_author": "Higgins-Chen",
+    "et_al": true,
+    "journal": "Nature Aging",
+    "year": 2022,
+    "doi": "10.1038/s43587-022-00248-2",
+    "preprint": false,
+    "coi_zh": "两位通讯作者用本文技术做的衰老指标经耶鲁大学授权给一家商业公司，这家公司提供了部分重复测量数据。"
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "好几岁",
+     "from": "claims.md: Horvath1 中位差 1.8 年、最大 4.8 年。PhenoAge 中位差 2.4 年、最大 8.6 年"
+    },
+    {
+     "text": "1.5 岁",
+     "from": "claims.md: PC 时钟大多数重复落在 1 到 1.5 年以内"
+    },
+    {
+     "text": "36 对",
+     "from": "claims.md: 36 对全血技术重复（GSE55763）"
+    },
+    {
+     "text": "2.4 岁",
+     "from": "claims.md: PhenoAge 中位差 2.4 年、最大 8.6 年"
+    },
+    {
+     "text": "8.6 岁",
+     "from": "claims.md: PhenoAge 中位差 2.4 年、最大 8.6 年"
+    },
+    {
+     "text": "7.8 万",
+     "from": "claims.md: 主成分用 78,464 个 CpG"
+    },
+    {
+     "text": "0.6 岁",
+     "from": "claims.md: PCPhenoAge 中位差 0.6 年、最大 1.6 年"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "coi_zh 保留（本文的主成分技术做出的指标已授权商业公司，该公司还提供了部分数据），补「经耶鲁大学授权」，与声明一致",
+     "核对：36 对、2.4/8.6 岁、0.6 岁、1–1.5 岁、7.8 万与 claims.md 一致；两位通讯作者即 Higgins-Chen 和 Levine"
+    ]
+   }
+  },
+  "epigenetic-frailty-risk-score": {
+   "title_zh": "用血液甲基化估衰弱",
+   "line_zh": "在德国两个老年人群队列里，用 20 个血液甲基化位点算的分数越高的人，衰弱越常见。",
+   "about_zh": "研究者在约 1000 名德国老人的血样里，从 42 万多个位点中筛出 20 个，合成衰弱风险分，再到另一个老年队列验证。在验证队列里，分数最高的四分之一人群，衰弱的几率约为最低四分之一的 2.77 倍。",
+   "tier": "human",
+   "tier_reason_zh": "两个老年人群队列研究。",
+   "source": {
+    "first_author": "Li",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2022,
+    "doi": "10.1038/s41467-022-32893-x",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "两个",
+     "from": "claims.md: ESTHER 和 KORA（发现集与 KORA-age 验证）"
+    },
+    {
+     "text": "20 个",
+     "from": "claims.md: LASSO 留下 20 个"
+    },
+    {
+     "text": "1000",
+     "from": "claims.md: 发现集 subset I n = 998"
+    },
+    {
+     "text": "42 万多",
+     "from": "claims.md: 在 422,524 个 CpG 上筛出"
+    },
+    {
+     "text": "四分之一",
+     "from": "claims.md: eFRS 四分位 3 和 4 相对四分位 1"
+    },
+    {
+     "text": "2.77 倍",
+     "from": "claims.md: OR 是 1.99（95% CI 1.23–3.21）和 2.77（95% CI 1.61–4.75）"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "about_zh：「衰弱的可能性（按比值比算）」改为「衰弱的几率」（比值比即几率之比），并写明 2.77 倍来自验证队列（KORA-age 基线，claims.md）"
+    ]
+   }
+  },
+  "face-aging-rate-cancer": {
+   "title_zh": "两张照片看老得多快",
+   "line_zh": "2276 名放疗癌症病人里，按前后两次照片估的面容年龄老得快的人，之后去世的更多。",
+   "about_zh": "研究者用一种人工智能算法，从病人就诊时拍的脸部照片估出「面容年龄」，两次之差除以间隔时间就是面容老化速度。照片相隔 2–4 年的病人里，面容老得比日历快的人，死亡风险约为其余病人的 1.65 倍。",
+   "tier": "human",
+   "tier_reason_zh": "癌症病人的队列研究。",
+   "source": {
+    "first_author": "Haugg",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2026,
+    "doi": "10.1038/s41467-025-66758-w",
+    "preprint": false,
+    "coi_zh": "包括第一作者和通讯作者在内的三位作者申报：他们所在的医疗系统已为包括面容年龄在内的两种面部健康算法申请临时专利。"
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "2276",
+     "from": "claims.md: 2,276 名接受至少两次放疗的肿瘤患者"
+    },
+    {
+     "text": "2–4 年",
+     "from": "claims.md: 长间隔 731–1,460 天 n = 365"
+    },
+    {
+     "text": "1.65 倍",
+     "from": "claims.md: 长间隔 731–1,460 天 n = 365，1.65（1.22–2.22）"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "coi_zh 保留（作者所在机构为卡上所用的面容年龄算法申请了临时专利，三位作者把它列为利益冲突），措辞贴近声明；其余顾问、经费关系与本研究无关，不写",
+     "核对：2276、2–4 年（731–1460 天）、1.65 倍（长间隔组、面容老化快于日历即 FAR > 1）与 claims.md 一致"
+    ]
+   }
+  },
   "facial-skin-somatic-mutations": {
    "title_zh": "两国人眼皮里的突变",
    "line_zh": "11 位中老年人的眼睑皮肤测序：英国人的突变负荷约是新加坡人的 4 倍，多为紫外线造成的类型。",
@@ -1767,6 +2704,69 @@
      "about_zh 补明英国 6 人是此前已发表的数据、只有新加坡样本是本次新测；6.3/1.6 标为「估算」（论文用 estimated）",
      "coi_zh：论文声明无利益冲突，保持 null",
      "research_assay=true 核实：结果依赖研究用检测（测序/单细胞/组织学/动物或细胞实验读数），技能输入也都是研究数据；feature_zh=null 正确"
+    ]
+   }
+  },
+  "fasting-mimicking-diet": {
+   "title_zh": "吃着饭假装断食",
+   "line_zh": "两项试验的二次分析：只算做完的 86 人，用 7 项指标算的生物年龄中位数比试验前低 2.6 岁。",
+   "about_zh": "受试者每月连吃 5 天特制的低热量植物性餐，共 3 轮。这种生物年龄用白蛋白、肌酐、C 反应蛋白、糖化血红蛋白等 6 项化验加收缩压算出。同期 19 名对照者平均高了 0.78 岁，变化不显著。",
+   "tier": "human",
+   "tier_reason_zh": "两项试验血样的二次分析，只统计做完的人，比的是试验前后。",
+   "source": {
+    "first_author": "Brandhorst",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2024,
+    "doi": "10.1038/s41467-024-45260-9",
+    "preprint": false,
+    "coi_zh": "试验用的模拟断食餐由一家公司提供；作者所在大学把本研究涉及的知识产权授权给这家公司，可能从中获得使用费；通讯作者和另一位作者持有这家公司的股份，没有参与数据的收集和分析。"
+   },
+   "research_assay": false,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "86",
+     "from": "claims.md: 合并 86 人中位数下降 2.6 年"
+    },
+    {
+     "text": "7 项",
+     "from": "claims.md: 生物年龄用七项：白蛋白、碱性磷酸酶、血清肌酐、C 反应蛋白、糖化血红蛋白、收缩压、总胆固醇"
+    },
+    {
+     "text": "2.6 岁",
+     "from": "claims.md: 合并 86 人中位数下降 2.6 年"
+    },
+    {
+     "text": "5 天",
+     "from": "论文正文（PMC10879164 Methods）: \"consume the FMD … for 5 continuous days … next cycle … about 25 days later\""
+    },
+    {
+     "text": "3 轮",
+     "from": "论文正文（PMC10879164 Methods）: \"Participants completed three cycles of this 5-day FMD\""
+    },
+    {
+     "text": "6 项",
+     "from": "claims.md 七项中除收缩压外的六项化验"
+    },
+    {
+     "text": "19",
+     "from": "claims.md: 对照 19 人平均增加 0.78 年（标准差 3.57）"
+    },
+    {
+     "text": "0.78 岁",
+     "from": "claims.md: 对照 19 人平均增加 0.78 年（标准差 3.57）"
+    }
+   ],
+   "library_issue_zh": "evidence 写的是 rct，但生物年龄结果是两项试验血样的二次分析（试验前后比较、只算完成者），应为紫色人群研究；summary_zh 里的「一种临床生物年龄指标」应写明是七项指标的 Klemera-Doubal 生物年龄。",
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "coi_zh 保留，按论文声明原意改写：「由生产它的公司提供」改为「由一家公司提供」，「可获得专利使用费」改为「知识产权授权、可能获得使用费」，股份和未参与数据收集分析照写",
+     "核对：「5 天」「3 轮」出自 PMC10879164 Methods，numbers[] 已引原文；第二项试验共 4 轮，但生物年龄也是在 3 轮后测的，「共 3 轮」成立",
+     "核对：对照 19 人平均 +0.78 岁，正文写 non-significant（p = 0.76），「变化不显著」成立；一句话已含二次分析、只算做完的人、比试验前 → 紫"
     ]
    }
   },
@@ -1886,6 +2886,51 @@
     "issues": [
      "核对：11.66 和 22.69 见 PDF 正文 Fig. 6b（重度抑郁 57 人、对照 51 人，P = 0.035）；「一半」由两数相除得到（0.51），原数都写在卡上，保留",
      "核对 PDF：「巴西年轻人」出自 Pelotas 社区样本；竞争利益声明为无"
+    ]
+   }
+  },
+  "genetic-architecture-biological-age": {
+   "title_zh": "器官老得快慢，基因占几成",
+   "line_zh": "欧洲血统的英国人里，九个器官系统的「年龄差」都部分可遗传，合计关联 393 个基因位点。",
+   "about_zh": "研究者用影像、体格和生理指标估出脑、心血管、眼、肝、免疫、代谢、肌骨、肺、肾的年龄，再减去实际年龄。常见基因变异能解释的个体差异，脑最高约 47%，免疫最低约 21%。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自英国生物样本库人群的全基因组关联分析。",
+   "source": {
+    "first_author": "Wen",
+    "et_al": true,
+    "journal": "Nature Aging",
+    "year": 2024,
+    "doi": "10.1038/s43587-024-00662-8",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "九",
+     "from": "claims.md: Nine systems: brain, cardiovascular, eye, hepatic, immune, metabolic, musculoskeletal, pulmonary, renal"
+    },
+    {
+     "text": "393",
+     "from": "claims.md: European GWAS locus counts … The nine counts sum to 393"
+    },
+    {
+     "text": "47%",
+     "from": "claims.md: SNP heritability from GCTA: 0.47 (brain)"
+    },
+    {
+     "text": "21%",
+     "from": "claims.md: SNP heritability … 0.21 (immune)"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "coi_zh 维持 null：论文页面写明 The authors declare no competing interests。"
     ]
    }
   },
@@ -2035,6 +3080,55 @@
     ]
    }
   },
+  "hemispheric-brain-age": {
+   "title_zh": "大脑的左右不对称",
+   "line_zh": "4.8 万名英国中老年人的脑磁共振里，多数灰质和白质指标左右不对称，年龄越大的人越明显。",
+   "about_zh": "研究者用左减右、再除以左加右来衡量：840 个白质指标里 793 个、117 个灰质指标里 115 个左右不同。分别用左、右半球估出的「脑年龄」，两边差距在年龄大的人里反而更小。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自英国生物样本库脑影像的横断面分析。",
+   "source": {
+    "first_author": "Korbmacher",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2024,
+    "doi": "10.1038/s41467-024-45282-3",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "4.8 万",
+     "from": "claims.md: T1 N=48,040 … T1 年龄均值 64.86±7.77"
+    },
+    {
+     "text": "840",
+     "from": "claims.md: 793/840 个 dMRI 特征不对称（94.4%）"
+    },
+    {
+     "text": "793",
+     "from": "claims.md: 793/840 个 dMRI 特征不对称"
+    },
+    {
+     "text": "117",
+     "from": "claims.md: 115/117 个 T1 特征不对称"
+    },
+    {
+     "text": "115",
+     "from": "claims.md: 115/117 个 T1 特征不对称"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "coi_zh 维持 null：作者申报的讲课费和咨询与本研究无关。"
+    ]
+   }
+  },
   "hepassocin-ampk-liver-aging": {
    "title_zh": "老肝少了一种自产蛋白",
    "line_zh": "敲除一种肝脏自产蛋白的中年小鼠，肝细胞衰老更重、易积脂肪，切掉部分肝后再生很差。",
@@ -2166,6 +3260,59 @@
     "issues": [
      "核对 PDF：未成熟神经元与阿尔茨海默病组相比显著更多（去掉离群样本前后都显著），与健康老人、年轻人、早期病变组相比约 2 倍但不显著；一句话方向正确，「不显著」改为「统计上不显著」，「多约一倍」改为「约为……两倍」",
      "「80 岁以上」改为「80 岁及以上」，与论文定义一致；神经母细胞比患者多是显著结果（q = 0.0002），加「明显」"
+    ]
+   }
+  },
+  "histological-aging-signatures": {
+   "title_zh": "切片里看出组织年龄",
+   "line_zh": "人工智能看 983 人、40 种组织的病理切片，从组织形态估出各组织的年龄，平均误差约 4.9 岁。",
+   "about_zh": "研究者分析 25,712 张全切片图像，为每种组织各做一个「组织时钟」。组织年龄偏大与端粒变短、已有疾病等相伴；40 个时钟里有 4 个样本不到 100 份，结论偏弱。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自人体组织切片的横断面分析。",
+   "source": {
+    "first_author": "Abila",
+    "et_al": true,
+    "journal": "Nature Medicine",
+    "year": 2026,
+    "doi": "10.1038/s41591-026-04566-5",
+    "preprint": false,
+    "coi_zh": "四位作者在利益声明里申报了专利形式的经济利益。"
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "983",
+     "from": "claims.md: 25,712 张切片、40 种组织、983 人"
+    },
+    {
+     "text": "40",
+     "from": "claims.md: 25,712 张切片、40 种组织"
+    },
+    {
+     "text": "4.9",
+     "from": "claims.md: 全部组织平均 MAE 4.88 年"
+    },
+    {
+     "text": "25,712",
+     "from": "claims.md: 25,712 张切片"
+    },
+    {
+     "text": "4",
+     "from": "claims.md: 40 个时钟里有 4 个样本少于 100，被写成功效不足"
+    },
+    {
+     "text": "100",
+     "from": "claims.md: 4 个样本少于 100"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "coi_zh 保留论文原意：四位主要分析者申报了专利形式的经济利益；论文没写专利内容，卡上不推测。删除 source.coi_from。"
     ]
    }
   },
@@ -2531,6 +3678,53 @@
     ]
    }
   },
+  "imaging-organ-aging-clock": {
+   "title_zh": "影像里的七个器官年龄",
+   "line_zh": "英国生物样本库里，影像估出的某个器官年龄偏大的人，日后这个器官的疾病更常见，例如脑与痴呆。",
+   "about_zh": "研究者用 11,000 名健康参与者的 1,777 项影像测量，给脑、心脏、体成分、肾、肝、胰腺和眼各建一个年龄模型。脑灰质年龄每偏大约 5.5 岁，日后痴呆风险约为 1.8 倍。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自英国生物样本库影像队列的随访关联。",
+   "source": {
+    "first_author": "Ren",
+    "et_al": true,
+    "journal": "npj Digital Medicine",
+    "year": 2026,
+    "doi": "10.1038/s41746-026-02488-7",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "七",
+     "from": "claims.md: 七个器官是脑、心脏、体成分、肾、肝、胰腺和眼"
+    },
+    {
+     "text": "11,000",
+     "from": "claims.md: 用 1777 个影像表型，来自 11,000 名健康参与者"
+    },
+    {
+     "text": "1,777",
+     "from": "claims.md: 用 1777 个影像表型"
+    },
+    {
+     "text": "5.5",
+     "from": "claims.md: 脑灰质年龄差与痴呆 HR = 1.81，SD = 5.46 年"
+    },
+    {
+     "text": "1.8",
+     "from": "claims.md: 脑灰质年龄差与痴呆 HR = 1.81"
+    }
+   ],
+   "library_issue_zh": "summary_zh 只写了仓库克隆不到和截距没印出，没有概括研究发现（器官年龄差与相应器官的疾病和死亡有关）。",
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": []
+   }
+  },
   "immune-aging-clock-runx1": {
    "title_zh": "一管血里的免疫时钟",
    "line_zh": "用 230 人血液免疫细胞的单细胞数据建「免疫时钟」，估出的年龄与实际年龄平均差约 5.7 岁。",
@@ -2736,6 +3930,237 @@
      "核对 PDF 摘要：缺失上调 CTH/CBS、乙酰辅酶 A 增加、由初始态转向始发态、早衰突变降低两种酶、调节两种酶可挽救，均一致；铜正确；coi_zh 无，保持 null",
      "research_assay=true 核实：结果依赖研究用检测（测序/单细胞/组织学/动物或细胞实验读数），技能输入也都是研究数据；feature_zh=null 正确"
     ]
+   }
+  },
+  "lensage-index-biological-age": {
+   "title_zh": "晶状体照片估年龄",
+   "line_zh": "从晶状体照片估年龄；估得比实际年龄大得越多的人，年龄相关眼病、全身疾病和死亡越常见。",
+   "about_zh": "研究者用 20–96 岁成人的晶状体照片训练深度学习模型，在相对健康的人里，估出的年龄和实际年龄平均差 4.25–4.82 岁。论文还试了用手机拍的照片（50 人）。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自人群队列里晶状体年龄与疾病、死亡的关联。",
+   "source": {
+    "first_author": "Li",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2023,
+    "doi": "10.1038/s41467-023-42934-8",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "20–96",
+     "from": "PDF：using lens photographs from 20 to 96-year-olds"
+    },
+    {
+     "text": "4.25–4.82",
+     "from": "claims.md: 相对健康者决定系数大于 0.80，平均绝对误差 4.25 到 4.82 年"
+    },
+    {
+     "text": "50",
+     "from": "claims.md: 手机 n = 50"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "about_zh 把「大批成人」写具体为 20–96 岁成人（PDF 摘要原文）。"
+    ]
+   }
+  },
+  "leukocyte-telomere-length": {
+   "title_zh": "量了 47 万人的端粒",
+   "line_zh": "英国 47 万人里，年纪大的人和男性，白细胞端粒偏短；男女之差相当于约 7 岁的年龄差。",
+   "about_zh": "研究者用同一套方法测了英国生物样本库 47 万多人的白细胞端粒。非洲裔和华人血统的人，端粒比欧洲白人更长。研究者还用 1351 人相隔约 5 年的两次样本，估算了同一个人前后测量的波动。",
+   "tier": "human",
+   "tier_reason_zh": "英国生物样本库的横断面分析。",
+   "source": {
+    "first_author": "Codd",
+    "et_al": true,
+    "journal": "Nature Aging",
+    "year": 2022,
+    "doi": "10.1038/s43587-021-00166-9",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "47 万",
+     "from": "skill.json paper.title: …leukocyte telomere length in 474,074 participants in UK Biobank"
+    },
+    {
+     "text": "7 岁",
+     "from": "论文摘要: \"with women on average ~7 years younger in 'biological age' than men\"；claims.md 两系数相除为 7.4 年"
+    },
+    {
+     "text": "1351",
+     "from": "论文摘要: \"Using paired samples from 1,351 participants taken ~5 years apart\""
+    },
+    {
+     "text": "5 年",
+     "from": "论文摘要: \"paired samples from 1,351 participants taken ~5 years apart\""
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "line_zh：「约 7.4 岁」改为论文摘要原话「约 7 岁」（7.4 是 claims.md 用两个系数相除得到的，带「约」又写到小数位不妥）",
+     "about_zh「相隔几年的成对样本」补上具体人数和间隔（1351 人、约 5 年，引自摘要）",
+     "核对：横断面关联，句式为「……偏短」；作者声明无利益冲突"
+    ]
+   }
+  },
+  "life-cycle-biological-clock": {
+   "title_zh": "从婴儿到老年的一只钟",
+   "line_zh": "用近 970 万人的常规病历和化验训练的时钟，儿童段与生长发育相关，成人段与衰老和慢病相关。",
+   "about_zh": "研究者把 2463 万次就诊的化验和病历交给一种人工智能模型，估算每个人的生物年龄。成人时钟里影响最大的是尿素偏高、白蛋白偏低和红细胞分布宽度偏高；在英国人群中验证，估出的年龄和实际年龄平均相差 4.14 岁。",
+   "tier": "human",
+   "tier_reason_zh": "用常规病历数据建立的模型研究。",
+   "source": {
+    "first_author": "Wang",
+    "et_al": true,
+    "journal": "Nature Medicine",
+    "year": 2025,
+    "doi": "10.1038/s41591-025-04006-w",
+    "preprint": false,
+    "coi_zh": "第一作者和一位通讯作者为这项成果申请了专利。"
+   },
+   "research_assay": false,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "970 万",
+     "from": "claims.md: 训练规模是 24,633,025 次就诊、9,680,764 人"
+    },
+    {
+     "text": "2463 万",
+     "from": "claims.md: 24,633,025 次就诊"
+    },
+    {
+     "text": "4.14 岁",
+     "from": "claims.md: 英国生物样本库外部验证 MAE 为 4.14"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "about_zh 写明 4.14 岁是估出年龄和实际年龄的平均误差（MAE）",
+     "coi_zh 保留（专利与本文相关）；本文有两位通讯作者，「通讯作者」改为「一位通讯作者」"
+    ]
+   }
+  },
+  "longitudinal-serum-proteome-mapping": {
+   "title_zh": "血清蛋白里的健康衰老分",
+   "line_zh": "中老年人 9 年里多次抽血：用 22 种血清蛋白算的「健康衰老分」越高的人，之后得慢性病越少见。",
+   "about_zh": "研究者分析 3,796 人的 7,565 份血清，找到在两批人里都与年龄相关的 86 种蛋白。分数每高一个标准差，慢性病风险低 72%，2 型糖尿病低 53%，高血压低 40%。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自中老年人群队列的随访关联。",
+   "source": {
+    "first_author": "Tang",
+    "et_al": true,
+    "journal": "Nature Metabolism",
+    "year": 2025,
+    "doi": "10.1038/s42255-024-01185-7",
+    "preprint": false,
+    "coi_zh": "一位通讯作者是 Westlake Omics 公司的股东。"
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "9",
+     "from": "claims.md: 7,565 份血清、3,796 人、9 年"
+    },
+    {
+     "text": "22",
+     "from": "claims.md: 前 22 个蛋白 AUC 0.70 … PHAS"
+    },
+    {
+     "text": "3,796",
+     "from": "claims.md: 7,565 份血清、3,796 人"
+    },
+    {
+     "text": "7,565",
+     "from": "claims.md: 7,565 份血清"
+    },
+    {
+     "text": "86",
+     "from": "claims.md: 86 个蛋白在发现和验证队列同方向与年龄相关"
+    },
+    {
+     "text": "一个标准差",
+     "from": "claims.md: PHAS 每增加 1 个标准差"
+    },
+    {
+     "text": "72%",
+     "from": "claims.md: 慢性病风险低 72%"
+    },
+    {
+     "text": "2 型糖尿病 53%",
+     "from": "claims.md: 2 型糖尿病低 53%"
+    },
+    {
+     "text": "40%",
+     "from": "claims.md: 高血压低 40%"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "about_zh 改正：86 种蛋白是在发现组和验证组里与年龄的关联方向一致，不是都「随年龄同向变化」。",
+     "coi_zh 删去「蛋白质组学公司」这一论文里没有的描述，只写论文原话（T.G. 是 Westlake Omics 股东，他是通讯作者之一）；删除 source.coi_from。"
+    ]
+   }
+  },
+  "lung-parenchyma-aging-clock": {
+   "title_zh": "肺组织怎样变老",
+   "line_zh": "比较不同年龄者的肺组织测序：年纪越大，肺泡细胞增殖越少，免疫 T 细胞越多、炎症信号越强。",
+   "about_zh": "研究者汇总人肺组织的单细胞和空间测序，看各类细胞随年龄的变化：巨噬细胞亚群减少，T 细胞增多且更显「疲惫」。最后用 578 份整块组织和 181 份单细胞样本训练了估算肺年龄的模型。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自不同年龄人群肺组织样本的横断面比较。",
+   "source": {
+    "first_author": "Xu",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2026,
+    "doi": "10.1038/s41467-026-75427-5",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "578",
+     "from": "claims.md: 样本是 578 个批量 RNA 和 181 个单细胞"
+    },
+    {
+     "text": "181",
+     "from": "claims.md: 样本是 578 个批量 RNA 和 181 个单细胞"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": []
    }
   },
   "mammal-cancer-risk-lifespan": {
@@ -2996,7 +4421,7 @@
   "mitophagy-inducers-alzheimers": {
    "title_zh": "机器学习挑出的自噬分子",
    "line_zh": "机器学习从天然化合物库挑出的山奈酚和丹叶大黄素，改善了阿尔茨海默病模型线虫和小鼠的记忆。",
-   "about_zh": "研究者把分子结构转成可比较的向量，挑出 18 个与已知线粒体自噬（清除受损线粒体）诱导剂相似的分子，其中 8 个在细胞里起效，命中率 44%，常规高通量筛选约为 0.14%。模型小鼠连续灌服两个月后，迷宫等记忆测试成绩变好。",
+   "about_zh": "研究者把分子结构转成可比较的向量，挑出 18 个与已知线粒体自噬（清除受损线粒体）诱导剂相似的分子，其中 8 个在细胞里起效，命中率 44%，常规高通量筛选约为 0.14%。模型小鼠连续两个月灌服这两种分子后，迷宫等记忆测试成绩变好。",
    "tier": "animal",
    "tier_reason_zh": "主结论来自阿尔茨海默病模型线虫和小鼠。",
    "source": {
@@ -3006,7 +4431,7 @@
     "year": 2022,
     "doi": "10.1038/s41551-021-00819-5",
     "preprint": false,
-    "coi_zh": "第一作者和两位通讯作者等五人已为「用线粒体自噬诱导物治疗阿尔茨海默病」申请专利；另有几位作者是一家人工智能制药公司的员工，论文的人工智能数据由该公司审核。"
+    "coi_zh": "第一作者和两位通讯作者等五人已为「用线粒体自噬诱导物治疗阿尔茨海默病」申请专利；另有几位作者是一家人工智能制药公司的员工，索取本研究的人工智能数据须经该公司审核。"
    },
    "research_assay": true,
    "feature_zh": null,
@@ -3041,6 +4466,46 @@
      "核对 PDF 摘要：两种分子在线虫和小鼠（3xTg 模型）里都改善了记忆（水迷宫、Y 迷宫、新物体识别），一句话与银色成立；claims.md 只记了线虫，小鼠部分引自 PDF",
      "「线粒体自噬」的解释移到第一次出现处；命中率 44% 补上论文给的参照（常规高通量筛选 0.14%）；正文补小鼠灌服两个月的记忆结果",
      "coi 保留并补充：专利与研究对象直接相关；人工智能公司员工完成了本研究的筛选方法，PDF 写人工智能相关数据须经该公司审核"
+    ]
+   }
+  },
+  "mri-multi-organ-clocks": {
+   "title_zh": "磁共振看七个器官的年龄",
+   "line_zh": "英国生物样本库的磁共振给七个器官估年龄：脑、脂肪、胰腺估得偏老的人，日后糖尿病更常见。",
+   "about_zh": "七个器官是脑、心脏、肝、脂肪、脾、肾和胰腺，估出的年龄与实际年龄平均差约 5 岁。脑、脂肪、脾和肝的年龄差与日后死亡有关：脑和脂肪偏老的人死亡更常见，脾和肝偏老的人反而更少见。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自英国生物样本库磁共振数据的随访关联。",
+   "source": {
+    "first_author": "The MULTI Consortium",
+    "et_al": true,
+    "journal": "Nature Medicine",
+    "year": 2026,
+    "doi": "10.1038/s41591-025-03999-8",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "七",
+     "from": "claims.md：七个 MRIBAG：脑、心脏、肝、脂肪、脾、肾、胰腺"
+    },
+    {
+     "text": "5",
+     "from": "claims.md：平均绝对误差大约 5 年"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "line_zh 删去「31 万多人」：313,645 是联盟汇总的全部数据人数，各器官模型只用 3,573–6,327 名健康人训练（全文 PMC12823390）。",
+     "line_zh 原写「器官偏老的人…死亡更常见」与全文不符：脾和肝的年龄差与死亡呈负相关（hazard ratio < 1）；一句话改为全文点名的脑、脂肪、胰腺与 2 型糖尿病，死亡的双向结果照写进 about_zh。",
+     "about_zh 删去 603 和 301 两个蛋白关联数，换成死亡结果。",
+     "coi_zh 维持 null：一位作者申报的 DunedinPACE（甲基化时钟）版税与本研究的磁共振时钟无关。"
     ]
    }
   },
@@ -3166,6 +4631,61 @@
      "「70 周龄时最高」是论文最后一个测量点，对读者没有参照，换成更有意义的数字：漏到线粒体外的一段 DNA 碎片约为普通小鼠的五倍",
      "利益冲突核对论文：两名作者是 Pretzel Therapeutics 的联合创始人和股东，声明没有说明它与本研究的关系，本研究也没有测试任何产品，coi_zh 保持 null"
     ]
+   }
+  },
+  "multi-organ-metabolome-age": {
+   "title_zh": "血液代谢物里的器官年龄",
+   "line_zh": "27 万多人的血液代谢物给五个器官系统估年龄，误差约 6 岁；基因分析提示与代谢病、高血压有关。",
+   "about_zh": "研究者用英国生物样本库的 107 种血液代谢物，给消化、肝、免疫、内分泌和代谢五个系统建模。估出的年龄和实际年龄相关不强（相关系数 0.25–0.42，1 为完全一致）；常见基因变异能解释 9%–18% 的个体差异。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自英国生物样本库人群的建模和遗传分析。",
+   "source": {
+    "first_author": "The MULTI consortium",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2025,
+    "doi": "10.1038/s41467-025-59964-z",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "27 万多",
+     "from": "claims.md: 274,247 名 UK Biobank 参与者的 107 个非衍生代谢物"
+    },
+    {
+     "text": "五",
+     "from": "claims.md: 五个系统：消化、肝、免疫、内分泌、代谢"
+    },
+    {
+     "text": "6",
+     "from": "claims.md: 平均绝对误差大约 6 年"
+    },
+    {
+     "text": "107",
+     "from": "claims.md: 107 个非衍生代谢物"
+    },
+    {
+     "text": "0.25–0.42",
+     "from": "claims.md: 独立测试集 0.25 < r < 0.42"
+    },
+    {
+     "text": "1",
+     "from": "相关系数的满分参照（定义，不是研究结果）"
+    },
+    {
+     "text": "9%–18%",
+     "from": "claims.md: SBayesS 遗传力 0.09 到 0.18"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": []
    }
   },
   "multiomic-human-longevity": {
@@ -3371,6 +4891,145 @@
      "删去「150 万」：论文没有给这个第 8 天计数的参照（唯一的「10 倍以上」比较是 6 月龄、引自前人研究）",
      "改用论文正文的定性参照「比同样大小的其他啮齿动物多得多」，并补上约 30 年生育期（摘要）",
      "「卵子出生后才开始生成」核对为摘要原话 the entire process of oogenesis occurs postnatally；论文声明无利益冲突"
+    ]
+   }
+  },
+  "naked-mole-queen-methylation-clock": {
+   "title_zh": "裸鼹鼠女王的钟走得慢",
+   "line_zh": "裸鼹鼠的甲基化时钟照样在走；负责繁殖的「女王」，血液和皮肤的时钟比不繁殖的同伴走得慢。",
+   "about_zh": "研究者用一种针对哺乳动物共有位点的芯片测了 385 份裸鼹鼠样本，造出全组织、血液、皮肤、肝、肾等时钟。另有人和裸鼹鼠通用的时钟，按各自的最长寿命（裸鼹鼠约 37 年、人约 122.5 年）换算年龄。",
+   "tier": "animal",
+   "tier_reason_zh": "主结论来自裸鼹鼠样本。",
+   "source": {
+    "first_author": "Horvath",
+    "et_al": true,
+    "journal": "Nature Aging",
+    "year": 2021,
+    "doi": "10.1038/s43587-021-00152-1",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "385 份",
+     "from": "claims.md: 385 份甲基化样本"
+    },
+    {
+     "text": "37 年",
+     "from": "claims.md: 相对年龄 = 年龄 / 最大寿命，裸鼹鼠 37 年，人 122.5 年"
+    },
+    {
+     "text": "122.5 年",
+     "from": "claims.md: 裸鼹鼠 37 年，人 122.5 年"
+    }
+   ],
+   "library_issue_zh": "技能元数据的年份写 2021，但论文属 Nature Aging 2022 年第 2 卷（2021 年 12 月 23 日在线发表），SKILL.md 和 claims.md 也写 2022；出处年份应统一。",
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "coi_zh 删去：第一作者创办的是一个非营利基金会，基金会「计划」许可他的若干专利，声明没有把作者和本文的时钟或任何产品联系起来",
+     "about_zh：37 年、122.5 年原来单独成句、没有交代用途，改为说明它们用于人和裸鼹鼠通用时钟的换算（claims.md 相对年龄 = 年龄 / 最大寿命）",
+     "年份按方法库 paper 块保留 2021；library_issue 保留（卷期属 2022 年）"
+    ]
+   }
+  },
+  "nanopore-parent-origin-methylation": {
+   "title_zh": "爸给的和妈给的，老得不同",
+   "line_zh": "全血纳米孔测序发现：只有父或母那份起作用的「印记」区域，两份 DNA 的甲基化随年龄变化不同。",
+   "about_zh": "研究者测了 7284 份全血样本、近 1800 万个甲基化位点，用其中 1373 个造了时钟，估年龄的误差中位数为 2.43 岁。把甲基化分到父亲和母亲各自那份 DNA 上后发现，一个叫 DIRAS3 的基因上，父亲那份随年龄甲基化升高。",
+   "tier": "human",
+   "tier_reason_zh": "大样本人血的横断面分析。",
+   "source": {
+    "first_author": "Sigurpalsdottir",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2026,
+    "doi": "10.1038/s41467-026-76240-w",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "1800 万",
+     "from": "claims.md: 测到 17,959,684 个高质量 CpG"
+    },
+    {
+     "text": "1373",
+     "from": "claims.md: 时钟用 1,373 个，训练中位绝对误差 2.22 年"
+    },
+    {
+     "text": "2.43 岁",
+     "from": "claims.md: 测试集 2.43 年"
+    },
+    {
+     "text": "7284",
+     "from": "论文摘要: \"we apply nanopore long-read sequencing to 7,284 whole blood samples\""
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "coi_zh 删去：作者受雇的是开展这项研究的基因公司本身，部分作者拿过测序仪厂商的差旅资助，都不是与卡上产品相关的专利、授权、股权或雇佣关系",
+     "about_zh「大批全血样本」改为具体的 7284 份（引自摘要）"
+    ]
+   }
+  },
+  "navy-circumference-body-fat": {
+   "title_zh": "一把软尺量体脂",
+   "line_zh": "美国海军以 602 名男性、214 名女性的水下称重为准，拟合出用身高和颈腰臀围估体脂率的公式。",
+   "about_zh": "男性用腰围、颈围和身高，女性再加臀围，先算体密度再换算成体脂率。和水下称重相比，估计误差男性约 3.5、女性约 3.7 个百分点；男性公式又在另外 100 名海军人员里验证过。",
+   "tier": "human",
+   "tier_reason_zh": "估算公式研究，用海军现役人员的测量数据建立。",
+   "source": {
+    "first_author": "Hodgdon",
+    "et_al": false,
+    "journal": "Naval Health Research Center Report No. 84-11",
+    "year": 1984,
+    "doi": null,
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": false,
+   "feature_zh": "健康页上『体脂率与腰围』里的体脂率就是用这套公式算的。",
+   "numbers": [
+    {
+     "text": "602",
+     "from": "claims.md: 在男性 602 人、女性 214 人中用水下称重体密度做逐步回归"
+    },
+    {
+     "text": "214",
+     "from": "claims.md: 女性 214 人"
+    },
+    {
+     "text": "3.5",
+     "from": "SKILL.md: 估计误差男 3.52、女 3.72 个百分点"
+    },
+    {
+     "text": "3.7",
+     "from": "SKILL.md: 估计误差男 3.52、女 3.72 个百分点"
+    },
+    {
+     "text": "100",
+     "from": "claims.md: 男性在另外 100 名海军人员中交叉验证"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "删除 source.source_id（DTIC ADA143890），doi 保持 null。",
+     "feature_zh 与健康页「体脂率与腰围」卡（src/core/method-view.ts）一致。"
     ]
    }
   },
@@ -3626,6 +5285,89 @@
     ]
    }
   },
+  "omicmage-biological-age-multiomics": {
+   "title_zh": "从病历年龄到甲基化年龄",
+   "line_zh": "常规化验建出的「病历年龄」，可用血液 DNA 甲基化复现；它偏大的人慢性病和死亡更常见。",
+   "about_zh": "研究者先用一家医院生物样本库 31,264 人的 19 项临床指标，建出反映死亡风险的病历年龄。再用 1,097 个 DNA 甲基化位点复现它，测试集里与病历年龄平均差约 8.5 岁；完整版还用甲基化去替代部分蛋白和代谢物。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自医院生物样本库和两个验证队列的建模与关联分析。",
+   "source": {
+    "first_author": "Chen",
+    "et_al": true,
+    "journal": "Nature Aging",
+    "year": 2026,
+    "doi": "10.1038/s43587-026-01073-7",
+    "preprint": false,
+    "coi_zh": "研究由提供 OMICmAge 商业检测的 TruDiagnostic 公司资助，多名作者是该公司员工，部分作者为这项成果申请了专利。"
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "19",
+     "from": "claims.md：MGB 最终 31,264 人、19 个临床变量"
+    },
+    {
+     "text": "31,264",
+     "from": "claims.md: MGB 最终 31,264 人"
+    },
+    {
+     "text": "1,097",
+     "from": "claims.md: DNAmEMRAge 用 1,097 个 CpG"
+    },
+    {
+     "text": "8.5",
+     "from": "claims.md: 训练 MAE 8.33 年，测试 MAE 8.50 年（Fig. 3c）"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "line_zh 原只写建模过程；改为摘要里的主结论（甲基化版病历年龄偏大的人慢性病和死亡更常见），19 项移到 about_zh，按论文原话（19 clinical variables）写作临床指标。",
+     "coi_zh 保留：论文声明研究在与 TruDiagnostic 的资助研究协议下完成、多名作者是该公司员工、部分作者为这项成果申请了专利；「提供 OMICmAge 商业检测」依据 claims.md（TruDiagnostic 对外报告的 OMICmAge 是商业实现）。删除 source.coi_from。"
+    ]
+   }
+  },
+  "omniage-mitotic-clonal-hematopoiesis": {
+   "title_zh": "把 413 种衰老指标放一起",
+   "line_zh": "在大批血液数据里，记录干细胞分裂次数的时钟，与用甲基化推算的「克隆性造血」信号相关。",
+   "about_zh": "研究者把 12 类、413 种衰老指标做成一个软件包，在大批血样里互相比较。克隆性造血是指一部分血液干细胞带着突变越长越多；这里用的是甲基化推算值，各队列都没有直接测突变。",
+   "tier": "human",
+   "tier_reason_zh": "多个人血数据集的比较分析，属工具研究。",
+   "source": {
+    "first_author": "Du",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2026,
+    "doi": "10.1038/s41467-026-76038-w",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "413 种",
+     "from": "claims.md: OmniAge 收了 413 个衰老组学标志、12 类"
+    },
+    {
+     "text": "12 类",
+     "from": "claims.md: 413 个衰老组学标志、12 类"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "about_zh「衰老组学指标」改为「衰老指标」，去掉术语"
+    ]
+   }
+  },
   "one-year-mortality-aging-marker": {
    "title_zh": "准确却不公平的死亡预测",
    "line_zh": "用芬兰全国登记数据训练的模型预测一年内死亡，比只看年龄性别更准，但对不同人群准度不一。",
@@ -3721,6 +5463,234 @@
     "issues": [
      "颜色定为铜：一句话说的是取出体外的爪蟾和人卵母细胞（活细胞成像、蛋白质组、凝胶实验），小鼠只作肌肉对照，不是动物体内实验",
      "论文声明无利益冲突"
+    ]
+   }
+  },
+  "oral-microbiome-signatures": {
+   "title_zh": "口腔细菌里的年龄",
+   "line_zh": "美国 4,675 名成人的口腔菌里，64 个菌属随年龄变化；据此估的年龄偏大的人，死亡和衰弱更常见。",
+   "about_zh": "样本是美国全国健康与营养调查里 30–70 岁成人的漱口水。模型估年龄的误差不小：验证组平均差约 9.2 岁；在另一组 1,293 人里只能用 37 个菌属重训，平均差约 12.6 岁。饮食和用药与它关系不大。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自美国全国调查人群的随访关联。",
+   "source": {
+    "first_author": "Zhao",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2026,
+    "doi": "10.1038/s41467-026-72096-2",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "4,675",
+     "from": "claims.md: NHANES 合计 4,675 人"
+    },
+    {
+     "text": "30–70",
+     "from": "claims.md: 年龄 30–70"
+    },
+    {
+     "text": "64",
+     "from": "claims.md: 64 个属在发现队列 FDR < 0.05 且在验证队列 P < 0.05"
+    },
+    {
+     "text": "9.2",
+     "from": "claims.md: 验证 ρ = 0.35、MAE = 9.16（Fig. 3b）"
+    },
+    {
+     "text": "1,293",
+     "from": "claims.md: 外部 1,293 人用重叠的 37 个属重新训练"
+    },
+    {
+     "text": "37",
+     "from": "claims.md: 用重叠的 37 个属重新训练"
+    },
+    {
+     "text": "12.6",
+     "from": "claims.md: ρ = 0.22、MAE = 12.63（Fig. 3c）"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "about_zh「模型估年龄并不准」改为平实的「误差不小」，后面照写误差数字。"
+    ]
+   }
+  },
+  "organ-aging-genetic-architecture": {
+   "title_zh": "13 个器官老化的基因图",
+   "line_zh": "血浆蛋白估的 13 个器官年龄关联 119 个基因位点；基因推断提示吸烟与肺、肠、肾、胃偏老有关。",
+   "about_zh": "研究者用英国 51,936 人的血浆蛋白，给脂肪、动脉、脑、心脏、肝、肺、肌肉、皮肤等器官建年龄模型；119 个位点里有 27 个为多个器官共有。基因推断还提示，心脏和肌肉老得快与心衰有关，肾老得快与高血压有关。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自英国生物样本库人群的遗传关联与孟德尔随机化分析。",
+   "source": {
+    "first_author": "Zhu",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2025,
+    "doi": "10.1038/s41467-025-67223-4",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "51,936",
+     "from": "claims.md: UKB-PPP 51,936 人、2,923 种蛋白"
+    },
+    {
+     "text": "13",
+     "from": "claims.md: 13 个器官：脂肪、动脉、脑、心脏、免疫、肠、肾、肝、肺、肌肉、胰腺、皮肤、胃"
+    },
+    {
+     "text": "119",
+     "from": "claims.md: 119 个位点，其中 27 个跨器官"
+    },
+    {
+     "text": "27",
+     "from": "claims.md: 其中 27 个跨器官"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": []
+   }
+  },
+  "organ-aging-plasma-proteome": {
+   "title_zh": "一管血估 11 个器官年龄",
+   "line_zh": "5,676 名成人的血浆蛋白显示，约五分之一的人有一个器官明显偏老；心脏偏老的人日后心衰更常见。",
+   "about_zh": "研究者用 856 种主要来自某个器官的血浆蛋白，在五个队列里用机器学习估 11 个器官的年龄，1.7% 的人多个器官同时偏老。心脏年龄每偏大约 4.1 岁，心衰风险约为 2.5 倍。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自五个人群队列的血浆蛋白关联分析。",
+   "source": {
+    "first_author": "Oh",
+    "et_al": true,
+    "journal": "Nature",
+    "year": 2023,
+    "doi": "10.1038/s41586-023-06802-1",
+    "preprint": false,
+    "coi_zh": "四位作者和斯坦福大学为这项研究申请了专利；其中三位是 Teal Omics 公司的联合创始人和科学顾问，持有该公司股份。"
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "五个",
+     "from": "claims.md: 五个队列共 5,676 名成人、11 个主要器官"
+    },
+    {
+     "text": "5,676",
+     "from": "claims.md: 五个队列共 5,676 名成人"
+    },
+    {
+     "text": "五分之一",
+     "from": "claims.md: 约 20% 的人有一个器官明显加速"
+    },
+    {
+     "text": "856",
+     "from": "claims.md: 质控后 4,778 个蛋白，其中 856 个器官富集"
+    },
+    {
+     "text": "11",
+     "from": "claims.md: 11 个主要器官"
+    },
+    {
+     "text": "1.7%",
+     "from": "claims.md: 1.7% 是多器官加速"
+    },
+    {
+     "text": "4.1",
+     "from": "claims.md: 心脏年龄每增加 1 个标准差（约 4.1 年）"
+    },
+    {
+     "text": "2.5",
+     "from": "claims.md: 对应心力衰竭风险约 2.5 倍"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "coi_zh 删去「用血液蛋白测器官年龄的」这一论文以外的公司介绍；保留论文原话：与这项研究相关的专利申请，以及三位作者在 Teal Omics 的创始人身份和股份。删除 source.coi_from。",
+     "about_zh 小改：器官来源蛋白是按组织表达图谱挑的，不是「在五个队列里挑出」。"
+    ]
+   }
+  },
+  "organ-specific-proteomic-aging": {
+   "title_zh": "跨三国验证的器官蛋白钟",
+   "line_zh": "英国 4 万多人的血浆蛋白建出 10 个器官年龄钟；器官偏老的人日后患病和死亡更常见。",
+   "about_zh": "研究者从 2,916 种蛋白里挑出 418 种主要来自某个器官的蛋白，每个器官的钟用 5 种（心脏）到 76 种（免疫）。在中国 3,977 人和美国 800 人的队列里，估年龄也很准；脑偏老与死亡的关联最强。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自英、中、美人群队列的血浆蛋白关联分析。",
+   "source": {
+    "first_author": "Wang",
+    "et_al": true,
+    "journal": "Nature Aging",
+    "year": 2025,
+    "doi": "10.1038/s43587-025-01016-8",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "4 万多",
+     "from": "claims.md: UK Biobank n = 43,616"
+    },
+    {
+     "text": "10",
+     "from": "claims.md: 器官循环是 Brain、Heart、Lung、Immune、Artery、Intestine、Liver、Muscle、Pancreas、Kidney（10 个）"
+    },
+    {
+     "text": "三国",
+     "from": "claims.md: UK Biobank、CKB n = 3,977、NHS n = 800"
+    },
+    {
+     "text": "2,916",
+     "from": "claims.md: Olink 2,916 个蛋白"
+    },
+    {
+     "text": "418",
+     "from": "claims.md: 418 个（14.3%）至少在一个器官富集"
+    },
+    {
+     "text": "5",
+     "from": "claims.md: 器官时钟从心脏 5 个到免疫 76 个"
+    },
+    {
+     "text": "76",
+     "from": "claims.md: 器官时钟从心脏 5 个到免疫 76 个"
+    },
+    {
+     "text": "3,977",
+     "from": "claims.md: CKB n = 3,977"
+    },
+    {
+     "text": "800",
+     "from": "claims.md: NHS n = 800"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "line_zh「脑最明显」含糊：摘要说的是脑偏老与死亡关联最强，改写进 about_zh。",
+     "about_zh「同样准确」改为「也很准」：论文只报告了跨队列相关系数，没有说和英国一样准。"
     ]
    }
   },
@@ -4127,6 +6097,116 @@
     ]
    }
   },
+  "plasma-proteomic-cellular-aging": {
+   "title_zh": "一管血估各类细胞的年龄",
+   "line_zh": "血浆蛋白能分别估出神经元、免疫细胞、胶质细胞等的年龄；某类细胞偏老与日后发病和死亡有关。",
+   "about_zh": "研究者用 6 万多人的 7,000 多种血浆蛋白，按蛋白主要来自哪类细胞，给 40 多种细胞分别建年龄模型。约 20%–25% 的人有一种细胞明显偏老；免疫和神经细胞偏年轻的人死亡风险更低。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自大规模人群血浆蛋白的建模和随访关联。",
+   "source": {
+    "first_author": "Ding",
+    "et_al": true,
+    "journal": "Nature Medicine",
+    "year": 2026,
+    "doi": "10.1038/s41591-026-04446-y",
+    "preprint": false,
+    "coi_zh": "两位作者是 Teal Omics 公司的联合创始人和科学顾问，持有该公司股份。"
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "6 万多",
+     "from": "PDF：plasma proteins measured in 60,542 individuals"
+    },
+    {
+     "text": "7,000 多",
+     "from": "PDF：analyses of over 7,000 plasma proteins"
+    },
+    {
+     "text": "40 多",
+     "from": "PDF：estimate the biological age of over 40 cell types"
+    },
+    {
+     "text": "20%–25%",
+     "from": "PDF：20–25% of individuals exhibited accelerated aging in a single cell type"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "claims.md 没有结果数字：about_zh 改用 PDF 摘要里的规模和结果（6 万多人、7,000 多种蛋白、40 多种细胞、20%–25% 的人有一种细胞明显偏老），numbers 引 PDF 原文；删去建模门槛「至少 4 种蛋白」。",
+     "about_zh「生存更长」改为关联写法「死亡风险更低」（PDF：youthful immune and neuronal cell types conferring protective effects）。",
+     "coi_zh 删去「用血液蛋白测器官年龄的」这一论文以外的公司介绍，只写论文原话；删除 source.coi_from。"
+    ]
+   }
+  },
+  "plasma-proteomics-brain-immune": {
+   "title_zh": "脑和免疫偏年轻的人更长寿",
+   "line_zh": "英国 4 万多人的血浆蛋白里，脑和免疫的蛋白年龄都明显偏小的人，随访期间死亡风险低一半多。",
+   "about_zh": "研究者用 44,498 人的 2,916 种血浆蛋白估 11 个器官的年龄。与器官年龄正常的人相比，脑明显偏老的人阿尔茨海默病风险约为 3.1 倍；明显偏老的器官有 8 个及以上时，死亡风险约为 8.3 倍。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自英国生物样本库人群的随访关联。",
+   "source": {
+    "first_author": "Oh",
+    "et_al": true,
+    "journal": "Nature Medicine",
+    "year": 2025,
+    "doi": "10.1038/s41591-025-03798-1",
+    "preprint": false,
+    "coi_zh": "三位作者是 Teal Omics 公司的联合创始人和科学顾问，持有该公司股份。"
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "4 万多",
+     "from": "claims.md: UK Biobank 44,498 人"
+    },
+    {
+     "text": "一半多",
+     "from": "claims.md: 年轻的脑、免疫、两者的死亡风险比是 0.60、0.58、0.44"
+    },
+    {
+     "text": "44,498",
+     "from": "claims.md: UK Biobank 44,498 人、2,916 个蛋白、11 个器官"
+    },
+    {
+     "text": "2,916",
+     "from": "claims.md: 2,916 个蛋白"
+    },
+    {
+     "text": "11",
+     "from": "claims.md: 11 个器官"
+    },
+    {
+     "text": "3.1",
+     "from": "claims.md: 特别老化的脑与阿尔茨海默病的风险比是 3.1"
+    },
+    {
+     "text": "8",
+     "from": "claims.md: 老化器官 … 8 个及以上的死亡风险比是 … 8.3"
+    },
+    {
+     "text": "8.3",
+     "from": "claims.md: 8 个及以上的死亡风险比是 8.3"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "标题「不显老」改为「偏年轻」，对应论文的「明显年轻」（z < −1.5）；「……的人更长寿」是关联写法，与论文标题的 longevity 一致。",
+     "about_zh 给 3.1 倍、8.3 倍补上参照：与器官年龄正常的人相比（PDF：compared to normal agers）。",
+     "coi_zh 删去「用血液蛋白测器官年龄的」这一论文以外的公司介绍，只写论文原话；删除 source.coi_from。"
+    ]
+   }
+  },
   "platelet-factors-ageing-cognition": {
    "title_zh": "血小板因子与小鼠记忆",
    "line_zh": "给老年雄性小鼠注射一种血小板放出的蛋白（血小板因子 4），脑部炎症减轻，记忆测试变好。",
@@ -4236,6 +6316,114 @@
     ]
    }
   },
+  "principal-component-clinical-aging": {
+   "title_zh": "把体检单压成一只钟",
+   "line_zh": "用美国全国健康调查的体检和化验数据做的临床衰老时钟，预测 20 年内死亡比只看年龄更准。",
+   "about_zh": "研究者用主成分分析把临床指标压缩成几组综合信号，找出代谢紊乱、心肾功能下降和炎症几类与不健康衰老有关的信号。预测 20 年死亡，只用 61 个参数的简化版时钟区分能力是 0.87，只看年龄是 0.83（满分 1）。",
+   "tier": "human",
+   "tier_reason_zh": "用全国健康调查数据建立并验证的模型。",
+   "source": {
+    "first_author": "Fong",
+    "et_al": true,
+    "journal": "Nature Aging",
+    "year": 2024,
+    "doi": "10.1038/s43587-024-00646-8",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": false,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "20 年",
+     "from": "claims.md: Fig. 6c，测试队列 20 年死亡"
+    },
+    {
+     "text": "61 个",
+     "from": "claims.md: LinAge 用 61 个参数"
+    },
+    {
+     "text": "0.87",
+     "from": "claims.md: LinAge 是 0.8655"
+    },
+    {
+     "text": "0.83",
+     "from": "claims.md: ChronAge 是 0.8289"
+    },
+    {
+     "text": "满分 1",
+     "from": "AUC 的取值上限（定义，非论文数字）"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "about_zh「心肾功能」改为「心肾功能下降」（摘要 cardiac and renal dysfunction）"
+    ]
+   }
+  },
+  "proteomic-aging-clock": {
+   "title_zh": "204 种血浆蛋白估年龄",
+   "line_zh": "英国 4.5 万人建的「蛋白年龄」在中国和芬兰人群里同样准；蛋白年龄偏大的人多病和死亡更常见。",
+   "about_zh": "测试集里蛋白年龄和实际年龄高度一致（相关系数 0.94，1 为完全一致），中国队列 0.92，芬兰 0.94。蛋白年龄最偏大的 5% 的人平均比实际大 6.3 岁，最偏小的 5% 平均小 6 岁。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自英、中、芬人群队列的血浆蛋白关联分析。",
+   "source": {
+    "first_author": "Argentieri",
+    "et_al": true,
+    "journal": "Nature Medicine",
+    "year": 2024,
+    "doi": "10.1038/s41591-024-03164-7",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "4.5 万",
+     "from": "claims.md: UK Biobank n = 45,441"
+    },
+    {
+     "text": "204",
+     "from": "claims.md: Olink 2,897 个蛋白，Boruta 后 204 个蛋白"
+    },
+    {
+     "text": "0.94",
+     "from": "claims.md: UKB 测试集 R2 = 0.88、r = 0.94；FinnGen … r = 0.94"
+    },
+    {
+     "text": "1",
+     "from": "相关系数的满分参照（定义，不是研究结果）"
+    },
+    {
+     "text": "0.92",
+     "from": "claims.md: CKB n = 3,977，R2 = 0.82、r = 0.92"
+    },
+    {
+     "text": "5%",
+     "from": "claims.md: UKB 前 5% 平均差 6.3 年，后 5% 平均差 −6 年"
+    },
+    {
+     "text": "6.3",
+     "from": "claims.md: UKB 前 5% 平均差 6.3 年"
+    },
+    {
+     "text": "6",
+     "from": "claims.md: 后 5% 平均差 −6 年"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": []
+   }
+  },
   "proteomic-apoe-alzheimers-signatures": {
    "title_zh": "风险型与保护型基因的蛋白",
    "line_zh": "3,289 人的血浆：载脂蛋白 E 基因为风险型 ε4 或保护型 ε2 的人，各有一批蛋白与常见型不同。",
@@ -4282,7 +6470,63 @@
     "pass": true,
     "issues": [
      "「说明这些变化出现得早」是推论，换成 PDF 摘要的原意：APOE 相关的蛋白改变在淀粉样蛋白病变出现之前就能测到",
+     "核对 PDF 竞争利益：作者受雇于礼来、艾伯维等药企或收过咨询费，与本研究的蛋白、检测平台无关，coi 保持 null",
      "「ε4 型」「ε2 型」写清为「带 ε4 / ε2 的人」（携带者对 ε3/ε3）"
+    ]
+   }
+  },
+  "proteomic-clocks-eye-aging": {
+   "title_zh": "蛋白年龄与眼睛老化",
+   "line_zh": "三个队列 5.5 万人里，白内障、糖尿病视网膜病变、黄斑变性或青光眼患者的血浆蛋白年龄偏大。",
+   "about_zh": "完整的蛋白时钟用 2,100 多种蛋白，估年龄平均差约 2.4 岁；只用一组心血管代谢相关蛋白的精简版平均差 3.25 岁，检测成本约降九成。蛋白年龄偏大的人，视网膜神经纤维层（把视觉信号送往大脑）偏薄。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自三个人群队列的横断面和随访关联。",
+   "source": {
+    "first_author": "Yang",
+    "et_al": true,
+    "journal": "npj Digital Medicine",
+    "year": 2026,
+    "doi": "10.1038/s41746-026-02805-0",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "三",
+     "from": "claims.md: 三个队列共 55,028 人"
+    },
+    {
+     "text": "5.5 万",
+     "from": "claims.md: 三个队列共 55,028 人"
+    },
+    {
+     "text": "2,100 多",
+     "from": "claims.md: 五折里非零系数的蛋白数为 2,139 到 2,190"
+    },
+    {
+     "text": "2.4",
+     "from": "claims.md: 测试 MAE 是 2.36 年"
+    },
+    {
+     "text": "3.25",
+     "from": "claims.md: 心代谢面板时钟 cProAge 的折外 MAE 是 3.25 年"
+    },
+    {
+     "text": "九成",
+     "from": "claims.md：实验成本大约降 90%"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "about_zh「心血管代谢检测板」改为白话「一组心血管代谢相关蛋白」。",
+     "视网膜一层的结果换成全文里最突出、且在验证队列里重复的神经纤维层变薄；原写的神经节细胞层只在英国队列显著，验证队列不显著（PMC13572482）。",
+     "coi_zh 维持 null（PDF：The authors declare no competing interests）。"
     ]
    }
   },
@@ -4472,6 +6716,67 @@
     ]
    }
   },
+  "retinal-aging-biomarkers-longitudinal": {
+   "title_zh": "眼底照片里的年龄",
+   "line_zh": "英国人群里，眼底照片估出的视网膜年龄每比实际大 10 岁，死亡风险约高 35%。",
+   "about_zh": "模型用英国和中国健康人群的眼底照片训练，平均误差 2.8 岁。在英国 45,436 人里，视网膜年龄每比实际大 1 岁，白内障风险约高 11%，青光眼约高 9%，黄斑变性约高 8%。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自英国生物样本库人群的随访关联。",
+   "source": {
+    "first_author": "Yu",
+    "et_al": true,
+    "journal": "npj Digital Medicine",
+    "year": 2025,
+    "doi": "10.1038/s41746-025-01751-7",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "2.8",
+     "from": "claims.md: 健康人模型 MAE 2.79 年"
+    },
+    {
+     "text": "10",
+     "from": "claims.md: 每 5 年 1.16，每 10 年 1.35"
+    },
+    {
+     "text": "35%",
+     "from": "claims.md: 每 10 年 1.35（全因死亡 HR）"
+    },
+    {
+     "text": "45,436",
+     "from": "claims.md: UKB 队列 B 45,436 人"
+    },
+    {
+     "text": "1",
+     "from": "claims.md: 年龄差每增加 1 年，全因死亡 HR 1.03"
+    },
+    {
+     "text": "11%",
+     "from": "claims.md: Fig. 6 的每年风险比还包括白内障 1.11"
+    },
+    {
+     "text": "9%",
+     "from": "claims.md: 青光眼 1.09"
+    },
+    {
+     "text": "8%",
+     "from": "claims.md: AMD 1.08"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "line_zh 改为「每比实际大 10 岁」：35% 是年龄差每增加 10 年的风险比，不是某一组人的比较。"
+    ]
+   }
+  },
   "rmeq-chronotype": {
    "title_zh": "五道题分出晨型夜型",
    "line_zh": "从 19 题的晨型夜型自答问卷里挑出 5 题，总分 4–25，分成从明确夜型到明确晨型五档。",
@@ -4531,6 +6836,40 @@
     ]
    }
   },
+  "scepiage-single-cell-ageing": {
+   "title_zh": "小鼠血细胞，各有各的岁数",
+   "line_zh": "在小鼠血液里，单个细胞的甲基化年龄分布比技术误差能解释的更宽，细胞之间老化程度不一。",
+   "about_zh": "研究者测了不同年龄小鼠外周血单细胞的甲基化和基因表达，造出一种只测到少量位点时也能估年龄的预测器。在没参与训练的血液样本上，它估出的年龄和实际周龄平均差约 10 周。",
+   "tier": "animal",
+   "tier_reason_zh": "主结论来自小鼠血细胞。",
+   "source": {
+    "first_author": "Bonder",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2024,
+    "doi": "10.1038/s41467-024-51833-5",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "10 周",
+     "from": "claims.md: Fig. 3C、D：留出样本的 MAE 是肝脏 5 周、血液 10 周"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "coi_zh 删去：两位作者分别是另外两家表观遗传检测公司的创始人或顾问、股东，声明没有把作者和本文的预测器联系起来",
+     "about_zh「能处理稀疏数据」改为白话「只测到少量位点时也能估年龄」"
+    ]
+   }
+  },
   "selective-senolytic-platform": {
    "title_zh": "顺着「垃圾」找衰老细胞",
    "line_zh": "衰老细胞里堆着一种色素「垃圾」；让药顺着它找上门，小鼠里能挑着清除衰老细胞、全身毒性小。",
@@ -4557,6 +6896,52 @@
     "issues": [
      "利益冲突核对论文：文中化合物在申请专利，涉及 N.K. 和通讯作者 V.G.G.，直接相关，保留并写明含通讯作者",
      "「达沙替尼」已注明是清衰老细胞常用的抗癌药，保留"
+    ]
+   }
+  },
+  "semaglutide-epigenetic-aging-trial": {
+   "title_zh": "司美格鲁肽与衰老时钟",
+   "line_zh": "随机试验的事后分析：伴脂肪堆积的艾滋病病毒感染者用药 32 周，几种衰老时钟比安慰剂组走得慢。",
+   "about_zh": "参加者是伴脂肪异常堆积的艾滋病病毒感染者，45 人用司美格鲁肽，39 人用安慰剂。试验原本看的是内脏脂肪，衰老时钟不在原定观察项里，是研究者事后用血样测 DNA 甲基化得出的。一种衡量衰老速度的指标，用药组比安慰剂组慢 9%。",
+   "tier": "human",
+   "tier_reason_zh": "随机试验血样的事后探索分析，衰老时钟不是预先设定的结局。",
+   "source": {
+    "first_author": "Corley",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2026,
+    "doi": "10.1038/s41467-026-72861-3",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "32 周",
+     "from": "claims.md: 32 周，司美格鲁肽 45 人，安慰剂 39 人"
+    },
+    {
+     "text": "45",
+     "from": "claims.md: 司美格鲁肽 45 人"
+    },
+    {
+     "text": "39",
+     "from": "claims.md: 安慰剂 39 人"
+    },
+    {
+     "text": "9%",
+     "from": "claims.md: DunedinPACE −0.09 单位、慢 9%（p = 0.01）"
+    }
+   ],
+   "library_issue_zh": "evidence 写的是 rct，但表观遗传年龄不是预设终点（claims.md 原话），结果属随机试验的事后探索分析，应为紫色人群研究。",
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "coi_zh 删去（边缘情况）：两位作者受雇于、第一作者任顾问的是一家甲基化检测公司，其软件算了部分附加指标；声明没有把作者和司美格鲁肽或卡上写的这几种时钟（PhenoAge、GrimAge、DunedinPACE 等）以专利、授权或股权联系起来。如要求更严可恢复",
+     "核对：「试验原本看的是内脏脂肪」「衰老时钟不是预设结局」都出自摘要；事后探索分析 → 紫，一句话已写明"
     ]
    }
   },
@@ -5063,6 +7448,69 @@
     ]
    }
   },
+  "sleep-chart-biological-ageing": {
+   "title_zh": "睡眠和生物年龄的 U 形线",
+   "line_zh": "英国中老年人里，自报睡眠偏短或偏长的人，多个器官的生物年龄偏大，睡 6.4–7.8 小时的人最小。",
+   "about_zh": "研究者把自报睡眠时长和 23 种来自影像、血浆蛋白和代谢物的生物年龄对照，9 种呈两头高、中间低的曲线。和睡 6–8 小时的人比，睡不到 6 小时的人之后去世的风险高约 50%，超过 8 小时的高约 40%。",
+   "tier": "human",
+   "tier_reason_zh": "英国生物样本库的关联分析，睡眠时长是自报的。",
+   "source": {
+    "first_author": "The MULTI Consortium",
+    "et_al": true,
+    "journal": "Nature",
+    "year": 2026,
+    "doi": "10.1038/s41586-026-10524-5",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": false,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "23 种",
+     "from": "claims.md: 睡眠时长和 23 个多器官、多组学生物年龄差"
+    },
+    {
+     "text": "9 种",
+     "from": "claims.md: 9 个非线性关联显著"
+    },
+    {
+     "text": "6.4–7.8 小时",
+     "from": "claims.md: 九个显著时钟的最低点范围：女 6.5–7.8 小时，男 6.4–7.7 小时"
+    },
+    {
+     "text": "6–8 小时",
+     "from": "claims.md: 短（<6 小时）、长（>8 小时）、正常（[6, 8] 小时）"
+    },
+    {
+     "text": "6 小时",
+     "from": "claims.md: 短（<6 小时）"
+    },
+    {
+     "text": "8 小时",
+     "from": "claims.md: 长（>8 小时）"
+    },
+    {
+     "text": "50%",
+     "from": "claims.md: Fig. 3b 全因死亡：短睡眠风险比 1.50（1.44–1.55）"
+    },
+    {
+     "text": "40%",
+     "from": "claims.md: 长睡眠 1.40（1.36–1.44）"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "line_zh 改写：原句把「不到 6 小时/超过 8 小时」的分组安到生物年龄上，论文里这个分组用于患病和死亡分析；生物年龄的结果是 U 形曲线，最低点在 6.4–7.8 小时（摘要）",
+     "about_zh 补上分组后的全因死亡风险（风险比 1.50、1.40，claims.md），明写是「去世的风险」，不和生物年龄混写",
+     "全卡保持关联句式和「自报」，没有「睡少了老」一类因果句；research_assay=false 保留（设计稿 6.3 以这张卡的自报睡眠为「和你的关系」示例）"
+    ]
+   }
+  },
   "sleep-study-life-expectancy": {
    "title_zh": "睡一夜，测个岁数",
    "line_zh": "用整夜睡眠监测估出的年龄，每比实际大 10 岁，日后全因死亡率高约 29%。",
@@ -5153,6 +7601,116 @@
     "issues": [
      "核对 PDF：「海马伞」出自摘要（particularly in the fimbria）；「雌鼠」成立：清除衰老细胞后 Lgals3 等的下降在雌鼠白质里报告，形态学成像也只做了雌鼠海马伞，雄鼠转录变化更不一致",
      "coi 核对 PDF：通讯作者 M.J.S.、第一作者 C.M.C. 和梅奥诊所持有与细胞衰老研究相关的知识产权，而本研究检验的正是清除衰老细胞，保留"
+    ]
+   }
+  },
+  "stochastic-epigenetic-aging": {
+   "title_zh": "时钟有多少靠随机",
+   "line_zh": "在 25 个队列 2 万多份血样里，一种早期甲基化时钟的准确度有 66–75% 可以用随机变化解释。",
+   "about_zh": "研究者先用免疫细胞数据搭了甲基化随机变化的模拟模型，再和真实时钟比。随机能解释的比例，在另一种更准的时钟里高达 90%，在按健康结局训练的一种时钟里是 63%，说明后者更多反映非随机的生物变化。",
+   "tier": "human",
+   "tier_reason_zh": "人血数据的模拟与比较分析，属方法研究。",
+   "source": {
+    "first_author": "Tong",
+    "et_al": true,
+    "journal": "Nature Aging",
+    "year": 2024,
+    "doi": "10.1038/s43587-024-00600-8",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "25 个",
+     "from": "claims.md: 22,770 份样本、25 个队列"
+    },
+    {
+     "text": "2 万多",
+     "from": "claims.md: 22,770 份样本"
+    },
+    {
+     "text": "66–75%",
+     "from": "claims.md: Horvath 准确度里约 66–75% 可由随机过程解释"
+    },
+    {
+     "text": "90%",
+     "from": "claims.md: Zhang 约 90%，RR2 0.90±0.08"
+    },
+    {
+     "text": "63%",
+     "from": "claims.md: PhenoAge 是 63%"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "核对：25 个队列、2 万多份、66–75%、90%、63% 与 claims.md 和摘要一致；通讯作者过去的顾问关系与本研究无关，coi_zh 保持 null"
+    ]
+   }
+  },
+  "structural-signature-plasma-proteins": {
+   "title_zh": "蛋白形状与阿尔茨海默病",
+   "line_zh": "用 3 种血浆蛋白的结构特征区分健康人、轻度认知障碍和阿尔茨海默病患者，准确率约 83%。",
+   "about_zh": "研究者比较 520 人的血浆，用质谱测蛋白上赖氨酸露在外面的比例：健康人平均 93.2%，轻度认知障碍 92.0%，阿尔茨海默病 91.1%。区分三组用的是一种补体蛋白、丛集蛋白和载脂蛋白 B 的肽段，在 470 份样本里检验。",
+   "tier": "human",
+   "tier_reason_zh": "主结论来自病例对照研究的血浆样本。",
+   "source": {
+    "first_author": "Son",
+    "et_al": true,
+    "journal": "Nature Aging",
+    "year": 2026,
+    "doi": "10.1038/s43587-026-01078-2",
+    "preprint": false,
+    "coi_zh": null
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "520",
+     "from": "claims.md: 520 份血浆"
+    },
+    {
+     "text": "3",
+     "from": "claims.md: C1QA、CLUS 和 ApoB 三个标志"
+    },
+    {
+     "text": "83%",
+     "from": "claims.md: 无监督测试准确率是 83.44%"
+    },
+    {
+     "text": "93.2%",
+     "from": "claims.md: 健康 93.2%（n = 227）"
+    },
+    {
+     "text": "92.0%",
+     "from": "claims.md: MCI 92.0%（n = 135）"
+    },
+    {
+     "text": "91.1%",
+     "from": "claims.md: AD 91.1%（n = 158）"
+    },
+    {
+     "text": "三组",
+     "from": "claims.md: 健康、MCI、AD 三组"
+    },
+    {
+     "text": "470",
+     "from": "claims.md: 三个标志在 470 份样本、18 个算法里的无监督测试准确率是 83.44%"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "coi_zh 维持 null：论文页面写明 The authors declare no competing interests。"
     ]
    }
   },
@@ -5311,6 +7869,87 @@
     ]
    }
   },
+  "time-seq-dna-methylation": {
+   "title_zh": "给衰老时钟省钱",
+   "line_zh": "一种省时省钱的甲基化测法：用 1056 人的血样做出的衰老时钟，估年龄的误差中位数为 3.39 岁。",
+   "about_zh": "研究者给每份样本的 DNA 打上标签，把许多样本混在一起测，只读和时钟有关的位点。大部分实验在小鼠的多种组织里做，小鼠时钟能反映饮食等干预的效果；人血时钟是论文的最后一部分。",
+   "tier": "human",
+   "tier_reason_zh": "一句话的结论来自 1056 人的血样，属人群研究；论文其余部分主要在小鼠里做。",
+   "source": {
+    "first_author": "Griffin",
+    "et_al": true,
+    "journal": "Nature Aging",
+    "year": 2024,
+    "doi": "10.1038/s43587-023-00555-2",
+    "preprint": false,
+    "coi_zh": "第一作者和通讯作者是这项测法专利申请的发明人，专利已授权给一家公司；通讯作者是这家公司的创始人和股东，第一作者作为这家公司的顾问拿过少量股权。"
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "1056",
+     "from": "论文摘要: \"we develop an economical human blood clock (R > 0.96, median error = 3.39 years) in 1,056 demographically representative individuals\""
+    },
+    {
+     "text": "3.39 岁",
+     "from": "claims.md: 测试 R = 0.96，MedAE = 3.39 年（Results）"
+    }
+   ],
+   "library_issue_zh": "summary_zh 只写了计算步骤，没写研究发现；evidence 写 cohort、species 只写 human，但这篇方法论文的大部分实验在小鼠里做，人血时钟只是其中一部分。",
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "颜色定为紫，由一句话决定：一句话写的是 1056 人血样做出的人类时钟（摘要 Finally, we develop an economical human blood clock），小鼠部分在正文写明对象；tier_reason 对齐",
+     "line_zh「在 1056 人血样上训练的时钟」改为「用 1056 人的血样做出的」（3.39 岁是留出测试的误差，1056 是全部人数）",
+     "coi_zh 保留（测法专利已授权给通讯作者创办并持股的公司），补上第一作者作为顾问获得少量股权（论文声明）"
+    ]
+   }
+  },
+  "transcriptomic-hallmarks-mammalian-ageing": {
+   "title_zh": "四种哺乳动物的衰老基因",
+   "line_zh": "在小鼠和大鼠里，用基因表达训练的「预期死亡时钟」能区分延寿和缩寿的干预。",
+   "about_zh": "研究者汇总小鼠、大鼠的 4,539 份和猕猴、人的 6,626 份组织样本。让细胞停止分裂的 CDKN1A 等基因随衰老升高，几种胶原基因下降，在不同物种里方向一致；英国生物样本库里，CDKN1A 的血液蛋白水平与死亡和多病有关。",
+   "tier": "animal",
+   "tier_reason_zh": "主结论来自小鼠和大鼠的死亡时钟与干预数据；猕猴和人的数据用来比对方向。",
+   "source": {
+    "first_author": "Tyshkovskiy",
+    "et_al": true,
+    "journal": "Nature",
+    "year": 2026,
+    "doi": "10.1038/s41586-026-10542-3",
+    "preprint": false,
+    "coi_zh": "两位作者就这项研究的相关内容申请了美国专利。"
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "四",
+     "from": "claims.md: 论文整合 4 个哺乳动物"
+    },
+    {
+     "text": "4,539",
+     "from": "claims.md: 4,539 份啮齿类样本、26 个组织"
+    },
+    {
+     "text": "6,626",
+     "from": "claims.md: 以及 6,626 份灵长类样本"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-organ",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "line_zh 写明时钟用小鼠和大鼠数据训练，并改为全文原意「能区分延寿和缩寿的干预」（PMC13233323：mortality clocks distinguished both short-lived and long-lived models）。",
+     "coi_zh 保留：论文写明两位作者的美国专利申请与这项研究相关；删除 source.coi_from。"
+    ]
+   }
+  },
   "trigonelline-nad-precursor-muscle": {
    "title_zh": "葫芦巴碱与老年小鼠的肌肉",
    "line_zh": "老年雄性小鼠的饲料里加葫芦巴碱后，握力和抗疲劳能力变好，最大肌肉收缩力没有变化。",
@@ -5396,6 +8035,7 @@
     "pass": true,
     "issues": [
      "颜色核对：PDF 摘要第一项结果就是认知正常者四年间血清和脑脊液 ULK1 下降（COGNORM n = 75，与基线比低 41.35% 和 19.18%），以它作一句话、定紫色成立；小鼠和细胞结果在正文标明对象",
+     "核对 PDF 竞争利益：通讯作者与 ChromaDex、LMITO 等公司有合作或咨询关系，论文没有说明这些公司与 ULK1 或所测化合物有关，按统一规则 coi 保持 null",
      "「病理蛋白的聚集」太含糊，写明 tau；并补上抑制剂让结团加重（XST-14 加重，SBI-0206965 只有趋势），不只写好的一半"
     ]
    }
@@ -5524,6 +8164,47 @@
     "pass": true,
     "issues": [
      "「住处交通污染重」改为「交通污染重」：论文用 2005 年的二氧化氮估计值，没有写是按住址算的"
+    ]
+   }
+  },
+  "wearable-aging-clock": {
+   "title_zh": "手表测出的脉搏年龄",
+   "line_zh": "在一项手表健康研究里，用手腕脉搏波估出的年龄比实际年龄大的人，心脏病、心衰和糖尿病更常见。",
+   "about_zh": "研究者用约 2000 万段 60 秒的手腕光学脉搏信号（手表背面用光测心率的那种）训练模型来估年龄。在健康参与者里，估出的年龄和实际年龄平均差 2.43 岁。这个年龄差还和吸烟、运动、睡眠有关。",
+   "tier": "human",
+   "tier_reason_zh": "可穿戴设备用户的观察性队列研究。",
+   "source": {
+    "first_author": "Miller",
+    "et_al": true,
+    "journal": "Nature Communications",
+    "year": 2025,
+    "doi": "10.1038/s41467-025-64275-4",
+    "preprint": false,
+    "coi_zh": "全部作者都是研究所用手表厂商的员工并持有该公司股票；这项手表健康研究由该公司和美国心脏协会出资。"
+   },
+   "research_assay": true,
+   "feature_zh": null,
+   "numbers": [
+    {
+     "text": "2000 万",
+     "from": "claims.md: PpgAge 用约 2,000 万段 60 秒 PPG 的自监督网络"
+    },
+    {
+     "text": "60 秒",
+     "from": "claims.md: 约 2,000 万段 60 秒 PPG"
+    },
+    {
+     "text": "2.43 岁",
+     "from": "claims.md: 开头结果写健康队列 MAE 2.43 年（2.33–2.53）"
+    }
+   ],
+   "library_issue_zh": null,
+   "review": {
+    "by": "reviewer-clock",
+    "at": "2026-10-04",
+    "pass": true,
+    "issues": [
+     "coi_zh 保留（作者受雇于并持股于卡上所用设备的厂商），「多位作者」改为「全部作者」（声明列出的 7 人即全体作者）"
     ]
    }
   },
