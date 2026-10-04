@@ -8,7 +8,7 @@ import type { AgentRunRecord } from './agents.ts'
 export type ActionKind = 'emergency' | 'see_doctor' | 'prepare_brief' | 'log_visit_outcome' | 'screening_topic'
   | 'book_addon_test' | 'self_measure' | 'answer_profile' | 'connect_records' | 'upload_report'
   | 'checkin' | 'retest' | 'review_verdict' | 'draft_plan' | 'adjust_plan' | 'read_result' | 'learn'
-  | 'season_quest' | 'claim_draw' | 'study_consent' | 'rest'
+  | 'codex_experiment' | 'codex_reveal' | 'study_consent' | 'rest'
 export interface NextBestAction {
   id: Id
   kind: ActionKind

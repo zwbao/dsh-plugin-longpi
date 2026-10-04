@@ -136,10 +136,10 @@ export function privacyPage(status: PrivacyStatus): string {
   const flow = decisionLabel(status.consents.data_flow_deepseek?.decision ?? null, '已同意把健康对话发给 DeepSeek')
   const session = status.session_log.upload ? '已单独开启' : '关闭（默认）'
   const ageValue = status.minor.age == null ? '' : String(status.minor.age)
-  const minorNote = !status.minor.known ? copy.minor.ask : status.minor.child ? copy.minor.under_14 : status.minor.minor ? copy.minor.under_18 : '已满 18 岁。图鉴抽卡可开启，也可在设置中关闭。'
+  const minorNote = !status.minor.known ? copy.minor.ask : status.minor.child ? copy.minor.under_14 : status.minor.minor ? copy.minor.under_18 : '已满 18 岁。长寿图鉴可以打开，也可以随时关闭。'
   const rulesLine = !status.minor.known
-    ? '图鉴抽卡：填写年龄前保持关闭。减肥项目待填写年龄后再判断。'
-    : `图鉴抽卡：${status.minor.codex_allowed ? '可开启' : '关闭'}。减肥项目：${status.minor.weight_loss ? '可以出现在方案里' : '不安排'}。`
+    ? '长寿图鉴：填写年龄前保持关闭。减肥项目待填写年龄后再判断。'
+    : `长寿图鉴：${status.minor.codex_allowed ? '可以打开' : '关闭'}。减肥项目：${status.minor.weight_loss ? '可以出现在方案里' : '不安排'}。`
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>

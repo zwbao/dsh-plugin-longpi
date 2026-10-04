@@ -57,8 +57,6 @@ assert.equal(younger({ delta: { value: -3, unit: '岁', band: [-2, 2], band_veri
 assert.equal(younger({ delta: { value: -3, unit: '岁', band: [-2, 2], band_verified: true, interval_days: 90, min_interval_days: 28, same_lab: false } }), false)
 assert.equal(younger({ subject: { kind: 'risk' } }), false)
 
-assert.equal(mod.oddsSumToOne({ odds: { common: 0.7, rare: 0.22, epic: 0.07, legendary: 0.01 } }), true)
-assert.equal(mod.oddsSumToOne({ odds: { common: 0.7, rare: 0.2, epic: 0.07, legendary: 0.01 } }), false)
 
 // Config defaults (AA §3.4); a user's partial row keeps the rest.
 assert.equal(mod.agentConfig({}, 'coach').maxTokens, 900)

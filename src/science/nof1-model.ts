@@ -9,38 +9,25 @@ export interface NOf1Quest {
   kind: 'science_n_of_1'
   title_zh: string
   criteria: { event: 'study.n_of_1_completed'; count: 1 }
-  reward: { draws: 1 }
+  /** 长寿图鉴 1.2: finishing it is recorded as a footprint; there are no draws and no packs for it. */
+  reward: { footprint: true }
   origin: 'rule'
   rarity_from_labs: false
-  codex: {
-    money: 'none'
-    trading: 'none'
-    daily_cap: 3
-    minors: 'off'
-    odds_zh: string
-    pity_zh: string
-  }
+  codex: { money: 'none'; trading: 'none'; minors: 'off' }
 }
 
-/** G2 can append this to a season. Rarity stays the Codex evidence table, not the glucose gap. */
+/** A finished personal trial is a footprint in the Codex; nothing in it reads the glucose gap. */
 export function nOf1SeasonQuest(seasonId: string): NOf1Quest {
   return {
     id: 'qs-n-of-1',
     season_id: seasonId,
     kind: 'science_n_of_1',
-    title_zh: '按随机顺序完成本赛季的个人小试验；间隔期照常生活，血糖仅记录在这台电脑上',
+    title_zh: '按随机顺序完成这次个人小试验；间隔期照常生活，血糖仅记录在这台电脑上',
     criteria: { event: 'study.n_of_1_completed', count: 1 },
-    reward: { draws: 1 },
+    reward: { footprint: true },
     origin: 'rule',
     rarity_from_labs: false,
-    codex: {
-      money: 'none',
-      trading: 'none',
-      daily_cap: 3,
-      minors: 'off',
-      odds_zh: '铜 52%，银 28%，紫 16%，金 4%',
-      pity_zh: '连续 10 次低于银之后，下一次至少是银',
-    },
+    codex: { money: 'none', trading: 'none', minors: 'off' },
   }
 }
 

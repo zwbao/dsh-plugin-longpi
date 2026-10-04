@@ -1,8 +1,8 @@
 // Plain Chinese for the screens a person actually reads. Internal names stay in
 // code and in the model's tool notes. They do not stay in these sentences.
 
-export const SEASON_INTRO = '一个赛季大约 8–12 周，从现在到你下次复查。这段时间里有几个小目标，复查当天一起回顾结果，然后开始下一个赛季。'
-export const CODEX_INTRO = '做完一件对健康有用的事（比如看医生、复查、量腰围），即可获得一张长寿图鉴卡。每张卡讲一个长寿研究或一种长寿动物，部分卡片还可以用你的数据进行计算。'
+export const SEASON_INTRO = '一个赛季 8 周，也可以设成到下次复查为止。一个赛季做 2–4 个两周的小实验：三选一，做，揭晓。'
+export const CODEX_INTRO = '长寿图鉴有三部分：图书馆里的研究卡随时可读；两周的个人小实验，做完翻开看自己的结果；做到的事记成足迹卡。'
 export const SCIENCE_INTRO = 'LongPi 的用户共同研究如何延缓衰老。你可以用自己的数据做个人小试验，也可以加入大家的研究。'
 export const OUTBOX_ZH = '研究正式开始后才会发出，现在只保存在你的设备上。'
 export const RECRUITING_ZH = '招募中'

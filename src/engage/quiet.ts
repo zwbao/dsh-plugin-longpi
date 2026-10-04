@@ -138,7 +138,7 @@ export function rememberAvoidance(dataDir: string, text: string): boolean {
 
 function isSeasonPressure(action: { id?: string; kind?: string; title_zh?: string; detail_zh?: string }): boolean {
   const blob = `${action.id ?? ''} ${action.kind ?? ''} ${action.title_zh ?? ''} ${action.detail_zh ?? ''}`
-  return action.kind === 'season_quest' || action.id === 'nba-season-quest' || /不用每天打卡|这一季只做几件事|这个赛季只做几件事|本赛季只需完成几件事|我这一季现在该做什么|这个赛季我现在该做什么/.test(blob)
+  return action.kind === 'codex_experiment' || action.id === 'nba-codex-pack' || action.id === 'nba-season-quest' || /不用每天打卡|这一季只做几件事|这个赛季只做几件事|本赛季只需完成几件事|我这一季现在该做什么|这个赛季我现在该做什么/.test(blob)
 }
 
 function scrubText(text: string, signals: QuietSignals): string {

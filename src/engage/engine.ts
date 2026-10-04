@@ -1,116 +1,46 @@
-// Season, quest, unlock, streak and Codex state. One file is the source of truth
-// (engage/state.json). Draws are earned by health actions. Rarity never reads a lab.
+// 长寿图鉴 (docs/codex-design.md 1.2). The main line is a two-week personal experiment: three to choose from, do
+// it, reveal. The reveal is the only pack opening. The library is free to read. Packs come only from a season
+// start, a finished experiment, or the holder's own retest; a family member's visit or checkup is a footprint.
+// State lives in the account holder's LongPi home (engage/state.json), whoever is being looked at.
 
-import { randomBytes } from 'node:crypto'
-import { appendFileSync, chmodSync, existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
-import type { Id, IsoDay, IsoTime } from '../contracts/common.ts'
-import type { DrawGrant } from '../contracts/engagement.ts'
-import type { Season, Quest, StreakState, Unlock } from '../contracts/engagement.ts'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import type { IsoDay, IsoTime } from '../contracts/common.ts'
+import type { Config } from '../config.ts'
+import type { ExperimentRun, ExperimentSpec, Footprint, FootprintKind, MetricKey, Pack, ResultCard, RunResult, Tier } from '../contracts/codex.ts'
 import type { Bus, HealthEventPayloads, HealthEventType } from '../contracts/events.ts'
 import type { FactPack } from '../contracts/factpack.ts'
 import type { ActionKind } from '../contracts/surfaces.ts'
-import type { CodexCard, DrawResult, Rarity } from '../contracts/codex.ts'
-import { addDays, checkinStatus, daysBetween, isoDay, readCheckIns } from '../interventions.ts'
-import { personMinor } from '../privacy/index.ts'
-import { estimatedAge, FOCUS, readProfile } from '../profile.ts'
-import { readSelf } from '../selfmeasure.ts'
-import { calculatorIdentity } from '../subject.ts'
-import { bindRecord } from '../bind.ts'
-import { loadCatalog } from '../catalog.ts'
-import { runSkill } from '../runner.ts'
-import { libraryHome } from '../skills-provider.ts'
-import { cardById, codexBlock, codexBlockZh, loadCodexPack, type CodexBlock } from './codex.ts'
-import { drawOnce, oddsDisclosure, rarityZh } from './droptable.ts'
-import { nudgeView, type NudgeState } from './nudges.ts'
-import { offerForCard, viewFromStored, type MethodOffer, type StoredRecord } from './offer.ts'
-import {
-  applyRetestValues, chapterGrade, insightBody, materializeQuests, pairsFromFacts, resolvePersonal, seasonHeader, shareCardText, shareRecapText,
-  type SeasonDraft, type SeasonFact, type SeasonPair,
-} from './personal.ts'
-import { readQuiet, seasonPressureOn } from './quiet.ts'
-import { makeQuests, questProgress, type QuestFacts } from './quests.ts'
-import { effectiveMode } from '../science/index.ts'
-import { nOf1SeasonQuest } from '../science/nof1-model.ts'
-import { commitmentOf } from './rng.ts'
-import { chapterList, MIN_SEASON_DAYS, recapText, seasonSpan, seasonStatus, weekOf } from './seasons.ts'
-import { computeStreak, daysInRange, milestonesUpTo, nextMilestone } from './streak.ts'
-import { makeUnlocks, openUnlock, REMINDER_ZH } from './unlocks.ts'
-import { weeklyText } from './weekly.ts'
+import { addDays, civilParts, daysBetween, isoDay } from '../interventions.ts'
+import { minorView } from '../privacy/consents.ts'
+import { readProfile } from '../profile.ts'
+import { loadReference, type Biovar } from '../reference.ts'
+import { careItems } from '../triage/care.ts'
+import { codexBlock, codexBlockZh, experimentById, loadCatalog, loadLibrary, type CodexBlock } from './data.ts'
+import { blockedBy, devices, eligible, pickThree, primaryFor, randomSchedule, type EligibilityContext } from './eligibility.ts'
+import { DEFAULT_MY_DAY, laterReveal, markRevealShown, settleAcks, slotView, standupDays, validClock, type SlotView } from './nudge.ts'
+import { readSeriesCache, refreshSeries, stepsOnDay, valuesIn, type SeriesCache } from './series.ts'
+import { emptyState, newId, readState, saveState, type CodexContext, type State } from './state.ts'
+import { judgeMetric, MIN_BASELINE_DAYS, MIN_TRIAL_DAYS, OUTCOME_ZH, praiseZh, thresholdZh } from './verdict.ts'
 
-/** 「9 月 10 日」, with the year when it is not this year. */
-function dayZhE(iso: string | null | undefined): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso ?? '')
-  if (!m) return iso ?? ''
-  const md = `${Number(m[2])} 月 ${Number(m[3])} 日`
-  return Number(m[1]) === new Date().getFullYear() ? md : `${m[1]} 年 ${md}`
-}
+export const SEASON_DAYS = 56
+const MAX_RUNNING = 2
+const EXTEND_DAYS = 7
+const RETEST_SEASON_CAP_DAYS = 112
 
-const TITLES: Record<string, string> = {
-  care: '先向医生问清需要咨询的事项',
-  data: '补做缺失的检查',
-  bioage: '本季关注身体年龄',
-  cardio: '本季关注心血管',
-  glucose: '本季关注血糖',
-  weight: '本季关注体重',
-  sleep: '本季关注睡眠',
-  plan: '本季完成一件事',
-}
-
-interface StoredAction { key: string; day: IsoDay; kind: 'care' | 'hscrp' | 'waist' | 'retest' | 'life' | 'booked' | 'ferritin' | 'iron' }
-
-interface CodexState {
-  seed_hex: string
-  commitment: string
-  counter: number
-  pity: number
-  grants: DrawGrant[]
-  owned: string[]
-  choice: 'on' | 'off' | null
-  draw_days: Record<string, number>
-  utility_used: string[]
-  notes: Record<string, string>
-  offers: Record<string, MethodOffer>
-}
-
-interface CareFunnel { doctor_step: IsoDay | null; booked: IsoDay | null; visited: IsoDay | null }
-interface InviteState { ready: boolean; reason: 'first_result' | 'doctor_step' | null; declined: boolean }
-interface FamilyState { opted: boolean; shares: Array<{ id: string; kind: 'card' | 'recap'; at: string; text_zh: string }> }
-
-interface State {
-  version: 1
-  season: Season | null
-  recap_zh: string | null
-  quests: Quest[]
-  unlocks: Unlock[]
-  streak: StreakState
-  codex: CodexState
-  actions: StoredAction[]
-  rewarded: string[]
-  nudge: NudgeState
-  /** Season and daily wording on the home. Null until they opt in. */
-  pressure: 'on' | 'off' | null
-  weekly_zh: string | null
-  facts: SeasonFact[]
-  facts_fp: string
-  coach_draft: SeasonDraft | null
-  personal_origin: 'coach' | 'template' | 'rule' | null
-  pairs: SeasonPair[]
-  care: CareFunnel
-  invite: InviteState
-  family: FamilyState
-  ended_by_retest: boolean
-  record_fp: string
-  applied_signature: string
-}
+export const FOOTPRINT_NOTE_ZH = '只记你做了什么，不代表指标好坏。'
 
 interface Runtime {
+  /** The person being looked at (a family member's folder when one is chosen). */
   dataDir: () => string
+  /** The account holder's LongPi home: the Codex lives here. */
+  rootDir: () => string
+  skillsHome: () => string
   codexOn: () => boolean
   bus: Bus | null
 }
 
-let runtime: Runtime = { dataDir: () => '', codexOn: () => true, bus: null }
+let runtime: Runtime = { dataDir: () => '', rootDir: () => '', skillsHome: () => '', codexOn: () => true, bus: null }
 
 export function bindRuntime(next: Partial<Runtime>): void {
   runtime = { ...runtime, ...next }
@@ -120,140 +50,30 @@ export function boundDataDir(): string {
   return runtime.dataDir()
 }
 
-function emptyState(): State {
-  return {
-    version: 1,
-    season: null,
-    recap_zh: null,
-    quests: [],
-    unlocks: [],
-    streak: { current: 0, best: 0, freezes_available: 0, frozen: [], last_active: null },
-    codex: { seed_hex: '', commitment: '', counter: 0, pity: 0, grants: [], owned: [], choice: null, draw_days: {}, utility_used: [], notes: {}, offers: {} },
-    actions: [],
-    rewarded: [],
-    nudge: { choice: null, dismissed: false, offered: false, last_shown: null },
-    pressure: null,
-    weekly_zh: null,
-    facts: [],
-    facts_fp: '',
-    coach_draft: null,
-    personal_origin: null,
-    pairs: [],
-    care: { doctor_step: null, booked: null, visited: null },
-    invite: { ready: false, reason: null, declined: false },
-    family: { opted: false, shares: [] },
-    ended_by_retest: false,
-    record_fp: '',
-    applied_signature: '',
-  }
-}
-
-function hydrate(raw: State): State {
-  const base = emptyState()
-  const codex = raw.codex ?? base.codex
-  return {
-    ...base,
-    ...raw,
-    quests: Array.isArray(raw.quests) ? raw.quests : [],
-    unlocks: Array.isArray(raw.unlocks) ? raw.unlocks : [],
-    actions: Array.isArray(raw.actions) ? raw.actions : [],
-    rewarded: Array.isArray(raw.rewarded) ? raw.rewarded : [],
-    facts: Array.isArray(raw.facts) ? raw.facts : [],
-    pairs: Array.isArray(raw.pairs) ? raw.pairs : [],
-    care: { ...base.care, ...(raw.care ?? {}) },
-    invite: { ...base.invite, ...(raw.invite ?? {}) },
-    family: {
-      opted: raw.family?.opted === true,
-      shares: Array.isArray(raw.family?.shares) ? raw.family.shares.slice(-20) : [],
-    },
-    applied_signature: typeof raw.applied_signature === 'string' ? raw.applied_signature : '',
-    ended_by_retest: raw.ended_by_retest === true,
-    personal_origin: raw.personal_origin === 'coach' || raw.personal_origin === 'template' || raw.personal_origin === 'rule' ? raw.personal_origin : null,
-    codex: {
-      ...base.codex,
-      ...codex,
-      grants: Array.isArray(codex.grants) ? codex.grants : [],
-      owned: Array.isArray(codex.owned) ? codex.owned : [],
-      draw_days: codex.draw_days ?? {},
-      utility_used: Array.isArray(codex.utility_used) ? codex.utility_used : [],
-      notes: codex.notes ?? {},
-      offers: codex.offers ?? {},
-    },
-  }
-}
-
-function engageDir(dataDir: string): string {
-  return join(dataDir, 'engage')
-}
-
-function readState(dataDir: string): State {
-  const path = join(engageDir(dataDir), 'state.json')
-  if (!existsSync(path)) return emptyState()
-  try {
-    const raw = JSON.parse(readFileSync(path, 'utf8')) as State
-    if (!raw || raw.version !== 1 || !raw.codex || !raw.streak) throw new Error('version')
-    if (raw.pressure !== 'on' && raw.pressure !== 'off') raw.pressure = null
-    return hydrate(raw)
-  } catch {
-    try { renameSync(path, `${path}.damaged-${Date.now()}`) } catch { /* leave the damaged file if rename fails */ }
-    return emptyState()
-  }
-}
-
-function writeJson(path: string, value: unknown): void {
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-  const tmp = `${path}.${process.pid}.${randomBytes(3).toString('hex')}.tmp`
-  writeFileSync(tmp, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 })
-  chmodSync(tmp, 0o600)
-  renameSync(tmp, path)
-}
-
-function saveState(dataDir: string, state: State): void {
-  const root = engageDir(dataDir)
-  mkdirSync(root, { recursive: true, mode: 0o700 })
-  writeJson(join(root, 'state.json'), state)
-  writeJson(join(root, 'season.json'), { version: 1, season: state.season, recap_zh: state.recap_zh })
-  writeJson(join(root, 'quests.json'), { version: 1, quests: state.quests })
-  writeJson(join(root, 'unlocks.json'), { version: 1, unlocks: state.unlocks })
-  writeJson(join(root, 'streak.json'), { version: 1, streak: state.streak })
-  writeJson(join(root, 'codex.json'), {
-    version: 1,
-    commitment: state.codex.commitment,
-    counter: state.codex.counter,
-    pity: state.codex.pity,
-    grants: state.codex.grants,
-    owned: state.codex.owned,
-    choice: state.codex.choice,
-  })
+/** The holder's home; falls back to the active folder when only that is bound (tests, bare hosts). */
+export function boundRootDir(): string {
+  return runtime.rootDir() || runtime.dataDir()
 }
 
 function emit<T extends HealthEventType>(type: T, payload: HealthEventPayloads[T]): void {
-  try { runtime.bus?.emit(type, payload, { module: 'M6', via: 'route' }) } catch { /* the bus is optional until M0 is wired */ }
+  try { runtime.bus?.emit(type, payload, { module: 'M6', via: 'route' }) } catch { /* the bus is optional */ }
 }
 
-interface World {
-  today: IsoDay
-  age: number | null
-  accountAge: number | null
-  sex: string
-  subject: boolean
-  subject_zh: string | null
-  consent: boolean
-  focus: string | null
-  minorFlag: boolean
-  memoryOptOut: boolean
-  memoryNudge: boolean
-  waist: boolean
-  hscrp: boolean
-  selfDays: IsoDay[]
-  checkinDays: IsoDay[]
-  doctorFirst: boolean
-  displayName: string
-  nOf1Done: boolean
+function biovar(): Biovar | null {
+  try {
+    const home = runtime.skillsHome()
+    return home ? loadReference(home).biovar : null
+  } catch {
+    return null
+  }
 }
 
-function memoryFlags(dataDir: string): { minor: boolean; optOut: boolean; nudge: boolean } {
-  const out = { minor: false, optOut: false, nudge: false }
+// ---- who may use it -----------------------------------------------------------
+
+interface World { today: IsoDay; now: Date; age: number | null; minor: boolean; consent: boolean; memoryOptOut: boolean; memoryStandup: boolean }
+
+function memoryFlags(dataDir: string): { minor: boolean; optOut: boolean; standup: boolean } {
+  const out = { minor: false, optOut: false, standup: false }
   try {
     const raw = JSON.parse(readFileSync(join(dataDir, 'memory.json'), 'utf8')) as { items?: unknown[] }
     for (const item of raw.items ?? []) {
@@ -262,940 +82,974 @@ function memoryFlags(dataDir: string): { minor: boolean; optOut: boolean; nudge:
       if (row.status && row.status !== 'active') continue
       if (row.kind === 'condition' && Array.isArray(row.flags) && row.flags.includes('minor')) out.minor = true
       if (row.kind === 'preference' && row.key === 'codex_enabled' && row.value === false) out.optOut = true
-      if (row.kind === 'preference' && row.key === 'nudge_in_workflow' && row.value === true) out.nudge = true
+      if (row.kind === 'preference' && row.key === 'nudge_in_workflow' && row.value === true) out.standup = true
     }
   } catch { /* memory is M0's file; missing is normal */ }
   return out
 }
 
-function labsPath(dataDir: string): string {
-  return join(dataDir, 'engage', 'labs.json')
-}
-
-/** Written when a journey sees hs-CRP or waist on the record, so the season stops asking for a test already on file. */
-export function noteLabsOnFile(dataDir: string, labs: { hscrp: boolean; waist: boolean }): void {
-  if (!dataDir) return
-  const path = labsPath(dataDir)
-  mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
-  const tmp = `${path}.${process.pid}.tmp`
-  writeFileSync(tmp, `${JSON.stringify({ hscrp: labs.hscrp === true, waist: labs.waist === true })}\n`, { mode: 0o600 })
-  chmodSync(tmp, 0o600)
-  renameSync(tmp, path)
-}
-
-function readLabsOnFile(dataDir: string): { hscrp: boolean; waist: boolean } {
-  if (!dataDir) return { hscrp: false, waist: false }
-  try {
-    const raw = JSON.parse(readFileSync(labsPath(dataDir), 'utf8')) as { hscrp?: unknown; waist?: unknown }
-    return { hscrp: raw?.hscrp === true, waist: raw?.waist === true }
-  } catch {
-    return { hscrp: false, waist: false }
-  }
-}
-
-function readWorld(dataDir: string, now: Date): World {
-  const today = isoDay(now)
-  const profile = readProfile(dataDir)
-  const year = Number(today.slice(0, 4))
-  const accountAge = profile.age ?? estimatedAge(profile.birthYear, year)
-  const identity = calculatorIdentity(profile)
-  const memory = memoryFlags(dataDir)
-  const self = readSelf(dataDir)
-  const labs = readLabsOnFile(dataDir)
-  let checkins: IsoDay[] = []
-  try {
-    const status = checkinStatus(readCheckIns(dataDir))
-    const days = new Set<IsoDay>()
-    for (const byDay of status.values()) for (const [day, done] of byDay) if (done) days.add(day)
-    checkins = [...days]
-  } catch { checkins = [] }
+function worldOf(root: string, now: Date): World {
+  const profile = readProfile(root)
+  const minor = minorView(profile, now)
+  const memory = memoryFlags(root)
   return {
-    today,
-    age: identity.age,
-    accountAge,
-    sex: identity.sex,
-    subject: identity.subject,
-    subject_zh: profile.subject?.relationship_zh ?? null,
+    today: isoDay(now),
+    now,
+    age: minor.age,
+    minor: minor.minor || memory.minor,
     consent: Boolean(profile.consent?.accepted_at),
-    focus: profile.focus[0] ?? null,
-    minorFlag: memory.minor || (identity.subject && identity.age != null && identity.age < 18),
-    displayName: profile.displayName ?? '',
     memoryOptOut: memory.optOut,
-    memoryNudge: memory.nudge,
-    waist: self.some((row) => row.key === 'waist') || labs.waist,
-    hscrp: labs.hscrp,
-    selfDays: [...new Set(self.map((row) => row.date))],
-    checkinDays: checkins,
-    doctorFirst: false,
-    nOf1Done: nOf1Finished(dataDir),
+    memoryStandup: memory.standup,
   }
-}
-
-function nOf1Finished(dataDir: string): boolean {
-  if (!dataDir) return false
-  try {
-    const raw = JSON.parse(readFileSync(join(dataDir, 'science', 'n-of-1.json'), 'utf8')) as { stopping?: { decision?: string } }
-    const decision = raw.stopping?.decision
-    return decision === 'stop_difference' || decision === 'stop_futility' || decision === 'stop_cap'
-  } catch {
-    return false
-  }
-}
-
-function activeDays(state: State, world: World): IsoDay[] {
-  const days = new Set<IsoDay>([...world.selfDays, ...world.checkinDays])
-  for (const action of state.actions) if (action.kind !== 'life') days.add(action.day)
-  return [...days]
-}
-
-function factsOf(state: State, world: World): QuestFacts & { allActive: IsoDay[]; waist: boolean; hscrp: boolean } {
-  const season = state.season
-  const waist = world.waist || state.actions.some((action) => action.kind === 'waist')
-  const hscrp = world.hscrp || state.actions.some((action) => action.kind === 'hscrp')
-  const careWithBrief = state.actions.some((action) => action.kind === 'care')
-  const booked = state.actions.some((action) => action.kind === 'booked')
-  const keys: Record<string, boolean> = {}
-  for (const action of state.actions) {
-    if (action.kind === 'iron' || action.kind === 'ferritin') keys.ferritin = true
-    if (action.kind !== 'life' && action.kind !== 'care' && action.kind !== 'retest' && action.kind !== 'booked') keys[action.kind] = true
-  }
-  const allActive = activeDays(state, world)
-  const inSeason = (day: IsoDay) => Boolean(season) && day >= season!.start && day <= (state.ended_by_retest ? world.today : season!.end)
-  const windowStart = season ? addDays(season.start, MIN_SEASON_DAYS - 1) : world.today
-  const retestInWindow = state.actions.some((action) => action.kind === 'retest' && action.day >= windowStart && action.day <= world.today)
-  return {
-    careWithBrief,
-    booked,
-    keys,
-    waist,
-    hscrp,
-    activeDays: allActive.filter(inSeason).length,
-    retestInWindow,
-    nOf1Done: world.nOf1Done,
-    allActive,
-  }
-}
-
-/** On-device and simulated studies add one ordinary Codex quest. Off and live add nothing. */
-function attachSimulatedTrial(state: State, season: Season): void {
-  if (effectiveMode() === 'off') return
-  if (state.quests.some((quest) => quest.id === 'qs-n-of-1')) return
-  const raw = nOf1SeasonQuest(season.id)
-  state.quests.push({
-    id: raw.id,
-    season_id: season.id,
-    kind: raw.kind,
-    title_zh: raw.title_zh,
-    criteria: { event: raw.criteria.event, count: raw.criteria.count },
-    progress: 0,
-    status: 'open',
-    reward: { draws: raw.reward.draws },
-    origin: raw.origin,
-  })
-  season.quest_ids = state.quests.map((quest) => quest.id)
 }
 
 function blockOf(state: State, world: World): CodexBlock {
-  const optedOut = state.codex.choice === 'off' || (state.codex.choice == null && world.memoryOptOut)
-  if (world.subject) return codexBlock({ age: world.age, minorFlag: world.minorFlag, optOut: optedOut, configOn: runtime.codexOn() })
-  const privacy = personMinor()
-  if (privacy && !privacy.codex) return privacy.minor ? 'minor' : 'age_unknown'
-  return codexBlock({ age: world.age, minorFlag: world.minorFlag, optOut: optedOut, configOn: runtime.codexOn() })
+  const optOut = state.choice === 'off' || (state.choice == null && world.memoryOptOut)
+  return codexBlock({ age: world.age, minorFlag: world.minor, optOut, configOn: runtime.codexOn() })
 }
 
-function personalize(state: State, season: Season): void {
-  const built = resolvePersonal(state.facts, state.coach_draft)
-  if (!built) {
-    if (state.facts.length > 0 && !state.personal_origin) state.personal_origin = 'rule'
-    return
-  }
-  const signature = `${built.origin}:${built.draft.title_zh}:${built.draft.quests.map((quest) => quest.id).join(',')}`
-  if (state.applied_signature === signature) return
-  if (state.quests.some((quest) => quest.status === 'done')) return
-  season.title_zh = built.draft.title_zh
-  season.theme = { focus: built.draft.focus, marker_keys: [...built.draft.marker_keys] }
-  season.chapters = chapterList(built.draft.focus === 'care' || built.draft.focus === 'data' ? built.draft.focus : 'generic', season.chapters.length)
-  state.quests = materializeQuests(season.id, built.draft, built.origin === 'coach' ? 'coach' : 'rule')
-  season.quest_ids = state.quests.map((quest) => quest.id)
-  state.personal_origin = built.origin
-  state.applied_signature = signature
-  if (state.pairs.length === 0) state.pairs = pairsFromFacts(state.facts)
+// ---- the person's data, from the cached series ---------------------------------
+
+function lifeDays(state: State): Set<IsoDay> {
+  return new Set(state.life.map((row) => row.day))
 }
 
-function grant(state: State, world: World, kind: DrawGrant['kind'], day: IsoDay, earnedBy: Id): void {
-  if (blockOf(state, world)) return
-  state.codex.grants.push({ id: `gr${randomBytes(8).toString('hex')}`, kind, earned_by: earnedBy, granted: day })
-  const last = state.codex.grants.at(-1)
-  if (last) emit('codex.draw_earned', { grant_id: last.id, kind: last.kind, by_event: earnedBy })
+function isWeekend(day: IsoDay): boolean {
+  const weekday = new Date(`${day}T12:00:00Z`).getUTCDay()
+  return weekday === 0 || weekday === 6
 }
 
-function ensureSeed(state: State): void {
-  if (state.codex.seed_hex) return
-  const seed = randomBytes(32)
-  state.codex.seed_hex = seed.toString('hex')
-  state.codex.commitment = commitmentOf(seed)
-}
-
-function startSeason(state: State, world: World): void {
-  const span = seasonSpan(world.today, null)
-  const focus = world.doctorFirst ? 'care'
-    : !world.waist || !world.hscrp ? 'data'
-      : world.focus && (FOCUS as readonly string[]).includes(world.focus) ? world.focus
-        : 'plan'
-  const season: Season = {
-    id: `sn${randomBytes(8).toString('hex')}`,
-    kind: 'personal',
-    title_zh: TITLES[focus] ?? TITLES.plan,
-    theme: { focus: focus as Season['theme']['focus'], marker_keys: [!world.waist ? 'waist' : '', !world.hscrp ? 'hscrp' : ''].filter(Boolean) },
-    start: span.start,
-    end: span.end,
-    retest_day: span.retest_day,
-    status: 'active',
-    chapters: chapterList(focus === 'care' || focus === 'data' ? focus : 'generic', span.weeks),
-    quest_ids: [],
-    unlock_ids: [],
-    codex_set_id: 'set-library',
-  }
-  state.season = season
-  state.recap_zh = null
-  state.quests = makeQuests(season.id, { waist: !world.waist && !state.actions.some((action) => action.kind === 'waist'), hscrp: !world.hscrp && !state.actions.some((action) => action.kind === 'hscrp') })
-  state.unlocks = makeUnlocks()
-  season.quest_ids = state.quests.map((quest) => quest.id)
-  season.unlock_ids = state.unlocks.map((unlock) => unlock.id)
-  state.rewarded = state.rewarded.filter((id) => id.startsWith('presence:'))
-  state.ended_by_retest = false
-  state.applied_signature = ''
-  if (state.streak.freezes_available < 1) state.streak.freezes_available = 1
-  ensureSeed(state)
-  personalize(state, season)
-  emit('season.started', { season_id: season.id })
-}
-
-function reduce(state: State, world: World, now: Date): void {
-  if (!world.consent) return
-  if (!state.season) startSeason(state, world)
-  else if (state.season) personalize(state, state.season)
-  const season = state.season
-  if (!season) return
-  attachSimulatedTrial(state, season)
-  const at = now.toISOString() as IsoTime
-  const facts = factsOf(state, world)
-  for (const unlock of state.unlocks) {
-    const have = unlock.key === 'cvd_risk' ? facts.waist : unlock.key === 'bioage' ? facts.hscrp : false
-    const next = openUnlock(unlock, have, at)
-    if (next.status === 'unlocked' && unlock.status !== 'unlocked') emit('unlock.granted', { unlock_id: unlock.id, key: unlock.key })
-    Object.assign(unlock, next)
-  }
-  let grantedToday = state.codex.grants.some((row) => row.granted === world.today)
-  for (const quest of state.quests) {
-    if (quest.status === 'done' || quest.status === 'waived') continue
-    quest.progress = questProgress(quest, facts)
-    if (quest.progress < quest.criteria.count) continue
-    quest.status = 'done'
-    emit('quest.completed', { quest_id: quest.id, season_id: quest.season_id, kind: quest.kind })
-    if (!state.rewarded.includes(quest.id)) {
-      state.rewarded.push(quest.id)
-      grant(state, world, quest.reward.guaranteed_min_rarity ? 'care_guaranteed' : 'standard', world.today, quest.id)
-      grantedToday = true
-    }
-  }
-  // A draw at each cumulative milestone of days with a health action. State from before (one draw per active day)
-  // has its milestones up to today counted as given, so an upgrade does not pour out back-dated draws.
-  const total = facts.allActive.length
-  if (!state.rewarded.includes('milestones:v1')) {
-    if (state.rewarded.some((key) => key.startsWith('presence:'))) for (const m of milestonesUpTo(total)) state.rewarded.push(`milestone:${m}`)
-    state.rewarded.push('milestones:v1')
-  }
-  for (const m of milestonesUpTo(total)) {
-    if (state.rewarded.includes(`milestone:${m}`)) continue
-    state.rewarded.push(`milestone:${m}`)
-    grant(state, world, 'standard', world.today, `ms${m}`)
-  }
-  void grantedToday
-  const computed = computeStreak(facts.allActive, state.streak.frozen.map((row) => row.day), world.today)
-  state.streak.current = computed.current
-  state.streak.best = Math.max(state.streak.best, computed.current)
-  state.streak.last_active = computed.lastActive
-  if (state.quests.some((quest) => quest.kind === 'retest' && quest.status === 'done')) state.ended_by_retest = true
-  const status = state.ended_by_retest ? 'closed' : seasonStatus(season, world.today)
-  season.status = status
-  if (status === 'closed' && !state.recap_zh) {
-    const graded = chapterGrade(state.pairs, world.today)
-    const base = recapText({
-      title: season.title_zh,
-      start: season.start,
-      end: season.end,
-      weeks: season.chapters.length,
-      done: state.quests.filter((quest) => quest.status === 'done').length,
-      total: state.quests.length,
-      days: facts.activeDays,
-      draws: state.codex.counter,
-      retest: facts.retestInWindow || state.ended_by_retest,
-    })
-    state.recap_zh = graded.text_zh ? `${base}${graded.text_zh}` : base
-    emit('season.ended', { season_id: season.id, completed_quests: state.quests.filter((quest) => quest.status === 'done').length })
-  }
-  const open = state.quests.filter((quest) => quest.status === 'open').map((quest) => quest.title_zh)
-  const locked = state.unlocks.find((unlock) => unlock.status === 'locked')
-  state.weekly_zh = weeklyText({
-    title: season.title_zh,
-    week: weekOf(season, world.today),
-    weeks: season.chapters.length,
-    status,
-    days_total: total,
-    days_season: facts.activeDays,
-    next_milestone: nextMilestone(total),
-    done: state.quests.filter((quest) => quest.status === 'done').length,
-    total: state.quests.length,
-    open,
-    reminder: locked ? (REMINDER_ZH[locked.key] ?? null) : null,
-    retestDay: season.retest_day,
-  })
-}
-
-export interface EngageView {
-  ok: true
-  needs_consent: boolean
-  season: null | {
-    id: string
-    title_zh: string
-    focus: string
-    start: IsoDay
-    end: IsoDay
-    retest_day: IsoDay | null
-    status: Season['status']
-    week: number
-    weeks: number
-    chapters: Season['chapters']
-    recap_zh: string | null
-  }
-  quests: Array<{ id: string; title_zh: string; kind: string; status: string; progress: number; count: number; reward_zh: string }>
-  unlocks: Array<{ id: string; key: string; title_zh: string; teaser_zh: string; status: string; reminder_zh: string }>
-  streak: { current: number; best: number; freezes_available: number; frozen: StreakState['frozen'] }
-  /** What the person sees: days with a health action, cumulative; a draw at each milestone. */
-  count: { total: number; season: number; next_milestone: number }
-  codex: {
-    enabled: boolean
-    hidden: boolean
-    reason: CodexBlock
-    reason_zh: string
-    odds_zh: string | null
-    draws_available: number
-    draws_today: number
-    daily_cap: number
-    commitment: string | null
-    owned: Array<{ id: string; title_zh: string; body_zh: string; rarity: Rarity; rarity_zh: string; family: string; offer?: MethodOffer }>
-  }
-  weekly_zh: string | null
-  reminder_zh: string | null
-  nudge: { offer: boolean; enabled: boolean; show: boolean }
-  /** False until they opt into the season. The quest list stays in the payload; the panel does not push it. */
-  pressure: boolean
-  personal_origin: 'coach' | 'template' | 'rule' | null
-  invite: null | { show: true; title_zh: string; body_zh: string; odds_path: string }
-  header: { show: boolean; text_zh: string }
-  care_path: { doctor_step: IsoDay | null; booked: IsoDay | null; visited: IsoDay | null }
-  family: { available: boolean; opted: boolean; subject_zh: string | null }
-  subject_zh: string | null
-}
-
-function viewOf(state: State, world: World, dataDir = ''): EngageView {
-  const season = state.season
-  const block = season ? blockOf(state, world) : null
-  const pack = season ? safePack() : null
-  const shown = state.codex.owned.map((id) => pack ? cardById(pack, id) : null).filter((card): card is CodexCard => Boolean(card))
-  const pressure = dataDir ? seasonPressureOn(readQuiet(dataDir)) : state.pressure === 'on'
-  const nudge = nudgeView(
-    { ...state.nudge, choice: state.nudge.choice ?? (world.memoryNudge ? 'on' : null) },
-    world.today,
-    pressure && Boolean(season) && season?.status !== 'closed',
-  )
-  const locked = state.unlocks.find((unlock) => unlock.status === 'locked')
-  return {
-    ok: true,
-    needs_consent: !world.consent,
-    season: season ? {
-      id: season.id,
-      title_zh: season.title_zh,
-      focus: season.theme.focus,
-      start: season.start,
-      end: season.end,
-      retest_day: season.retest_day,
-      status: season.status,
-      week: weekOf(season, world.today),
-      weeks: season.chapters.length,
-      chapters: season.chapters,
-      recap_zh: state.recap_zh,
-    } : null,
-    quests: state.quests.map((quest) => ({
-      id: quest.id,
-      title_zh: quest.title_zh,
-      kind: quest.kind,
-      status: quest.status,
-      progress: quest.progress,
-      count: quest.criteria.count,
-      reward_zh: quest.reward.guaranteed_min_rarity ? '完成后获得一张银卡或更高等级的卡' : '完成后获得一张卡',
-    })),
-    unlocks: state.unlocks.map((unlock) => ({
-      id: unlock.id,
-      key: unlock.key,
-      title_zh: unlock.title_zh,
-      teaser_zh: unlock.status === 'unlocked' ? '已解锁' : unlock.teaser_zh,
-      status: unlock.status,
-      reminder_zh: unlock.status === 'unlocked' ? '' : (REMINDER_ZH[unlock.key] ?? unlock.teaser_zh),
-    })),
-    streak: {
-      current: state.streak.current,
-      best: state.streak.best,
-      freezes_available: state.streak.freezes_available,
-      frozen: state.streak.frozen,
-    },
-    count: (() => {
-      const facts = factsOf(state, world)
-      return { total: facts.allActive.length, season: season ? facts.activeDays : 0, next_milestone: nextMilestone(facts.allActive.length) }
-    })(),
-    codex: {
-      enabled: !block && Boolean(season),
-      hidden: Boolean(block) || !season,
-      reason: season ? block : (world.age == null && world.consent ? 'age_unknown' : block),
-      reason_zh: !world.consent ? '请先完成知情同意。' : codexBlockZh(block),
-      odds_zh: !block && pack ? oddsDisclosure(pack.table, pack.cards) : null,
-      draws_available: block ? 0 : state.codex.grants.filter((row) => !row.used_by).length,
-      draws_today: state.codex.draw_days[world.today] ?? 0,
-      daily_cap: pack?.table.daily_cap ?? 3,
-      commitment: block ? null : (state.codex.commitment || null),
-      owned: (block ? [] : shown).map((card) => ({
-        id: card.id,
-        title_zh: card.title_zh,
-        body_zh: state.codex.notes[card.id] || card.body_zh,
-        rarity: card.rarity,
-        rarity_zh: rarityZh(card.rarity),
-        family: card.family,
-        ...(state.codex.offers[card.id] ? { offer: state.codex.offers[card.id] } : {}),
-      })),
-    },
-    weekly_zh: state.weekly_zh,
-    reminder_zh: !pressure ? null : locked && season && season.status !== 'closed' ? (REMINDER_ZH[locked.key] ?? null) : (season && season.status !== 'closed' && state.quests.some((quest) => quest.status === 'open') ? '本季还有未完成的任务，请打开健康页查看' : null),
-    nudge,
-    pressure,
-    personal_origin: state.personal_origin,
-    invite: world.consent && state.invite.ready && !state.invite.declined && !pressure && season ? {
-      show: true,
-      title_zh: season.title_zh,
-      body_zh: '一个赛季约 8–12 周，从现在到你下次复查。期间设有几个小目标，复查当天一起回顾完成情况，然后开始下一个赛季。长寿图鉴免费，每位成年人抽到各类卡的概率相同。未满 18 岁不开放图鉴。',
-      odds_path: '/api/longpi/codex/odds',
-    } : null,
-    header: seasonHeader({ pressure, title: season?.title_zh ?? null, week: season ? weekOf(season, world.today) : null }),
-    care_path: { ...state.care },
-    family: {
-      available: (world.accountAge ?? -1) >= 18 && (world.age ?? -1) >= 18,
-      opted: state.family.opted,
-      subject_zh: world.subject_zh,
-    },
-    subject_zh: world.subject ? world.subject_zh : null,
-  }
-}
-
-function safePack() {
-  try { return loadCodexPack() } catch { return null }
-}
-
-export function syncEngage(dataDir: string, now: Date = new Date()): EngageView {
-  if (!dataDir) {
-    const blank = emptyState()
-    return viewOf(blank, { today: isoDay(now), age: null, accountAge: null, sex: 'unknown', subject: false, subject_zh: null, consent: false, focus: null, minorFlag: false, memoryOptOut: false, memoryNudge: false, waist: false, hscrp: false, selfDays: [], checkinDays: [], doctorFirst: false, displayName: '', nOf1Done: false }, dataDir)
-  }
-  const world = readWorld(dataDir, now)
-  const state = readState(dataDir)
-  if (!world.consent) return viewOf(state, world, dataDir)
-  reduce(state, world, now)
-  saveState(dataDir, state)
-  return viewOf(state, world, dataDir)
-}
-
-export function plainReminderOf(dataDir: string): string | null {
-  if (!dataDir || !seasonPressureOn(readQuiet(dataDir))) return null
-  const state = readState(dataDir)
-  if (!state.season || state.season.status === 'closed') return null
-  const locked = state.unlocks.find((unlock) => unlock.status === 'locked')
-  if (locked) return REMINDER_ZH[locked.key] ?? null
-  if (state.quests.some((quest) => quest.status === 'open')) return '本季还有未完成的任务，请打开健康页查看'
-  return null
-}
-
-function addAction(state: State, kind: StoredAction['kind'], day: IsoDay): boolean {
-  const key = `${kind}:${day}`
-  if (state.actions.some((action) => action.key === key)) return false
-  state.actions.push({ key, day, kind })
-  return true
-}
-
-export type EngageAction =
-  | { action: 'care_visit'; with_brief?: boolean }
-  | { action: 'book'; department_zh?: string }
-  | { action: 'addon'; key: string }
-  | { action: 'retest'; measurements?: Array<{ key: string; value: number; date?: string }> }
-  | { action: 'next_season' }
-
-export function actEngage(dataDir: string, action: EngageAction, now: Date = new Date()): { ok: boolean; error?: string; note?: string; view: EngageView } {
-  const world = readWorld(dataDir, now)
-  if (!world.consent) return { ok: false, error: '请先完成知情同意，再开始本季。', view: syncEngage(dataDir, now) }
-  const state = readState(dataDir)
-  if (action.action === 'next_season') {
-    if (!state.season || seasonStatus(state.season, world.today) !== 'closed') {
-      reduce(state, world, now)
-      saveState(dataDir, state)
-      return { ok: false, error: '本季尚未结束。', view: viewOf(state, world, dataDir) }
-    }
-    state.season = null
-    state.quests = []
-    state.unlocks = []
-    state.recap_zh = null
-    state.weekly_zh = null
-    state.ended_by_retest = false
-    state.applied_signature = ''
-    state.pairs = state.pairs.map((pair) => pair.to == null ? pair : { ...pair, from: pair.to, from_date: pair.to_date ?? pair.from_date, to: null, to_date: null })
-    state.rewarded = state.rewarded.filter((id) => id.startsWith('presence:'))
-  } else if (action.action === 'book') {
-    addAction(state, 'booked', world.today)
-    if (!state.care.booked) state.care.booked = world.today
-    emit('care.booked', { department_zh: action.department_zh?.slice(0, 40) || '医生', day: world.today })
-  } else if (action.action === 'care_visit') {
-    if (!action.with_brief) return { ok: false, error: '需携带简报就诊才算完成。简报可在健康页准备。', view: syncEngage(dataDir, now) }
-    addAction(state, 'care', world.today)
-    if (!state.care.visited) state.care.visited = world.today
-  } else if (action.action === 'addon') {
-    if (action.key !== 'hscrp' && action.key !== 'waist' && action.key !== 'ferritin' && action.key !== 'iron') return { ok: false, error: '仅可记录腰围、hs-CRP 或铁蛋白。', view: syncEngage(dataDir, now) }
-    addAction(state, action.key === 'iron' ? 'ferritin' : action.key, world.today)
-  } else if (action.action === 'retest') {
-    addAction(state, 'retest', world.today)
-    if (action.measurements && action.measurements.length > 0) state.pairs = applyRetestValues(state.pairs, action.measurements, world.today)
-    if (!state.season) reduce(state, world, now)
-    const season = state.season
-    const windowStart = season ? addDays(season.start, MIN_SEASON_DAYS - 1) : world.today
-    if (season && world.today < windowStart) {
-      reduce(state, world, now)
-      saveState(dataDir, state)
-      return { ok: true, note: `已记录。复测窗口自 ${dayZhE(windowStart)}开始，届时复测才算完成此任务。`, view: viewOf(state, world, dataDir) }
-    }
-  }
-  reduce(state, world, now)
-  saveState(dataDir, state)
-  return { ok: true, view: viewOf(state, world, dataDir) }
-}
-
-export function freezeEngage(dataDir: string, input: { reason: 'sick' | 'travel' | 'other'; from: IsoDay; to: IsoDay }, now: Date = new Date()): { ok: boolean; error?: string; view: EngageView } {
-  const synced = syncEngage(dataDir, now)
-  if (synced.needs_consent || !synced.season) return { ok: false, error: '请先完成知情同意，再开始本季。', view: synced }
-  const state = readState(dataDir)
-  const world = readWorld(dataDir, now)
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.from) || !/^\d{4}-\d{2}-\d{2}$/.test(input.to) || input.to < input.from) {
-    return { ok: false, error: '日期格式须为 YYYY-MM-DD，且结束日期不早于开始日期。', view: synced }
-  }
-  if (daysBetween(input.from, input.to) > 13) return { ok: false, error: '一次最多记 14 天。', view: synced }
-  const active = new Set(activeDays(state, world))
-  const days = daysInRange(input.from, input.to, world.today).filter((day) => !active.has(day) && !state.streak.frozen.some((row) => row.day === day))
-  if (days.length === 0) return { ok: false, error: '这些日期已有记录或尚未到来。', view: synced }
-  // Counts are cumulative, so a sick or travel day costs nothing and is never rationed; it only quiets reminders.
-  for (const day of days) {
-    state.streak.frozen.push({ day, reason: input.reason, event_id: `fr${randomBytes(6).toString('hex')}` })
-    emit('streak.frozen', { day, reason: input.reason })
-  }
-  reduce(state, world, now)
-  saveState(dataDir, state)
-  return { ok: true, view: viewOf(state, world, dataDir) }
-}
-
-export function prefsEngage(dataDir: string, input: { codex?: boolean; nudge?: boolean; dismiss?: boolean; offerSeen?: boolean; shown?: boolean; pressure?: boolean; family?: boolean; declineInvite?: boolean }, now: Date = new Date()): EngageView {
-  const world = readWorld(dataDir, now)
-  const state = readState(dataDir)
-  if (input.codex === true) state.codex.choice = 'on'
-  if (input.codex === false) state.codex.choice = 'off'
-  if (input.nudge === true) state.nudge.choice = 'on'
-  if (input.nudge === false) { state.nudge.choice = 'off'; state.nudge.dismissed = true }
-  if (input.pressure === true) state.pressure = 'on'
-  if (input.pressure === false) state.pressure = 'off'
-  if (input.declineInvite) state.invite.declined = true
-  if (input.family === false) state.family.opted = false
-  if (input.family === true && (world.accountAge ?? -1) >= 18 && (world.age ?? -1) >= 18) state.family.opted = true
-  if (input.dismiss) state.nudge.dismissed = true
-  if (input.offerSeen) state.nudge.offered = true
-  if (input.shown) {
-    state.nudge.last_shown = world.today
-    emit('nudge.shown', { nudge_id: `ng${randomBytes(6).toString('hex')}`, where: 'overlay' })
-  }
-  if (world.consent) reduce(state, world, now)
-  if (world.consent || input.codex != null || input.nudge != null || input.pressure != null || input.family != null || input.declineInvite) saveState(dataDir, state)
-  return viewOf(state, world, dataDir)
-}
-
-export interface DrawResponse {
-  ok: boolean
-  error?: string
-  reason?: string
-  view: EngageView
-  card?: { id: string; title_zh: string; body_zh: string; rarity: Rarity; rarity_zh: string; family: string; duplicate: boolean; offer?: MethodOffer }
-  questions_zh?: string[]
-  deep_dive_zh?: string
-  pity_before?: number
-  commitment?: string
-}
-
-export function drawEngage(dataDir: string, now: Date = new Date()): DrawResponse {
-  const world = readWorld(dataDir, now)
-  const state = readState(dataDir)
-  if (!world.consent) return { ok: false, reason: 'consent', error: '请先完成知情同意。', view: viewOf(state, world, dataDir) }
-  reduce(state, world, now)
-  const block = blockOf(state, world)
-  if (block) {
-    saveState(dataDir, state)
-    return { ok: false, reason: block, error: codexBlockZh(block), view: viewOf(state, world, dataDir) }
-  }
-  const pack = safePack()
-  if (!pack) {
-    saveState(dataDir, state)
-    return { ok: false, reason: 'pack', error: '安装包中尚未包含图鉴卡组。', view: viewOf(state, world, dataDir) }
-  }
-  const grantRow = state.codex.grants.find((row) => !row.used_by)
-  if (!grantRow) {
-    saveState(dataDir, state)
-    return { ok: false, reason: 'no_grant', error: '暂无抽卡次数。完成一项健康行动（测量、记录、带着简报就诊或复测）后即可获得。', view: viewOf(state, world, dataDir) }
-  }
-  const usedToday = state.codex.draw_days[world.today] ?? 0
-  if (usedToday >= pack.table.daily_cap) {
-    saveState(dataDir, state)
-    return { ok: false, reason: 'daily_cap', error: `今日 ${pack.table.daily_cap} 次抽取已用完，请明天再抽；剩余次数会保留。`, view: viewOf(state, world, dataDir) }
-  }
-  ensureSeed(state)
-  const seed = Buffer.from(state.codex.seed_hex, 'hex')
-  const days = new Set(activeDays(state, world)).size
-  const extra = pack.cards.filter((card) => card.insight && days >= card.insight.min_days_of_data).map((card) => card.id)
-  const drawn = drawOnce({
-    table: pack.table,
-    cards: pack.cards,
-    seed,
-    counter: state.codex.counter,
-    pityBefore: state.codex.pity,
-    guarantee: grantRow.kind === 'care_guaranteed' ? pack.table.care_guarantee : null,
-    owned: new Set(state.codex.owned),
-    extraIds: extra,
-    at: now.toISOString(),
-    grantId: grantRow.id,
-  })
-  grantRow.used_by = drawn.result.id
-  state.codex.counter += 1
-  state.codex.pity = drawn.pityAfter
-  state.codex.draw_days[world.today] = usedToday + 1
-  const first = !state.codex.owned.includes(drawn.card.id)
-  if (first) state.codex.owned.push(drawn.card.id)
-  if (drawn.card.family === 'insight') {
-    const done = state.quests.filter((quest) => quest.status === 'done').map((quest) => quest.title_zh)
-    state.codex.notes[drawn.card.id] = insightBody(days, done)
-  }
-  if (drawn.card.family === 'method' || drawn.card.family === 'species' || drawn.card.evidence_tier === 'animal' || drawn.card.evidence_tier === 'cell') {
-    state.codex.offers[drawn.card.id] = offerForCard(drawn.card, libraryHome(), viewFromStored(libraryHome(), readRecord(dataDir)))
-  }
-  let questions: string[] | undefined
-  let deep: string | undefined
-  if (first && drawn.card.utility === 'streak_freeze') {
-    state.streak.freezes_available += 1
-    state.codex.utility_used.push(drawn.card.id)
-  } else if (drawn.card.utility === 'doctor_questions') {
-    const locked = state.unlocks.filter((unlock) => unlock.status === 'locked').map((unlock) => `是否补做「${unlock.title_zh}」？`)
-    questions = ['这次最该先看的一项是什么？', '有没有需要复查或加测的项目？', ...locked].slice(0, 3)
-  } else if (drawn.card.utility === 'deep_dive') {
-    const method = state.codex.owned.map((id) => cardById(pack, id)).find((card) => card?.family === 'method')
-    deep = method ? `可以阅读「${method.title_zh}」。它讲的是研究方法，不是你的检查结论。` : '尚无方法卡。完成一项健康行动后即可抽取。'
-  }
-  appendDraw(dataDir, drawn.result)
-  emit('codex.drawn', { draw_id: drawn.result.id, card_id: drawn.card.id, rarity: drawn.card.rarity })
-  saveState(dataDir, state)
-  return {
-    ok: true,
-    view: viewOf(state, world, dataDir),
-    card: {
-      id: drawn.card.id,
-      title_zh: drawn.card.title_zh,
-      body_zh: state.codex.notes[drawn.card.id] || drawn.card.body_zh,
-      rarity: drawn.card.rarity,
-      rarity_zh: rarityZh(drawn.card.rarity),
-      family: drawn.card.family,
-      duplicate: drawn.result.duplicate,
-      ...(state.codex.offers[drawn.card.id] ? { offer: state.codex.offers[drawn.card.id] } : {}),
-    },
-    ...(questions ? { questions_zh: questions } : {}),
-    ...(deep ? { deep_dive_zh: deep } : {}),
-    pity_before: drawn.result.pity_before,
-    commitment: state.codex.commitment,
-  }
-}
-
-function appendDraw(dataDir: string, result: DrawResult): void {
-  const path = join(engageDir(dataDir), 'draws.jsonl')
-  mkdirSync(engageDir(dataDir), { recursive: true, mode: 0o700 })
-  appendFileSync(path, `${JSON.stringify(result)}\n`, { mode: 0o600 })
-  try { chmodSync(path, 0o600) } catch { /* the file is already private if it existed */ }
-}
-
-export function logLifeEngage(dataDir: string, input: { event: 'sick' | 'travel' | 'injury' | 'surgery' | 'pregnancy' | 'bereavement' | 'shift_work' | 'other'; from: IsoDay; to: IsoDay | null; note?: string }, now: Date = new Date()): { ok: boolean; error?: string; froze: IsoDay[]; view: EngageView } {
-  const reason = input.event === 'sick' ? 'sick' : input.event === 'travel' ? 'travel' : input.event === 'injury' ? 'other' : null
-  const from = input.from
-  const to = input.to ?? input.from
-  emit('life_event.logged', { memory_id: `lf${randomBytes(6).toString('hex')}`, event: input.event, from, to: input.to })
-  if (!reason) {
-    const view = syncEngage(dataDir, now)
-    return { ok: true, froze: [], view }
-  }
-  const frozen = freezeEngage(dataDir, { reason, from, to }, now)
-  return { ok: frozen.ok, error: frozen.error, froze: frozen.ok ? frozen.view.streak.frozen.map((row) => row.day).filter((day) => day >= from && day <= to) : [], view: frozen.view }
-}
-
-function readRecord(dataDir: string): StoredRecord | null {
-  try {
-    const raw = JSON.parse(readFileSync(join(engageDir(dataDir), 'record.json'), 'utf8')) as StoredRecord
-    if (!raw || !Array.isArray(raw.indicators)) return null
-    return {
-      age: typeof raw.age === 'number' ? raw.age : null,
-      sex: typeof raw.sex === 'string' ? raw.sex : 'unknown',
-      indicators: raw.indicators.slice(0, 80),
-    }
-  } catch {
-    return null
-  }
-}
-
-function writeRecord(dataDir: string, record: StoredRecord): void {
-  writeJson(join(engageDir(dataDir), 'record.json'), {
-    age: record.age,
-    sex: record.sex,
-    indicators: record.indicators.slice(0, 80).map((row) => ({
-      name: String(row.name ?? '').slice(0, 80),
-      value: String(row.value ?? '').slice(0, 40),
-      unit: String(row.unit ?? '').slice(0, 20),
-      ...(row.loinc ? { loinc: String(row.loinc).slice(0, 20) } : {}),
-      ...(row.date ? { date: String(row.date).slice(0, 10) } : {}),
-    })),
-  })
-}
-
-export function noteSeasonContext(dataDir: string, input: {
-  facts: SeasonFact[]
-  doctorStep?: boolean
-  firstResult?: boolean
-  draft?: SeasonDraft | null
-  record?: StoredRecord | null
-}, now: Date = new Date()): EngageView {
-  if (!dataDir) return syncEngage(dataDir, now)
-  const world = readWorld(dataDir, now)
-  const state = readState(dataDir)
-  const fp = input.facts.map((fact) => `${fact.id}:${fact.rule}`).join('|')
-  let changed = false
-  if (fp !== state.facts_fp) {
-    state.facts = input.facts.slice(0, 12).map((fact) => ({
-      id: String(fact.id).slice(0, 80),
-      rule: String(fact.rule).slice(0, 80),
-      text_zh: String(fact.text_zh).slice(0, 240),
-      refs: (fact.refs ?? []).filter((ref) => Number.isFinite(ref.value)).slice(0, 4).map((ref) => ({
-        key: String(ref.key).slice(0, 40),
-        label_zh: String(ref.label_zh).slice(0, 40),
-        value: ref.value,
-        unit: String(ref.unit ?? '').slice(0, 20),
-        date: ref.date ? String(ref.date).slice(0, 10) : null,
-      })),
-    }))
-    state.facts_fp = fp
-    changed = true
-  }
-  if (input.draft) {
-    state.coach_draft = input.draft
-    changed = true
-  }
-  if (input.doctorStep && !state.care.doctor_step) {
-    state.care.doctor_step = world.today
-    changed = true
-  }
-  if ((input.firstResult || input.doctorStep) && !state.invite.declined && !state.invite.ready) {
-    state.invite.ready = true
-    state.invite.reason = input.doctorStep ? 'doctor_step' : 'first_result'
-    changed = true
-  }
-  if (input.record) {
-    const stamp = `${input.record.age ?? ''}:${input.record.sex}:${input.record.indicators.length}`
-    if (stamp !== state.record_fp) {
-      state.record_fp = stamp
-      writeRecord(dataDir, input.record)
-      changed = true
-    }
-  }
-  if (!changed && state.season) return viewOf(state, world, dataDir)
-  if (world.consent) reduce(state, world, now)
-  if (world.consent || changed) saveState(dataDir, state)
-  return viewOf(state, world, dataDir)
-}
-
-export function shareEngage(dataDir: string, input: { kind: 'card' | 'recap'; card_id?: string }, now: Date = new Date()): { ok: boolean; error?: string; text_zh?: string; view: EngageView } {
-  const world = readWorld(dataDir, now)
-  const state = readState(dataDir)
-  const view = () => viewOf(state, world, dataDir)
-  if ((world.accountAge ?? -1) < 18 || (world.age ?? -1) < 18) return { ok: false, error: '家人圈只对成年人开放。', view: view() }
-  if (!state.family.opted) return { ok: false, error: '请先开启家人圈。', view: view() }
-  let text = ''
-  if (input.kind === 'recap') {
-    if (!state.recap_zh) return { ok: false, error: '本季尚无回顾。', view: view() }
-    text = shareRecapText(state.recap_zh, world.displayName)
-  } else {
-    const pack = safePack()
-    const card = pack && input.card_id ? cardById(pack, input.card_id) : null
-    if (!card || !state.codex.owned.includes(card.id)) return { ok: false, error: '只能分享已经抽到的卡。', view: view() }
-    if (blockOf(state, world)) return { ok: false, error: '图鉴未开启，无法分享卡片。', view: view() }
-    text = shareCardText({
-      rarity_zh: rarityZh(card.rarity),
-      title_zh: card.title_zh,
-      body_zh: state.codex.notes[card.id] || card.body_zh,
-    }, world.displayName)
-  }
-  state.family.shares.push({ id: `sh${randomBytes(4).toString('hex')}`, kind: input.kind, at: now.toISOString(), text_zh: text })
-  state.family.shares = state.family.shares.slice(-20)
-  saveState(dataDir, state)
-  return { ok: true, text_zh: text, view: viewOf(state, world, dataDir) }
-}
-
-export async function runCodexMethod(dataDir: string, cardId: string, now: Date = new Date()): Promise<{ ok: boolean; error?: string; text_zh: string; label: string | null; ran: boolean; view: EngageView }> {
-  const world = readWorld(dataDir, now)
-  const state = readState(dataDir)
-  if (world.consent) reduce(state, world, now)
-  const denied = (error: string, text = error) => {
-    saveState(dataDir, state)
-    return { ok: false, error, text_zh: text, label: null, ran: false, view: viewOf(state, world, dataDir) }
-  }
-  if (blockOf(state, world)) return denied(codexBlockZh(blockOf(state, world)))
-  const pack = safePack()
-  const card = pack ? cardById(pack, cardId) : null
-  if (!card || !state.codex.owned.includes(card.id)) return denied('只能计算已经抽到的方法卡。')
-  const home = libraryHome()
-  const offer = state.codex.offers[card.id] ?? offerForCard(card, home, viewFromStored(home, readRecord(dataDir)))
-  state.codex.offers[card.id] = offer
-  if (offer.kind === 'evidence') {
-    saveState(dataDir, state)
-    return { ok: true, text_zh: offer.text_zh, label: 'evidence-only', ran: false, view: viewOf(state, world, dataDir) }
-  }
-  if (offer.kind !== 'run' || !offer.skill) {
-    saveState(dataDir, state)
-    return { ok: false, error: offer.text_zh, text_zh: offer.text_zh, label: offer.label, ran: false, view: viewOf(state, world, dataDir) }
-  }
-  const catalog = loadCatalog(home)
-  const skill = catalog.cards.find((item) => item.name === offer.skill)
-  const stored = viewFromStored(home, readRecord(dataDir))
-  if (!skill || !stored) return denied(offer.text_zh)
-  const report = bindRecord(skill, stored)
-  if (!report.ok) {
-    saveState(dataDir, state)
-    return { ok: false, error: offer.text_zh, text_zh: offer.text_zh, label: report.label, ran: false, view: viewOf(state, world, dataDir) }
-  }
-  const ran = await runSkill({
-    home,
-    dataDir,
-    name: skill.name,
-    args: [],
-    files: [],
-    binding: {
-      skill: skill.name,
-      inputs: Object.fromEntries(report.inputs_used.map((row) => [row.input, {
-        source_row_id: row.source_row_id,
-        value: row.value,
-        unit: row.unit,
-        provenance: row.provenance,
-        quote: row.quote,
-      }])),
-    },
-    bindingView: stored,
-    python: 'python3',
-    timeoutMs: 8000,
-    revision: catalog.revision,
-    profile: { age: stored.profile?.age ?? null, sex: stored.profile?.sex ?? 'unknown' },
-    useProfile: true,
-  })
-  saveState(dataDir, state)
-  const label = ran.method?.label ?? offer.label
-  return {
-    ok: ran.ok,
-    text_zh: offer.text_zh,
-    label,
-    ran: true,
-    ...(ran.ok ? {} : { error: ran.error || '本次未能计算出结果。' }),
-    view: viewOf(state, world, dataDir),
-  }
-}
-
-export function careMetrics(dataDir: string, now: Date = new Date()): {
-  origin: State['personal_origin']
-  title: string | null
-  pressure: boolean
-  doctor_step: IsoDay | null
-  booked: IsoDay | null
-  visited: IsoDay | null
-  days_to_first_care: number | null
-  quests_done: number
-  quests_total: number
-  draws: number
-} {
-  const view = syncEngage(dataDir, now)
-  const state = readState(dataDir)
-  const first = [state.care.booked, state.care.visited].filter((day): day is IsoDay => Boolean(day)).sort()[0] ?? null
-  return {
-    origin: state.personal_origin,
-    title: view.season?.title_zh ?? null,
-    pressure: view.pressure,
-    doctor_step: state.care.doctor_step,
-    booked: state.care.booked,
-    visited: state.care.visited,
-    days_to_first_care: state.care.doctor_step && first ? daysBetween(state.care.doctor_step, first) : null,
-    quests_done: view.quests.filter((quest) => quest.status === 'done').length,
-    quests_total: view.quests.length,
-    draws: state.codex.counter,
-  }
-}
-
-export function engagementSummary(): FactPack['engagement'] {
-  const dataDir = runtime.dataDir()
-  if (!dataDir) return null
-  try {
-    const view = syncEngage(dataDir, new Date())
-    if (!view.season) return null
-    return {
-      season_title_zh: view.season.title_zh,
-      week: view.season.week,
-      days_total: view.count.total,
-      next_milestone: view.count.next_milestone,
-      streak: view.streak.current,
-      freezes_left: view.streak.freezes_available,
-      open_quests: view.quests.filter((quest) => quest.status === 'open').length,
-      draws_available: view.codex.enabled ? view.codex.draws_available : 0,
-    }
-  } catch {
-    return null
-  }
-}
-
-export function candidateSeeds(dataDir: string, now: Date = new Date()): Array<{ id: string; kind: ActionKind; priority: number; title_zh: string; detail_zh: string; prompt_zh: string }> {
-  let view: EngageView
-  try { view = syncEngage(dataDir, now) } catch { return [] }
-  if (!view.season || view.needs_consent) return []
-  const out: Array<{ id: string; kind: ActionKind; priority: number; title_zh: string; detail_zh: string; prompt_zh: string }> = []
-  for (const unlock of view.unlocks) {
-    if (unlock.status !== 'locked') continue
-    out.push({
-      id: unlock.key === 'cvd_risk' ? 'nba-cvd-risk' : 'nba-bioage-hs',
-      kind: unlock.key === 'cvd_risk' ? 'self_measure' : 'book_addon_test',
-      priority: 46,
-      title_zh: unlock.teaser_zh,
-      detail_zh: unlock.reminder_zh,
-      prompt_zh: unlock.key === 'cvd_risk' ? '帮我记下今天的腰围' : '下次体检我想加测超敏 C 反应蛋白，帮我写进要问医生的问题',
-    })
-  }
-  const quest = view.quests.find((row) => row.status === 'open')
-  if (quest && view.pressure) out.push({ id: 'nba-season-quest', kind: 'season_quest', priority: 42, title_zh: quest.title_zh, detail_zh: '本赛季只需完成几件事，其余时间无需打开。', prompt_zh: '这个赛季我现在该做什么？' })
-  if (view.codex.enabled && view.codex.draws_available > 0) out.push({ id: 'nba-claim-draw', kind: 'claim_draw', priority: 38, title_zh: '有一次图鉴抽取机会', detail_zh: '抽取次数来自健康行动，无需付费。', prompt_zh: '我想抽一张长寿图鉴' })
+function runDays(run: ExperimentRun, through: IsoDay): IsoDay[] {
+  const last = [run.extended_to ?? run.end, through].sort()[0] as IsoDay
+  const out: IsoDay[] = []
+  for (let day = run.start; day <= last; day = addDays(day, 1)) out.push(day)
   return out
 }
 
+function countable(run: ExperimentRun, state: State): (day: IsoDay) => boolean {
+  const life = lifeDays(state)
+  return (day) => !life.has(day) && (run.scope !== 'weekdays' || !isWeekend(day))
+}
+
+function median(values: number[]): number | null {
+  if (values.length === 0) return null
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 ? sorted[mid] as number : ((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2
+}
+
+/** Sleep onset, as distance from the window's own median (minutes): the regularity measure. */
+function onsetSpread(series: Record<IsoDay, number> | undefined, days: IsoDay[]): Record<IsoDay, number> {
+  const values = days.flatMap((day) => series?.[day] != null ? [{ day, value: series[day] as number }] : [])
+  const mid = median(values.map((row) => row.value))
+  if (mid == null) return {}
+  return Object.fromEntries(values.map((row) => [row.day, Math.abs(row.value - mid)]))
+}
+
+function metricValues(key: MetricKey, cache: SeriesCache, days: IsoDay[]): Array<{ day: IsoDay; value: number }> {
+  if (key === 'onset') {
+    const spread = onsetSpread(cache.days.onset, days)
+    return days.flatMap((day) => spread[day] != null ? [{ day, value: spread[day] as number }] : [])
+  }
+  const series = cache.days[key]
+  return days.flatMap((day) => series?.[day] != null ? [{ day, value: series[day] as number }] : [])
+}
+
+function baselineDays(run: ExperimentRun): IsoDay[] {
+  const out: IsoDay[] = []
+  for (let day = run.baseline.from; day <= run.baseline.to; day = addDays(day, 1)) out.push(day)
+  return out
+}
+
+/** 做到 days LongPi can see itself; check-ins add the ones the person ticked. */
+function autoDone(run: ExperimentRun, state: State, cache: SeriesCache, days: IsoDay[]): Set<IsoDay> {
+  const out = new Set<IsoDay>()
+  const spec = experimentById(run.experiment_id)
+  if (!spec) return out
+  if (spec.adherence === 'standup') {
+    const stood = standupDays(state.nudge)
+    for (const day of days) if (stood.has(day)) out.add(day)
+  } else if (spec.adherence === 'bp_reading') {
+    for (const day of days) if (cache.days.sbp?.[day] != null) out.add(day)
+  } else if (spec.adherence === 'sleep_longer') {
+    const base = valuesIn(cache.days.sleep, run.baseline.from, run.baseline.to).map((row) => row.value)
+    const avg = base.length ? base.reduce((a, b) => a + b, 0) / base.length : null
+    if (avg != null) for (const day of days) if ((cache.days.sleep?.[day] ?? -1) >= avg + 0.33) out.add(day)
+  } else if (spec.adherence === 'wake_fixed') {
+    const key = run.variant === 'fixed-bed' ? 'onset' : 'wake'
+    const series = cache.days[key]
+    const target = median(valuesIn(series, run.baseline.from, run.baseline.to).map((row) => row.value))
+    if (target != null) {
+      for (const day of days) {
+        const value = series?.[day]
+        if (value == null) continue
+        const tolerance = isWeekend(day) && run.scope !== 'weekdays' && run.variant !== 'fixed-bed' ? 60 : 30
+        if (Math.abs(value - target) <= tolerance) out.add(day)
+      }
+    }
+  }
+  return out
+}
+
+function doneDays(run: ExperimentRun, state: State, cache: SeriesCache, days: IsoDay[]): Set<IsoDay> {
+  const out = autoDone(run, state, cache, days)
+  for (const day of run.done) if (days.includes(day)) out.add(day)
+  return out
+}
+
+/** The 14 cells of the progress bar: d done, m missed, f future. */
+function cells(run: ExperimentRun, state: State, cache: SeriesCache, today: IsoDay): Array<'d' | 'm' | 'f'> {
+  const total = Math.min(14, daysBetween(run.start, run.end) + 1)
+  const days = Array.from({ length: total }, (_, i) => addDays(run.start, Math.round(i * (daysBetween(run.start, run.end) + 1) / total)))
+  const done = doneDays(run, state, cache, runDays(run, today))
+  return days.map((day) => day >= today && !done.has(day) ? 'f' : done.has(day) ? 'd' : 'm')
+}
+
+// ---- judging a run -------------------------------------------------------------
+
+function judgeRun(run: ExperimentRun, state: State, cache: SeriesCache, today: IsoDay, now: Date): RunResult {
+  const { metrics } = loadCatalog()
+  const keep = countable(run, state)
+  const trialDays = runDays(run, addDays(today, -1)).filter(keep)
+  const done = doneDays(run, state, cache, trialDays)
+  const bv = biovar()
+  const judged = (key: MetricKey, role: 'primary' | 'also') => {
+    const metric = metrics[key]
+    if (run.randomized && run.schedule) {
+      const values = metricValues(key, cache, trialDays)
+      const on = values.filter((row) => run.schedule?.[row.day] === true).map((row) => row.value)
+      const off = values.filter((row) => run.schedule?.[row.day] === false).map((row) => row.value)
+      return judgeMetric(metric, off, on, bv, { role, compare: 'off_on', minFirst: role === 'primary' ? 5 : 4, minSecond: role === 'primary' ? 5 : 4 })
+    }
+    const base = metricValues(key, cache, baselineDays(run).filter((day) => !lifeDays(state).has(day))).map((row) => row.value)
+    const trial = metricValues(key, cache, trialDays).map((row) => row.value)
+    return judgeMetric(metric, base, trial, bv, role === 'primary'
+      ? { role, minFirst: metric.method === 'personal' ? MIN_BASELINE_DAYS : 3, minSecond: MIN_TRIAL_DAYS }
+      : { role })
+  }
+  const primary = judged(run.primary, 'primary')
+  const also = run.also.filter((key) => metrics[key] && metrics[key].method !== 'lab').map((key) => judged(key, 'also'))
+  const effective = metricValues(run.primary, cache, trialDays).length
+  const { how_zh: how, ...first } = primary
+  return {
+    outcome: primary.outcome,
+    primary: first,
+    also: also.map(({ how_zh: _how, ...rest }) => rest),
+    done_days: done.size,
+    effective_days: effective,
+    window_days: trialDays.length,
+    how_zh: how,
+    praise_zh: praiseZh(primary),
+    at: now.toISOString() as IsoTime,
+  }
+}
+
+function judgeLab(run: ExperimentRun, after: { value: number; date: IsoDay }, now: Date): RunResult {
+  const { metrics } = loadCatalog()
+  const metric = metrics[run.primary]
+  const before = run.lab_before
+  const judged = before ? judgeMetric(metric, [before.value], [after.value], biovar(), { role: 'primary', minFirst: 1, minSecond: 1 }) : judgeMetric(metric, [], [after.value], biovar(), { role: 'primary' })
+  const { how_zh: how, ...first } = judged
+  const text = before
+    ? `主要结果 · ${metric.label_zh}：${before.value.toFixed(metric.decimals)} → ${after.value.toFixed(metric.decimals)} ${metric.unit_zh}，${judged.outcome === 'outside' ? '超出你的平时波动' : judged.outcome === 'inside' ? '在你的平时波动内' : '数据不够，没法判断'}。`
+    : first.text_zh
+  return {
+    outcome: judged.outcome,
+    primary: { ...first, text_zh: text },
+    also: [],
+    done_days: run.done.length,
+    effective_days: 1,
+    window_days: daysBetween(run.start, run.end) + 1,
+    how_zh: how,
+    praise_zh: praiseZh(judged),
+    at: now.toISOString() as IsoTime,
+  }
+}
+
+// ---- footprints and packs ------------------------------------------------------
+
+const FOOTPRINT_TITLES: Record<FootprintKind, string> = {
+  care_brief: '带着简报就诊',
+  retest: '按时复测',
+  addon: '补上一项检查',
+  first_experiment: '做完第一个实验',
+  season: '走完一个赛季',
+  family: '陪家人复查',
+}
+
+function addFootprint(state: State, kind: FootprintKind, day: IsoDay, text: string, title?: string): void {
+  const footprint: Footprint = { id: newId('fp'), kind, day, title_zh: title ?? FOOTPRINT_TITLES[kind], text_zh: text }
+  state.footprints.push(footprint)
+  emit('codex.footprint', { footprint_id: footprint.id, kind })
+}
+
+function grantPack(state: State, kind: Pack['kind'], day: IsoDay, source: string, results: ResultCard[] = []): Pack {
+  const pack: Pack = { id: newId('pk'), kind, source_zh: source, granted: day, opened: null, options: [], chosen: null, results }
+  state.packs.push(pack)
+  emit('codex.pack_granted', { pack_id: pack.id, kind, source: kind === 'experiment' ? 'season_or_experiment' : 'retest' })
+  return pack
+}
+
+function ensureSeed(state: State): void {
+  if (!state.seed_hex) state.seed_hex = newId('')
+}
+
+function startSeason(state: State, day: IsoDay): void {
+  const id = newId('sn')
+  const end = addDays(day, (state.prefs.season_mode === 'retest' ? RETEST_SEASON_CAP_DAYS : SEASON_DAYS) - 1)
+  state.season = { id, mode: state.prefs.season_mode, start: day, end, status: 'active', closed: null }
+  state.seasons.push({ id, start: day, closed: null, runs: [] })
+  grantPack(state, 'experiment', day, '赛季开始')
+  emit('season.started', { season_id: id })
+}
+
+function closeSeason(state: State, day: IsoDay): void {
+  const season = state.season
+  if (!season || season.status === 'closed') return
+  season.status = 'closed'
+  season.closed = day
+  const row = state.seasons.find((item) => item.id === season.id)
+  if (row) row.closed = day
+  const finished = state.runs.filter((run) => run.status === 'revealed' && run.start >= season.start).length
+  addFootprint(state, 'season', day, finished > 0 ? `从开始到结束，走完了一个赛季，做了 ${finished} 个实验。` : '从开始到结束，走完了一个赛季。')
+  emit('season.ended', { season_id: season.id, experiments_done: finished })
+}
+
+function resultCards(context: CodexContext): ResultCard[] {
+  const out: ResultCard[] = []
+  const bio = context.results.bioage
+  if (bio) {
+    const diff = bio.prev != null ? bio.now - bio.prev : null
+    const beyond = diff != null && bio.band != null && Math.abs(diff) > bio.band
+    out.push({
+      id: newId('rc'),
+      key: 'bioage',
+      title_zh: '表型年龄（用 9 项化验算的生物年龄）',
+      value_zh: `${bio.now.toFixed(1)} 岁`,
+      compare_zh: bio.prev == null ? '第一次算出这一项。' : `和上次（${bio.prev_date ?? ''}）比：${bio.prev.toFixed(1)} → ${bio.now.toFixed(1)} 岁，${beyond ? OUTCOME_ZH.outside : OUTCOME_ZH.inside}。`,
+      outcome: bio.prev == null ? null : beyond ? 'outside' : 'inside',
+      tier: 'human',
+      plain: diff != null && diff > 0,
+      note_zh: null,
+    })
+  }
+  const risk = context.results.risk
+  if (risk) {
+    out.push({
+      id: newId('rc'),
+      key: 'risk',
+      title_zh: '十年心血管风险（China-PAR）',
+      value_zh: risk.applicable && risk.pct != null ? `${risk.pct.toFixed(1)}%` : null,
+      compare_zh: risk.applicable && risk.pct != null ? `${risk.category_zh || '本次的估算'}。` : risk.reason_zh,
+      outcome: null,
+      tier: 'human',
+      plain: true,
+      note_zh: risk.applicable ? null : risk.reason_zh,
+    })
+  }
+  for (const change of context.results.changes.filter((row) => !row.ask_doctor).slice(0, 4)) {
+    out.push({
+      id: newId('rc'),
+      key: change.key,
+      title_zh: change.label_zh,
+      value_zh: `${change.to} ${change.unit}`,
+      compare_zh: `和上次（${change.from_date}）比：${change.from} → ${change.to} ${change.unit}，${change.beyond ? OUTCOME_ZH.outside : OUTCOME_ZH.inside}。`,
+      outcome: change.beyond ? 'outside' : 'inside',
+      tier: 'human' as Tier,
+      plain: change.verdict !== 'better',
+      note_zh: null,
+    })
+  }
+  return out
+}
+
+function seasonExperimentIds(state: State, back: number): Set<string> {
+  const seasons = state.seasons.slice(-back)
+  const starts = seasons.map((row) => row.start).sort()
+  const from = starts[0] ?? '0000-00-00'
+  return new Set(state.runs.filter((run) => run.start >= from && run.status !== 'stopped').map((run) => run.experiment_id))
+}
+
+function eligibilityContext(state: State, today: IsoDay, cache: SeriesCache): EligibilityContext {
+  const ctx = state.context
+  const retestIn8to12 = ctx.retests.some((row) => {
+    const gap = daysBetween(today, row.date)
+    return gap >= 56 && gap <= 84
+  })
+  return {
+    today,
+    drugClasses: new Set(ctx.drug_classes),
+    conditions: new Set(ctx.conditions),
+    pregnant: ctx.pregnant,
+    openFindings: new Set(ctx.open_findings),
+    series: cache,
+    ldlOnFile: Boolean(ctx.ldl),
+    retestIn8to12Weeks: retestIn8to12,
+    personalText: ctx.personal_text,
+    focus: new Set(ctx.focus),
+    standupOn: state.nudge.standup === 'on',
+    recent: seasonExperimentIds(state, 2),
+    running: new Set(state.runs.filter((run) => run.status === 'running' || run.status === 'retest_wait').map((run) => run.experiment_id)),
+  }
+}
+
+// ---- the reducer ---------------------------------------------------------------
+
+function reduce(state: State, world: World, cache: SeriesCache): void {
+  const today = world.today
+  if (!world.consent || blockOf(state, world) || !state.started) return
+  ensureSeed(state)
+  const ctx = state.context
+  // A season: 8 weeks, or until the next retest (capped).
+  if (!state.season) startSeason(state, today)
+  const season = state.season
+  if (season && season.status === 'active' && today > season.end) closeSeason(state, today)
+  // A new checkup of the holder: a retest pack and a footprint; a season in retest mode ends with it.
+  const latest = ctx.latest_checkup
+  if (latest && !state.seen.checkups.includes(latest)) {
+    const known = state.seen.checkups.length > 0
+    state.seen.checkups.push(latest)
+    if (known && state.started && latest >= state.started) {
+      const results = resultCards(ctx)
+      for (const run of state.runs) {
+        if (run.status !== 'retest_wait' || !ctx.ldl || ctx.ldl.date < addDays(run.start, 42)) continue
+        run.result = judgeLab(run, ctx.ldl, world.now)
+        run.status = 'ready'
+        results.unshift({ id: newId('rc'), key: `run:${run.id}`, title_zh: run.title_zh, value_zh: null, compare_zh: run.result.primary.text_zh, outcome: run.result.outcome, tier: 'human', plain: run.result.primary.direction !== 'better', note_zh: null })
+      }
+      grantPack(state, 'retest', today, '新的体检结果到了', results)
+      const due = ctx.retests.some((row) => Math.abs(daysBetween(row.date, latest)) <= 30)
+      addFootprint(state, 'retest', today, due ? '在该复查的时候做了复查。' : '做了一次复查，新的结果进了档案。', due ? '按时复测' : '做了一次复查')
+      if (state.season?.status === 'active' && state.season.mode === 'retest') closeSeason(state, today)
+    }
+  }
+  // Footprints from the holder's own care visits (with a brief) and add-on tests.
+  for (const item of careItems(boundRootDir())) {
+    if (item.care_status !== 'visited' || !item.brief_id || state.seen.care.includes(item.id)) continue
+    state.seen.care.push(item.id)
+    if (!state.footprints.some((row) => row.kind === 'care_brief')) addFootprint(state, 'care_brief', item.visit_date ?? today, '拿着整理好的问题去见了医生。')
+  }
+  for (const key of ['hscrp', 'waist'] as const) {
+    if (ctx.labs[key] && !state.seen.labs[key]) {
+      state.seen.labs[key] = true
+      addFootprint(state, 'addon', today, key === 'hscrp' ? '补上了超敏 C 反应蛋白这一项检查。' : '量了腰围，补上了这一项。')
+    }
+  }
+  // Experiments: a 14-day run becomes ready when 10 days had data; else it runs on for up to 7 more days.
+  const { metrics } = loadCatalog()
+  for (const run of state.runs) {
+    if (run.status !== 'running') continue
+    if (metrics[run.primary]?.method === 'lab') {
+      if (today > run.end) run.status = 'retest_wait'
+      continue
+    }
+    if (today <= run.end) continue
+    const keep = countable(run, state)
+    const effective = metricValues(run.primary, cache, runDays(run, addDays(today, -1)).filter(keep)).length
+    const hardEnd = addDays(run.end, EXTEND_DAYS)
+    if (effective >= MIN_TRIAL_DAYS || run.randomized || today > hardEnd) {
+      run.result = judgeRun(run, state, cache, today, world.now)
+      run.status = 'ready'
+    } else if (!run.extended_to) {
+      run.extended_to = hardEnd
+    }
+  }
+}
+
+// ---- views ---------------------------------------------------------------------
+
+export interface ExperimentOption {
+  id: string
+  title_zh: string
+  do_zh: string
+  icon: ExperimentSpec['icon']
+  days: number
+  primary_zh: string
+  also_zh: string[]
+  randomizable: boolean
+  questions: Array<{ id: string; text_zh: string }>
+  source_zh: string
+  needs_retest: boolean
+}
+
+export interface RunView {
+  id: string
+  experiment_id: string
+  title_zh: string
+  do_zh: string
+  icon: ExperimentSpec['icon']
+  checkin_zh: string
+  start: IsoDay
+  end: IsoDay
+  extended_to: IsoDay | null
+  day: number
+  days: number
+  cells: Array<'d' | 'm' | 'f'>
+  done_today: boolean
+  done_count: number
+  status: ExperimentRun['status']
+  randomized: boolean
+  today_zh: string | null
+  threshold_zh: string
+  primary_zh: string
+  progress_zh: string
+  result: RunResult | null
+}
+
+export interface CodexView {
+  ok: true
+  today: IsoDay
+  needs_consent: boolean
+  enabled: boolean
+  reason: CodexBlock
+  reason_zh: string
+  member: null | { label_zh: string; note_zh: string }
+  started: boolean
+  intro: { my_day: { start: string; end: string }; season_mode: '8w' | 'retest'; standup: boolean; wristband: boolean }
+  season: null | { id: string; mode: '8w' | 'retest'; start: IsoDay; end: IsoDay; week: number; weeks: number; status: 'active' | 'closed' }
+  packs: Array<{ id: string; kind: Pack['kind']; source_zh: string; granted: IsoDay; opened: IsoDay | null; options: ExperimentOption[]; results: ResultCard[]; empty_zh: string | null }>
+  reserve: ExperimentOption[]
+  running: RunView[]
+  ready: RunView[]
+  deck: RunView[]
+  library: { size: number; read: number; pending: number; chapters: Array<{ id: string; no: number; title_zh: string; size: number; read: number }> }
+  species: { met: number; total: number }
+  footprints: Footprint[]
+  footprints_note_zh: string
+  prefs: { simple: boolean; presentation: boolean; my_day: { start: string; end: string }; season_mode: '8w' | 'retest'; standup: boolean }
+  devices: { wristband: boolean; bp_cuff: boolean; scale: boolean }
+  slot: SlotView
+  /** The neutral line for the right pane: 「饭后走 10 分钟 · 第 9/14 天」. No result, no metric value. */
+  pane_zh: string | null
+  rules_zh: string[]
+}
+
+const RULES_ZH = [
+  '长寿图鉴免费，没有付费，不能交易。',
+  '未满 18 岁不开放，可以随时关闭。',
+  '卡包只来自真实发生的事：赛季开始、做完一个实验、你自己复查。',
+  '颜色表示研究是怎么做的，不表示和你多相关。',
+  '结果只说「超出平时波动」「在平时波动内」或「数据不够」，不说是实验带来的。',
+]
+
+function optionOf(spec: ExperimentSpec, primary: MetricKey | null): ExperimentOption {
+  const { metrics } = loadCatalog()
+  const main = primary ?? spec.primary[0]
+  const also = [...spec.primary.filter((key) => key !== main), ...spec.also].filter((key, i, all) => all.indexOf(key) === i)
+  return {
+    id: spec.id,
+    title_zh: spec.title_zh,
+    do_zh: spec.do_zh,
+    icon: spec.icon,
+    days: spec.days,
+    primary_zh: metrics[main]?.label_zh ?? '',
+    also_zh: also.map((key) => metrics[key]?.label_zh ?? '').filter(Boolean),
+    randomizable: spec.randomizable,
+    questions: spec.questions.map((row) => ({ id: row.id, text_zh: row.text_zh })),
+    source_zh: spec.source_zh,
+    needs_retest: Boolean(spec.retest_markers?.length) && spec.days > 14,
+  }
+}
+
+function runView(run: ExperimentRun, state: State, cache: SeriesCache, today: IsoDay): RunView {
+  const { metrics } = loadCatalog()
+  const total = daysBetween(run.start, run.end) + 1
+  const day = Math.min(total, Math.max(1, daysBetween(run.start, today) + 1))
+  const done = doneDays(run, state, cache, runDays(run, today))
+  const assignment = run.randomized && run.schedule ? run.schedule[today] : undefined
+  const waiting = run.status === 'retest_wait'
+  return {
+    id: run.id,
+    experiment_id: run.experiment_id,
+    title_zh: run.title_zh,
+    do_zh: run.do_zh,
+    icon: run.icon,
+    checkin_zh: run.checkin_zh,
+    start: run.start,
+    end: run.end,
+    extended_to: run.extended_to,
+    day,
+    days: total,
+    cells: cells(run, state, cache, today),
+    done_today: done.has(today),
+    done_count: done.size,
+    status: run.status,
+    randomized: run.randomized,
+    today_zh: assignment === undefined ? null : assignment ? '今天：做' : '今天：不做（照常生活）',
+    threshold_zh: run.threshold_zh,
+    primary_zh: metrics[run.primary]?.label_zh ?? '',
+    progress_zh: waiting ? `${run.title_zh} · 等复查` : run.status === 'ready' ? `${run.title_zh} · 可以翻了` : `${run.title_zh} · 第 ${day}/${total} 天`,
+    result: run.status === 'revealed' ? run.result : null,
+  }
+}
+
+function libraryCounts(state: State): CodexView['library'] {
+  const lib = loadLibrary()
+  return {
+    size: lib.studies.length,
+    read: lib.studies.filter((card) => state.read[card.id]).length,
+    pending: lib.pending.length,
+    chapters: lib.chapters.map((chapter) => ({
+      id: chapter.id,
+      no: chapter.no,
+      title_zh: chapter.title_zh,
+      size: lib.studies.filter((card) => card.chapter === chapter.id).length,
+      read: lib.studies.filter((card) => card.chapter === chapter.id && state.read[card.id]).length,
+    })),
+  }
+}
+
+function memberNote(): CodexView['member'] {
+  const root = boundRootDir()
+  const active = runtime.dataDir()
+  if (!root || !active || active === root) return null
+  let label = '家人'
+  try {
+    const reg = JSON.parse(readFileSync(join(root, 'people.json'), 'utf8')) as { active?: string; people?: Array<{ id: string; label_zh?: string }> }
+    label = reg.people?.find((row) => row.id === reg.active)?.label_zh || label
+  } catch { /* the default label */ }
+  return { label_zh: label, note_zh: `长寿图鉴是你自己的。陪${label}看医生或复查，会记一张足迹卡。` }
+}
+
+function viewOf(state: State, world: World, cache: SeriesCache): CodexView {
+  const block = blockOf(state, world)
+  const today = world.today
+  const have = devices(cache, today)
+  const ctx = eligibilityContext(state, today, cache)
+  const options = (ids: string[]) => ids.flatMap((id) => {
+    const spec = experimentById(id)
+    return spec ? [optionOf(spec, primaryFor(spec, ctx))] : []
+  })
+  const runs = state.runs.map((run) => runView(run, state, cache, today))
+  const season = state.season
+  const ready = runs.filter((run) => run.status === 'ready')
+  const packsReady = state.packs.filter((pack) => pack.kind === 'retest' && !pack.opened)
+  const slot = slotView({
+    now: world.now,
+    enabled: !block && Boolean(state.started),
+    wristband: have.wristband,
+    presentation: state.prefs.presentation,
+    myDay: state.prefs.my_day,
+    nudge: state.nudge,
+    ready: [
+      ...state.runs.filter((run) => run.status === 'ready').map((run) => ({ ref: run.id, since: run.result?.at?.slice(0, 10) ?? today })),
+      ...packsReady.map((pack) => ({ ref: pack.id, since: pack.granted })),
+    ],
+  })
+  const active = runs.filter((run) => run.status === 'running' || run.status === 'retest_wait' || run.status === 'ready')
+  const shown = !block && world.consent
+  return {
+    ok: true,
+    today,
+    needs_consent: !world.consent,
+    enabled: shown,
+    reason: block,
+    reason_zh: !world.consent ? '先完成使用说明里的同意，再打开长寿图鉴。' : codexBlockZh(block),
+    member: memberNote(),
+    started: Boolean(state.started),
+    intro: { my_day: { start: state.prefs.my_day.start, end: state.prefs.my_day.end }, season_mode: state.prefs.season_mode, standup: state.nudge.standup === 'on', wristband: have.wristband },
+    season: shown && season ? {
+      id: season.id,
+      mode: season.mode,
+      start: season.start,
+      end: season.end,
+      week: Math.min(Math.ceil((daysBetween(season.start, season.end) + 1) / 7), Math.floor(daysBetween(season.start, today) / 7) + 1),
+      weeks: Math.ceil((daysBetween(season.start, season.end) + 1) / 7),
+      status: season.status,
+    } : null,
+    packs: shown ? state.packs.filter((pack) => !pack.opened || (pack.kind === 'experiment' && !pack.chosen)).map((pack) => ({
+      id: pack.id,
+      kind: pack.kind,
+      source_zh: pack.source_zh,
+      granted: pack.granted,
+      opened: pack.opened,
+      options: pack.opened ? options(pack.options) : [],
+      results: pack.opened ? pack.results : [],
+      empty_zh: pack.opened && pack.kind === 'experiment' && pack.options.length === 0 ? emptyPackZh(ctx) : null,
+    })) : [],
+    reserve: shown ? options(state.reserve.filter((id) => {
+      const spec = experimentById(id)
+      return spec ? !blockedBy(spec, ctx) : false
+    })) : [],
+    running: shown ? active.filter((run) => run.status !== 'ready') : [],
+    ready: shown ? ready : [],
+    deck: shown ? runs.filter((run) => run.status === 'revealed').reverse() : [],
+    library: libraryCounts(state),
+    species: { met: Object.keys(state.met).length, total: loadLibrary().species.length },
+    footprints: shown ? [...state.footprints].reverse() : [],
+    footprints_note_zh: FOOTPRINT_NOTE_ZH,
+    prefs: { simple: state.prefs.simple, presentation: state.prefs.presentation, my_day: { start: state.prefs.my_day.start, end: state.prefs.my_day.end }, season_mode: state.prefs.season_mode, standup: state.nudge.standup === 'on' },
+    devices: have,
+    slot,
+    pane_zh: shown && active.length > 0 ? active.map((run) => run.progress_zh).join('；') : null,
+    rules_zh: RULES_ZH,
+  }
+}
+
+function emptyPackZh(ctx: EligibilityContext): string {
+  const have = devices(ctx.series, ctx.today)
+  if (ctx.pregnant) return '孕期不出现实验。图书馆照常可以读。'
+  if (!have.wristband && !have.bp_cuff && !have.scale) return '现在没有能自动记录结果的数据。连上手环、家用血压计或体重秤并记满一周后，这个包里就会有实验。包会一直留着。'
+  return '现在没有适合你的实验。包会一直留着，数据多了再来拆。'
+}
+
+// ---- reading and acting --------------------------------------------------------
+
+function load(now: Date): { root: string; state: State; world: World; cache: SeriesCache } {
+  const root = boundRootDir()
+  const world = worldOf(root, now)
+  const state = root ? readState(root, now, world.today) : emptyState()
+  const cache = readSeriesCache(root)
+  return { root, state, world, cache }
+}
+
+export function syncCodex(now: Date = new Date()): CodexView {
+  const { root, state, world, cache } = load(now)
+  if (!root) return viewOf(state, world, cache)
+  reduce(state, world, cache)
+  saveState(root, state)
+  return viewOf(state, world, cache)
+}
+
+export type CodexAction =
+  | { action: 'start'; my_day?: { start?: string; end?: string }; season_mode?: '8w' | 'retest'; standup?: boolean }
+  | { action: 'prefs'; simple?: boolean; presentation?: boolean; my_day?: { start?: string; end?: string }; season_mode?: '8w' | 'retest'; standup?: boolean; codex?: boolean }
+  | { action: 'open_pack'; pack_id: string }
+  | { action: 'begin'; experiment_id: string; pack_id?: string; answers?: Record<string, boolean>; randomized?: boolean }
+  | { action: 'checkin'; run_id: string; done?: boolean }
+  | { action: 'reveal'; run_id: string }
+  | { action: 'stop'; run_id: string }
+  | { action: 'read'; card_id: string }
+  | { action: 'next_season' }
+  | { action: 'nudge'; event: 'shown' | 'ok' | 'dismiss_today' | 'reveal_shown' | 'reveal_later' | 'reveal_open'; ref?: string }
+
+export interface ActResult { ok: boolean; error?: string; note_zh?: string; met?: string[]; run?: RunView; pack?: { id: string; kind: Pack['kind']; source_zh: string; results: ResultCard[] }; view: CodexView }
+
+function setMyDay(state: State, input: { start?: string; end?: string } | undefined): void {
+  if (!input) return
+  if (validClock(input.start)) state.prefs.my_day.start = input.start
+  if (validClock(input.end)) state.prefs.my_day.end = input.end
+  state.prefs.my_day.asked = true
+}
+
+export function actCodex(input: CodexAction, now: Date = new Date()): ActResult {
+  const { root, state, world, cache } = load(now)
+  const done = (extra: Partial<ActResult> = {}): ActResult => {
+    reduce(state, world, cache)
+    if (root) saveState(root, state)
+    return { ok: true, ...extra, view: viewOf(state, world, cache) }
+  }
+  const fail = (error: string): ActResult => ({ ok: false, error, view: viewOf(state, world, cache) })
+  if (!root) return fail('还没有 LongPi 档案。')
+  if (input.action === 'prefs') {
+    if (typeof input.codex === 'boolean') state.choice = input.codex ? 'on' : 'off'
+    if (typeof input.simple === 'boolean') state.prefs.simple = input.simple
+    if (typeof input.presentation === 'boolean') state.prefs.presentation = input.presentation
+    if (input.season_mode === '8w' || input.season_mode === 'retest') state.prefs.season_mode = input.season_mode
+    if (typeof input.standup === 'boolean') state.nudge.standup = input.standup ? 'on' : 'off'
+    setMyDay(state, input.my_day)
+    return done()
+  }
+  if (input.action === 'nudge') return nudgeEvent(state, input, now, done)
+  if (!world.consent) return fail('先完成使用说明里的同意，再打开长寿图鉴。')
+  const block = blockOf(state, world)
+  if (block) return fail(codexBlockZh(block))
+  if (input.action === 'start') {
+    setMyDay(state, input.my_day ?? DEFAULT_MY_DAY)
+    if (input.season_mode === '8w' || input.season_mode === 'retest') state.prefs.season_mode = input.season_mode
+    state.nudge.standup = input.standup === true ? 'on' : input.standup === false ? 'off' : (world.memoryStandup ? 'on' : 'off')
+    if (!state.started) {
+      state.started = world.today
+      state.pressure = 'on'
+      if (state.context.latest_checkup && !state.seen.checkups.includes(state.context.latest_checkup)) state.seen.checkups.push(state.context.latest_checkup)
+      state.seen.labs = { ...state.context.labs }
+      state.seen.care = careItems(root).map((item) => item.id)
+    }
+    return done()
+  }
+  if (!state.started) return fail('先打开长寿图鉴，回答两个小问题。')
+  if (input.action === 'read') {
+    const lib = loadLibrary()
+    const card = lib.studies.find((row) => row.id === input.card_id)
+    if (!card) return fail('没有这张卡。')
+    const met: string[] = []
+    if (!state.read[card.id]) state.read[card.id] = world.today
+    for (const key of card.meet) {
+      if (!state.met[key]) { state.met[key] = world.today; met.push(key) }
+    }
+    return done({ met })
+  }
+  if (input.action === 'next_season') {
+    if (state.season?.status !== 'closed') return fail('这个赛季还没有结束。')
+    state.season = null
+    return done()
+  }
+  if (input.action === 'open_pack') {
+    const pack = state.packs.find((row) => row.id === input.pack_id)
+    if (!pack) return fail('没有这个包。')
+    if (pack.kind === 'experiment' && (!pack.opened || pack.options.length === 0)) {
+      const candidates = eligible(eligibilityContext(state, world.today, cache))
+      pack.options = pickThree(candidates, `${state.seed_hex}:${pack.id}`, new Set(state.reserve))
+      if (pack.options.length === 0) {
+        pack.opened = null
+        reduce(state, world, cache)
+        saveState(root, state)
+        return { ok: true, note_zh: emptyPackZh(eligibilityContext(state, world.today, cache)), view: viewOf(state, world, cache) }
+      }
+    }
+    pack.opened = pack.opened ?? world.today
+    if (pack.kind === 'retest') {
+      state.nudge.reveal[pack.id] = { first: state.nudge.reveal[pack.id]?.first ?? world.today, later: null, done: true }
+      for (const card of pack.results) {
+        const runId = card.key.startsWith('run:') ? card.key.slice(4) : null
+        const run = runId ? state.runs.find((row) => row.id === runId) : null
+        if (run && run.status === 'ready') revealRun(state, run, world)
+      }
+      return done({ pack: { id: pack.id, kind: pack.kind, source_zh: pack.source_zh, results: pack.results } })
+    }
+    return done()
+  }
+  if (input.action === 'begin') return begin(state, world, cache, input, done, fail)
+  const run = 'run_id' in input ? state.runs.find((row) => row.id === input.run_id) : undefined
+  if (!run) return fail('没有这个实验。')
+  if (input.action === 'checkin') {
+    if (run.status !== 'running' || world.today < run.start || world.today > (run.extended_to ?? run.end)) return fail('这个实验今天不能打卡。')
+    const on = input.done !== false
+    run.done = on ? [...new Set([...run.done, world.today])] : run.done.filter((day) => day !== world.today)
+    return done()
+  }
+  if (input.action === 'stop') {
+    if (run.status !== 'running' && run.status !== 'retest_wait') return fail('这个实验已经结束。')
+    run.status = 'stopped'
+    return done({ note_zh: '已停下，不算失败，也不扣任何东西。' })
+  }
+  if (input.action === 'reveal') {
+    if (run.status !== 'ready') return fail(run.status === 'revealed' ? '这张卡已经翻开了。' : '还没到揭晓的时候。')
+    revealRun(state, run, world)
+    return done({ run: runView(run, state, cache, world.today) })
+  }
+  return fail('不能识别的操作。')
+}
+
+function revealRun(state: State, run: ExperimentRun, world: World): void {
+  run.status = 'revealed'
+  run.revealed_at = world.now.toISOString() as IsoTime
+  state.nudge.reveal[run.id] = { first: state.nudge.reveal[run.id]?.first ?? world.today, later: null, done: true }
+  emit('codex.experiment_revealed', { run_id: run.id, experiment_id: run.experiment_id, outcome: run.result?.outcome ?? 'insufficient' })
+  if (state.runs.filter((row) => row.status === 'revealed').length === 1) addFootprint(state, 'first_experiment', world.today, `做完了第一个两周小实验：${run.title_zh}。`)
+  if (state.season?.status === 'active') grantPack(state, 'experiment', world.today, `做完「${run.title_zh}」`)
+}
+
+function begin(state: State, world: World, cache: SeriesCache, input: Extract<CodexAction, { action: 'begin' }>, done: (extra?: Partial<ActResult>) => ActResult, fail: (error: string) => ActResult): ActResult {
+  const pack = input.pack_id ? state.packs.find((row) => row.id === input.pack_id) : null
+  const fromPack = pack && pack.opened && pack.options.includes(input.experiment_id)
+  const fromReserve = state.reserve.includes(input.experiment_id)
+  if (!fromPack && !fromReserve) return fail('只能从拆开的实验包或待选里开始。')
+  if (state.runs.filter((run) => run.status === 'running').length >= MAX_RUNNING) return fail('同时最多做 2 个实验。先做完一个，或者停下一个。')
+  let spec = experimentById(input.experiment_id)
+  if (!spec) return fail('没有这个实验。')
+  const answers = input.answers ?? {}
+  let variant: string | null = null
+  for (const question of spec.questions) {
+    if (answers[question.id] !== true) continue
+    if (question.yes.swap) {
+      const swapped = experimentById(question.yes.swap)
+      if (swapped) { spec = swapped; break }
+    }
+    if (question.yes.variant && !variant) variant = question.yes.variant
+  }
+  const ctx = eligibilityContext(state, world.today, cache)
+  const blocked = blockedBy(spec, ctx)
+  if (blocked) return fail(blocked === 'no_data' ? '这个实验需要开始前两周的数据，现在还不够。' : '这个实验现在不适合你。')
+  const primary = primaryFor(spec, ctx) as MetricKey
+  const { metrics } = loadCatalog()
+  const randomized = input.randomized === true && spec.randomizable
+  const days = spec.days
+  const start = world.today
+  const v = variant ? spec.variants[variant] : null
+  const run: ExperimentRun = {
+    id: newId('rn'),
+    experiment_id: spec.id,
+    variant,
+    title_zh: v?.title_zh ?? spec.title_zh,
+    do_zh: v?.do_zh ?? spec.do_zh,
+    checkin_zh: spec.checkin_zh,
+    icon: spec.icon,
+    primary,
+    also: [...spec.primary.filter((key) => key !== primary), ...spec.also].filter((key, i, all) => all.indexOf(key) === i && key !== primary),
+    threshold_zh: thresholdZh(metrics[primary], biovar(), { randomized, lab: metrics[primary].method === 'lab' }),
+    start,
+    end: addDays(start, days - 1),
+    extended_to: null,
+    baseline: { from: addDays(start, -14), to: addDays(start, -1) },
+    randomized,
+    schedule: randomized ? randomSchedule(start, days, `${state.seed_hex}:${start}:${spec.id}`) : null,
+    scope: v?.scope === 'weekdays' ? 'weekdays' : 'all',
+    answers,
+    done: [],
+    lab_before: metrics[primary].method === 'lab' ? state.context.ldl : null,
+    status: 'running',
+    result: null,
+    revealed_at: null,
+  }
+  state.runs.push(run)
+  const season = state.seasons.find((row) => row.id === state.season?.id)
+  if (season) season.runs.push(run.id)
+  if (fromPack && pack) {
+    pack.chosen = input.experiment_id
+    for (const other of pack.options) if (other !== input.experiment_id && !state.reserve.includes(other)) state.reserve.push(other)
+  }
+  state.reserve = state.reserve.filter((id) => id !== input.experiment_id && id !== spec!.id).slice(-6)
+  emit('codex.experiment_started', { run_id: run.id, experiment_id: spec.id, randomized })
+  return done({ run: runView(run, state, cache, world.today), note_zh: spec.id !== input.experiment_id ? `按你的回答，换成了「${spec.title_zh}」。` : undefined })
+}
+
+function nudgeEvent(state: State, input: Extract<CodexAction, { action: 'nudge' }>, now: Date, done: (extra?: Partial<ActResult>) => ActResult): ActResult {
+  const today = isoDay(now)
+  if (input.event === 'shown') {
+    state.nudge.shown.push({ at: now.toISOString() as IsoTime, kind: 'standup' })
+    emit('nudge.shown', { nudge_id: newId('ng'), where: 'overlay', kind: 'standup' })
+  } else if (input.event === 'ok') {
+    state.nudge.acks.push({ at: now.toISOString() as IsoTime, status: 'pending' })
+  } else if (input.event === 'dismiss_today') {
+    state.nudge.dismissed_day = today
+  } else if (input.event === 'reveal_shown' && input.ref) {
+    markRevealShown(state.nudge, input.ref, now)
+    emit('nudge.shown', { nudge_id: newId('ng'), where: 'overlay', kind: 'reveal' })
+  } else if (input.event === 'reveal_later' && input.ref) {
+    laterReveal(state.nudge, input.ref, today)
+  } else if (input.event === 'reveal_open' && input.ref) {
+    const prev = state.nudge.reveal[input.ref]
+    state.nudge.reveal[input.ref] = { first: prev?.first ?? today, later: null, done: true }
+  }
+  return done()
+}
+
+// ---- seams for the rest of LongPi ---------------------------------------------
+
+/** From the journey: what the Codex needs of the holder's record, or a family member's visits and checkups. */
+export function noteCodexContext(dataDir: string, context: Omit<CodexContext, 'at'> & { care_visits?: Array<{ id: string; date: IsoDay | null; with_brief: boolean }> }, now: Date = new Date()): void {
+  const root = boundRootDir()
+  if (!root || !dataDir) return
+  const world = worldOf(root, now)
+  const state = readState(root, now, world.today)
+  if (dataDir !== root) {
+    // A family member: footprints only, never a pack.
+    const member = memberNote()
+    const label = member?.label_zh ?? '家人'
+    let changed = false
+    const memberId = dataDir.split('/').filter(Boolean).at(-1) ?? 'member'
+    if (state.started && !blockOf(state, world)) {
+      for (const visit of context.care_visits ?? []) {
+        const key = `${memberId}:care:${visit.id}`
+        if (!visit.with_brief || state.seen.member.includes(key)) continue
+        state.seen.member.push(key)
+        if ((visit.date ?? world.today) >= state.started) addFootprint(state, 'family', visit.date ?? world.today, `带着简报陪${label}看了医生。`, `陪${label}复查`)
+        changed = true
+      }
+      if (context.latest_checkup) {
+        const key = `${memberId}:checkup:${context.latest_checkup}`
+        const known = state.seen.member.some((row) => row.startsWith(`${memberId}:checkup:`))
+        if (!state.seen.member.includes(key)) {
+          state.seen.member.push(key)
+          if (known && context.latest_checkup >= state.started) addFootprint(state, 'family', world.today, `${label}的新检查结果进了档案。`, `陪${label}复查`)
+          changed = true
+        }
+      }
+    }
+    if (changed) saveState(root, state)
+    return
+  }
+  const { care_visits: _visits, ...rest } = context
+  state.context = { ...rest, at: now.toISOString() as IsoTime }
+  if (!state.started) {
+    // Before the first open, remember what is already on file so nothing back-dated becomes a pack or footprint.
+    if (context.latest_checkup && !state.seen.checkups.includes(context.latest_checkup)) state.seen.checkups.push(context.latest_checkup)
+    state.seen.labs = { ...context.labs }
+  }
+  reduce(state, world, readSeriesCache(root))
+  saveState(root, state)
+}
+
+/** A sick or travel day: not an experiment day, never a failure. */
+export function logLifeCodex(input: { event: string; from: IsoDay; to: IsoDay | null }, now: Date = new Date()): { ok: boolean; error?: string; days: IsoDay[] } {
+  const root = boundRootDir()
+  if (!root) return { ok: false, error: '还没有 LongPi 档案。', days: [] }
+  const to = input.to ?? input.from
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || to < input.from) return { ok: false, error: '日期格式须为 YYYY-MM-DD，且结束日期不早于开始日期。', days: [] }
+  if (daysBetween(input.from, to) > 13) return { ok: false, error: '一次最多记 14 天。', days: [] }
+  const world = worldOf(root, now)
+  const state = readState(root, now, world.today)
+  const days: IsoDay[] = []
+  for (let day = input.from; day <= to; day = addDays(day, 1)) {
+    if (day > world.today) break
+    if (!state.life.some((row) => row.day === day)) { state.life.push({ day, reason: input.event }); days.push(day) }
+  }
+  state.life = state.life.slice(-120)
+  saveState(root, state)
+  emit('life_event.logged', { memory_id: newId('lf'), event: input.event as HealthEventPayloads['life_event.logged']['event'], from: input.from, to: input.to })
+  return { ok: true, days }
+}
+
+export function engagementSummary(): FactPack['engagement'] {
+  try {
+    const view = syncCodex(new Date())
+    if (!view.enabled || !view.started) return null
+    return {
+      season_week: view.season?.week ?? null,
+      season_weeks: view.season?.weeks ?? null,
+      experiments_running: view.running.map((run) => run.title_zh),
+      reveal_ready: view.ready.length > 0 || view.packs.some((pack) => pack.kind === 'retest'),
+      packs_waiting: view.packs.length,
+    }
+  } catch {
+    return null
+  }
+}
+
+export function candidateSeeds(now: Date = new Date()): Array<{ id: string; kind: ActionKind; priority: number; title_zh: string; detail_zh: string; prompt_zh: string }> {
+  let view: CodexView
+  try { view = syncCodex(now) } catch { return [] }
+  if (!view.enabled || !view.started) return []
+  const out: Array<{ id: string; kind: ActionKind; priority: number; title_zh: string; detail_zh: string; prompt_zh: string }> = []
+  if (view.ready.length > 0 || view.packs.some((pack) => pack.kind === 'retest')) {
+    out.push({ id: 'nba-codex-reveal', kind: 'codex_reveal', priority: 40, title_zh: '有一张实验卡可以翻了', detail_zh: '在长寿图鉴里翻开它。', prompt_zh: '我的实验结果出来了吗？' })
+  }
+  if (view.packs.some((pack) => pack.kind === 'experiment' && !pack.opened)) {
+    out.push({ id: 'nba-codex-pack', kind: 'codex_experiment', priority: 30, title_zh: '有一个实验包可以拆', detail_zh: '三选一，挑一个两周的小实验。', prompt_zh: '长寿图鉴里的三个实验，哪个适合我？' })
+  }
+  return out
+}
+
+/** The weekly plain reminder had season quests; the Codex sends no reminders of its own (design §2). */
+export function plainReminderOf(_dataDir: string): string | null {
+  return null
+}
+
+/**
+ * After a journey build of the holder: re-read the daily series the experiments are judged on, settle 好 presses
+ * against raw steps, and bring the Codex up to date. Never for a family member's record.
+ */
+export async function refreshCodex(input: { config: Config; dataDir: string; present: Iterable<string>; now?: Date; force?: boolean }): Promise<void> {
+  const root = boundRootDir()
+  if (!root || input.dataDir !== root) return
+  const now = input.now ?? new Date()
+  const state = readState(root, now, isoDay(now))
+  if (!state.started) return
+  await refreshSeries({ config: input.config, dataDir: root, present: input.present, now, force: input.force })
+  const pending = state.nudge.acks.filter((row) => row.status === 'pending')
+  if (pending.length > 0) {
+    const fresh = readState(root, now, isoDay(now))
+    for (const day of [...new Set(pending.map((row) => isoDay(new Date(row.at))))]) {
+      const samples = await stepsOnDay(input.config, day)
+      settleAcks(fresh.nudge, samples, now, day)
+    }
+    saveState(root, fresh)
+  }
+  syncCodex(now)
+}
+
+/** Today's civil hour, for tests of 我的白天. */
+export function civilHour(now: Date): number {
+  return civilParts(now).hour
+}

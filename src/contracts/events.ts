@@ -3,8 +3,7 @@
 import type { Id, IsoDay, IsoTime, ModuleId } from './common.ts'
 import type { MemoryKind, LifeEventItem } from './memory.ts'
 import type { EvidenceGrade } from './feedback.ts'
-import type { DrawGrant, QuestKind } from './engagement.ts'
-import type { Rarity } from './codex.ts'
+import type { PackKind, FootprintKind, Outcome } from './codex.ts'
 import type { ConsentRecord } from './science.ts'
 import type { SurfaceSet } from './surfaces.ts'
 
@@ -24,17 +23,18 @@ export interface HealthEventPayloads {
   'checkin.logged': { day: IsoDay; item_ids: string[]; done: boolean | null }
   'selfmeasure.logged': { key: string; day: IsoDay }
   'life_event.logged': { memory_id: Id; event: LifeEventItem['event']; from: IsoDay; to: IsoDay | null }
-  'streak.frozen': { day: IsoDay; reason: 'sick' | 'travel' | 'other' }
   'retest.due': { marker_key: string; day: IsoDay }
   'retest.arrived': { marker_keys: string[]; day: IsoDay }
   'verdict.changed': { item_id: string; marker_key: string; from: string; to: string }
   'feedback.issued': { feedback_id: Id; grade: EvidenceGrade; subject_key: string }
   'season.started': { season_id: Id }
-  'season.ended': { season_id: Id; completed_quests: number }
-  'quest.completed': { quest_id: Id; season_id: Id; kind: QuestKind }
-  'unlock.granted': { unlock_id: Id; key: string }
-  'codex.draw_earned': { grant_id: Id; kind: DrawGrant['kind']; by_event: Id }
-  'codex.drawn': { draw_id: Id; card_id: Id; rarity: Rarity }
+  'season.ended': { season_id: Id; experiments_done: number }
+  /** A pack exists because something real happened: a season began, an experiment ended, a retest arrived. */
+  'codex.pack_granted': { pack_id: Id; kind: PackKind; source: string }
+  'codex.experiment_started': { run_id: Id; experiment_id: string; randomized: boolean }
+  /** The outcome word only (outside / inside / insufficient); never the values. */
+  'codex.experiment_revealed': { run_id: Id; experiment_id: string; outcome: Outcome }
+  'codex.footprint': { footprint_id: Id; kind: FootprintKind }
   'study.consented': { study_id: string; consent_id: Id }
   'study.withdrawn': { study_id: string; consent_id: Id }
   'study.run_completed': { study_id: string; run_id: Id; released: boolean }
@@ -45,7 +45,7 @@ export interface HealthEventPayloads {
   'profile.changed': { fields: string[] }
   'surface.generated': { inputs_fp: string; source: SurfaceSet['source']; latency_ms: number }
   'chat.turn_ended': { session_id: string; turn: number; health: boolean; prefilter_hit: boolean }
-  'nudge.shown': { nudge_id: Id; where: 'overlay' | 'dock' | 'notification' }
+  'nudge.shown': { nudge_id: Id; where: 'overlay' | 'dock' | 'notification' | 'pane'; kind?: 'standup' | 'reveal' }
 }
 export type HealthEventType = keyof HealthEventPayloads
 export interface HealthEventSource {
@@ -72,9 +72,9 @@ export interface Bus {
 export const EVENT_OWNERS: Readonly<Record<HealthEventType, ModuleId>> = {
   'report.arrived': 'M7', 'record.changed': 'M10', 'memory.changed': 'M0', 'triage.opened': 'M1', 'triage.resolved': 'M1',
   'care.advised': 'M1', 'care.booked': 'M6', 'care.visit_logged': 'M1', 'brief.generated': 'M1', 'plan.drafted': 'M3', 'plan.saved': 'M3',
-  'plan.item_excluded': 'M3', 'checkin.logged': 'M3', 'selfmeasure.logged': 'M7', 'life_event.logged': 'M6', 'streak.frozen': 'M6',
+  'plan.item_excluded': 'M3', 'checkin.logged': 'M3', 'selfmeasure.logged': 'M7', 'life_event.logged': 'M6',
   'retest.due': 'M9', 'retest.arrived': 'M9', 'verdict.changed': 'M9', 'feedback.issued': 'M4', 'season.started': 'M6',
-  'season.ended': 'M6', 'quest.completed': 'M6', 'unlock.granted': 'M6', 'codex.draw_earned': 'M6', 'codex.drawn': 'M6',
+  'season.ended': 'M6', 'codex.pack_granted': 'M6', 'codex.experiment_started': 'M6', 'codex.experiment_revealed': 'M6', 'codex.footprint': 'M6',
   'study.consented': 'M8', 'study.withdrawn': 'M8', 'study.run_completed': 'M8', 'study.n_of_1_completed': 'M8', 'consent.changed': 'M11', 'day.rolled': 'M0',
   'profile.changed': 'M0', 'surface.generated': 'M5', 'chat.turn_ended': 'M0', 'nudge.shown': 'M6',
 }

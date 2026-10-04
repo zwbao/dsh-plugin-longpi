@@ -7,7 +7,6 @@ import { readdirSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { noteSeasonContext, syncEngage } from '../src/engage/engine.ts'
 import { EVENT_OWNERS } from '../src/contracts/events.ts'
 import { signFeed, pollReleaseManifests } from '../src/science/feed.ts'
 import { effectiveMode, liveRefused, startScience } from '../src/science/index.ts'
@@ -45,8 +44,11 @@ try {
   assert.equal(PRODUCT_VERSION, '0.8.0')
   assert.equal(EVENT_OWNERS['study.n_of_1_completed'], 'M8')
   assert.equal(EVENT_OWNERS['care.booked'], 'M6')
-  assert.ok(RESERVED_ROUTES.M6.includes('GET /api/longpi/codex/odds'))
-  assert.ok(RESERVED_ROUTES.M6.includes('POST /api/longpi/codex/run'))
+  assert.ok(RESERVED_ROUTES.M6.includes('GET /api/longpi/codex'))
+  assert.ok(RESERVED_ROUTES.M6.includes('GET /api/longpi/codex/slot'))
+  assert.equal(RESERVED_ROUTES.M6.some((row) => /draw|odds|streak/.test(row)), false, 'no draw, odds or streak routes')
+  assert.equal(EVENT_OWNERS['codex.pack_granted'], 'M6')
+  assert.equal('codex.drawn' in EVENT_OWNERS, false)
   assert.ok(RESERVED_ROUTES.M8.includes('GET /api/longpi/science/registry'))
   assert.ok(RESERVED_ROUTES.M8.includes('GET /api/longpi/science/transparency'))
   assert.ok(RESERVED_ROUTES.M8.includes('POST /api/longpi/science/n-of-1'))
@@ -54,19 +56,11 @@ try {
   const quest = nOf1SeasonQuest('sn-test')
   assert.equal(quest.id, 'qs-n-of-1')
   assert.equal(quest.criteria.event, 'study.n_of_1_completed')
-  assert.equal(quest.reward.draws, 1)
+  assert.equal(quest.reward.footprint, true, 'a finished personal trial is a footprint, not a draw')
   assert.equal(quest.rarity_from_labs, false)
   assert.equal(quest.codex.money, 'none')
   assert.equal(quest.codex.trading, 'none')
-  assert.equal(quest.codex.daily_cap, 3)
   assert.equal(quest.codex.minors, 'off')
-  assert.equal(quest.codex.odds_zh, '铜 52%，银 28%，紫 16%，金 4%')
-
-  const offDir = tempDir()
-  profile(offDir)
-  startScience({ configured: () => 'off', dataDir: () => offDir })
-  const off = noteSeasonContext(offDir, { facts: anaemia, doctorStep: true }, at('2026-07-27'))
-  assert.equal(off.quests.some((row) => row.id === 'qs-n-of-1'), false)
 
   const liveDir = tempDir()
   profile(liveDir)
@@ -74,30 +68,6 @@ try {
   assert.equal(configuredLive(), true)
   assert.equal(effectiveMode(), 'off')
   assert.equal(liveRefused().refused, true)
-  const live = noteSeasonContext(liveDir, { facts: anaemia, doctorStep: true }, at('2026-07-27'))
-  assert.equal(live.quests.some((row) => row.id === 'qs-n-of-1'), false)
-
-  const simDir = tempDir()
-  profile(simDir)
-  startScience({ configured: () => 'simulated', dataDir: () => simDir })
-  assert.equal(effectiveMode(), 'simulated')
-  const sim = noteSeasonContext(simDir, { facts: anaemia, doctorStep: true }, at('2026-07-27'))
-  assert.equal(sim.header.show, false)
-  const row = sim.quests.find((item) => item.id === 'qs-n-of-1')
-  assert.ok(row, 'simulated season appends the personal trial')
-  assert.equal(row.status, 'open')
-  const stored = JSON.parse(readFileSync(join(simDir, 'engage', 'quests.json'), 'utf8'))
-  const saved = stored.quests.find((item) => item.id === 'qs-n-of-1')
-  assert.equal(saved.kind, 'science_n_of_1')
-  assert.equal(saved.criteria.event, 'study.n_of_1_completed')
-  assert.equal(saved.reward.draws, 1)
-  assert.equal(saved.reward.guaranteed_min_rarity, undefined)
-  assert.equal(saved.season_id, sim.season.id)
-
-  mkdirSync(join(simDir, 'science'), { recursive: true })
-  writeFileSync(join(simDir, 'science', 'n-of-1.json'), `${JSON.stringify({ stopping: { decision: 'stop_cap' } })}\n`)
-  const finished = syncEngage(simDir, at('2026-08-10'))
-  assert.equal(finished.quests.find((item) => item.id === 'qs-n-of-1')?.status, 'done')
 
   const page = readFileSync(join(root, 'src/client/page.ts'), 'utf8')
   const styles = readdirSync(join(root, 'src/client/styles')).map((f) => readFileSync(join(root, 'src/client/styles', f), 'utf8')).join('\n')

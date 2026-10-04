@@ -11,7 +11,8 @@ import { absoluteLevel, buildChanges } from '../src/changes.ts'
 import { findingsFromIndicators, listFindings } from '../src/datain/narrative.ts'
 import { ingestDocument } from '../src/datain/upload.ts'
 import { listMedications } from '../src/datain/meds.ts'
-import { logLifeEngage, noteLabsOnFile, syncEngage } from '../src/engage/engine.ts'
+import { bindRuntime, logLifeCodex } from '../src/engage/engine.ts'
+import { readState } from '../src/engage/state.ts'
 import { progressStory } from '../src/feedback/grade.ts'
 import { retestDates } from '../src/feedback/retest-timing.ts'
 import { modelRangeNote } from '../src/honesty/model-range.ts'
@@ -115,14 +116,11 @@ try {
 
   const seasonDir = tempDir('season')
   profile(seasonDir)
-  const cold = logLifeEngage(seasonDir, { event: 'sick', from: '2026-09-27', to: '2026-09-27' }, new Date('2026-09-27T10:00:00+08:00'))
+  bindRuntime({ dataDir: () => seasonDir, rootDir: () => seasonDir })
+  const cold = logLifeCodex({ event: 'sick', from: '2026-09-27', to: '2026-09-27' }, new Date('2026-09-27T10:00:00+08:00'))
   assert.equal(cold.ok, true, cold.error)
-  assert.ok(cold.view.streak.frozen.some((row) => row.day === '2026-09-27'), 'a sick day logged in chat is on the season view the page reads')
-  noteLabsOnFile(seasonDir, { hscrp: true, waist: false })
-  const unlocked = syncEngage(seasonDir, new Date('2026-09-28T10:00:00+08:00'))
-  const bio = unlocked.unlocks.find((row) => row.key === 'bioage')
-  assert.equal(bio?.status, 'unlocked')
-  assert.doesNotMatch(`${bio?.teaser_zh ?? ''} ${unlocked.reminder_zh ?? ''}`, /加测|超敏 C 反应蛋白/)
+  const kept = readState(seasonDir, new Date('2026-09-27T10:00:00+08:00'), '2026-09-27')
+  assert.ok(kept.life.some((row) => row.day === '2026-09-27'), 'a sick day logged in chat is kept out of the experiment days the page reads')
 
   // --- #97 failed upload is not a duplicate ---
   const uploadDir = tempDir('upload')

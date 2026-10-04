@@ -5,8 +5,7 @@ import assert from 'node:assert/strict'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { candidateSeeds, prefsEngage, syncEngage } from '../src/engage/engine.ts'
-import { chapterList } from '../src/engage/seasons.ts'
+import { actCodex, bindRuntime, candidateSeeds, plainReminderOf, syncCodex } from '../src/engage/engine.ts'
 import { DAILY_WORDING, QUIET_TITLE, quietenSurfaces, readQuiet, rememberAvoidance, statedAvoidance } from '../src/engage/quiet.ts'
 import { followupTick, writeFollowup } from '../src/followup.ts'
 import { withConsentOffer } from '../src/home-bp.ts'
@@ -52,7 +51,7 @@ function surfaces(next, moreDetail) {
     greeting: card('greeting', '晚上好', { kind: 'greeting' }),
     status: card('status', '白细胞这次的变化，值得问问医生', { kind: 'status' }),
     next: { action: next, card: card('next', next.title_zh, { kind: 'next_step', detail_zh: next.detail_zh }) },
-    more: [action('nba-season-quest', 'season_quest', '带着简报去看一次医生，回来记一笔', moreDetail)],
+    more: [action('nba-codex-pack', 'codex_experiment', '带着简报去看一次医生，回来记一笔', moreDetail)],
     suggestions: [card('followup-on', '每天晚上提醒我打卡', { prompt_zh: '每天晚上提醒我打卡' }), card('changes', '白细胞这个变化，我该问医生什么？', { prompt_zh: '白细胞这个变化，我该问医生什么？' })],
     validation: { passed: [], failed: [] },
   }
@@ -62,30 +61,27 @@ try {
   assert.equal(statedAvoidance('别天天提醒我'), true)
   assert.equal(statedAvoidance('真有事就用一句话告诉我'), true)
   assert.equal(statedAvoidance('告诉我一句话怎么吃'), false)
-  assert.doesNotMatch(JSON.stringify(chapterList('data', 12)), DAILY_WORDING)
-  assert.doesNotMatch(JSON.stringify(chapterList('care', 12)), DAILY_WORDING)
-  assert.doesNotMatch(JSON.stringify(chapterList('generic', 12)), DAILY_WORDING)
 
   const quietDir = tempDir()
   profile(quietDir)
-  const opened = syncEngage(quietDir, at('2026-07-27'))
-  assert.equal(opened.pressure, false)
-  assert.equal(opened.reminder_zh, null)
-  const seeds = candidateSeeds(quietDir, at('2026-07-27'))
-  assert.equal(seeds.some((row) => row.id === 'nba-season-quest'), false)
+  bindRuntime({ dataDir: () => quietDir, rootDir: () => quietDir, codexOn: () => true })
+  const opened = syncCodex(at('2026-07-27'))
+  assert.equal(opened.started, false, 'the Codex never starts by itself')
+  assert.equal(plainReminderOf(quietDir), null)
+  const seeds = candidateSeeds(at('2026-07-27'))
+  assert.equal(seeds.some((row) => row.id === 'nba-codex-pack'), false)
   assert.doesNotMatch(JSON.stringify(seeds), DAILY_WORDING)
-  const pushed = quietenSurfaces(surfaces(action('nba-season-quest', 'season_quest', '带着简报去看一次医生，回来记一笔', '这一季只做几件事，不用每天打卡。'), '这一季只做几件事，不用每天打卡。'), { title_zh: '补充档案', detail_zh: '回答档案里的 6 个问题即可计算心血管风险。' }, readQuiet(quietDir))
+  const pushed = quietenSurfaces(surfaces(action('nba-codex-pack', 'codex_experiment', '带着简报去看一次医生，回来记一笔', '这一季只做几件事，不用每天打卡。'), '这一季只做几件事，不用每天打卡。'), { title_zh: '补充档案', detail_zh: '回答档案里的 6 个问题即可计算心血管风险。' }, readQuiet(quietDir))
   assert.doesNotMatch(JSON.stringify(pushed), DAILY_WORDING)
-  assert.equal(pushed.more.some((row) => row.id === 'nba-season-quest'), false)
+  assert.equal(pushed.more.some((row) => row.id === 'nba-codex-pack'), false)
   assert.equal(pushed.suggestions.some((row) => row.text_zh === '白细胞这个变化，我该问医生什么？'), true)
 
   const planned = tempDir()
   profile(planned)
   plan(planned)
-  syncEngage(planned, at('2026-07-27'))
   const kept = quietenSurfaces(surfaces(action('stage-checkin', 'checkin', '今天的打卡', '还有 1 项待完成'), '这一季只做几件事，不用每天打卡。'), { title_zh: '今天的打卡', detail_zh: '还有 1 项待完成' }, readQuiet(planned))
   assert.match(JSON.stringify(kept.next), /今天的打卡/)
-  assert.equal(kept.more.some((row) => row.kind === 'season_quest'), false)
+  assert.equal(kept.more.some((row) => row.kind === 'codex_experiment'), false)
   assert.equal(kept.suggestions.some((row) => row.text_zh === '每天晚上提醒我打卡'), true)
 
   assert.equal(rememberAvoidance(planned, '别天天提醒我，只要一句话'), true)
@@ -96,12 +92,12 @@ try {
   assert.doesNotMatch(JSON.stringify(stripped), DAILY_WORDING)
   assert.match(JSON.stringify(stripped.next), new RegExp(QUIET_TITLE))
 
-  prefsEngage(quietDir, { pressure: true }, at('2026-07-27'))
-  const opted = syncEngage(quietDir, at('2026-07-27'))
-  assert.equal(opted.pressure, true)
-  const optedSeeds = candidateSeeds(quietDir, at('2026-07-27'))
-  assert.equal(optedSeeds.some((row) => row.id === 'nba-season-quest'), true)
-  assert.doesNotMatch(optedSeeds.find((row) => row.id === 'nba-season-quest').detail_zh, DAILY_WORDING)
+  const opted = actCodex({ action: 'start' }, at('2026-07-27'))
+  assert.equal(opted.view.started, true)
+  assert.equal(readQuiet(quietDir).optedIn, true, 'opening the Codex is the opt-in')
+  const optedSeeds = candidateSeeds(at('2026-07-27'))
+  assert.equal(optedSeeds.some((row) => row.id === 'nba-codex-pack'), true)
+  assert.doesNotMatch(optedSeeds.find((row) => row.id === 'nba-codex-pack').detail_zh, DAILY_WORDING)
 
   const held = tempDir()
   profile(held)

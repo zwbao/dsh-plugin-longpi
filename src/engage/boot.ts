@@ -1,4 +1,4 @@
-// Wires routes, tools and the seasons skill. Called from the follow-up tools (already
+// Wires the Codex routes, tools and the seasons skill. Called from the follow-up tools (already
 // started by the plugin) and from register() once M0 calls the module.
 
 import { readFileSync } from 'node:fs'
@@ -15,6 +15,9 @@ import { registerEngageTools } from './tools.ts'
 
 export interface EngageRuntime {
   dataDir: () => string
+  /** The account holder's LongPi home, where the Codex lives. */
+  rootDir?: () => string
+  skillsHome?: () => string
   codexOn?: () => boolean
   bus?: Bus | null
 }
@@ -55,6 +58,8 @@ function skillText(): { name: string; description: string; content: string } | n
 export function bootEngage(ctx: Context, runtime: EngageRuntime): void {
   bindRuntime({
     dataDir: runtime.dataDir,
+    ...(runtime.rootDir ? { rootDir: runtime.rootDir } : {}),
+    ...(runtime.skillsHome ? { skillsHome: runtime.skillsHome } : {}),
     ...(runtime.codexOn ? { codexOn: runtime.codexOn } : {}),
     ...(runtime.bus !== undefined ? { bus: runtime.bus } : {}),
   })

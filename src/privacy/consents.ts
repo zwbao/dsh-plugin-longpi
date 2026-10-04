@@ -9,7 +9,7 @@ import { estimatedAge, readProfile, setPrivacyAct, setStatedAge, type PrivacyAct
 
 export const ADULT_AGE = 18
 export const CHILD_AGE = 14
-export const MINOR_PREFERENCE_ZH = '未满 18 岁，不开启图鉴抽卡'
+export const MINOR_PREFERENCE_ZH = '未满 18 岁，不开启长寿图鉴'
 
 const PRODUCT_SCOPES = ['pipl_sensitive', 'data_flow_deepseek', 'session_log_upload'] as const
 type ProductScope = (typeof PRODUCT_SCOPES)[number]

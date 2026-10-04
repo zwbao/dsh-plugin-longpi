@@ -13,7 +13,7 @@ import { bootEngage } from './engage/boot.ts'
 import { followupResponse, inQuiet, maskUrl, readFollowup, sendNow, writeFollowup, WEBHOOK_KINDS, type FollowupState } from './followup.ts'
 import { currentPlan } from './interventions.ts'
 import { asJson } from './json.ts'
-import { resolveDataDir } from './paths.ts'
+import { resolveDataDir, resolveRootDir, resolveSkillsHome } from './paths.ts'
 
 function jsonText(value: unknown): [{ type: 'text'; text: string }] {
   return [{ type: 'text', text: JSON.stringify(value, null, 2) }]
@@ -116,6 +116,8 @@ export function registerFollowupTools(ctx: Context, config: () => Config, state:
   try {
     bootEngage(ctx, {
       dataDir,
+      rootDir: () => resolveRootDir(config().dataDir),
+      skillsHome: () => resolveSkillsHome(config().skillsHome),
       codexOn: () => {
         const current = config() as { engage?: { codex?: boolean } }
         return current.engage?.codex !== false

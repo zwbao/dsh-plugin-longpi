@@ -408,7 +408,6 @@ export { MEMORY_VERSION, SAFETY_DRUG_CLASSES, SAFETY_CONDITION_FLAGS } from './c
 export { FACT_PRIORITY_RANK } from './contracts/factpack.ts'
 export { AGENT_PROFILE_IDS } from './contracts/agents.ts'
 export { youngerAllowed } from './contracts/feedback.ts'
-export { oddsSumToOne } from './contracts/codex.ts'
 export {
   registerLibraryHooks, registerLibraryMount, mountLibraryLanes,
   listSkillIndex, validateBinding, readStore, methodResults, registeredMethodResults,

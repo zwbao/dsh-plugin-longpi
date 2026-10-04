@@ -70,7 +70,7 @@ export const RESERVED_TOOL_NAMES = {
   M0: ['read_person_memory', 'remember_for_me', 'note_page_issue', 'consult_longpi_specialist'],
   M1: ['read_care_navigation', 'prepare_doctor_brief', 'log_care_visit'],
   M4: ['read_progress_feedback'],
-  M6: ['log_life_event', 'read_season', 'propose_personal_season', 'run_drawn_method'],
+  M6: ['log_life_event', 'read_season'],
   M7: ['forward_report', 'record_condition', 'read_narrative_findings'],
   M8: ['list_studies', 'explain_study', 'design_n_of_1', 'log_n_of_1_outcome', 'record_study_consent', 'withdraw_from_study'],
 } as const
@@ -81,7 +81,7 @@ export const RESERVED_ROUTES = {
   M1: ['GET /api/longpi/triage', 'GET /api/longpi/brief', 'POST /api/longpi/brief', 'POST /api/longpi/care-visit'],
   M4: ['GET /api/longpi/feedback'],
   M5: ['GET /api/longpi/surfaces'],
-  M6: ['GET /api/longpi/season', 'POST /api/longpi/season', 'POST /api/longpi/streak-freeze', 'GET /api/longpi/schedule', 'POST /api/longpi/schedule', 'GET /api/longpi/codex', 'GET /api/longpi/codex/odds', 'POST /api/longpi/codex/draw', 'POST /api/longpi/codex/run', 'GET /api/longpi/weekly', 'POST /api/longpi/nudges'],
+  M6: ['GET /api/longpi/codex', 'POST /api/longpi/codex', 'GET /api/longpi/codex/library', 'GET /api/longpi/codex/slot', 'GET /api/longpi/schedule', 'POST /api/longpi/schedule'],
   M7: ['POST /api/longpi/upload', 'GET /api/longpi/findings', 'GET /api/longpi/meds', 'POST /api/longpi/meds', 'GET /api/longpi/conditions', 'POST /api/longpi/conditions', 'GET /api/longpi/stores'],
   M8: ['GET /api/longpi/science/studies', 'POST /api/longpi/science/consent', 'POST /api/longpi/science/withdraw', 'POST /api/longpi/science/run', 'GET /api/longpi/science/translog', 'GET /api/longpi/science/community', 'GET /api/longpi/science/registry', 'GET /api/longpi/science/transparency', 'POST /api/longpi/science/n-of-1', 'POST /api/longpi/science/export', 'GET /api/longpi/science/invite', 'POST /api/longpi/science/invite', 'POST /api/longpi/science/preference'],
   M11: ['GET /api/longpi/privacy', 'POST /api/longpi/privacy/consent', 'GET /api/longpi/privacy/export', 'POST /api/longpi/privacy/delete'],
