@@ -81,12 +81,13 @@ export function clearConnection(dataDir: string): boolean {
 let memo: { config: Config; stamp: string; value: Config; dir: string } | null = null
 
 /**
- * The configuration every module reads: the plugin's own, with mcpUrl and mcpToken taken from the saved
- * connection when there is one. A saved connection without a token means none, never the configured one:
- * a token belongs to its address.
+ * The configuration one person's store reads through: the plugin's own, with mcpUrl and mcpToken taken from
+ * that store's saved connection when there is one. A family member reads only through their own saved link,
+ * never the holder's configured address or token; a saved connection without a token means none.
  */
-export function effectiveConfig(config: Config): Config {
-  const path = pathOf(resolveDataDir(config.dataDir))
+export function effectiveConfigFor(config: Config, dataDir: string): Config {
+  const dir = resolve(dataDir)
+  const path = pathOf(dir)
   let stamp = '-'
   try {
     const stat = statSync(path)
@@ -95,14 +96,19 @@ export function effectiveConfig(config: Config): Config {
     stamp = '-'
   }
   if (memo && memo.config === config && memo.stamp === stamp && memo.dir === path) return memo.value
-  const saved = stamp === '-' ? null : readConnection(resolveDataDir(config.dataDir))
+  const saved = stamp === '-' ? null : readConnection(dir)
   // A family member reads only through their own saved link, never the configured (holder's) address or token:
   // with none saved they are simply not connected.
-  const family = resolveDataDir(config.dataDir) !== resolveRootDir(config.dataDir)
+  const family = dir !== resolveRootDir(config.dataDir)
   const value = family ? { ...config, mcpUrl: saved?.mcp_url ?? '', mcpToken: '' }
     : saved ? { ...config, mcpUrl: saved.mcp_url, mcpToken: saved.mcp_token ?? '' } : config
   memo = { config, stamp, value, dir: path }
   return value
+}
+
+/** The configuration the person being looked at reads through. */
+export function effectiveConfig(config: Config): Config {
+  return effectiveConfigFor(config, resolveDataDir(config.dataDir))
 }
 
 /** Where the effective address comes from. */

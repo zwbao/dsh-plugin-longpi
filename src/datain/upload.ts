@@ -37,6 +37,10 @@ export interface IngestResult {
   /** Set when a typed store was offered or written. Counts only: the raw matrix stays on disk. */
   stores?: StoreSummary[]
   needs_confirm?: boolean
+  /** Where a failure happened: local validation, connecting, or the service refusing / not reading the file. */
+  stage?: 'local' | 'connect' | 'forward'
+  /** The upload deadline fired before the service answered: whether it saved the file is unknown, not a refusal. */
+  timed_out?: boolean
   error?: string
 }
 
@@ -55,7 +59,12 @@ interface UploadLog {
   wrong_person?: boolean
   /** How many lab values the service read from it (absent in logs written before 0.7.1). */
   indicators?: number | null
+  /** Which text-fingerprint algorithm wrote this row; rows without it hold the old 4000-character prefix hash. */
+  fingerprint_version?: number
 }
+
+/** Fingerprint version 2 hashes the whole normalized text; older rows cannot be compared with it (they keep the sha check). */
+const FINGERPRINT_VERSION = 2
 
 function keptUpload(row: UploadLog): boolean {
   if (row.wrong_person) return false
@@ -130,6 +139,8 @@ export interface MirobodyPush {
   indicators: number | null
   checkup_day: string | null
   failed: boolean
+  /** The deadline fired with no answer: the service may or may not have saved the file. Not a refusal, not a success. */
+  timed_out: boolean
   /** The file arrived but reading it did not: no model is configured in the service, or its call failed. */
   extraction_failed: boolean
 }
@@ -168,6 +179,8 @@ export async function pushToMirobody(opts: {
       const count = typeof last.indicators_count === 'number' ? last.indicators_count : null
       resolve({
         events, progress, last, failed,
+        // The deadline fired with no answer: the service may have saved the file, so it is neither failed nor read.
+        timed_out: last.type === 'timeout',
         // Mirobody says so on extraction_completed (failed: true): never shown as「0 项」.
         extraction_failed: last.type === 'extraction_completed' && last.failed === true,
         indicators: count,
@@ -239,11 +252,16 @@ function dayZhU(iso: string | null): string {
   return Number(m[1]) === new Date().getFullYear() ? md : `${m[1]} 年 ${md}`
 }
 
-function readBack(parts: { forwarded: boolean; connected: boolean; indicators: number | null; day: string | null; findings: NarrativeFinding[]; duplicate: boolean; wrong: string; genetics: 'narrative' | 'raw' | null }): string {
+function readBack(parts: { forwarded: boolean; connected: boolean; uploadRequested?: boolean; indicators: number | null; day: string | null; findings: NarrativeFinding[]; duplicate: boolean; duplicateUploaded?: boolean; wrong: string; genetics: 'narrative' | 'raw' | null }): string {
   if (parts.wrong) return parts.wrong
-  if (parts.duplicate) return `该报告此前已上传${parts.day ? `（检查日期：${dayZhU(parts.day)}）` : ''}，未重复保存。`
+  if (parts.duplicate) return parts.duplicateUploaded
+    ? `该报告此前已上传${parts.day ? `（检查日期：${dayZhU(parts.day)}）` : ''}，未重复保存。`
+    : `该报告此前已保存在这台电脑上${parts.day ? `（检查日期：${dayZhU(parts.day)}）` : ''}，未重复保存。`
   const lines: string[] = []
   if (parts.genetics === 'raw' && parts.forwarded) lines.push('基因原始数据已上传，位点以健康数据服务中保存的数据为准，无需再上传叙述版 PDF。')
+  else if (parts.genetics === 'raw' && parts.uploadRequested && !parts.connected) lines.push('基因原始数据文件没有上传：健康数据服务尚未连接。本机只记录了报告摘要，位点没有保存。')
+  else if (parts.genetics === 'raw' && parts.uploadRequested) lines.push('基因原始数据文件没有上传。请稍后重试。')
+  else if (parts.genetics === 'raw') lines.push('基因原始数据没有上传；本机只记录了报告摘要，位点没有保存。')
   else if (parts.genetics) lines.push('基因叙述报告未进入体检解析；关键位点已保存在本机，并标注了消费级检测的局限。如需完整位点，请上传基因原始数据文件。')
   else if (!parts.connected) lines.push('报告中的文字内容已保存。健康数据服务尚未连接，文件本身未上传。')
   else if (parts.forwarded) lines.push(parts.indicators == null
@@ -267,6 +285,8 @@ export interface IngestInput {
   upload?: boolean
   /** Tests inject a socket. Production uses the platform WebSocket. */
   open?: SocketOpener
+  /** Tests inject a short deadline; production keeps the 90 s default. */
+  deadlineMs?: number
   /** methylation, taxa, proteins, or conditions. Omitted for a checkup. */
   type?: StoreKind
   /** Page uploads send true. A chat attachment is already the person's confirmation. */
@@ -306,34 +326,34 @@ export async function ingestDocument(deps: Pick<CoreDeps, 'config' | 'dataDir' |
       }
     }
     bytes = readFileSync(filePath)
-    if (!text && extname(filePath).toLowerCase() === '.pdf') text = pdfText(filePath)
+    if (!text && extname(filePath).toLowerCase() === '.pdf') text = pdfText(filePath, pages ?? PAGE_CAP)
     if (!text && contentTypeOf(filePath) === 'text/plain') text = bytes.toString('utf8')
   }
   bytes = bytes ?? Buffer.from(text, 'utf8')
   if (!text && contentTypeOf(filename) === 'text/plain') text = bytes.toString('utf8')
   const sha = createHash('sha256').update(bytes).digest('hex')
   const fingerprint = textFingerprint(text)
-  const prior = readLog(dataDir).find((row) => keptUpload(row) && ((sha && row.sha256 === sha) || (fingerprint && row.fingerprint === fingerprint)))
+  const prior = readLog(dataDir).find((row) => keptUpload(row) && ((sha && row.sha256 === sha) || (fingerprint && row.fingerprint_version === FINGERPRINT_VERSION && row.fingerprint === fingerprint)))
   if (prior) {
     const existing = listFindings(dataDir).filter((row) => row.upload_id === prior.id)
     return {
       ok: true, forwarded: false, duplicate: true, wrong_person: false,
       checkup_day: prior.checkup_day, indicators: null,
       findings: existing.map(publicFinding),
-      read_back_zh: readBack({ forwarded: false, connected: true, indicators: null, day: prior.checkup_day, findings: existing, duplicate: true, wrong: '', genetics: null }),
+      read_back_zh: readBack({ forwarded: false, connected: true, indicators: null, day: prior.checkup_day, findings: existing, duplicate: true, duplicateUploaded: prior.forwarded === true, wrong: '', genetics: null }),
       progress: ['重复文件，未再次上传'],
       genetics_stored: false,
     }
   }
   if (isWeGeneRaw(text)) {
     const summary = extractGeneticsText(text, 'raw')
-    return finishForward(deps, { filename, bytes, text, sha, fingerprint, contentType: 'text/plain', note: input.note, open: input.open, upload: input.upload !== false, genetics: summary, findings: [] })
+    return finishForward(deps, { filename, bytes, text, sha, fingerprint, contentType: 'text/plain', note: input.note, open: input.open, upload: input.upload !== false, genetics: summary, findings: [], ...(input.deadlineMs != null ? { deadlineMs: input.deadlineMs } : {}) })
   }
   if (isWeGeneNarrative(text)) {
     const summary = storeGenetics(dataDir, extractGeneticsText(text, 'text'))
     const uploadId = newId('up')
     const finding = storeFindings(dataDir, [{ id: newId('find'), date: summary.generated, kind: 'genetics', text_zh: summary.headlines_zh[0] || '已记录基因报告。' }], uploadId)
-    appendJsonl(logPath(dataDir), { id: uploadId, at: new Date().toISOString(), filename, sha256: sha, fingerprint, bytes: bytes.length, checkup_day: summary.generated || null, forwarded: false, accepted: true } satisfies UploadLog)
+    appendJsonl(logPath(dataDir), { id: uploadId, at: new Date().toISOString(), filename, sha256: sha, fingerprint, fingerprint_version: FINGERPRINT_VERSION, bytes: bytes.length, checkup_day: summary.generated || null, forwarded: false, accepted: true } satisfies UploadLog)
     return {
       ok: true, forwarded: false, duplicate: false, wrong_person: false, checkup_day: summary.generated || null, indicators: null,
       findings: finding.map(publicFinding),
@@ -346,7 +366,7 @@ export async function ingestDocument(deps: Pick<CoreDeps, 'config' | 'dataDir' |
     const row = storeFindings(dataDir, [{
       id: newId('find'), date: '', kind: 'wrong_person', text_zh: identity.reason_zh, page_note_zh: identity.page_note_zh,
     }])
-    appendJsonl(logPath(dataDir), { id: newId('up'), at: new Date().toISOString(), filename, sha256: sha, fingerprint, bytes: bytes.length, checkup_day: null, forwarded: false, wrong_person: true } satisfies UploadLog)
+    appendJsonl(logPath(dataDir), { id: newId('up'), at: new Date().toISOString(), filename, sha256: sha, fingerprint, fingerprint_version: FINGERPRINT_VERSION, bytes: bytes.length, checkup_day: null, forwarded: false, wrong_person: true } satisfies UploadLog)
     return {
       ok: true, forwarded: false, duplicate: false, wrong_person: true, checkup_day: null, indicators: null,
       findings: row.map((item) => ({ id: item.id, kind: item.kind, text_zh: item.text_zh, date: item.date })),
@@ -359,8 +379,9 @@ export async function ingestDocument(deps: Pick<CoreDeps, 'config' | 'dataDir' |
   if (lab) rememberLabMethod(dataDir, { sha256: sha, ...lab })
   const dayGuess = /(20\d{2}-\d{2}-\d{2})/.exec(text)?.[1] ?? ''
   const findings = text ? parseNarrative(text, dayGuess) : []
-  const forwarded = await finishForward(deps, { filename, bytes, text, sha, fingerprint, contentType: contentTypeOf(filename), note: input.note, open: input.open, upload: input.upload !== false, genetics: null, findings })
-  if (omics.note) forwarded.read_back_zh += omics.note
+  const forwarded = await finishForward(deps, { filename, bytes, text, sha, fingerprint, contentType: contentTypeOf(filename), note: input.note, open: input.open, upload: input.upload !== false, genetics: null, findings, ...(input.deadlineMs != null ? { deadlineMs: input.deadlineMs } : {}) })
+  // A timeout has no success read-back to extend: the state is unknown, not「已读取」with a note.
+  if (omics.note && !forwarded.timed_out) forwarded.read_back_zh += omics.note
   if (omics.stores) forwarded.stores = omics.stores
   return forwarded
 }
@@ -409,7 +430,7 @@ function takeOmics(deps: Pick<CoreDeps, 'dataDir'>, bag: {
   if (!localOnly) return { stores: saved.summaries }
   if (stored) {
     appendJsonl(logPath(deps.dataDir()), {
-      id: newId('up'), at: new Date().toISOString(), filename, sha256: bag.sha, fingerprint: bag.fingerprint,
+      id: newId('up'), at: new Date().toISOString(), filename, sha256: bag.sha, fingerprint: bag.fingerprint, fingerprint_version: FINGERPRINT_VERSION,
       bytes: bag.bytes.length, checkup_day: input.sample_date ?? null, forwarded: false, accepted: true,
     } satisfies UploadLog)
   }
@@ -420,7 +441,7 @@ function localOmics(ok: boolean, readBack: string, stores: StoreSummary[], error
   return {
     ok, forwarded: false, duplicate: false, wrong_person: false, checkup_day: null, indicators: null,
     findings: [], read_back_zh: readBack, progress: [needsConfirm ? '等待确认' : '已在这台电脑上核对'],
-    genetics_stored: false, stores, needs_confirm: needsConfirm, ...(error ? { error } : {}),
+    genetics_stored: false, stores, needs_confirm: needsConfirm, stage: 'local', ...(error ? { error } : {}),
   }
 }
 
@@ -433,6 +454,8 @@ async function finishForward(deps: Pick<CoreDeps, 'config' | 'dataDir' | 'bus' |
   contentType: string
   note?: string
   open?: SocketOpener
+  /** Tests inject a short upload deadline; production keeps the 90 s default. */
+  deadlineMs?: number
   upload: boolean
   genetics: GeneticsSummary | null
   findings: NarrativeFinding[]
@@ -464,27 +487,33 @@ async function finishForward(deps: Pick<CoreDeps, 'config' | 'dataDir' | 'bus' |
   if (input.upload && connected && origin && token && input.bytes.length > 0 && input.bytes.length <= LAB_CAP_BYTES) {
     push = await pushToMirobody({
       origin, token, filename: input.filename, bytes: input.bytes, contentType: input.contentType,
-      note: 'LongPi checkup upload', open: input.open, ...(queryUserId ? { queryUserId } : {}),
+      note: 'LongPi checkup upload', open: input.open, ...(input.deadlineMs != null ? { deadlineMs: input.deadlineMs } : {}),
+      ...(queryUserId ? { queryUserId } : {}),
     })
   }
   const day = push?.checkup_day || /(20\d{2}-\d{2}-\d{2})/.exec(input.text)?.[1] || null
   const uploadId = newId('up')
   const stored = storeFindings(dataDir, input.findings.map((row) => ({ ...row, date: row.date || day || '' })), uploadId)
   if (input.genetics) storeGenetics(dataDir, input.genetics)
-  const extractionFailed = Boolean(push && !push.failed && push.extraction_failed)
-  const forwarded = Boolean(push && !push.failed)
-  // A failed push, or Mirobody not connected, must not mark the file seen. The next send is a retry, not a duplicate.
-  const accepted = forwarded || Boolean(input.genetics) || (!input.upload && stored.length > 0)
+  // A timeout is neither success nor refusal: the service may have saved the file, so it counts as neither forwarded
+  // nor accepted, and the page is told the state is unknown instead of being told the report was read.
+  const timedOut = Boolean(push?.timed_out)
+  const extractionFailed = Boolean(push && !push.failed && !timedOut && push.extraction_failed)
+  const forwarded = Boolean(push && !push.failed && !timedOut)
+  // A failed push, a timeout, or Mirobody not connected must not mark the file seen. The next send is a retry, not a
+  // duplicate. A genetics summary alone is not enough when the caller asked to upload (raw data would be lost).
+  const localOnly = !input.upload && (Boolean(input.genetics) || stored.length > 0)
+  const accepted = forwarded || localOnly
   if (accepted) {
     appendJsonl(logPath(dataDir), {
-      id: uploadId, at: new Date().toISOString(), filename: input.filename, sha256: input.sha, fingerprint: input.fingerprint,
+      id: uploadId, at: new Date().toISOString(), filename: input.filename, sha256: input.sha, fingerprint: input.fingerprint, fingerprint_version: FINGERPRINT_VERSION,
       bytes: input.bytes.length, checkup_day: day, forwarded, accepted: true, indicators: extractionFailed ? 0 : push?.indicators ?? null,
     } satisfies UploadLog)
   }
-  if (push && !push.failed) {
+  if (forwarded) {
     try { deps.invalidate() } catch { /* the file is already in Mirobody */ }
   }
-  if (stored.length > 0 || (push && !push.failed)) {
+  if (!timedOut && !push?.failed && (stored.length > 0 || forwarded)) {
     try {
       deps.bus.emit('report.arrived', {
         checkup_day: day || new Date().toISOString().slice(0, 10),
@@ -495,6 +524,32 @@ async function finishForward(deps: Pick<CoreDeps, 'config' | 'dataDir' | 'bus' |
     } catch { /* the upload still stands */ }
   }
   const shown = stored.length > 0 ? stored : input.findings
+  const rawGenetics = input.genetics?.source === 'raw'
+  if (!timedOut && rawGenetics && input.upload && !forwarded) {
+    return {
+      ok: false, forwarded: false, duplicate: false, wrong_person: false, checkup_day: day, indicators: null,
+      findings: [],
+      read_back_zh: '',
+      progress: push?.progress ?? [],
+      genetics_stored: true,
+      stage: connected ? 'forward' : 'connect',
+      error: connected
+        ? '基因原始数据文件没有上传：健康数据服务未接收该文件。报告摘要已保存在本机，位点没有保存；请稍后重新上传。'
+        : '基因原始数据文件没有上传：健康数据服务尚未连接。本机只记录了报告摘要，位点没有保存；请连接后重新上传。',
+    }
+  }
+  if (timedOut) {
+    return {
+      ok: false, timed_out: true, forwarded: false, duplicate: false, wrong_person: false, checkup_day: day, indicators: null,
+      findings: shown.map(publicFinding),
+      read_back_zh: '',
+      progress: ['等待健康数据服务响应超时，服务端是否收到这份文件还不确定'],
+      genetics_stored: Boolean(input.genetics),
+      error: stored.length > 0
+        ? '上传等待超时：还不能确认健康数据服务是否已收到并保存这份报告（从报告中读到的文字已保存在本机）。请稍后在健康页核对是否出现新指标；若没有，再重新上传。'
+        : '上传等待超时：还不能确认健康数据服务是否已收到并保存这份报告。请稍后在健康页核对是否出现这份报告或新指标；若没有，再重新上传。',
+    }
+  }
   if (extractionFailed) {
     // The service has the file but no reading of it: an error the person can act on, not「识别出 0 项」.
     return {
@@ -515,7 +570,7 @@ async function finishForward(deps: Pick<CoreDeps, 'config' | 'dataDir' | 'bus' |
     indicators: push?.indicators ?? null,
     findings: shown.map(publicFinding),
     read_back_zh: readBack({
-      forwarded: Boolean(push && !push.failed), connected, indicators: push?.indicators ?? null, day,
+      forwarded: Boolean(push && !push.failed), connected, uploadRequested: input.upload, indicators: push?.indicators ?? null, day,
       findings: shown, duplicate: false, wrong: '', genetics: input.genetics ? (input.genetics.source === 'raw' ? 'raw' : 'narrative') : null,
     }),
     progress: push?.progress ?? (connected ? [] : ['健康数据服务尚未连接']),

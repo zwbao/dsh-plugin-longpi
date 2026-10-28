@@ -5,6 +5,7 @@
 import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import type { Id, IsoDay, ModuleId, Provenance } from '../contracts/common.ts'
+import type { Bus } from '../contracts/events.ts'
 import {
   MEMORY_VERSION, SAFETY_CONDITION_FLAGS, SAFETY_DRUG_CLASSES,
   type CareItem, type CommitmentItem, type ConditionFlag, type DrugClass, type ExclusionItem, type MemoryApi, type MemoryApplyResult, type MemoryItem,
@@ -101,7 +102,7 @@ export interface MemoryStore extends MemoryApi {
   latestCare(): CareItem | null
 }
 
-export function createMemory(dataDir: () => string): MemoryStore {
+export function createMemory(dataDir: () => string, bus: () => Bus | null = currentBus): MemoryStore {
   const path = () => join(dataDir(), 'memory.json')
   const logPath = () => join(dataDir(), 'memory_log.jsonl')
   const read = (): PersonMemory => readJson(path(), parseMemory, emptyMemory)
@@ -228,7 +229,7 @@ export function createMemory(dataDir: () => string): MemoryStore {
         }
       }
       const kinds = [...new Set(changed.map((item) => item.kind))] as MemoryKind[]
-      currentBus()?.emit('memory.changed', { rev: memory.rev, kinds, safety_relevant: changed.some((item) => item.safety_relevant || item.kind === 'exclusion'), item_ids: [...new Set(changed.map((item) => item.id))] }, { module: 'M0', via: 'hook' })
+      bus()?.emit('memory.changed', { rev: memory.rev, kinds, safety_relevant: changed.some((item) => item.safety_relevant || item.kind === 'exclusion'), item_ids: [...new Set(changed.map((item) => item.id))] }, { module: 'M0', via: 'hook' })
       return { rev: memory.rev, applied, rejected }
     },
     digest({ purpose, maxChars = 1200 }) {

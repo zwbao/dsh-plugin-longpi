@@ -130,9 +130,13 @@ export function storeFindings(dataDir: string, rows: NarrativeFinding[], uploadI
   return saved
 }
 
-/** Stable short hash of the report text, so a second photo of the same page is a duplicate. */
+/**
+ * Stable short hash of the whole report text, so a real copy (same text, different bytes or whitespace) is a
+ * duplicate while two reports that merely share a long prefix are not. Short texts return '' and rely on the
+ * byte hash: a few words are not enough to call two files the same report.
+ */
 export function textFingerprint(text: string): string {
-  const norm = text.replace(/\s+/g, '').slice(0, 4000)
+  const norm = text.replace(/\s+/g, '')
   if (norm.length < 40) return ''
   return createHash('sha256').update(norm).digest('hex').slice(0, 16)
 }

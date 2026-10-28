@@ -10,7 +10,8 @@ import type { Config } from './config.ts'
 import { addCheckIns, currentPlan, isoDay, normalizePlan, readCheckIns, readPlans, savePlan, CATEGORIES, CHECKIN_TAGS } from './interventions.ts'
 import { asJson } from './json.ts'
 import type { MountState } from './mirobody.ts'
-import { resolveDataDir, resolveSkillsHome } from './paths.ts'
+import { resolveDataDir, resolveRootDir, resolveSkillsHome } from './paths.ts'
+import { consumePlanSaveTokensFor, issuePlanSaveToken, markPlanReadBack, planSaveProblem } from './tools-approval.ts'
 import { invalidateRecords, loadRecords } from './records.ts'
 import { addSelf, SELF_KEYS, SELF_SPEC } from './selfmeasure.ts'
 import { buildTracking, describeItem, describePlan, goalProblems, invalidateTracking, modelGoals } from './tracking.ts'
@@ -71,7 +72,7 @@ const HOW_TO_READ = [
   'suggestions are the next steps to offer for the saved plan. A change to the plan is a new draft (draft_intervention_plan), read back and confirmed like any plan. Never add a medicine or a dose.',
 ]
 
-const DRAFT_HOW_TO_USE = 'Send reply_zh as your reply, in the person\'s language, then stop: do not call another tool in this turn (no save_intervention_plan, no query_longevity_evidence, no bash, no read). If brief.safety.stop_zh is set, that sentence comes first: say plainly to see a doctor about those values. A short safe-while-you-wait draft may follow (walking, meal quality, sleep, smoking or drinking less). Do not add fasting, time-restricted eating, a large weight-loss target, a supplement, or iron. If brief.notes_zh says the record has changes beyond normal fluctuation (超出正常波动), say that first: suggest they have a doctor look at those changes before starting the plan, name no cause, and suggest no supplement or dose for them. Items the person excluded stay excluded in every later draft. State each item\'s evidence only as reply_zh does, and that individual results vary. Supplements are options to confirm with a doctor, without a dose. Never start, stop or change a prescription medicine or any dose. Save later, only after they agree. This reply already read the draft to them: when they then say to save it (可以，就按这份方案保存吧), call save_intervention_plan confirm=false and, in that same turn, with the same plan, confirm=true. Do not read it back a second time or ask them to say 保存 again.'
+const DRAFT_HOW_TO_USE = 'Send reply_zh as your reply, in the person\'s language, then stop: do not call another tool in this turn (no save_intervention_plan, no query_longevity_evidence, no bash, no read). If brief.safety.stop_zh is set, that sentence comes first: say plainly to see a doctor about those values. A short safe-while-you-wait draft may follow (walking, meal quality, sleep, smoking or drinking less). Do not add fasting, time-restricted eating, a large weight-loss target, a supplement, or iron. If brief.notes_zh says the record has changes beyond normal fluctuation (超出正常波动), say that first: suggest they have a doctor look at those changes before starting the plan, name no cause, and suggest no supplement or dose for them. Items the person excluded stay excluded in every later draft. State each item\'s evidence only as reply_zh does, and that individual results vary. Supplements are options to confirm with a doctor, without a dose. Never start, stop or change a prescription medicine or any dose. Save later, only after they agree. This reply already read the draft to them: when they then say to save it (可以，就按这份方案保存吧), call save_intervention_plan confirm=false and, in that same turn, with the same plan and the save_token that confirm=false returns, confirm=true (a save without it is refused). Do not read it back a second time or ask them to say 保存 again.'
 /** Past this the tool answers anyway (the build goes on in the background and the next call picks it up). */
 const DRAFT_DEADLINE_MS = 60_000
 
@@ -100,11 +101,11 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
 
   ctx.tools.register(defineTool({
     name: 'save_intervention_plan',
-    description: 'Save the person\'s intervention plan: their own (from what they said, or a plan document from their doctor or longevity coach that they shared), or a draft from draft_intervention_plan tailored with them. First call with confirm=false: the tool checks it and returns the structured read-back and warnings. Read that back to the person. Only after they confirm, call again with the same plan and confirm=true. Each item needs a start date (YYYY-MM-DD) so its effect can be judged against a baseline. List the markers each item aims to move (hs-CRP, 空腹血糖, LDL-C, 血压…) and goal values if the plan or the draft has them. For a wearable-tracked item give target {metric, op, value} using a Mirobody indicator name from read_personal_situation (dailySteps, dailyTotalSleepTime). Medicines and supplements are saved by name only: their dose and dose log stay in Mirobody. Never add a dose, a medicine, or a goal number that neither the person, their plan document nor the draft gave. Saving a new plan keeps earlier versions.',
+    description: 'Save the person\'s intervention plan: their own (from what they said, or a plan document from their doctor or longevity coach that they shared), or a draft from draft_intervention_plan tailored with them. First call with confirm=false: the tool checks it and returns the structured read-back and warnings. Read that back to the person. Only after they confirm, call again with the same plan and the save_token that confirm=false returned; without it the save is refused, and a plan from import_analysis carries its token inside plan_for_save. Each item needs a start date (YYYY-MM-DD) so its effect can be judged against a baseline. List the markers each item aims to move (hs-CRP, 空腹血糖, LDL-C, 血压…) and goal values if the plan or the draft has them. For a wearable-tracked item give target {metric, op, value} using a Mirobody indicator name from read_personal_situation (dailySteps, dailyTotalSleepTime). Medicines and supplements are saved by name only: their dose and dose log stay in Mirobody. Never add a dose, a medicine, or a goal number that neither the person, their plan document nor the draft gave. Saving a new plan keeps earlier versions.',
     parameters: {
       title: { type: 'string', description: 'Plan title, such as 2026 秋季方案.' },
       note: { type: 'string', description: 'Anything else the plan says, in the person\'s words.' },
-      source: { type: 'string', enum: ['chat', 'file'], description: 'chat when the person described it, file when it came from a document they shared.' },
+      source: { type: 'string', enum: ['chat', 'file', 'analysis'], description: 'chat when the person described it, file for a shared document, analysis for an imported analysis (preserve its save_token).' },
       items: {
         type: 'array',
         required: true,
@@ -155,15 +156,25 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
         description: 'Target values the plan states, such as 空腹血糖 5.3 mmol/L.',
       },
       confirm: { type: 'boolean', description: 'false (default) checks and returns the read-back; true saves after the person confirmed it.' },
+      save_token: { type: 'string', description: 'Preserve the token from import_analysis or the previous confirm=false result. Required for analysis plans and confirm=true; binds the plan to its member and session.' },
     },
     output: jsonOut,
     timeoutMs: 60000,
     isConcurrencySafe: () => false,
-    async execute(args) {
-      const { current, dataDir } = where()
+    async execute(args, exec) {
+      const { current, dataDir, skillsHome } = where()
+      const root = resolveRootDir(current.dataDir)
+      const session = sessionKey(exec?.agent)
+      const token = args.save_token ?? (args.confirm !== true && args.source !== 'analysis' ? issuePlanSaveToken(root, dataDir, args, session) : null)
+      const bound = { ...args, save_token: token }
+      const refused = (error: string) => asJson({ ok: false, saved: false, errors: [error] })
+      const problem = planSaveProblem(bound, root, session, args.confirm === true)
+      if (problem) return refused(problem)
       // confirm=false only needs medicine names for the read-back. A full catalogue can sit on 正在核对
       // past the tool timeout (Y30 day 22). Eight seconds, then the medicines they already asked us to remember.
       const medications = await medicationNames(current, dataDir, mount.pluginHome, args.confirm === true)
+      const afterRead = planSaveProblem(bound, resolveRootDir(config().dataDir), session, args.confirm === true)
+      if (afterRead) return refused(afterRead)
       const normalized = normalizePlan(args, {
         today: isoDay(),
         medications,
@@ -171,24 +182,27 @@ export function registerTrackingTools(ctx: Context, config: () => Config, mount:
       })
       // What is stored, as stored: the plan's title and note, and each item with its details (after dose stripping).
       const readBack = [describePlan(normalized.plan), ...normalized.plan.items.map(describeItem)]
-      const goalIssues = goalProblems(loadCatalog(where().skillsHome), normalized.plan.goals, where().skillsHome)
+      const goalIssues = goalProblems(loadCatalog(skillsHome), normalized.plan.goals, skillsHome)
       if (normalized.errors.length > 0) {
         return asJson({ ok: false, saved: false, errors: normalized.errors, warnings: normalized.warnings, read_back: readBack, hint: 'Ask the person for what is missing. Do not fill a date or a marker yourself.' })
       }
       if (!args.confirm) {
+        markPlanReadBack(token!)
         return asJson({
           ok: true,
           saved: false,
+          save_token: token,
           title: normalized.plan.title,
           note: normalized.plan.note,
           read_back: readBack,
           goals: normalized.plan.goals,
           warnings: normalized.warnings,
           ...(goalIssues.length > 0 ? { goal_problems: goalIssues } : {}),
-          next: 'If their message in this turn already agreed to save this plan and it was read to them before (a draft you read them, or an earlier read-back), that is the confirmation: call again now with the same plan and confirm=true, and do not read it back again or ask them to say 保存. Otherwise read all of read_back (the plan line and every item with its 说明), the warnings and any goal_problems to the person, and save only after they confirm, by calling again with confirm=true.',
+          next: 'Preserve save_token when calling again with the same plan and confirm=true. If their message already agreed to the plan previously read to them, save now without asking again. Otherwise read read_back, warnings and goal_problems, and save only after they confirm. If the member changed, switch back to the plan owner first.',
         })
       }
       const saved = savePlan(dataDir, normalized.plan)
+      consumePlanSaveTokensFor(token!)
       invalidateTracking()
       return asJson({
         ok: true,

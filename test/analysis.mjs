@@ -289,19 +289,23 @@ function exportFor(run, over = {}) {
 // ---- who decides: the AI starts only on new data and at most every 30 days; the member may always ask
 {
   const { dataDir, deps: base } = readyMember('auto')
-  let records = { indicators: [{ name: 'LDL', value: '3.8', unit: 'mmol/L', date: '2026-09-10' }] }
-  const deps = { ...base, context: async () => ({ today: '2026-09-30', records: { ...records, medications: [] } }) }
+  // Relative to the real clock: startRun records its run at the real "now", and the readiness rules compare
+  // new data and the 30-day spacing against it. Fixed dates went stale once the calendar passed them.
+  const today = mod.isoDay()
+  const rel = (days) => mod.addDays(today, days)
+  let records = { indicators: [{ name: 'LDL', value: '3.8', unit: 'mmol/L', date: rel(-46) }] }
+  const deps = { ...base, context: async () => ({ today, records: { ...records, medications: [] } }) }
   assert.equal((await mod.startRun(deps, { trigger: 'ai', reasonZh: '' })).missing, 'reason', 'a start without a reason is refused')
   // the switch is off by default: the AI may only ask, and says what it costs
-  let ready = mod.analysisReadiness(dataDir, { dataDir }, records, '2026-09-30')
+  let ready = mod.analysisReadiness(dataDir, { dataDir }, records, today)
   assert.equal(ready.auto_on, false); assert.equal(ready.auto_allowed, false); assert.equal(ready.new_data, true)
   assert.match(mod.analysisReadinessLine(ready), /自动深度分析没有打开.*问他要不要做.*token/)
   assert.equal((await mod.startRun(deps, { trigger: 'ai', reasonZh: '有新数据' })).missing, 'auto_off')
   // asked once per batch of new data
   mod.markAsked(dataDir, ready.newest)
-  assert.match(mod.analysisReadinessLine(mod.analysisReadiness(dataDir, { dataDir }, records, '2026-09-30')), /已经问过用户，不要再问/)
+  assert.match(mod.analysisReadinessLine(mod.analysisReadiness(dataDir, { dataDir }, records, today)), /已经问过用户，不要再问/)
   mod.setAutoEnabled(dataDir, true)
-  ready = mod.analysisReadiness(dataDir, { dataDir }, records, '2026-09-30')
+  ready = mod.analysisReadiness(dataDir, { dataDir }, records, today)
   assert.equal(ready.auto_allowed, true, ready.why_zh)
   assert.match(mod.analysisReadinessLine(ready), /可以由你决定现在开始/)
   const first = await mod.startRun(deps, { trigger: 'ai', reasonZh: '有 9 月体检的新化验，还没做过深度分析' })
@@ -313,20 +317,20 @@ function exportFor(run, over = {}) {
   // it finished: nothing new since, so no automatic run
   const run = mod.listRuns(dataDir).at(-1)
   exportFor(run)
-  ready = mod.analysisReadiness(dataDir, { dataDir }, records, '2026-09-30')
+  ready = mod.analysisReadiness(dataDir, { dataDir }, records, today)
   assert.equal(ready.new_data, false); assert.equal(ready.auto_allowed, false)
   assert.equal((await mod.startRun(deps, { trigger: 'ai', reasonZh: 'x' })).missing, 'not_now')
   // new data, but within 30 days of the last automatic start: still no; the member asking is allowed
-  records = { indicators: [{ name: 'LDL', value: '3.4', unit: 'mmol/L', date: '2026-10-05' }] }
-  ready = mod.analysisReadiness(dataDir, { dataDir }, records, '2026-10-06')
+  records = { indicators: [{ name: 'LDL', value: '3.4', unit: 'mmol/L', date: rel(1) }] }
+  ready = mod.analysisReadiness(dataDir, { dataDir }, records, rel(2))
   assert.equal(ready.new_data, true); assert.equal(ready.auto_allowed, false)
   assert.match(ready.why_zh, /不足 30 天/)
-  const asked = await mod.startRun({ ...deps, context: async () => ({ today: '2026-10-06', records: { ...records, medications: [] } }) }, { trigger: 'member', reasonZh: '用户要求复查后再分析' })
+  const asked = await mod.startRun({ ...deps, context: async () => ({ today: rel(2), records: { ...records, medications: [] } }) }, { trigger: 'member', reasonZh: '用户要求复查后再分析' })
   assert.equal(asked.ok, true, JSON.stringify(asked))
   // after 30 days and with new data, the AI may start again
   mod.abandonAnalysis(deps, mod.listRuns(dataDir).at(-1).id)
-  records = { indicators: [{ name: 'LDL', value: '3.1', unit: 'mmol/L', date: '2026-11-20' }] }
-  ready = mod.analysisReadiness(dataDir, { dataDir }, records, '2026-11-21')
+  records = { indicators: [{ name: 'LDL', value: '3.1', unit: 'mmol/L', date: rel(31) }] }
+  ready = mod.analysisReadiness(dataDir, { dataDir }, records, rel(32))
   assert.equal(ready.auto_allowed, true, ready.why_zh)
 }
 

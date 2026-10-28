@@ -25,9 +25,7 @@ import { setCoach } from './surfaces/coach-service.ts'
 import { createBudget } from './core/budget.ts'
 import { createLlmCall } from './core/llm-call.ts'
 import { createSse } from './core/sse.ts'
-import { DISTILL_PREFILTER, distillerProfile } from './agents/memory_distiller.ts'
-import { lastPersonText } from './core/turn-text.ts'
-import { sessionKey } from './plan-hold.ts'
+import { registerMemoryDistillation } from './agents/memory-turn.ts'
 import { agentConfig } from './config.ts'
 import type { HealthEventType } from './contracts/events.ts'
 import { addDays } from './interventions.ts'
@@ -45,7 +43,7 @@ import { ensureLocalPairing } from './mirobody-account.ts'
 import { isDemo, keepDemoReachable } from './demo/index.ts'
 import { resolveRootDir } from './paths.ts'
 import { startFollowup, type FollowupState } from './followup.ts'
-import { buildJourneyFull, followupStateOf, within } from './journey.ts'
+import { buildJourneyFull, followupStateOf, within, type JourneyContext } from './journey.ts'
 import { loadCatalog } from './catalog.ts'
 import { invalidateRecords, loadRecords } from './records.ts'
 import { invalidateTracking, trackingGeneration } from './tracking.ts'
@@ -53,7 +51,7 @@ import { isoDay } from './interventions.ts'
 import { resolveDataDir, resolveMirobodyPlugin, resolveSkillsHome } from './paths.ts'
 import { bootstrapWorkspace, type WorkspaceRegistryLike } from './workspace.ts'
 import { healthWorkspacePaths, type WorkspaceLike } from './guard-scope.ts'
-import { effectiveConfig } from './connection.ts'
+import { effectiveConfig, effectiveConfigFor } from './connection.ts'
 import { mountLibraryLanes } from './contracts/library.ts'
 
 export const name = 'dsh-plugin-longpi'
@@ -115,7 +113,7 @@ export { presentMedications, fixScheduleText, readStatements } from './meds-stat
 export type { PlanBrief, PlanDraft, DraftItem } from './planner.ts'
 export { guardRoute, isJsonRequest, CONNECTION_UNAVAILABLE } from './routes.ts'
 export {
-  readConnection, saveConnection, clearConnection, effectiveConfig, connectionSource, connectionKey, maskMcpUrl, connectionUrlProblem, connectionTokenProblem,
+  readConnection, saveConnection, clearConnection, effectiveConfig, effectiveConfigFor, connectionSource, connectionKey, maskMcpUrl, connectionUrlProblem, connectionTokenProblem,
   testConnection, CONNECTION_FILE, CONNECTION_TEST_MS,
 } from './connection.ts'
 export type { SavedConnection, ConnectionSource, ConnectionTest } from './connection.ts'
@@ -188,7 +186,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     }
   }
   // Saving a plan, starting a deep analysis: DSH asks the person first.
-  registerApprovals(ctx, { analysisBlocked: () => startBlockers(resolveDataDir(source().dataDir), source()) !== null })
+  registerApprovals(ctx, { analysisBlocked: () => startBlockers(resolveDataDir(source().dataDir), source()) !== null, rootDir: () => resolveRootDir(source().dataDir) })
   // Reminders follow the person selected on the page (their store holds their plan and settings); a family member's say whose.
   startFollowup(ctx, () => {
     const who = activePerson(resolveRootDir(config.dataDir))
@@ -215,6 +213,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const bus = createBus({ dataDir: dataDirNow, ctx, log: (message) => logTo(ctx, 'warn', `bus: ${message}`) })
   setBus(bus)
   const http = createHttp(ctx)
+  // Everything a journey is built from for one person's store, read now. No pairing or renewal here: this also
+  // reads a member who is not the one being looked at, and reading must not change that member's link or state.
+  const journeyContextFor = async (dataDir: string): Promise<JourneyContext> => {
+    const current = effectiveConfigFor(config, dataDir)
+    const skillsHome = resolveSkillsHome(current.skillsHome)
+    const records = await loadRecords(current, dataDir, mount.pluginHome)
+    return { config: current, dataDir, skillsHome, catalog: loadCatalog(skillsHome), records, today: isoDay(), mount }
+  }
   const journeyContext = async () => {
     // A family member's link is renewed before it is read (at most every ten minutes); one that cannot be renewed
     // stays expired and reads fail, never falling back to the holder's own record.
@@ -223,11 +229,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     await renewActiveMember(resolveRootDir(source().dataDir)).catch(() => '')
     // The 示例档案 reads a local stand-in that a restart or a new day replaces: keep its address current.
     if (isDemo(activePerson(resolveRootDir(source().dataDir)).id)) await keepDemoReachable(resolveRootDir(source().dataDir)).catch(() => undefined)
-    const current = source()
-    const dataDir = resolveDataDir(current.dataDir)
-    const skillsHome = resolveSkillsHome(current.skillsHome)
-    const records = await loadRecords(current, dataDir, mount.pluginHome)
-    return { config: current, dataDir, skillsHome, catalog: loadCatalog(skillsHome), records, today: isoDay(), mount }
+    return journeyContextFor(resolveDataDir(source().dataDir))
   }
   const memory: MemoryApi = {
     read: () => memoryFor(dataDirNow()).read(),
@@ -266,6 +268,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     validators: { register: registerValidator },
     mount,
     context: journeyContext,
+    contextFor: journeyContextFor,
     dataDir: dataDirNow,
     invalidate: () => { invalidateRecords(); invalidateTracking() },
   }
@@ -374,24 +377,12 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     snapshot: snapshotNow,
     log: (message) => logTo(ctx, 'warn', message),
   })
-  // After a health turn whose words hint at something to keep: the memory distiller, in the background.
-  ctx.on('agent/turn-stopping', (payload) => {
-    try {
-      const agent = (payload as unknown as { agent?: unknown }).agent
-      const session = sessionKey(agent)
-      const health = orchestrator.isHealth(agent)
-      const text = lastPersonText(session)
-      const hit = health && DISTILL_PREFILTER.test(text)
-      bus.emit('chat.turn_ended', { session_id: session, turn: Number((payload as unknown as { turn?: unknown }).turn ?? 0), health, prefilter_hit: hit }, { module: 'M0', via: 'hook', session_id: session })
-      if (!hit) return
-      const pack = currentSurfaces(dataDirNow())?.pack
-      if (!pack) return
-      void llmCall.structured({ profile: distillerProfile, pack, extra: { message: text, session_id: session, today: isoDay() } }).then(({ value }) => {
-        if (value.length > 0) memoryFor(dataDirNow()).apply(value, 'M0')
-      }).catch(() => {})
-    } catch {
-      // the turn closes regardless
-    }
+  registerMemoryDistillation(ctx, {
+    isHealth: orchestrator.isHealth,
+    rootDir: () => resolveRootDir(source().dataDir),
+    llm: llmCall,
+    bus,
+    log: (message) => logTo(ctx, 'warn', message),
   })
 
 }

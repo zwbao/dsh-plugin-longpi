@@ -9,8 +9,24 @@ import { asJson } from '../json.ts'
 import { rememberCondition } from './conditions.ts'
 import { leadImaging, listFindings } from './narrative.ts'
 import { isStoreKind } from '../stores/index.ts'
-import { ingestDocument } from './upload.ts'
+import { ingestDocument, type IngestResult } from './upload.ts'
 import { reportReaderProfile } from '../agents/report_reader.ts'
+
+/** What forward_report may hand back as a read-back: only a successful read has one; a timeout/failure has none. */
+export function forwardReportReadBack(result: IngestResult, digest: { read_back_zh: string }): string {
+  return result.ok === true ? digest.read_back_zh : ''
+}
+
+/** How the model must describe the upload: an unknown timeout, a failure, or a report that was read. */
+export function forwardReportHowToRead(result: IngestResult): string {
+  if (result.timed_out) {
+    return 'The upload timed out: say plainly that it is not known whether the health service saved the report; say what is kept locally only if the result says so. Ask them to check the 健康 page later, and to upload again only if it does not appear. Do not say it was read, and do not say the service did not receive it. Do not add a diagnosis, a dose, or their name.'
+  }
+  if (result.ok === false) {
+    return 'The report was not read: say error plainly, do not claim any indicator was added, and suggest the next step it gives. Do not add a diagnosis, a dose, or their name.'
+  }
+  return 'Read read_back_zh to them. Do not add a diagnosis, a dose, or their name. A TI-RADS or BI-RADS grade is the report\'s own words: suggest they take it to a doctor, and do not decide on a biopsy or a medicine.'
+}
 
 export function registerDatainTools(ctx: Context, deps: CoreDeps): void {
   ctx.tools.register(defineTool({
@@ -43,7 +59,8 @@ export function registerDatainTools(ctx: Context, deps: CoreDeps): void {
           ...(sample ? { sample_date: sample } : {}),
         })
         const digest = reportReaderProfile.fallback(null as never, result)
-        return asJson({ ...result, read_back_zh: digest.read_back_zh, how_to_read: 'Read read_back_zh to them. Do not add a diagnosis, a dose, or their name. A TI-RADS or BI-RADS grade is the report\'s own words: suggest they take it to a doctor, and do not decide on a biopsy or a medicine.' })
+        // A timeout is unknown, a failure is an error: only a success may be read back as if the report was read.
+        return asJson({ ...result, read_back_zh: forwardReportReadBack(result, digest), how_to_read: forwardReportHowToRead(result) })
       } catch {
         return asJson({ ok: false, error: '读不到这个文件。请让对方重新发一次。' })
       }

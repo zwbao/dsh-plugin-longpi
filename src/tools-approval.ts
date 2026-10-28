@@ -1,13 +1,16 @@
 // Approval for saving a plan from chat (claim 8d) and for starting a deep analysis.
 // save_intervention_plan with confirm=true now waits for the person to approve in DSH, and only after the
-// same plan was read back (confirm=false) in this process within the last 30 minutes. The tool body is
-// unchanged: these are tools/pre-execute and tools/post-execute listeners, in the same shape as the
-// set_followup one in tools-followup.ts.
+// same plan was read back (confirm=false) in this process within the last 30 minutes. Opaque save tokens
+// bind that read-back to its member, store and session; the tool body rechecks after asynchronous reads.
 
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { CATEGORY_ZH, isoDay, normalizePlan, type Category } from './interventions.ts'
 import { COST_ZH } from './analysis/service.ts'
+import { currentImport, listRuns } from './analysis/store.ts'
+import { ownerOfStore, storeIdentity, storeIsCurrent, sameStore, type StoreIdentity, type StoreOwner } from './member-store.ts'
+import { SELF } from './people/store.ts'
+import { sessionKey } from './plan-hold.ts'
 
 export const READ_BACK_MS = 30 * 60_000
 export const NO_READ_BACK = '请先复述方案给用户确认'
@@ -45,17 +48,59 @@ export function planApprovalReason(args: unknown): string {
   return `LongPi 要保存干预方案「${plan.title}」：${shown.join('；')}${more}${goals}。只有你本人确认过这份方案才同意。`
 }
 
-const readBacks = new Map<string, number>()
+interface SaveContext {
+  root: string; dataDir: string; owner: StoreOwner
+  /** Null only for the holder's own store before it exists: the first plan may create it. */
+  identity: StoreIdentity | null
+  session: string; key: string; at: number; ready: boolean; runId?: string
+}
+const readBacks = new Map<string, SaveContext>()
 
-function rememberReadBack(key: string, now = Date.now()): void {
-  for (const [other, at] of readBacks) if (now - at > READ_BACK_MS) readBacks.delete(other)
-  readBacks.set(key, now)
+/** Opaque provenance travels with the plan; never infer its owner from the page at confirmation time. */
+export function issuePlanSaveToken(root: string, dataDir: string, args: unknown, session: string, runId?: string): string | null {
+  const owner = ownerOfStore(root, dataDir)
+  const identity = storeIdentity(dataDir)
+  // The holder's own store may not exist yet (first plan on a new install); a family member's must already exist.
+  if (!owner || (!identity && owner.id !== SELF)) return null
+  const now = Date.now()
+  for (const [token, row] of readBacks) if (now - row.at > READ_BACK_MS) readBacks.delete(token)
+  const token = randomUUID()
+  readBacks.set(token, { root, dataDir, owner, identity, session, key: planKey(args), at: now, ready: false, runId })
   if (readBacks.size > 200) readBacks.delete(readBacks.keys().next().value as string)
+  return token
 }
 
-function hasReadBack(key: string, now = Date.now()): boolean {
-  const at = readBacks.get(key)
-  return at !== undefined && now - at <= READ_BACK_MS
+export function planSaveProblem(args: unknown, root: string, session: string, requireReadBack: boolean): string | null {
+  const token = record(args).save_token
+  const row = typeof token === 'string' ? readBacks.get(token) : undefined
+  if (!row || Date.now() - row.at > READ_BACK_MS) return '方案保存凭据缺失或已过期，请重新导入分析或回读方案。'
+  if (row.root !== root || row.session !== session || row.key !== planKey(args)) return '方案内容或会话已变化，请重新回读方案。'
+  const ownerNow = ownerOfStore(root, row.dataDir)
+  const identityNow = storeIdentity(row.dataDir)
+  const storeOk = row.identity
+    ? sameStore(row.identity, identityNow)
+    // It did not exist when read back: still absent, or created live since; a delete tombstone refuses.
+    : identityNow === null || identityNow.deleted === ''
+  if (!ownerNow || ownerNow.id !== row.owner.id || !storeOk) return '方案所属档案已删除或变化，未保存。'
+  if (!storeIsCurrent(root, row.dataDir)) return `该方案属于${row.owner.label_zh}，请先切换到该成员，再回读并确认保存。`
+  if (row.runId && (currentImport(row.dataDir)?.meta.run_id !== row.runId || !listRuns(row.dataDir).some(run => run.id === row.runId))) return '来源分析已变化或放弃，请重新导入后确认方案。'
+  return requireReadBack && !row.ready ? NO_READ_BACK : null
+}
+
+export function markPlanReadBack(token: string): void {
+  const row = readBacks.get(token)
+  if (row) readBacks.set(token, { ...row, ready: true })
+}
+
+export function consumePlanSaveToken(token: string): void { readBacks.delete(token) }
+
+/** A successful save closes the whole read-back window for that plan, not only the token that confirmed it. */
+export function consumePlanSaveTokensFor(token: string): void {
+  const row = readBacks.get(token)
+  if (!row) return
+  for (const [other, candidate] of readBacks) {
+    if (candidate.root === row.root && candidate.session === row.session && candidate.key === row.key) readBacks.delete(other)
+  }
 }
 
 /** Tests: forget every read-back. */
@@ -63,7 +108,7 @@ export function resetReadBacks(): void {
   readBacks.clear()
 }
 
-export function registerApprovals(ctx: Context, opts: { analysisBlocked?: () => boolean } = {}): void {
+export function registerApprovals(ctx: Context, opts: { analysisBlocked?: () => boolean; rootDir?: () => string } = {}): void {
   // After every other listener allowed it: a confirmed save needs a fresh read-back and then the person's yes.
   ctx.on('tools/pre-execute', async (exec, next) => {
     const decision = await next()
@@ -76,18 +121,19 @@ export function registerApprovals(ctx: Context, opts: { analysisBlocked?: () => 
       return { kind: 'ask', reason: `开始一次深度分析？${COST_ZH}。` }
     }
     if (exec.name !== SAVE_TOOL || record(exec.arguments).confirm !== true) return decision
-    if (!hasReadBack(planKey(exec.arguments))) return { kind: 'deny', reason: NO_READ_BACK }
-    return { kind: 'ask', reason: planApprovalReason(exec.arguments) }
+    const problem = planSaveProblem(exec.arguments, opts.rootDir?.() ?? '', sessionKey(exec.agent), true)
+    if (problem) return { kind: 'deny', reason: problem }
+    const owner = readBacks.get(String(record(exec.arguments).save_token))!.owner
+    return { kind: 'ask', reason: `保存到${owner.label_zh}的档案。${planApprovalReason(exec.arguments)}` }
   })
 
-  // A read-back that went through (confirm=false, no errors) is what a later confirm=true must match.
+  // Also consume on a successful host result; direct tool execution consumes immediately after writing.
   ctx.on('tools/post-execute', async (exec, result, next) => {
     const decision = await next()
     if (exec.name !== SAVE_TOOL || result.isError) return decision
     const value = record(result.value)
     const args = record(exec.arguments)
-    if (args.confirm !== true && value.ok === true && value.saved === false) rememberReadBack(planKey(args))
-    else if (args.confirm === true && value.saved === true) readBacks.delete(planKey(args))
+    if (args.confirm === true && value.saved === true && typeof args.save_token === 'string') consumePlanSaveTokensFor(args.save_token)
     return decision
   })
 }

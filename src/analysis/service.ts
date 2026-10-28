@@ -3,6 +3,7 @@
 import { execFileSync } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { activePerson, personDir, readRegistry, rootDir, SELF, type Person } from '../people/store.ts'
+import { ownerOfStore, sameStore, storeIdentity } from '../member-store.ts'
 import { holderAuth, mintMemberLink, saveMemberLink } from '../people/mirobody.ts'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
@@ -269,10 +270,19 @@ export function abandon(deps: CoreDeps, runId: string): boolean {
   return abandonRun(deps.dataDir(), runId)
 }
 
+/**
+ * One run row of statusNow. A named type with explicit fields so the emitted declaration prints the trigger union in
+ * a fixed order: an inferred union printed in the checker's order changed between builds and made lib/ look stale.
+ */
+export interface AnalysisRunRow extends RunStatus {
+  trigger: 'ai' | 'member'
+  reason_zh: string
+}
+
 export async function statusNow(deps: CoreDeps) {
   const dataDir = deps.dataDir()
   const listed = listRuns(dataDir).slice(-5).reverse()
-  const runs = listed.map((run) => ({ ...runStatus(run), trigger: run.trigger ?? 'member', reason_zh: run.reason_zh ?? '' }))
+  const runs: AnalysisRunRow[] = listed.map((run) => ({ ...runStatus(run), trigger: run.trigger ?? 'member', reason_zh: run.reason_zh ?? '' }))
   const context = await deps.context().catch(() => null)
   const ready = readiness(dataDir, deps.config(), context?.records ?? null, context?.today ?? new Date().toISOString().slice(0, 10))
   return { runs, current: currentSummary(dataDir), blockers: ready.blockers, readiness: ready }
@@ -364,8 +374,10 @@ export function compareAnalyses(dataDir: string, config: { pythonBin?: string; s
 
 function findRun(dataDir: string, runId?: string | null, root?: string): { dir: string; run: AnalysisRun } | null {
   if (runId && root) {
-    // A run belongs to the person it was started for, whoever the page shows when it finishes.
+    // A run belongs to the person it was started for, whoever the page shows when it finishes. Only a store that
+    // already has runs is read: a lookup must not create an analysis folder in another member's store as a side effect.
     for (const dir of [root, ...readRegistry(root).people.map((p) => personDir(root, p.id))]) {
+      if (!existsSync(join(dir, 'analysis', 'runs.jsonl'))) continue
       const run = listRuns(dir).find((r) => r.id === runId)
       if (run) return { dir, run }
     }
@@ -376,31 +388,78 @@ function findRun(dataDir: string, runId?: string | null, root?: string): { dir: 
   return run ? { dir: dataDir, run } : null
 }
 
+/** Whose store a run or an imported analysis belongs to (without the page comparison, which is taken at return time). */
+export interface AnalysisOwner { id: string; label_zh: string; is_current: boolean }
+
+/** The run is still listed for its store: not abandoned, and its run list was not cleared with the store. */
+function runStillThere(dataDir: string, runId: string): boolean {
+  return existsSync(join(dataDir, 'analysis', 'runs.jsonl')) && listRuns(dataDir).some((row) => row.id === runId)
+}
+
+/** The member's own context, never a context read for the member the page showed at some point during the read. */
+async function ownerContext(deps: CoreDeps, dataDir: string): Promise<Awaited<ReturnType<CoreDeps['context']>>> {
+  const pageDir = deps.dataDir()
+  const usedPageContext = dataDir === pageDir
+  let context = usedPageContext ? await deps.context() : await deps.contextFor(dataDir)
+  const readFor = (context as { dataDir?: unknown }).dataDir
+  // A context built for the page can resolve to another member when the page switches during the read; only a
+  // context that is still this store's is kept, otherwise the store is read again through contextFor (read only).
+  const ownContext = typeof readFor === 'string' ? readFor === dataDir : !usedPageContext || deps.dataDir() === pageDir
+  if (!ownContext) context = await deps.contextFor(dataDir)
+  return context
+}
+
 export type ImportResult =
-  | { ok: true; run_id: string; readouts: number; organs: number; board: number; plan_items: number; doctor_items: number; retests: number; compare: TwinCompare | null; read_back: PlanReadBack }
+  | { ok: true; run_id: string; owner: AnalysisOwner; readouts: number; organs: number; board: number; plan_items: number; doctor_items: number; retests: number; compare: TwinCompare | null; read_back: PlanReadBack }
   | { ok: false; error_zh: string; problems: string[] }
 
 export async function importLatest(deps: CoreDeps, runId?: string | null): Promise<ImportResult> {
   const dataDir = deps.dataDir()
-  const found = findRun(dataDir, runId, rootDir(deps.config().dataDir))
+  const config = deps.config()
+  const root = rootDir(config.dataDir)
+  const found = findRun(dataDir, runId, root)
   if (!found) return { ok: false, error_zh: '暂无已完成的深度分析可供导入。', problems: [] }
-  const { run } = found
+  const { dir, run } = found
+  // The analysis belongs to the member its run was started for. Pin whose store that is before any await: a member
+  // removed, a store deleted, or a run abandoned while the record is read is then never written to.
+  const owner = ownerOfStore(root, dir)
+  if (!owner) return { ok: false, error_zh: '这次分析所属的成员已不在，结果未导入。', problems: ['analysis owner no longer exists'] }
+  const storeBefore = storeIdentity(dir)
+  if (!storeBefore) return { ok: false, error_zh: '这次分析所属成员的存储已不在，结果未导入。', problems: ['analysis store no longer exists'] }
+  if (!runStillThere(dir, run.id)) return { ok: false, error_zh: '这次分析的结果已不在（可能已被放弃），未导入。', problems: ['analysis run abandoned or removed'] }
   const checked = readExport(run)
   if (!checked.value || !checked.html) return { ok: false, error_zh: '本次分析结果未通过校验，未导入。', problems: checked.problems }
   const v = checked.value
+  // Read the owner's record for the plan, whatever the page shows. Reading never switches the page or renews a link.
+  const context = await ownerContext(deps, dir)
+  // Re-check after the await: nothing is written into a member removed meanwhile, a store deleted or replaced, or a
+  // run abandoned while its result was read.
+  const ownerAfter = ownerOfStore(root, dir)
+  if (!ownerAfter || ownerAfter.id !== owner.id) return { ok: false, error_zh: '这次分析所属的成员已不在，结果未导入。', problems: ['analysis owner no longer exists'] }
+  if (!sameStore(storeBefore, storeIdentity(dir))) return { ok: false, error_zh: '这次分析所属成员的存储已删除或变化，结果未导入。', problems: ['analysis store changed while importing'] }
+  if (!runStillThere(dir, run.id)) return { ok: false, error_zh: '这次分析的结果已不在（可能已被放弃），未导入。', problems: ['analysis run abandoned or removed'] }
   // Everything the page and the plan need is built before anything is written.
-  const context = await deps.context()
   const input = planInput(v, context.today)
-  const trial = normalizePlan(input, { today: context.today, medications: [], previous: null })
+  const trial = normalizePlan(input, {
+    today: context.today,
+    medications: context.records.medications.map((row) => ({ name: row.name, ...(row.plan_id ? { plan_id: row.plan_id } : {}) })),
+    previous: null,
+  })
   if (trial.plan.items.length === 0 && (input.items as unknown[]).length > 0) return { ok: false, error_zh: '本次分析的方案无法读取，未导入。', problems: trial.errors }
-  const sameRun = currentImport(found.dir)?.meta.run_id === run.id
-  importRun(found.dir, run, v, checked.html, new Date(), checked.twin)
-  const compare = sameRun ? (readTwinCompare(found.dir) as TwinCompare | null) : compareAnalyses(found.dir, deps.config())
-  deps.invalidate()
+  const sameRun = currentImport(dir)?.meta.run_id === run.id
+  importRun(dir, run, v, checked.html, new Date(), checked.twin)
+  // compareAnalyses reads only the skill paths (same on every member's config), never the shown member's record.
+  const compare = sameRun ? (readTwinCompare(dir) as TwinCompare | null) : compareAnalyses(dir, config)
+  const readBack = await planReadBack(deps, dir)
+  // The page can switch while the plan is read back: whether it shows the owner now decides what the tool may offer
+  // for saving, so it is taken last. Only the shown member's caches need to drop for its page to re-read.
+  const currentNow = dir === deps.dataDir()
+  if (currentNow) deps.invalidate()
   return {
-    ok: true, run_id: run.id, readouts: v.readouts.length, organs: v.organs.length, board: v.board.length,
+    ok: true, run_id: run.id, owner: { ...owner, is_current: currentNow },
+    readouts: v.readouts.length, organs: v.organs.length, board: v.board.length,
     plan_items: (input.items as unknown[]).length, doctor_items: doctorItems(v).length, retests: v.retests.length, compare,
-    read_back: await planReadBack(deps),
+    read_back: readBack,
   }
 }
 
@@ -421,7 +480,9 @@ export async function planReadBack(deps: CoreDeps, fixedDir?: string): Promise<P
   const dataDir = fixedDir ?? deps.dataDir()
   const cur = currentImport(dataDir)
   if (!cur) return { ok: false, run_id: null, plan_key: null, title: '', items: [], doctor_items: [], warnings: [], errors: ['尚未导入深度分析。'], plan: null }
-  const context = await deps.context()
+  // Read the plan with the record of the store it belongs to, not the member the page happens to show now: a page
+  // switch during the read must not leave another member's record checking this store's plan.
+  const context = await ownerContext(deps, dataDir)
   const input = planInput(cur.value, context.today)
   const normalized = normalizePlan(input, {
     today: context.today,

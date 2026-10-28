@@ -39,6 +39,11 @@ export interface CoreDeps {
   mount: MountState
   /** Everything a journey is built from, read now (config, dataDir, records, catalog, today). */
   context: () => Promise<import('../journey.ts').JourneyContext>
+  /**
+   * The same, for one person's store by directory: their own connection, profile and record. For reading a
+   * member who is not the one being looked at (an analysis that belongs to them), never for switching.
+   */
+  contextFor: (dataDir: string) => Promise<import('../journey.ts').JourneyContext>
   /** The dataDir now (config may change on reload). */
   dataDir: () => string
   /** Drop the cached records and tracking so the next build reads again. */

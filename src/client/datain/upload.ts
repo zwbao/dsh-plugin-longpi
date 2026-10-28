@@ -3,6 +3,7 @@
 import React from 'react'
 import { Btn } from '../ui.ts'
 import { errorText, postJson } from '../api.ts'
+import { uploadAnswerText } from './upload-answer.ts'
 
 const h = React.createElement
 const PIECE = 24 * 1024
@@ -16,6 +17,7 @@ interface UploadAnswer {
   error?: string
   duplicate?: boolean
   wrong_person?: boolean
+  timed_out?: boolean
 }
 
 function fileToBuffer(file: File): Promise<ArrayBuffer> {
@@ -52,6 +54,7 @@ export function ReportUpload(props: { onDone?: (readBack: string) => void; simpl
         op: 'start', filename: file.name, content_type: file.type || 'application/octet-stream', size: bytes.length,
         ...(kind ? { type: kind, confirm: true } : {}),
       })
+      if (started.ok === false) throw new Error(started.error || '上传未能开始')
       const id = started.id
       const total = started.total ?? 1
       if (!id) throw new Error('上传未能开始')
@@ -64,7 +67,14 @@ export function ReportUpload(props: { onDone?: (readBack: string) => void; simpl
       }
       setStatus('正在读取报告…')
       const done = await postJson<UploadAnswer>('/api/longpi/upload', { op: 'finish', id })
-      setStatus(done.read_back_zh || '已读取这份报告')
+      // 200 + ok:false (a timeout) is not a read: only uploadAnswerText may turn an answer into a success line.
+      const shown = uploadAnswerText(done)
+      if (!shown.ok) {
+        setError(shown.error)
+        setStatus('')
+        return
+      }
+      setStatus(shown.status)
       props.onDone?.(done.read_back_zh || '')
     } catch (err) {
       setError(`这份报告没有读取成功：${errorText(err, '原因不明')}。可以换一张更清晰的照片再试。`)
